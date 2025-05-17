@@ -115,7 +115,7 @@ def test_get_individual_piece_moves_pawn():
     prom_pawn = Piece(8, 0)
     prom_pawn.is_promoted = True
     moves_prom = game.get_individual_piece_moves(prom_pawn, 4, 4)
-    expected = [(3, 4), (4, 3), (4, 5), (5, 3), (5, 5)]
+    expected = [(3, 4), (5, 4), (4, 3), (4, 5), (3, 3), (3, 5)]
     for m in expected:
         assert m in moves_prom
     king = Piece(7, 0)
@@ -140,7 +140,7 @@ def test_get_individual_piece_moves_lance_knight():
     prom_lance = Piece(9, 0)
     prom_lance.is_promoted = True
     moves_prom = game.get_individual_piece_moves(prom_lance, 4, 4)
-    expected_gold = [(3, 4), (4, 3), (4, 5), (5, 3), (5, 5)]
+    expected_gold = [(3, 4), (5, 4), (4, 3), (4, 5), (3, 3), (3, 5)]
     for m in expected_gold:
         assert m in moves_prom
     knight = Piece(2, 0)
@@ -154,6 +154,7 @@ def test_get_individual_piece_moves_lance_knight():
     prom_knight = Piece(10, 0)
     prom_knight.is_promoted = True
     moves_promk = game.get_individual_piece_moves(prom_knight, 4, 4)
+    expected_gold = [(3, 4), (5, 4), (4, 3), (4, 5), (3, 3), (3, 5)]
     for m in expected_gold:
         assert m in moves_promk
 
@@ -176,7 +177,7 @@ def test_get_individual_piece_moves_silver_gold():
     prom_silver = Piece(11, 0)
     prom_silver.is_promoted = True
     moves_prom = game.get_individual_piece_moves(prom_silver, 4, 4)
-    expected_gold = [(3, 4), (4, 3), (4, 5), (5, 3), (5, 5)]
+    expected_gold = [(3, 4), (5, 4), (4, 3), (4, 5), (3, 3), (3, 5)]
     for m in expected_gold:
         assert m in moves_prom
     gold = Piece(4, 0)
@@ -184,7 +185,7 @@ def test_get_individual_piece_moves_silver_gold():
     for m in expected_gold:
         assert m in moves_gold
     gold_w = Piece(4, 1)
-    expected_gold_w = [(5, 4), (4, 3), (4, 5), (3, 3), (3, 5)]
+    expected_gold_w = [(5, 4), (3, 4), (4, 3), (4, 5), (5, 3), (5, 5)]
     moves_gold_w = game.get_individual_piece_moves(gold_w, 4, 4)
     for m in expected_gold_w:
         assert m in moves_gold_w
@@ -234,8 +235,57 @@ def test_shogigame_get_observation():
     game = ShogiGame()
     obs = game.get_observation()
     assert isinstance(obs, np.ndarray)
-    assert obs.shape == (44, 9, 9)
+    assert obs.shape == (46, 9, 9)
     assert np.all(obs[42] == 1.0)
     assert np.all(obs[43] == 0.0)
+    assert np.all(obs[44] == 0.0)
+    assert np.all(obs[45] == 0.0)
     assert np.all(obs[0, 6, :] == 1.0)
     assert np.all(obs[14, 2, :] == 1.0)
+
+
+def test_nifu_detection():
+    """Test ShogiGame.is_nifu detects Nifu (double pawn) correctly."""
+    game = ShogiGame()
+    # Black has pawns on all files at row 6
+    for col in range(9):
+        assert game.is_nifu(0, col)
+    # Remove pawn from file 4
+    game.set_piece(6, 4, None)
+    assert not game.is_nifu(0, 4)
+    # Add a promoted pawn (should not count for Nifu)
+    game.set_piece(5, 4, Piece(8, 0, True))
+    assert not game.is_nifu(0, 4)
+    # Add an unpromoted black pawn back
+    game.set_piece(3, 4, Piece(0, 0, False))
+    assert game.is_nifu(0, 4)
+    # White pawns
+    for col in range(9):
+        assert game.is_nifu(1, col)
+    # Remove white pawn from file 2
+    game.set_piece(2, 2, None)
+    assert not game.is_nifu(1, 2)
+
+
+def test_uchi_fu_zume():
+    """Test ShogiGame.is_uchi_fu_zume detects illegal pawn drop mate (Uchi Fu Zume)."""
+    game = ShogiGame()
+    # Set up a true mate: white king at (0,4), black pawn can drop at (1,4), king's escape squares blocked
+    for r in range(9):
+        for c in range(9):
+            game.set_piece(r, c, None)
+    game.set_piece(0, 4, Piece(7, 1))  # White king
+    # Block king's escape squares
+    game.set_piece(0, 3, Piece(4, 0))  # Black gold
+    game.set_piece(0, 5, Piece(4, 0))  # Black gold
+    game.set_piece(1, 3, Piece(4, 0))  # Black gold
+    game.set_piece(1, 5, Piece(4, 0))  # Black gold
+    # Black to drop pawn at (1,4) for mate
+    assert game.is_uchi_fu_zume(1, 4, 0)
+    # If king can escape, not mate
+    game.set_piece(0, 3, None)
+    assert not game.is_uchi_fu_zume(1, 4, 0)
+    # If not a pawn drop, not mate (simulate with a gold drop)
+    game.set_piece(1, 4, None)
+    game.set_piece(1, 4, Piece(4, 0))
+    assert not game.is_uchi_fu_zume(1, 4, 0)

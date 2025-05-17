@@ -35,15 +35,21 @@ This file tracks the progress of the implementation plan as described in IMPLEME
 - [x] Implement `ExperienceBuffer` in `experience_buffer.py`
 - [x] Implement `train.py` main loop (random agent, no learning)
 - [x] Unit tests for all new classes and methods
+- [x] Expand `ActorCritic` in `neural_network.py` to support PPO (policy/value loss, optimizer step)
+- [x] Expand `PPOAgent` in `ppo_agent.py` to support PPO (update, GAE, etc.)
+- [x] Add/expand unit tests for PPO logic
 
 ## Phase 4: Full PPO Implementation
-- [ ] Complete `ActorCritic` and `PPOAgent` with full PPO logic
-- [ ] Integrate GAE and learning steps
-- [ ] Unit tests for RL logic
+- [x] Complete `ActorCritic` and `PPOAgent` with full PPO logic
+- [x] Integrate GAE and learning steps
+- [x] Unit tests for RL logic
 
-## Phase 5: Advanced Rules & Refinements
-- [ ] Implement advanced Shogi rules (Nifu, Uchi Fu Zume, Sennichite, etc.)
-- [ ] Add model saving/loading, logging, and evaluation
+## Phase 5: Advanced Shogi Rules
+- [x] Implement Nifu (pawn drop on file with another unpromoted pawn)
+- [x] Implement Uchi Fu Zume (pawn drop mate illegal)
+- [ ] Implement Sennichite (fourfold repetition)
+- [ ] Add model saving/loading
+- [ ] Add logging and evaluation
 - [ ] Tune hyperparameters and refine architecture as needed
 - [ ] Expand tests for edge cases and advanced rules
 

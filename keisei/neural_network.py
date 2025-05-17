@@ -2,11 +2,13 @@
 Minimal ActorCritic neural network for DRL Shogi Client (dummy forward pass).
 """
 
+import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class ActorCritic(nn.Module):
-    """Actor-Critic neural network for Shogi RL agent."""
+    """Actor-Critic neural network for Shogi RL agent (PPO-ready)."""
 
     def __init__(self, input_channels: int, num_actions_total: int):
         """Initialize the ActorCritic network with convolutional and linear layers."""
@@ -25,3 +27,23 @@ class ActorCritic(nn.Module):
         policy_logits = self.policy_head(x)
         value = self.value_head(x)
         return policy_logits, value
+
+    def get_action_and_value(self, obs, legal_indices=None):
+        policy_logits, value = self.forward(obs)
+        if legal_indices is not None:
+            mask = torch.zeros_like(policy_logits)
+            mask[:, legal_indices] = 1
+            policy_logits = policy_logits.masked_fill(mask == 0, float('-inf'))
+        probs = F.softmax(policy_logits, dim=-1)
+        dist = torch.distributions.Categorical(probs)
+        action = dist.sample()
+        log_prob = dist.log_prob(action)
+        return action, log_prob, value.squeeze(-1)
+
+    def evaluate_actions(self, obs, actions):
+        policy_logits, value = self.forward(obs)
+        probs = F.softmax(policy_logits, dim=-1)
+        dist = torch.distributions.Categorical(probs)
+        log_probs = dist.log_prob(actions)
+        entropy = dist.entropy()
+        return log_probs, entropy, value.squeeze(-1)
