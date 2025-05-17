@@ -1,0 +1,17 @@
+"""
+Unit test for evaluate_agent in train.py
+"""
+from keisei.ppo_agent import PPOAgent
+from keisei.utils import PolicyOutputMapper, TrainingLogger
+import train
+
+def test_evaluate_agent_runs(tmp_path):
+    logger = TrainingLogger(str(tmp_path / "eval.log"), also_stdout=False)
+    mapper = PolicyOutputMapper()
+    agent = PPOAgent(input_channels=46, num_actions_total=3159, policy_output_mapper=mapper)
+    # Should run without error and log results
+    train.evaluate_agent(agent, num_games=2, logger=logger)
+    logger.close()
+    with open(tmp_path / "eval.log", encoding="utf-8") as f:
+        lines = f.readlines()
+    assert any("Evaluation:" in line for line in lines)

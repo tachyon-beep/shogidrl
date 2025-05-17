@@ -3,6 +3,7 @@ PolicyOutputMapper: Maps Shogi moves to/from policy network output indices.
 """
 
 from typing import Any
+import datetime
 
 
 class PolicyOutputMapper:
@@ -48,3 +49,23 @@ class PolicyOutputMapper:
         if idx < len(self.idx_to_shogi_move_spec):
             return self.idx_to_shogi_move_spec[idx]
         raise NotImplementedError("Index not mapped in demo PolicyOutputMapper.")
+
+
+class TrainingLogger:
+    """Simple logger for training and evaluation."""
+
+    def __init__(self, log_path: str, also_stdout: bool = True):
+        self.log_path = log_path
+        self.also_stdout = also_stdout
+        self.log_file = open(log_path, "a", encoding="utf-8")
+
+    def log(self, msg: str):
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        line = f"[{timestamp}] {msg}\n"
+        self.log_file.write(line)
+        self.log_file.flush()
+        if self.also_stdout:
+            print(line, end="")
+
+    def close(self):
+        self.log_file.close()

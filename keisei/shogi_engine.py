@@ -478,34 +478,34 @@ class ShogiGame:
                         # _p_attacker_is_promoted = p_attacker.is_promoted
 
                         is_sliding_piece = False
-                        if _p_attacker_type == 0: # Pawn
+                        if _p_attacker_type == 0:  # Pawn
                             is_sliding_piece = False
-                        elif _p_attacker_type == 1: # Lance
+                        elif _p_attacker_type == 1:  # Lance
                             is_sliding_piece = True
-                        elif _p_attacker_type == 2: # Knight
+                        elif _p_attacker_type == 2:  # Knight
                             is_sliding_piece = False
-                        elif _p_attacker_type == 3: # Silver
+                        elif _p_attacker_type == 3:  # Silver
                             is_sliding_piece = False
-                        elif _p_attacker_type == 4: # Gold
+                        elif _p_attacker_type == 4:  # Gold
                             is_sliding_piece = False
-                        elif _p_attacker_type == 5: # Bishop
+                        elif _p_attacker_type == 5:  # Bishop
                             is_sliding_piece = True
-                        elif _p_attacker_type == 6: # Rook
+                        elif _p_attacker_type == 6:  # Rook
                             is_sliding_piece = True
-                        elif _p_attacker_type == 7: # King
+                        elif _p_attacker_type == 7:  # King
                             is_sliding_piece = False
                         # Promoted pieces
-                        elif _p_attacker_type == 8: # +P (moves like Gold)
+                        elif _p_attacker_type == 8:  # +P (moves like Gold)
                             is_sliding_piece = False
-                        elif _p_attacker_type == 9: # +L (moves like Gold)
+                        elif _p_attacker_type == 9:  # +L (moves like Gold)
                             is_sliding_piece = False
-                        elif _p_attacker_type == 10: # +N (moves like Gold)
+                        elif _p_attacker_type == 10:  # +N (moves like Gold)
                             is_sliding_piece = False
-                        elif _p_attacker_type == 11: # +S (moves like Gold)
+                        elif _p_attacker_type == 11:  # +S (moves like Gold)
                             is_sliding_piece = False
-                        elif _p_attacker_type == 12: # +B (Bishop + King moves)
+                        elif _p_attacker_type == 12:  # +B (Bishop + King moves)
                             is_sliding_piece = True
-                        elif _p_attacker_type == 13: # +R (Rook + King moves)
+                        elif _p_attacker_type == 13:  # +R (Rook + King moves)
                             is_sliding_piece = True
 
                         if not is_sliding_piece:
@@ -539,11 +539,24 @@ class ShogiGame:
                             # This also handles the case where (r_attacker, c_attacker) == (row, col)
                             # if dr,dc are 0 which means the while loop condition `(curr_r, curr_c)
                             # != (row, col)` would be initially false.
-                            if abs(r_attacker - row) > 1 or abs(c_attacker - col) > 1 or \
-                               (abs(r_attacker - row) == 1 and abs(c_attacker - col) > 1) or \
-                               (abs(r_attacker - row) > 1 and abs(c_attacker - col) == 1) or \
-                               (dr == 0 and dc == 0 and (r_attacker != row or c_attacker !=col )):
-                               # Check path only if not adjacent or same square
+                            if (
+                                abs(r_attacker - row) > 1
+                                or abs(c_attacker - col) > 1
+                                or (
+                                    abs(r_attacker - row) == 1
+                                    and abs(c_attacker - col) > 1
+                                )
+                                or (
+                                    abs(r_attacker - row) > 1
+                                    and abs(c_attacker - col) == 1
+                                )
+                                or (
+                                    dr == 0
+                                    and dc == 0
+                                    and (r_attacker != row or c_attacker != col)
+                                )
+                            ):
+                                # Check path only if not adjacent or same square
                                 curr_r, curr_c = r_attacker + dr, c_attacker + dc
                                 while (curr_r, curr_c) != (row, col):
                                     if not self.is_on_board(curr_r, curr_c):
@@ -558,13 +571,15 @@ class ShogiGame:
                                     curr_c += dc
                                     # Safety break for unexpected scenarios, though (row,col)
                                     # in raw_moves should ensure termination
-                                    if not self.is_on_board(curr_r, curr_c) and (curr_r, curr_c) != (row, col):
-                                        path_clear = False # Went off board before reaching target
+                                    if not self.is_on_board(curr_r, curr_c) and (
+                                        curr_r,
+                                        curr_c,
+                                    ) != (row, col):
+                                        path_clear = False  # Went off board before reaching target
                                         break
 
-
                             if path_clear:
-                                return True # If path is clear for a sliding piece, it's an attack.
+                                return True  # If path is clear for a sliding piece, it's an attack.
                             # else: path not clear, continue to the next attacker in the outer loop.
         return False
 
@@ -614,9 +629,32 @@ class ShogiGame:
             return True  # No king found, treat as in check
         return self._is_square_attacked(king_pos[0], king_pos[1], 1 - color)
 
+    def _board_state_hash(self):
+        """
+        Returns a hashable representation of the current board, hands, and player to move.
+        For now, only board and player (no hands yet).
+        """
+        board_tuple = tuple(
+            tuple((p.type, p.color, p.is_promoted) if p else None for p in row)
+            for row in self.board
+        )
+        # TODO: Add hands to the hash when implemented
+        return (board_tuple, self.current_player)
+
+    def is_sennichite(self) -> bool:
+        """
+        Returns True if the current board state has occurred four times (Sennichite).
+        """
+        state_hash = self._board_state_hash()
+        count = sum(1 for h in self.move_history if h.get("state_hash") == state_hash)
+        # Include current state
+        if state_hash == self._board_state_hash():
+            count += 1
+        return count >= 4
+
     def make_move(self, move_tuple):
         """
-        Make a move (board move only) and update the game state.
+        Make a move (board move only) and update the game state. Now records board state for Sennichite.
         """
         r_from, c_from, r_to, c_to, _ = move_tuple
         moving_piece = self.get_piece(r_from, c_from)
@@ -627,9 +665,16 @@ class ShogiGame:
         # No hand/capture logic yet
         self.move_count += 1
         self.current_player = 1 - self.current_player
-        # No game over/checkmate logic yet
         # Record move for undo (minimal)
-        self.move_history.append((move_tuple, captured_piece))
+        # Now also record board state hash for Sennichite
+        state_hash = self._board_state_hash()
+        self.move_history.append(
+            {"move": move_tuple, "captured": captured_piece, "state_hash": state_hash}
+        )
+        # Sennichite detection
+        if self.is_sennichite():
+            self.game_over = True
+            self.winner = None  # Draw for now
 
     def undo_move(self):
         """
@@ -637,7 +682,9 @@ class ShogiGame:
         """
         if not self.move_history:
             raise RuntimeError("No move to undo")
-        move_tuple, captured_piece = self.move_history.pop()
+        last = self.move_history.pop()
+        move_tuple = last["move"]
+        captured_piece = last["captured"]
         r_from, c_from, r_to, c_to, _ = move_tuple
         moving_piece = self.get_piece(r_to, c_to)
         # Move piece back
@@ -647,6 +694,8 @@ class ShogiGame:
         self.move_count -= 1
         # No hand/capture logic yet
         # No game over/winner logic yet
+        self.game_over = False
+        self.winner = None
 
     def is_in_check(self, player_color_int):
         """

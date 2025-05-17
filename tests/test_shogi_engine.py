@@ -404,3 +404,28 @@ def test_is_in_check_basic():
     game.set_piece(3, 4, Piece(6, 0))  # Black rook at (3,4)
     assert game.is_in_check(1)
     assert not game.is_in_check(0)
+
+
+def test_sennichite_detection():
+    """Test ShogiGame detects Sennichite (fourfold repetition) and declares a draw."""
+    game = ShogiGame()
+    # Clear the board for a simple repetition test
+    for r in range(9):
+        for c in range(9):
+            game.set_piece(r, c, None)
+    # Place kings only
+    game.set_piece(8, 4, Piece(7, 0))
+    game.set_piece(0, 4, Piece(7, 1))
+    # Repeat a simple move back and forth 4 times
+    for _ in range(4):
+        move1 = (8, 4, 7, 4, 0)  # Black king up
+        move2 = (0, 4, 1, 4, 0)  # White king down
+        move3 = (7, 4, 8, 4, 0)  # Black king back
+        move4 = (1, 4, 0, 4, 0)  # White king back
+        game.make_move(move1)
+        game.make_move(move2)
+        game.make_move(move3)
+        game.make_move(move4)
+    # After 4 repetitions, Sennichite should be detected
+    assert game.game_over, "Game should be over due to Sennichite."
+    assert game.winner is None, "Sennichite should be a draw (winner=None)."

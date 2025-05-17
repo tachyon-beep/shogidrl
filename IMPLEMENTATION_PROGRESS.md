@@ -47,9 +47,9 @@ This file tracks the progress of the implementation plan as described in IMPLEME
 ## Phase 5: Advanced Shogi Rules
 - [x] Implement Nifu (pawn drop on file with another unpromoted pawn)
 - [x] Implement Uchi Fu Zume (pawn drop mate illegal)
-- [ ] Implement Sennichite (fourfold repetition)
-- [ ] Add model saving/loading
-- [ ] Add logging and evaluation
+- [x] Implement Sennichite (fourfold repetition)
+- [x] Add model saving/loading
+- [x] Add logging and evaluation
 - [ ] Tune hyperparameters and refine architecture as needed
 - [ ] Expand tests for edge cases and advanced rules
 
