@@ -3,7 +3,6 @@ Minimal train.py main loop for DRL Shogi Client (random agent, no learning).
 """
 
 import torch
-import numpy as np
 from keisei.shogi_engine import ShogiGame
 from keisei.utils import PolicyOutputMapper
 from keisei.ppo_agent import PPOAgent

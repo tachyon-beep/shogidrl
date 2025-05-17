@@ -29,11 +29,15 @@ class ActorCritic(nn.Module):
         return policy_logits, value
 
     def get_action_and_value(self, obs, legal_indices=None):
+        """
+        Given an observation (and optional legal action indices), return a sampled action, its log probability, 
+        and value estimate.
+        """
         policy_logits, value = self.forward(obs)
         if legal_indices is not None:
             mask = torch.zeros_like(policy_logits)
             mask[:, legal_indices] = 1
-            policy_logits = policy_logits.masked_fill(mask == 0, float('-inf'))
+            policy_logits = policy_logits.masked_fill(mask == 0, float("-inf"))
         probs = F.softmax(policy_logits, dim=-1)
         dist = torch.distributions.Categorical(probs)
         action = dist.sample()
@@ -41,6 +45,9 @@ class ActorCritic(nn.Module):
         return action, log_prob, value.squeeze(-1)
 
     def evaluate_actions(self, obs, actions):
+        """
+        Evaluate the log probabilities, entropy, and value for given observations and actions.
+        """
         policy_logits, value = self.forward(obs)
         probs = F.softmax(policy_logits, dim=-1)
         dist = torch.distributions.Categorical(probs)

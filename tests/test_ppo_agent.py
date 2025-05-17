@@ -2,7 +2,6 @@
 Unit tests for PPOAgent in ppo_agent.py
 """
 
-import pytest
 import torch
 import numpy as np
 from keisei.ppo_agent import PPOAgent
