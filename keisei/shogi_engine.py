@@ -1,13 +1,10 @@
 """
 shogi_engine.py: Core Shogi game mechanics for DRL Shogi Client.
 """
-
 from typing import Optional, List
 import numpy as np
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
+
 
 
 class Piece:
@@ -122,13 +119,13 @@ class ShogiGame:
             rows.append(" ".join(row))
         return "\n".join(rows)
 
-    def _is_on_board(self, row: int, col: int) -> bool:
+    def is_on_board(self, row: int, col: int) -> bool:
         """
         Returns True if (row, col) is a valid board coordinate.
         """
         return 0 <= row < 9 and 0 <= col < 9
 
-    def _get_individual_piece_moves(
+    def get_individual_piece_moves(
         self, piece: Piece, r_from: int, c_from: int
     ) -> list[tuple[int, int]]:
         """
@@ -156,11 +153,11 @@ class ShogiGame:
                 ]
                 for dr, dc in gold_moves:
                     nr, nc = r_from + dr, c_from + dc
-                    if self._is_on_board(nr, nc):
+                    if self.is_on_board(nr, nc):
                         moves.append((nr, nc))
             else:
                 nr, nc = r_from + forward, c_from
-                if self._is_on_board(nr, nc):
+                if self.is_on_board(nr, nc):
                     moves.append((nr, nc))
         # King
         elif t == 7:
@@ -169,7 +166,7 @@ class ShogiGame:
                     if dr == 0 and dc == 0:
                         continue
                     nr, nc = r_from + dr, c_from + dc
-                    if self._is_on_board(nr, nc):
+                    if self.is_on_board(nr, nc):
                         moves.append((nr, nc))
         # Lance
         elif t == 1 or (promoted and t == 9):
@@ -185,13 +182,13 @@ class ShogiGame:
                 ]
                 for dr, dc in gold_moves:
                     nr, nc = r_from + dr, c_from + dc
-                    if self._is_on_board(nr, nc):
+                    if self.is_on_board(nr, nc):
                         moves.append((nr, nc))
             else:
                 # Lance moves any number of squares forward
                 for i in range(1, 9):
                     nr, nc = r_from + i * forward, c_from
-                    if not self._is_on_board(nr, nc):
+                    if not self.is_on_board(nr, nc):
                         break
                     moves.append((nr, nc))
         # Knight
@@ -208,13 +205,13 @@ class ShogiGame:
                 ]
                 for dr, dc in gold_moves:
                     nr, nc = r_from + dr, c_from + dc
-                    if self._is_on_board(nr, nc):
+                    if self.is_on_board(nr, nc):
                         moves.append((nr, nc))
             else:
                 # Knight moves in an L shape: two forward, one left/right
                 for dc in [-1, 1]:
                     nr, nc = r_from + 2 * forward, c_from + dc
-                    if self._is_on_board(nr, nc):
+                    if self.is_on_board(nr, nc):
                         moves.append((nr, nc))
         # Silver
         elif t == 3 or (promoted and t == 11):
@@ -230,7 +227,7 @@ class ShogiGame:
                 ]
                 for dr, dc in gold_moves:
                     nr, nc = r_from + dr, c_from + dc
-                    if self._is_on_board(nr, nc):
+                    if self.is_on_board(nr, nc):
                         moves.append((nr, nc))
             else:
                 # Silver: forward, forward-diagonals, backward-diagonals
@@ -242,7 +239,7 @@ class ShogiGame:
                     (-forward, 1),
                 ]:
                     nr, nc = r_from + dr, c_from + dc
-                    if self._is_on_board(nr, nc):
+                    if self.is_on_board(nr, nc):
                         moves.append((nr, nc))
         # Gold
         elif t == 4:
@@ -257,7 +254,7 @@ class ShogiGame:
             ]
             for dr, dc in gold_moves:
                 nr, nc = r_from + dr, c_from + dc
-                if self._is_on_board(nr, nc):
+                if self.is_on_board(nr, nc):
                     moves.append((nr, nc))
         # Bishop
         elif t == 5 or (promoted and t == 12):
@@ -265,14 +262,14 @@ class ShogiGame:
             for dr, dc in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:
                 for i in range(1, 9):
                     nr, nc = r_from + dr * i, c_from + dc * i
-                    if not self._is_on_board(nr, nc):
+                    if not self.is_on_board(nr, nc):
                         break
                     moves.append((nr, nc))
             if promoted:
                 # Promoted bishop: add king moves (orthogonal)
                 for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                     nr, nc = r_from + dr, c_from + dc
-                    if self._is_on_board(nr, nc):
+                    if self.is_on_board(nr, nc):
                         moves.append((nr, nc))
         # Rook
         elif t == 6 or (promoted and t == 13):
@@ -280,14 +277,14 @@ class ShogiGame:
             for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                 for i in range(1, 9):
                     nr, nc = r_from + dr * i, c_from + dc * i
-                    if not self._is_on_board(nr, nc):
+                    if not self.is_on_board(nr, nc):
                         break
                     moves.append((nr, nc))
             if promoted:
                 # Promoted rook: add king moves (diagonal)
                 for dr, dc in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:
                     nr, nc = r_from + dr, c_from + dc
-                    if self._is_on_board(nr, nc):
+                    if self.is_on_board(nr, nc):
                         moves.append((nr, nc))
         return moves
 
@@ -325,5 +322,7 @@ class ShogiGame:
         # Current player plane
         obs[42, :, :] = 1.0 if self.current_player == 0 else 0.0
         # Move count plane (normalized)
-        obs[43, :, :] = self.move_count / float(getattr(config, "MAX_MOVES_PER_GAME", 512))
+        obs[43, :, :] = self.move_count / float(
+            getattr(config, "MAX_MOVES_PER_GAME", 512)
+        )
         return obs

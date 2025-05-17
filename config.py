@@ -13,8 +13,8 @@ MAX_MOVES_PER_GAME = 512
 INPUT_CHANNELS = 46  # As per DESIGN.md
 NUM_ACTIONS_TOTAL = 3159  # As per DESIGN.md (update if PolicyOutputMapper changes)
 SAVE_FREQ_EPISODES = 100
-DEVICE = 'cuda'  # or 'cpu'
+DEVICE = "cuda"  # or 'cpu'
 
-MODEL_DIR = 'models/'
-LOG_DIR = 'logs/'
-LOG_FILE = LOG_DIR + 'shogi_training_log.txt'
+MODEL_DIR = "models/"
+LOG_DIR = "logs/"
+LOG_FILE = LOG_DIR + "shogi_training_log.txt"

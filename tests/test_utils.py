@@ -1,8 +1,10 @@
 """
 Unit tests for PolicyOutputMapper in utils.py
 """
+
 import pytest
 from keisei.utils import PolicyOutputMapper
+
 
 def test_policy_output_mapper_init():
     """Test PolicyOutputMapper initializes with correct total actions."""
@@ -48,12 +50,12 @@ def test_policy_output_mapper_expanded():
     assert idx_w == 6
     assert mapper.policy_index_to_shogi_move(idx_w) == move_w
     # Black pawn drop
-    drop = (None, None, 4, 4, 'drop_pawn_black')
+    drop = (None, None, 4, 4, "drop_pawn_black")
     idx_drop = mapper.shogi_move_to_policy_index(drop)
     assert idx_drop == 8
     assert mapper.policy_index_to_shogi_move(idx_drop) == drop
     # White pawn drop
-    drop_w = (None, None, 4, 4, 'drop_pawn_white')
+    drop_w = (None, None, 4, 4, "drop_pawn_white")
     idx_drop_w = mapper.shogi_move_to_policy_index(drop_w)
     assert idx_drop_w == 9
     assert mapper.policy_index_to_shogi_move(idx_drop_w) == drop_w

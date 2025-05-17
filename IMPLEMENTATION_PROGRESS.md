@@ -26,15 +26,15 @@ This file tracks the progress of the implementation plan as described in IMPLEME
 - [x] Implement minimal `PolicyOutputMapper` in `utils.py` (single pawn move mapping)
 - [x] Unit test for minimal `PolicyOutputMapper`
 - [x] Fix and verify all tests for minimal mapping
-- [ ] Expand `PolicyOutputMapper` to cover more move types and drops
-- [ ] Add/expand unit tests for new mappings
+- [x] Expand `PolicyOutputMapper` to cover more move types and drops
+- [x] Add/expand unit tests for new mappings
 
 ## Phase 3: RL Loop Structure & Random Agent
-- [ ] Implement `ActorCritic` in `neural_network.py` (initial dummy forward pass)
-- [ ] Implement `PPOAgent` in `ppo_agent.py` (random action selection initially)
-- [ ] Implement `ExperienceBuffer` in `experience_buffer.py`
-- [ ] Implement `train.py` main loop (random agent, no learning)
-- [ ] Unit tests for all new classes and methods
+- [x] Implement `ActorCritic` in `neural_network.py` (initial dummy forward pass)
+- [x] Implement `PPOAgent` in `ppo_agent.py` (random action selection initially)
+- [x] Implement `ExperienceBuffer` in `experience_buffer.py`
+- [x] Implement `train.py` main loop (random agent, no learning)
+- [x] Unit tests for all new classes and methods
 
 ## Phase 4: Full PPO Implementation
 - [ ] Complete `ActorCritic` and `PPOAgent` with full PPO logic

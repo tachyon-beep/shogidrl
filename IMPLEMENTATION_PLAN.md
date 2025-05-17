@@ -103,5 +103,6 @@ tests/
 - Use pylint and flake8 for linting; resolve all warnings and errors.
 - Use black for code formatting.
 - Protected/private members may be accessed in tests for foundational logic, with a comment or linter directive.
+- Under no circumstances should you implement or add lines like `# pylint: disable=protected-access`, `# noqa`, `# type: ignore`, or any similar directive to bypass linting, type checking, or test errors. All code and tests must comply with linting and type checking requirements by design, not by disabling checks. This applies to all files, tests, and instructions in the project.
 - All code and tests must pass type checking with mypy.
 - All code and tests must pass linting and formatting before merging or committing.
