@@ -17,8 +17,8 @@ This file tracks the progress of the implementation plan as described in IMPLEME
 - [x] Unit tests for silver and gold moves
 - [x] Implement logic for bishop and rook (including promoted) in _get_individual_piece_moves
 - [x] Unit tests for bishop and rook moves
-- [ ] Implement move logic, state management, and other foundational methods
-- [ ] Unit tests for move logic and state management
+- [x] Implement move logic, state management, and other foundational methods (`get_legal_moves`, `make_move`, `undo_move`, `_is_in_check`)
+- [x] Unit tests for move logic and state management
 
 ## Phase 2: State Representation & Action Mapping
 - [x] Implement `get_observation()` in `ShogiGame`

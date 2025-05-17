@@ -127,6 +127,10 @@ def test_get_individual_piece_moves_pawn():
 def test_get_individual_piece_moves_lance_knight():
     """Test get_individual_piece_moves for lance and knight (unpromoted and promoted)."""
     game = ShogiGame()
+    # Clear the board for pure move generation
+    for r in range(9):
+        for c in range(9):
+            game.set_piece(r, c, None)
     lance = Piece(1, 0)
     moves = game.get_individual_piece_moves(lance, 4, 4)
     expected = [(3, 4), (2, 4), (1, 4), (0, 4)]
@@ -194,6 +198,10 @@ def test_get_individual_piece_moves_silver_gold():
 def test_get_individual_piece_moves_bishop_rook():
     """Test get_individual_piece_moves for bishop and rook (unpromoted and promoted)."""
     game = ShogiGame()
+    # Clear the board for pure move generation
+    for r in range(9):
+        for c in range(9):
+            game.set_piece(r, c, None)
     bishop = Piece(5, 0)
     moves = game.get_individual_piece_moves(bishop, 4, 4)
     for d in range(1, 5):
@@ -289,3 +297,110 @@ def test_uchi_fu_zume():
     game.set_piece(1, 4, None)
     game.set_piece(1, 4, Piece(4, 0))
     assert not game.is_uchi_fu_zume(1, 4, 0)
+
+
+def test_sfen_encode_move_stub():
+    """Test sfen_encode_move NotImplementedError."""
+    game = ShogiGame()
+    try:
+        game.sfen_encode_move((6, 6, 6, 5, 0))
+    except NotImplementedError:
+        pass
+    else:
+        assert False, "sfen_encode_move should raise NotImplementedError initially"
+
+
+def test_get_legal_moves_initial_position():
+    """Test get_legal_moves returns plausible legal moves for initial position (Black to move)."""
+    game = ShogiGame()
+    moves = game.get_legal_moves()
+    # All Black pawns should be able to move forward one square (row 6 to 5)
+    pawn_moves = [(6, c, 5, c, 0) for c in range(9)]
+    for m in pawn_moves:
+        assert m in moves
+    # No move should capture own piece
+    for m in moves:
+        r_from, c_from, r_to, c_to, _ = m
+        piece = game.get_piece(r_from, c_from)
+        error_message = (
+            f"Move {m} originates from an empty square ({r_from},{c_from}). "
+            "This implies a bug in get_legal_moves."
+        )
+        assert piece is not None, error_message
+        target = game.get_piece(r_to, c_to)
+        if target:
+            assert target.color != piece.color
+
+
+def test_make_move_pawn_forward():
+    """Test make_move moves a black pawn forward and updates state."""
+    game = ShogiGame()
+    move = (6, 0, 5, 0, 0)  # Black pawn at (6,0) moves to (5,0)
+    game.make_move(move)
+    assert game.get_piece(6, 0) is None
+    p = game.get_piece(5, 0)
+    assert p is not None and p.type == 0 and p.color == 0
+    assert game.current_player == 1  # White's turn
+    assert game.move_count == 1
+
+
+def test_make_move_and_undo_simple_pawn():
+    """Test make_move and undo_move for a simple pawn move (no capture, no promotion)."""
+    game = ShogiGame()
+    # Save initial state
+    initial_board = [[game.get_piece(r, c) for c in range(9)] for r in range(9)]
+    initial_player = game.current_player
+    initial_move_count = game.move_count
+    initial_history_len = len(game.move_history)
+
+    move = (6, 0, 5, 0, 0)  # Black pawn at (6,0) moves to (5,0)
+    game.make_move(move)
+    # After move, pawn should be at (5,0), (6,0) empty, player switched, move_count incremented
+    assert game.get_piece(6, 0) is None
+    p = game.get_piece(5, 0)
+    assert p is not None and p.type == 0 and p.color == 0
+    assert game.current_player != initial_player
+    assert game.move_count == initial_move_count + 1
+    assert len(game.move_history) == initial_history_len + 1
+
+    # Undo move
+    game.undo_move()
+    # Board should be restored
+    for r in range(9):
+        for c in range(9):
+            orig = initial_board[r][c]
+            curr = game.get_piece(r, c)
+            if orig is None:
+                assert curr is None
+            else:
+                assert curr is not None
+                assert curr.type == orig.type
+                assert curr.color == orig.color
+                assert curr.is_promoted == orig.is_promoted
+    assert game.current_player == initial_player
+    assert game.move_count == initial_move_count
+    assert len(game.move_history) == initial_history_len
+
+
+def test_is_in_check_basic():
+    """Test _is_in_check for both players in simple scenarios."""
+    game = ShogiGame()
+    # Clear the board for pure check logic
+    for r in range(9):
+        for c in range(9):
+            game.set_piece(r, c, None)
+    # Place black king at (8,4), white king at (0,4)
+    game.set_piece(8, 4, Piece(7, 0))
+    game.set_piece(0, 4, Piece(7, 1))
+    # Neither king is in check
+    assert not game.is_in_check(0)
+    assert not game.is_in_check(1)
+    # Place a white rook to check black king
+    game.set_piece(5, 4, Piece(6, 1))  # White rook at (5,4)
+    assert game.is_in_check(0)
+    assert not game.is_in_check(1)
+    # Remove white rook, place black rook to check white king
+    game.set_piece(5, 4, None)
+    game.set_piece(3, 4, Piece(6, 0))  # Black rook at (3,4)
+    assert game.is_in_check(1)
+    assert not game.is_in_check(0)

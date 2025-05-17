@@ -30,7 +30,7 @@ class ActorCritic(nn.Module):
 
     def get_action_and_value(self, obs, legal_indices=None):
         """
-        Given an observation (and optional legal action indices), return a sampled action, its log probability, 
+        Given an observation (and optional legal action indices), return a sampled action, its log probability,
         and value estimate.
         """
         policy_logits, value = self.forward(obs)

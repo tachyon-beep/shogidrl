@@ -210,10 +210,17 @@ class ShogiGame:
         elif t == 1 and not is_promoted_by_flag:
             for i in range(1, 9):
                 nr, nc = r_from + forward * i, c_from
-                if self.is_on_board(nr, nc):
+                if not self.is_on_board(nr, nc):
+                    break
+                target = self.get_piece(nr, nc)
+                if target is None:
                     moves.append((nr, nc))
-                    # if self.get_piece(nr, nc) is not None: break # Removed to allow full path generation
                 else:
+                    # Always add the king's square as a possible move for check detection
+                    if target.type == 7:
+                        moves.append((nr, nc))
+                    elif target.color != piece.color:
+                        moves.append((nr, nc))
                     break
 
         # --- Knight (unpromoted) ---
@@ -238,10 +245,17 @@ class ShogiGame:
             for dr_diag, dc_diag in [(-1, -1), (-1, 1), (1, -1), (1, 1)]:
                 for i in range(1, 9):
                     nr, nc = r_from + dr_diag * i, c_from + dc_diag * i
-                    if self.is_on_board(nr, nc):
+                    if not self.is_on_board(nr, nc):
+                        break
+                    target = self.get_piece(nr, nc)
+                    if target is None:
                         moves.append((nr, nc))
-                        # if self.get_piece(nr, nc) is not None: break # Removed to allow full path generation
                     else:
+                        # Always add the king's square as a possible move for check detection
+                        if target.type == 7:
+                            moves.append((nr, nc))
+                        elif target.color != piece.color:
+                            moves.append((nr, nc))
                         break
             # If Promoted Bishop (type 12, OR type 5 and flagged promoted)
             if t == 12 or (t == 5 and is_promoted_by_flag):
@@ -256,10 +270,17 @@ class ShogiGame:
             for dr_ortho, dc_ortho in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                 for i in range(1, 9):
                     nr, nc = r_from + dr_ortho * i, c_from + dc_ortho * i
-                    if self.is_on_board(nr, nc):
+                    if not self.is_on_board(nr, nc):
+                        break
+                    target = self.get_piece(nr, nc)
+                    if target is None:
                         moves.append((nr, nc))
-                        # if self.get_piece(nr, nc) is not None: break # Removed to allow full path generation
                     else:
+                        # Always add the king's square as a possible move for check detection
+                        if target.type == 7:
+                            moves.append((nr, nc))
+                        elif target.color != piece.color:
+                            moves.append((nr, nc))
                         break
             # If Promoted Rook (type 13, OR type 6 and flagged promoted)
             if t == 13 or (t == 6 and is_promoted_by_flag):
@@ -316,7 +337,7 @@ class ShogiGame:
 
     def is_nifu(self, color: int, col: int) -> bool:
         """
-        Returns True if dropping a pawn of the given color in the given column would violate Nifu 
+        Returns True if dropping a pawn of the given color in the given column would violate Nifu
         (two unpromoted pawns on the same file).
         """
         for row in range(9):
@@ -452,55 +473,46 @@ class ShogiGame:
                         # Piece types: 0=P, 1=L, 2=N, 3=S, 4=G, 5=B, 6=R, 7=K
                         # Promoted: +P=8, +L=9, +N=10, +S=11, +B=12, +R=13
 
-                        # Using the existing complex logic for is_sliding_piece from the file:
                         _p_attacker_type = p_attacker.type
-                        _p_attacker_is_promoted = (
-                            p_attacker.is_promoted
-                        )  # Note: piece.type >=8 already implies promotion generally
+                        # Not directly needed for this simplified check
+                        # _p_attacker_is_promoted = p_attacker.is_promoted
 
-                        is_sliding_piece = _p_attacker_type in [1, 5, 6] or (
-                            _p_attacker_is_promoted
-                            and _p_attacker_type in [8, 9, 10, 11, 12, 13]
-                        )
-
-                        if _p_attacker_type == 0:
-                            is_sliding_piece = False  # Pawn
-                        elif _p_attacker_type == 1:
-                            is_sliding_piece = True  # Lance
-                        elif _p_attacker_type == 2:
-                            is_sliding_piece = False  # Knight
-                        elif _p_attacker_type == 3:
-                            is_sliding_piece = False  # Silver
-                        elif _p_attacker_type == 4:
-                            is_sliding_piece = False  # Gold
-                        elif _p_attacker_type == 5:
-                            is_sliding_piece = True  # Bishop
-                        elif _p_attacker_type == 6:
-                            is_sliding_piece = True  # Rook
-                        elif _p_attacker_type == 7:
-                            is_sliding_piece = False  # King
+                        is_sliding_piece = False
+                        if _p_attacker_type == 0: # Pawn
+                            is_sliding_piece = False
+                        elif _p_attacker_type == 1: # Lance
+                            is_sliding_piece = True
+                        elif _p_attacker_type == 2: # Knight
+                            is_sliding_piece = False
+                        elif _p_attacker_type == 3: # Silver
+                            is_sliding_piece = False
+                        elif _p_attacker_type == 4: # Gold
+                            is_sliding_piece = False
+                        elif _p_attacker_type == 5: # Bishop
+                            is_sliding_piece = True
+                        elif _p_attacker_type == 6: # Rook
+                            is_sliding_piece = True
+                        elif _p_attacker_type == 7: # King
+                            is_sliding_piece = False
                         # Promoted pieces
-                        elif _p_attacker_type == 8:
-                            is_sliding_piece = False  # +P (moves like Gold)
-                        elif _p_attacker_type == 9:
-                            is_sliding_piece = False  # +L (moves like Gold)
-                        elif _p_attacker_type == 10:
-                            is_sliding_piece = False  # +N (moves like Gold)
-                        elif _p_attacker_type == 11:
-                            is_sliding_piece = False  # +S (moves like Gold)
-                        elif _p_attacker_type == 12:
-                            is_sliding_piece = True  # +B (Bishop + King moves)
-                        elif _p_attacker_type == 13:
-                            is_sliding_piece = True  # +R (Rook + King moves)
-                        else:
-                            is_sliding_piece = False  # Should not happen
+                        elif _p_attacker_type == 8: # +P (moves like Gold)
+                            is_sliding_piece = False
+                        elif _p_attacker_type == 9: # +L (moves like Gold)
+                            is_sliding_piece = False
+                        elif _p_attacker_type == 10: # +N (moves like Gold)
+                            is_sliding_piece = False
+                        elif _p_attacker_type == 11: # +S (moves like Gold)
+                            is_sliding_piece = False
+                        elif _p_attacker_type == 12: # +B (Bishop + King moves)
+                            is_sliding_piece = True
+                        elif _p_attacker_type == 13: # +R (Rook + King moves)
+                            is_sliding_piece = True
 
                         if not is_sliding_piece:
                             # For non-sliding pieces, if (row, col) is in raw_moves, it's a direct attack.
                             return True
                         else:
                             # Path checking for sliding pieces (Lance, Bishop, Rook, Promoted B/R)
-                            # Determine direction of attack
                             dr = 0
                             if row > r_attacker:
                                 dr = 1
@@ -513,55 +525,150 @@ class ShogiGame:
                             elif col < c_attacker:
                                 dc = -1
 
-                            # Check squares between attacker and target
-                            curr_r, curr_c = r_attacker + dr, c_attacker + dc
-                            path_clear = True
-                            while (curr_r, curr_c) != (row, col):
-                                if not self.is_on_board(curr_r, curr_c):
-                                    # This case should ideally not be reached if (row, col) is on board and
-                                    # raw_moves are generated correctly for on-board targets. However, if
-                                    # raw_moves somehow generated an off-board intermediate step for an
-                                    # on-board target, this would catch it.
-                                    path_clear = False
-                                    break
+                            # If dr and dc are both 0, it means r_attacker == row and c_attacker == col.
+                            # This shouldn't happen if (row, col) is a move for p_attacker,
+                            # unless it's a self-capture (which raw_moves should prevent for same color).
+                            # However, for safety, if it's an adjacent square (already handled by raw_moves
+                            # for king-like parts of +B/+R) or if it's the same square, path check logic
+                            # might be tricky.
+                            # The crucial part is that (row,col) is in raw_moves.
+                            # If it's an adjacent square, the path is trivially clear.
 
-                                piece_on_path = self.get_piece(curr_r, curr_c)
-                                if piece_on_path is not None:
-                                    path_clear = False
-                                    break
-                                curr_r += dr
-                                curr_c += dc
+                            path_clear = True
+                            # Only check path if not adjacent (distance > 1 in at least one direction)
+                            # This also handles the case where (r_attacker, c_attacker) == (row, col)
+                            # if dr,dc are 0 which means the while loop condition `(curr_r, curr_c)
+                            # != (row, col)` would be initially false.
+                            if abs(r_attacker - row) > 1 or abs(c_attacker - col) > 1 or \
+                               (abs(r_attacker - row) == 1 and abs(c_attacker - col) > 1) or \
+                               (abs(r_attacker - row) > 1 and abs(c_attacker - col) == 1) or \
+                               (dr == 0 and dc == 0 and (r_attacker != row or c_attacker !=col )):
+                               # Check path only if not adjacent or same square
+                                curr_r, curr_c = r_attacker + dr, c_attacker + dc
+                                while (curr_r, curr_c) != (row, col):
+                                    if not self.is_on_board(curr_r, curr_c):
+                                        # Should not happen if raw_moves are correct
+                                        path_clear = False
+                                        break
+                                    piece_on_path = self.get_piece(curr_r, curr_c)
+                                    if piece_on_path is not None:
+                                        path_clear = False
+                                        break
+                                    curr_r += dr
+                                    curr_c += dc
+                                    # Safety break for unexpected scenarios, though (row,col)
+                                    # in raw_moves should ensure termination
+                                    if not self.is_on_board(curr_r, curr_c) and (curr_r, curr_c) != (row, col):
+                                        path_clear = False # Went off board before reaching target
+                                        break
+
 
                             if path_clear:
-                                # For promoted Bishop/Rook, they also have non-sliding King-like moves.
-                                # If the target square is adjacent, it's a direct attack regardless of
-                                # path IF that adjacent move is part of their King-like moves.
-                                # The raw_moves check already confirmed (row,col) is a possible destination.
-                                # The is_sliding_piece logic means we are here for the sliding component or a piece that
-                                # has sliding components (+B, +R).
-
-                                if p_attacker.type in [
-                                    12,
-                                    13,
-                                ]:  # Promoted Bishop or Rook
-                                    # Check if this attack is due to its King-like component (adjacent square)
-                                    # This specific check is to see if an adjacent square is hit by the "king-move"
-                                    # part of +B/+R
-                                    # If it's an adjacent square, it could be a king-like move or a 1-step sliding move.
-                                    # get_individual_piece_moves includes both. If path_clear is true, it means any
-                                    # sliding path is open.
-                                    # The original code's logic:
-                                    if (
-                                        abs(r_attacker - row) <= 1
-                                        and abs(c_attacker - col) <= 1
-                                    ):
-                                        # This means the target is adjacent. Since (row,col) is in raw_moves for +B/+R,
-                                        # and it's adjacent, it's a valid move (either king-like or 1-step slide).
-                                        # Path being clear for a 1-step slide is trivial.
-                                        # Adjacent square, direct attack by king-like move part or 1-step slide
-                                        return True
-
-                            else:  # Path not clear
-                                continue  # This attacker does not attack via this path.
-
+                                return True # If path is clear for a sliding piece, it's an attack.
+                            # else: path not clear, continue to the next attacker in the outer loop.
         return False
+
+    def get_legal_moves(self):
+        """
+        Generate all legal moves for the current player. Returns a list of move tuples.
+        Only board moves (no drops) and no advanced rules for this first step.
+        """
+        legal_moves = []
+        for r_from in range(9):
+            for c_from in range(9):
+                piece = self.get_piece(r_from, c_from)
+                if not piece or piece.color != self.current_player:
+                    continue
+                moves = self.get_individual_piece_moves(piece, r_from, c_from)
+                for r_to, c_to in moves:
+                    target = self.get_piece(r_to, c_to)
+                    if target and target.color == self.current_player:
+                        continue  # Can't capture own piece
+                    # For now, ignore promotion and drops
+                    move_tuple = (r_from, c_from, r_to, c_to, 0)
+                    # Simulate move
+                    captured = self.get_piece(r_to, c_to)
+                    orig_piece = self.get_piece(r_from, c_from)
+                    self.set_piece(r_to, c_to, orig_piece)
+                    self.set_piece(r_from, c_from, None)
+                    in_check = self._king_in_check_after_move(self.current_player)
+                    # Undo move
+                    self.set_piece(r_from, c_from, orig_piece)
+                    self.set_piece(r_to, c_to, captured)
+                    if not in_check:
+                        legal_moves.append(move_tuple)
+        return legal_moves
+
+    def _king_in_check_after_move(self, color):
+        # Helper: after a move, is the given color's king in check?
+        king_pos = None
+        for r in range(9):
+            for c in range(9):
+                p = self.get_piece(r, c)
+                if p and p.type == 7 and p.color == color:
+                    king_pos = (r, c)
+                    break
+            if king_pos:
+                break
+        if not king_pos:
+            return True  # No king found, treat as in check
+        return self._is_square_attacked(king_pos[0], king_pos[1], 1 - color)
+
+    def make_move(self, move_tuple):
+        """
+        Make a move (board move only) and update the game state.
+        """
+        r_from, c_from, r_to, c_to, _ = move_tuple
+        moving_piece = self.get_piece(r_from, c_from)
+        captured_piece = self.get_piece(r_to, c_to)
+        # Move the piece
+        self.set_piece(r_to, c_to, moving_piece)
+        self.set_piece(r_from, c_from, None)
+        # No hand/capture logic yet
+        self.move_count += 1
+        self.current_player = 1 - self.current_player
+        # No game over/checkmate logic yet
+        # Record move for undo (minimal)
+        self.move_history.append((move_tuple, captured_piece))
+
+    def undo_move(self):
+        """
+        Undo the last move (for search or testing). Only supports board moves (no drops/captures yet).
+        """
+        if not self.move_history:
+            raise RuntimeError("No move to undo")
+        move_tuple, captured_piece = self.move_history.pop()
+        r_from, c_from, r_to, c_to, _ = move_tuple
+        moving_piece = self.get_piece(r_to, c_to)
+        # Move piece back
+        self.set_piece(r_from, c_from, moving_piece)
+        self.set_piece(r_to, c_to, captured_piece)
+        self.current_player = 1 - self.current_player
+        self.move_count -= 1
+        # No hand/capture logic yet
+        # No game over/winner logic yet
+
+    def is_in_check(self, player_color_int):
+        """
+        Return True if the given player's king is in check.
+        """
+        # Find the king's position
+        king_pos = None
+        for r in range(9):
+            for c in range(9):
+                p = self.get_piece(r, c)
+                if p and p.type == 7 and p.color == player_color_int:
+                    king_pos = (r, c)
+                    break
+            if king_pos:
+                break
+        if not king_pos:
+            return True  # No king found, treat as in check
+        # Is the king's square attacked by the opponent?
+        return self._is_square_attacked(king_pos[0], king_pos[1], 1 - player_color_int)
+
+    def sfen_encode_move(self, move_tuple):
+        """
+        Convert a move tuple to SFEN/USI string for logging.
+        """
+        raise NotImplementedError("sfen_encode_move not yet implemented")
