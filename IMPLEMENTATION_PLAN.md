@@ -75,7 +75,7 @@
   - [x] Add new unit tests for drop logic in `test_shogi_rules_logic.py` or `test_shogi_engine.py`.
   - [x] Add new unit tests for promotion logic (optional/forced, all promotable pieces, zone checks)
   - [x] Add new unit tests for `get_observation` with hand pieces
-  - [ ] Add new unit tests for `undo_move` with drops and promotions
+  - [x] Add new unit tests for `undo_move` with drops and promotions
   - [ ] Tune hyperparameters and refine architecture as needed
   - [ ] Expand tests for edge cases and advanced rules:
     - [ ] Nifu edge cases (promoted pawns, after captures, pawn drops)
