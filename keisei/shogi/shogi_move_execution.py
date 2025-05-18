@@ -4,8 +4,7 @@ Contains functions for applying and reverting moves in the Shogi game.
 These functions operate on a ShogiGame instance.
 """
 
-from typing import Any, Dict
-from typing import TYPE_CHECKING
+from typing import Any, Dict, TYPE_CHECKING, cast
 
 from .shogi_core_definitions import (
     Piece,
@@ -13,7 +12,6 @@ from .shogi_core_definitions import (
     Color,
     MoveTuple,
     BASE_TO_PROMOTED_TYPE,
-    PROMOTED_TO_BASE_TYPE,
     PIECE_TYPE_TO_HAND_TYPE,
 )
 
@@ -21,16 +19,19 @@ if TYPE_CHECKING:
     from .shogi_game import ShogiGame  # For type hinting the 'game' parameter
 
 
-# No direct numpy or config import needed for these functions based on original code
-
-
-def apply_move_to_board(game: "ShogiGame", move_tuple: MoveTuple) -> None:
+def apply_move_to_board(game: "ShogiGame", move_tuple: MoveTuple, is_simulation: bool = False) -> None:
     """
     Make a move and update the game state.
     Operates on the 'game' (ShogiGame instance).
 
     Board move: (r_from, c_from, r_to, c_to, promote_flag: bool)
     Drop move: (None, None, r_to, c_to, piece_type_to_drop: PieceType)
+
+    Args:
+        game: The ShogiGame instance.
+        move_tuple: The move to apply.
+        is_simulation: If True, indicates the move is part of a simulation
+                       and game-ending checks (checkmate, stalemate) should be skipped.
     """
     r_from_orig, c_from_orig, r_to_orig, c_to_orig, move_info_orig = move_tuple
     player_making_move = game.current_player
@@ -128,13 +129,27 @@ def apply_move_to_board(game: "ShogiGame", move_tuple: MoveTuple) -> None:
         Color.WHITE if player_making_move == Color.BLACK else Color.BLACK
     )
 
-    # The game instance's is_sennichite method will be a wrapper
-    if game.is_sennichite():
-        game.game_over = True
-        game.winner = None  # Draw
+    # Check for game end conditions for the new current_player
+    # Only perform these checks if not in a simulation context to prevent recursion
+    if not is_simulation:
+        if game.is_sennichite():
+            game.game_over = True
+            game.winner = None  # Draw by repetition
+        elif game.is_checkmate():  # Check for checkmate for the new current_player
+            game.game_over = True
+            # The player who made the last move (player_making_move) is the winner
+            game.winner = player_making_move
+        elif game.is_stalemate():  # Check for stalemate for the new current_player
+            game.game_over = True
+            game.winner = None  # Draw by stalemate
+
+    # The game instance\'s is_sennichite method will be a wrapper
+    # if game.is_sennichite(): # This check is now done above
+    #     game.game_over = True
+    #     game.winner = None  # Draw
 
     # Check for game over by checkmate or stalemate (no legal moves for the new current_player)
-    # is typically handled by the game loop after this function returns.
+    # is typically handled by the game loop after this function returns. # This is now handled here.
 
 
 def revert_last_applied_move(game: "ShogiGame") -> None:
@@ -146,116 +161,73 @@ def revert_last_applied_move(game: "ShogiGame") -> None:
         raise RuntimeError("No move to undo")
 
     last_move_details = game.move_history.pop()
-    move_tuple: MoveTuple = last_move_details[
-        "move"
-    ]  # Ensure MoveTuple type from details
-    # Unpack carefully based on whether it's a BoardMove or DropMove.
-    # The original unpacking was generic: (r_from, c_from, r_to, c_to, _ )
-    # For drop moves, r_from and c_from are None. For board moves, they are int.
-    r_to_original_move = move_tuple[2]  # This is always the destination row
-    c_to_original_move = move_tuple[3]  # This is always the destination col
+    move_tuple: MoveTuple = last_move_details["move"]
 
     # Switch current player back first
     game.current_player = (
         Color.WHITE if game.current_player == Color.BLACK else Color.BLACK
     )
-    player_who_made_move = (
-        game.current_player
-    )  # Now refers to the player whose move is being undone
+    player_who_made_move = game.current_player
 
     if last_move_details["is_drop"]:
         dropped_piece_type: PieceType = last_move_details["dropped_piece_type"]
-        # Piece that was dropped is on (r_to_original_move, c_to_original_move)
-        game.set_piece(r_to_original_move, c_to_original_move, None)
+        r_to_drop = move_tuple[2]
+        c_to_drop = move_tuple[3]
+
+        game.set_piece(r_to_drop, c_to_drop, None)
         game.hands[player_who_made_move.value][dropped_piece_type] += 1
     else:  # Board move
-        r_from_original_move = move_tuple[0]  # Must be int for board move
-        c_from_original_move = move_tuple[1]  # Must be int for board move
-        if r_from_original_move is None or c_from_original_move is None:
-            raise RuntimeError(
-                "Undo error: r_from/c_from is None for a non-drop move during undo."
-            )
+        orig_r_from: int = cast(int, move_tuple[0])
+        orig_c_from: int = cast(int, move_tuple[1])
+        orig_r_to: int = cast(int, move_tuple[2])
+        orig_c_to: int = cast(int, move_tuple[3])
+        # promote_flag_original = move_tuple[4] # Stored in last_move_details if needed
 
-        # Piece that moved is currently at (r_to_original_move, c_to_original_move)
-        moved_piece = game.get_piece(r_to_original_move, c_to_original_move)
+        moved_piece = game.get_piece(orig_r_to, orig_c_to)
         if not moved_piece:
             raise RuntimeError(
-                f"Undo error: No piece found at destination {r_to_original_move},{c_to_original_move} for non-drop."
+                f"Inconsistent state: Expected piece at ({orig_r_to}, {orig_c_to}) for undo."
             )
 
-        # Restore piece to its original square
-        game.set_piece(r_from_original_move, c_from_original_move, moved_piece)
-
-        # Restore captured piece, if any
-        captured_piece_data: Piece | None = last_move_details[
-            "captured"
-        ]  # type hint Piece or None
-        if captured_piece_data:
-            restored_captured_piece = Piece(
-                captured_piece_data.type, captured_piece_data.color
-            )
-            game.set_piece(
-                r_to_original_move, c_to_original_move, restored_captured_piece
-            )
-            # Remove from hand of player_who_made_move
-            hand_type_of_captured = PIECE_TYPE_TO_HAND_TYPE.get(
-                captured_piece_data.type  # Access type from Piece object
-            )
-            if hand_type_of_captured:
-                if (
-                    game.hands[player_who_made_move.value].get(hand_type_of_captured, 0)
-                    > 0
-                ):
-                    game.hands[player_who_made_move.value][hand_type_of_captured] -= 1
-                else:
-                    # This would indicate an inconsistency in game state or undo history
-                    print(
-                        "Warning: Tried to undo capture of {hand_type_of_captured.name} but not found in hand."
-                    )
-            else:
-                # Should not happen if captured piece was valid (e.g. not a King)
-                print(
-                    "Warning: Could not determine hand type for captured "
-                    "{captured_piece_data.type.name} during undo."
-                )
-        else:  # No capture, destination was empty
-            game.set_piece(r_to_original_move, c_to_original_move, None)
-
-        # Handle demotion
         if last_move_details.get("was_promoted_in_move", False):
-            original_base_type: PieceType | None = last_move_details.get(
-                "original_type_before_promotion"
-            )
-            # Ensure moved_piece.type is actually a promoted type that maps back
-            if original_base_type and moved_piece.type in PROMOTED_TO_BASE_TYPE:
-                # Double check: original_base_type should match PROMOTED_TO_BASE_TYPE[moved_piece.type]
-                if PROMOTED_TO_BASE_TYPE[moved_piece.type] == original_base_type:
-                    moved_piece.type = original_base_type
-                else:
-                    print(
-                        f"Warning: Mismatch in undo demotion. Original was {original_base_type.name}, "
-                        f"current promoted is {moved_piece.type.name} which unpromotes to "
-                        f"{PROMOTED_TO_BASE_TYPE[moved_piece.type].name}"
-                    )
-                    # Fallback to stored original_base_type if different, but log it.
-                    moved_piece.type = original_base_type
-
-            elif original_base_type and moved_piece.type == original_base_type:
-                # This case might happen if original_type_before_promotion was set
-                # but was_promoted_in_move was True erroneously (e.g. piece type didn't change).
-                # No actual demotion needed if types are already the same.
+            original_type = last_move_details.get("original_type_before_promotion")
+            if original_type is not None:
+                moved_piece.type = original_type
+            else:
+                # This implies an inconsistency if was_promoted_in_move is True but no original_type stored.
                 pass
-            elif not original_base_type and moved_piece.type in PROMOTED_TO_BASE_TYPE:
-                # If original_type_before_promotion wasn't stored but should have been.
-                print(
-                    f"Warning: Undoing promotion for {moved_piece.type.name} but original_base_type not found. "
-                    f"Demoting to standard base type."
-                )
-                moved_piece.type = PROMOTED_TO_BASE_TYPE[moved_piece.type]
 
-            # No explicit 'else' for cases where demotion isn't possible/logged as error,
-            # as per original logic that might rely on valid state from get_legal_moves.
+        game.set_piece(orig_r_from, orig_c_from, moved_piece)
+
+        captured_piece_data = last_move_details.get("captured")
+        if captured_piece_data:  # captured_piece_data is a Piece object
+            game.set_piece(orig_r_to, orig_c_to, captured_piece_data)  # Restore captured piece to board
+
+            if captured_piece_data.type != PieceType.KING:
+                hand_equivalent_type = PIECE_TYPE_TO_HAND_TYPE.get(captured_piece_data.type)
+                
+                # Ensure hand_equivalent_type is a valid PieceType before using as a key
+                if hand_equivalent_type is None:
+                    # This case should ideally not be reached if PIECE_TYPE_TO_HAND_TYPE is comprehensive
+                    # for all capturable, non-king pieces.
+                    # If it's a base type not in the map (e.g. Gold), it should be the type itself.
+                    if captured_piece_data.type in PieceType.get_unpromoted_types() and captured_piece_data.type != PieceType.KING:
+                        hand_equivalent_type = captured_piece_data.type
+                    else:
+                        # This indicates an issue with the piece type or the mapping
+                        raise ValueError(f"Cannot determine hand equivalent for captured piece type: {captured_piece_data.type}")
+
+                if game.hands[player_who_made_move.value].get(hand_equivalent_type, 0) > 0:
+                    game.hands[player_who_made_move.value][hand_equivalent_type] -= 1
+                else:
+                    # This would be an inconsistency: a non-King piece was captured,
+                    # should have been added to hand, but not found to remove.
+                    # Consider logging a warning or raising an error for debugging.
+                    pass # Or raise error
+        else:
+            game.set_piece(orig_r_to, orig_c_to, None)  # Square becomes empty
 
     game.move_count -= 1
     game.game_over = False
     game.winner = None
+    # Repetition history and sennichite status will be naturally re-evaluated by game logic.

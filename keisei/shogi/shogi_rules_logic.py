@@ -413,197 +413,139 @@ def must_promote_specific_piece(game: "ShogiGame", piece: Piece, r_to: int) -> b
 
 
 def can_drop_specific_piece(
-    game: "ShogiGame", piece_type: PieceType, row: int, col: int, color: Color
+    game: "ShogiGame", piece_type: PieceType, r_to: int, c_to: int, color: Color
 ) -> bool:
     """
-    Checks if a piece of given base type can be legally dropped.
-    (Formerly ShogiGame.can_drop_piece)
+    Checks if a specific piece_type can be legally dropped by 'color' at (r_to, c_to).
+    This function checks rules like:
+    - Square must be empty.
+    - Nifu (two pawns on the same file).
+    - Piece cannot be dropped where it has no further moves (Pawn, Lance on last rank; Knight on last two ranks).
+    - Uchi Fu Zume (dropping a pawn for an immediate checkmate that cannot be escaped).
+    It does NOT check if the drop leaves the current player's king in check;
+    that is handled by the calling function (e.g., generate_all_legal_moves).
     """
-    if game.get_piece(row, col) is not None:  # Square must be empty
-        return False
-    # Player must have the piece in hand
-    if game.hands[color.value].get(piece_type, 0) <= 0:
-        return False
+    if game.get_piece(r_to, c_to) is not None:
+        return False  # Square must be empty
 
-    # Pawn specific checks
+    # Determine player-specific "forward" direction and promotion zone boundaries
+    # Black (Sente, 0) moves towards smaller row indices (ranks 8 to 0)
+    # White (Gote, 1) moves towards larger row indices (ranks 0 to 8)
+    # Black's last rank is 0, White's last rank is 8.
+    last_rank = 0 if color == Color.BLACK else 8
+    second_last_rank = 1 if color == Color.BLACK else 7
+
     if piece_type == PieceType.PAWN:
-        # Nifu check: is there already an unpromoted pawn of the same color on this file?
-        if check_for_nifu(game, color, col):  # Uses the refactored check_for_nifu
+        # 1. Nifu check: Cannot drop a pawn on a file that already contains an unpromoted pawn of the same color.
+        if check_for_nifu(game, color, c_to):
             return False
-        # Cannot drop pawn on the last rank where it has no moves
-        if (color == Color.BLACK and row == 0) or (color == Color.WHITE and row == 8):
+        # 2. Cannot drop a pawn on the last rank (it would have no moves).
+        if r_to == last_rank:
             return False
-        # Uchi Fu Zume (pawn drop checkmate) check
-        if check_for_uchi_fu_zume(
-            game, row, col, color
-        ):  # Uses the refactored check_for_uchi_fu_zume
+        # 3. Uchi Fu Zume check: Cannot drop a pawn to give immediate checkmate if that checkmate has no escape.
+        #    The check_for_uchi_fu_zume function returns True if it *is* uchi_fu_zume.
+        if check_for_uchi_fu_zume(game, r_to, c_to, color):
             return False
-
-    # Lance specific checks (cannot drop on last rank)
-    if piece_type == PieceType.LANCE:
-        if (color == Color.BLACK and row == 0) or (color == Color.WHITE and row == 8):
+    elif piece_type == PieceType.LANCE:
+        # Cannot drop a lance on the last rank.
+        if r_to == last_rank:
             return False
-
-    # Knight specific checks (cannot drop on last two ranks)
-    if piece_type == PieceType.KNIGHT:
-        if (color == Color.BLACK and row <= 1) or (color == Color.WHITE and row >= 7):
+    elif piece_type == PieceType.KNIGHT:
+        # Cannot drop a knight on the last two ranks.
+        if r_to == last_rank or r_to == second_last_rank:
             return False
 
+    # Other pieces (Gold, Silver, Bishop, Rook, King) can be dropped on any empty square
+    # provided other conditions (like not leaving king in check) are met by the caller.
+    # King is not a droppable piece type, but included for completeness if logic changes.
+    # For now, hands will only contain P, L, N, S, G, B, R.
     return True
 
 
 def generate_all_legal_moves(game: "ShogiGame") -> List[MoveTuple]:
     """
-    Generate all legal moves for the current player.
+    Generates all legal moves for the current player.
+    A move is legal if:
+    1. It follows the piece's movement rules.
+    2. For drops: it follows drop rules (Nifu, Uchi Fu Zume, no-move squares).
+    3. It does not leave the current player's king in check.
     (Formerly ShogiGame.get_legal_moves)
-    Move tuple format:
-    - Board move: (r_from, c_from, r_to, c_to, promote_flag: bool)
-    - Drop move: (None, None, r_to, c_to, piece_type_to_drop: PieceType)
     """
     legal_moves: List[MoveTuple] = []
-    current_p_color = game.current_player
+    original_player_color = game.current_player
+    # opponent_color = Color.WHITE if original_player_color == Color.BLACK else Color.BLACK
 
-    # 1. Generate board moves
+    # I. Generate Board Moves (moving a piece already on the board)
     for r_from in range(9):
         for c_from in range(9):
             piece = game.get_piece(r_from, c_from)
-            if not piece or piece.color != current_p_color:
-                continue
+            if piece and piece.color == original_player_color:
+                # Get squares the piece attacks or can move to if empty
+                potential_squares = generate_piece_potential_moves(
+                    game, piece, r_from, c_from
+                )
 
-            possible_tos = generate_piece_potential_moves(game, piece, r_from, c_from)
+                for r_to, c_to in potential_squares:
+                    # Check for promotion possibilities
+                    can_promote = can_promote_specific_piece(
+                        game, piece, r_from, r_to
+                    )
+                    must_promote = must_promote_specific_piece(game, piece, r_to)
 
-            for r_to, c_to in possible_tos:
-                can_promote_opt = can_promote_specific_piece(game, piece, r_from, r_to)
-                must_promote_now = must_promote_specific_piece(game, piece, r_to)
+                    current_move_tuples_to_check: List[BoardMove] # Declare type here
+                    if must_promote:
+                        # Only one move: promotion is forced
+                        current_move_tuples_to_check = [
+                            (r_from, c_from, r_to, c_to, True)
+                        ]
+                    elif can_promote:
+                        # Two possibilities: promote or not promote
+                        current_move_tuples_to_check = [
+                            (r_from, c_from, r_to, c_to, True),
+                            (r_from, c_from, r_to, c_to, False),
+                        ]
+                    else:
+                        # Only one move: no promotion possible or allowed
+                        current_move_tuples_to_check = [
+                            (r_from, c_from, r_to, c_to, False)
+                        ]
 
-                # Option 1: Move without promotion
-                if not must_promote_now:
-                    move_tuple_no_promo: MoveTuple = (r_from, c_from, r_to, c_to, False)
-                    captured_piece_sim = game.get_piece(
-                        r_to, c_to
-                    )  # Store for restoration
-                    original_piece_type_sim = piece.type  # Store for restoration
-
-                    # Simulate move
-                    game.set_piece(r_to, c_to, piece)
-                    game.set_piece(r_from, c_from, None)
-
-                    if not is_king_in_check_after_simulated_move(game, current_p_color):
-                        # II.10 Stranded piece rule:
-                        # Player can only decline an optional promotion if the piece, in its unpromoted state,
-                        # would still have legal moves from the destination square.
-                        is_stranded_if_no_promo = False
-                        if (
-                            can_promote_opt
-                            and piece.type not in [PieceType.GOLD, PieceType.KING]
-                            and piece.type not in PROMOTED_TYPES_SET
-                        ):
-                            # Create a temporary piece representing the unpromoted state for checking future moves
-                            # This check is about the piece *at the destination square* r_to, c_to
-                            # The piece is already at (r_to, c_to) in its unpromoted form due to simulation.
-                            # Piece type must be its original unpromoted type if it was promoted for a check.
-                            # In this path (no promotion), piece.type is already unpromoted.
-
-                            # If piece.type is already promoted (e.g. +P), then it can't be "unpromoted further"
-                            # This stranded rule applies to base pieces choosing not to promote.
-
-                            # Check if this unpromoted piece at (r_to, c_to) has any potential moves.
-                            # This doesn't need full legality check (king safety), just physical moves.
-                            potential_next_moves = generate_piece_potential_moves(
-                                game, piece, r_to, c_to
-                            )
-
-                            # A piece is considered stranded if it has no moves AND it *could* have promoted
-                            # because it entered/moved within the promotion zone.
-                            # The must_promote_now condition already covers some forms of strandedness (Pawn/Lance on last rank, Knight on last two).
-                            # This II.10 rule is for cases where promotion is optional but declining strands it.
-                            if not potential_next_moves and (
-                                game.is_in_promotion_zone(r_from, current_p_color)
-                                or game.is_in_promotion_zone(r_to, current_p_color)
-                            ):
-                                is_stranded_if_no_promo = True
-
-                        if not is_stranded_if_no_promo:
-                            legal_moves.append(move_tuple_no_promo)
-
-                    # Undo simulation
-                    piece.type = original_piece_type_sim  # Restore piece type
-                    game.set_piece(r_from, c_from, piece)
-                    game.set_piece(r_to, c_to, captured_piece_sim)
-
-                # Option 2: Move with promotion
-                if can_promote_opt:  # This also covers must_promote_now implicitly
-                    move_tuple_promo: MoveTuple = (r_from, c_from, r_to, c_to, True)
-                    promoted_type = BASE_TO_PROMOTED_TYPE.get(piece.type)
-
-                    if promoted_type:  # Ensure piece is promotable
-                        captured_piece_sim = game.get_piece(r_to, c_to)
-                        original_type_sim = piece.type
-
-                        piece.type = promoted_type  # Temporarily promote
-                        game.set_piece(r_to, c_to, piece)
-                        game.set_piece(r_from, c_from, None)
-
+                    for board_move_tuple in current_move_tuples_to_check:
+                        # Simulate the move
+                        game.make_move(board_move_tuple, is_simulation=True) # Pass is_simulation=True
+                        # Check if the current player's king is NOT in check after this move
                         if not is_king_in_check_after_simulated_move(
-                            game, current_p_color
+                            game, original_player_color
                         ):
-                            legal_moves.append(move_tuple_promo)
+                            legal_moves.append(board_move_tuple)
+                        game.undo_move()  # Revert the simulated move
 
-                        # Undo simulation
-                        piece.type = original_type_sim  # Revert type
-                        game.set_piece(r_from, c_from, piece)
-                        game.set_piece(r_to, c_to, captured_piece_sim)
-
-    # 2. Generate drop moves
-    player_hand = game.hands[current_p_color.value]
-    # Use PieceType.get_unpromoted_types() or similar from game/core_definitions for iteration order if specific
-    # hand_piece_order = PieceType.get_unpromoted_types() # if order matters for policy output
-    # for piece_type_to_drop_enum in hand_piece_order:
-    #    count = player_hand.get(piece_type_to_drop_enum, 0)
-    # Original iterates dict items, order might not be guaranteed but usually fine.
-    for piece_type_to_drop_enum, count in player_hand.items():
-        if count > 0:
-            for r_to_drop in range(9):
-                for c_to_drop in range(9):
-                    if (
-                        game.get_piece(r_to_drop, c_to_drop) is None
-                    ):  # Can only drop on empty square
+    # II. Generate Drop Moves
+    for piece_type_to_drop in game.hands[original_player_color.value]:
+        if game.hands[original_player_color.value][piece_type_to_drop] > 0:
+            for r_to in range(9):
+                for c_to in range(9):
+                    if game.get_piece(r_to, c_to) is None:  # Square must be empty
+                        # Check basic drop legality (Nifu, Uchi Fu Zume, no-move squares)
                         if can_drop_specific_piece(
-                            game,
-                            piece_type_to_drop_enum,
-                            r_to_drop,
-                            c_to_drop,
-                            current_p_color,
+                            game, piece_type_to_drop, r_to, c_to, original_player_color
                         ):
-                            move_tuple_drop: MoveTuple = (
+                            drop_move_tuple: DropMove = (
                                 None,
                                 None,
-                                r_to_drop,
-                                c_to_drop,
-                                piece_type_to_drop_enum,
+                                r_to,
+                                c_to,
+                                piece_type_to_drop,
                             )
-
-                            # Simulate drop
-                            game.hands[current_p_color.value][
-                                piece_type_to_drop_enum
-                            ] -= 1
-                            dropped_p_sim = Piece(
-                                piece_type_to_drop_enum, current_p_color
-                            )
-                            game.set_piece(r_to_drop, c_to_drop, dropped_p_sim)
-
+                            # Simulate the drop
+                            game.make_move(drop_move_tuple, is_simulation=True) # Pass is_simulation=True
+                            # Check if the current player's king is NOT in check after this drop
                             if not is_king_in_check_after_simulated_move(
-                                game, current_p_color
+                                game, original_player_color
                             ):
-                                legal_moves.append(move_tuple_drop)
-
-                            # Undo simulation
-                            game.set_piece(r_to_drop, c_to_drop, None)
-                            game.hands[current_p_color.value][
-                                piece_type_to_drop_enum
-                            ] += 1
-
-    return list(set(legal_moves))  # Ensure uniqueness
+                                legal_moves.append(drop_move_tuple)
+                            game.undo_move()  # Revert the simulated drop
+    return legal_moves
 
 
 def check_for_sennichite(game: "ShogiGame") -> bool:
@@ -624,7 +566,7 @@ def check_for_sennichite(game: "ShogiGame") -> bool:
     # Inside is_sennichite (this function):
     # game.current_player is P_new.
     # So, state_to_check_for_repetition = game._board_state_hash() will use P_new.
-    # This means we are checking if the state (board, hands, P_new_to_move) has repeated.
+    # This means we are checking if the state (board, hands, P_old_who_just_moved) has repeated.
     # The history stores (board, hands, P_old_who_just_moved). This comparison is subtle.
 
     # The problem description (II.8) implies the hash in history is the one to count.

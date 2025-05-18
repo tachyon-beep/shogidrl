@@ -536,34 +536,84 @@ def test_illegal_lance_drop_last_rank():
 
 
 def test_checkmate_minimal():
-    """Checkmate detection with minimal pieces."""
+    """Minimal checkmate scenario."""
     game = ShogiGame()
-    for r in range(9):
-        for c in range(9):
-            game.set_piece(r, c, None)
-    game.set_piece(0, 4, Piece(PieceType.KING, Color.WHITE))  # White king
+    # Clear board and hands
+    for r_idx in range(9):
+        for c_idx in range(9):
+            game.set_piece(r_idx, c_idx, None)
+    game.hands[Color.BLACK.value] = {}
+    game.hands[Color.WHITE.value] = {}
+    for piece_type in PieceType.get_unpromoted_types():
+        game.hands[Color.BLACK.value][piece_type] = 0
+        game.hands[Color.WHITE.value][piece_type] = 0
+    game.move_history = []
+    # Accessing the sennichite_history attribute which is initialized in shogi_rules_logic.check_for_sennichite
+    # For a clean test setup, we ensure it's empty or reset if it were publicly settable.
+    # Since it's not directly settable, we rely on a fresh game instance or ensure no prior moves led to its population.
+    # For the purpose of this test, a fresh ShogiGame() instance handles this.
+    # If sennichite_history were a public attribute on ShogiGame, it would be: game.sennichite_history = {}
+    game.game_over = False
+    game.winner = None
+    game.current_player = Color.WHITE # White to make the checkmating move
 
-    # Add a black pawn to black's hand
-    game.hands[Color.BLACK.value][PieceType.PAWN] = 1
+    # Setup:
+    # Black King at (8,4)
+    # White Gold at (6,4) -> moves to (7,4) for checkmate
+    # White Gold at (7,3) (covers Black King's escape to (8,3))
+    # White Gold at (7,5) (covers Black King's escape to (8,5))
+    game.set_piece(8, 4, Piece(PieceType.KING, Color.BLACK))
+    game.set_piece(6, 4, Piece(PieceType.GOLD, Color.WHITE)) # The moving piece
+    game.set_piece(7, 3, Piece(PieceType.GOLD, Color.WHITE))
+    game.set_piece(7, 5, Piece(PieceType.GOLD, Color.WHITE))
 
-    # Now check if dropping a pawn at (1,4) by black (color 0) would checkmate the white king
-    # This should be true because:
-    # 1. The pawn would put the king in check
-    # 2. The king has no escape squares (at the top of the board)
-    # 3. No other piece can capture the pawn
-    # Therefore the drop is Uchi Fu Zume
-    # However, in this minimal setup, the king *can* escape to (0,3), (0,5) etc.
-    # as those squares are empty and not attacked by the pawn at (1,4).
-    assert not game.is_uchi_fu_zume(1, 4, Color.BLACK)
+    # White makes the checkmating move: Gold (6,4) -> (7,4)
+    checkmating_move = (6, 4, 7, 4, False) # (r_from, c_from, r_to, c_to, promote)
+    
+    assert not game.game_over, "Game should not be over before the checkmating move."
+    
+    game.make_move(checkmating_move)
 
+    assert game.game_over, "Game should be over after checkmate."
+    assert game.winner == Color.WHITE, f"Winner should be White, but got {game.winner}"
 
 def test_stalemate_minimal():
-    """Stalemate detection (if implemented)."""
+    """Minimal stalemate scenario."""
     game = ShogiGame()
-    for r in range(9):
-        for c in range(9):
-            game.set_piece(r, c, None)
-    game.set_piece(0, 4, Piece(PieceType.KING, Color.WHITE))
-    # No legal moves for white, not in check
-    # This is a stub: actual stalemate logic may need to be implemented
-    # assert game.is_stalemate(Color.WHITE)  # Uncomment if stalemate detection is implemented
+    # Clear board and hands
+    for r_idx in range(9):
+        for c_idx in range(9):
+            game.set_piece(r_idx, c_idx, None)
+    game.hands[Color.BLACK.value] = {}
+    game.hands[Color.WHITE.value] = {}
+    for piece_type in PieceType.get_unpromoted_types():
+        game.hands[Color.BLACK.value][piece_type] = 0
+        game.hands[Color.WHITE.value][piece_type] = 0
+    game.move_history = []
+    # Similar to checkmate test, sennichite_history is managed internally.
+    # A fresh game instance is sufficient for a clean state.
+    game.game_over = False
+    game.winner = None
+    game.current_player = Color.WHITE # White to make the move leading to stalemate for Black
+
+    # Setup:
+    # Black King at (8,8)
+    # White Gold at (6,8) (covers Black King's escape to (7,8))
+    # White Gold at (8,6) (covers Black King's escape to (8,7))
+    # White King at (6,6) (covers Black King's escape to (7,7))
+    # White Pawn at (0,0) for White to make a non-disruptive move.
+    game.set_piece(8, 8, Piece(PieceType.KING, Color.BLACK))
+    game.set_piece(6, 8, Piece(PieceType.GOLD, Color.WHITE))
+    game.set_piece(8, 6, Piece(PieceType.GOLD, Color.WHITE))
+    game.set_piece(6, 6, Piece(PieceType.KING, Color.WHITE))
+    game.set_piece(0, 0, Piece(PieceType.PAWN, Color.WHITE)) # White's moving piece
+
+    # White makes a move that doesn't affect the stalemate net: Pawn (0,0) -> (1,0)
+    stalemating_move = (0, 0, 1, 0, False) # (r_from, c_from, r_to, c_to, promote)
+
+    assert not game.game_over, "Game should not be over before the stalemating move."
+    
+    game.make_move(stalemating_move)
+
+    assert game.game_over, "Game should be over after stalemate."
+    assert game.winner is None, f"Winner should be None for stalemate, but got {game.winner}"

@@ -200,12 +200,17 @@ class ShogiGame:
         """
         return shogi_rules_logic.check_for_sennichite(self)
 
-    def make_move(self, move_tuple: MoveTuple):
+    def make_move(self, move_tuple: MoveTuple, is_simulation: bool = False):
         """
         Executes a move on the board and updates game state.
         The move can be either a board move or a drop move.
+
+        Args:
+            move_tuple: The move to make.
+            is_simulation: True if this move is part of a simulation (e.g., for legal move generation).
+                           If True, game-ending checks like checkmate/stalemate might be skipped.
         """
-        shogi_move_execution.apply_move_to_board(self, move_tuple)
+        shogi_move_execution.apply_move_to_board(self, move_tuple, is_simulation)
 
     def undo_move(self):
         """
@@ -356,3 +361,25 @@ class ShogiGame:
             bool: True if the piece must be promoted, False otherwise
         """
         return shogi_rules_logic.must_promote_specific_piece(self, piece, r_to)
+
+    def is_checkmate(self) -> bool:
+        """
+        Checks if the current player is checkmated.
+        A player is checkmated if they are in check and have no legal moves.
+        """
+        if not self.is_in_check(self.current_player):
+            return False  # Not in check, so not checkmate
+        
+        legal_moves = self.get_legal_moves()
+        return not legal_moves # Checkmate if in check and no legal moves
+
+    def is_stalemate(self) -> bool:
+        """
+        Checks if the current player is stalemated.
+        A player is stalemated if they are not in check but have no legal moves.
+        """
+        if self.is_in_check(self.current_player):
+            return False  # In check, so not stalemate (could be checkmate)
+
+        legal_moves = self.get_legal_moves()
+        return not legal_moves # Stalemate if not in check and no legal moves

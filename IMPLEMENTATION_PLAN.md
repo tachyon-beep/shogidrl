@@ -38,39 +38,43 @@
 
 ### Phase 5: Advanced Rules & Engine Completion
 - **I. Piece Drops Implementation (`shogi_engine.py`)**
-  - [ ] Manage Pieces in Hand (initialize `self.hands`, update `make_move`/`undo_move` for captures)
-  - [ ] Generate Legal Drop Moves (in `get_legal_moves`, handle `(None, None, r_to, c_to, piece_type, is_drop=True)`)
-  - [ ] Implement Legality Checks for Drops (Nifu, Illegal Drop Squares for P/L/N, Uchi Fu Zume integration)
-  - [ ] Execute Drop Moves (in `make_move`, remove from hand, place on board)
-  - [ ] Update `get_observation` to include hand pieces representation
+  - [x] Manage Pieces in Hand (initialize `self.hands`, update `make_move`/`undo_move` for captures)
+  - [x] Generate Legal Drop Moves (in `get_legal_moves`, handle `(None, None, r_to, c_to, piece_type, is_drop=True)`)
+  - [x] Implement Legality Checks for Drops (Nifu, Illegal Drop Squares for P/L/N, Uchi Fu Zume integration)
+  - [x] Execute Drop Moves (in `make_move`, remove from hand, place on board)
+  - [x] Update `get_observation` to include hand pieces representation
 - **II. Promotions Implementation (`shogi_engine.py`)**
-  - [ ] Define Promotion Zones
-  - [ ] Generate Promotion Moves (in `get_legal_moves`, handle optional and forced promotions)
-  - [ ] Execute Promotion Moves (in `make_move`, update piece state if `promote=True`)
-  - [ ] Update `undo_move` to correctly revert promotions
+  - [x] Define Promotion Zones
+  - [x] Generate Promotion Moves (in `get_legal_moves`, handle optional and forced promotions)
+  - [x] Execute Promotion Moves (in `make_move`, update piece state if `promote=True`)
+  - [x] Update `undo_move` to correctly revert promotions
 - **III. Advanced Legality and Game State (`shogi_engine.py`)**
-  - [ ] Robust Checkmate Detection (`is_checkmate`)
-  - [ ] Stalemate Detection (`is_stalemate` - no legal moves, not in check)
-  - [ ] Ensure Sennichite detection is robust and integrated into game over checks
+  - [x] Implement `is_nifu` detection logic
+  - [x] Integrate `is_nifu` into drop move legality checks
+  - [x] Implement `is_uchi_fu_zume` detection logic
+  - [x] Integrate `is_uchi_fu_zume` into pawn drop move legality checks
+  - [x] Implement `detect_sennichite` logic
+  - [x] Integrate `sennichite` into game over condition and repetition history
+  - [x] Robust Checkmate Detection (`is_checkmate`)
+  - [x] Stalemate Detection (`is_stalemate` - no legal moves, not in check)
 - **IV. `PolicyOutputMapper` Expansion (`utils.py`)**
   - [ ] Design and implement a comprehensive mapping for all moves (normal, drops, promotions)
   - [ ] Implement `move_to_index`, `index_to_move`, `get_legal_mask`
-  - [ ] Update `NUM_ACTIONS_TOTAL` in `config.py`
+  - [x] Update `NUM_ACTIONS_TOTAL` in `config.py`
 - **V. Test Coverage for Engine Completion**
   - [ ] Ensure all existing advanced rule tests in `test_shogi_engine.py` pass
   - [ ] Add new unit tests for drop logic (all piece types, valid/invalid squares, hand updates)
   - [ ] Add new unit tests for promotion logic (optional/forced, all promotable pieces, zone checks)
   - [ ] Add new unit tests for `get_observation` with hand pieces
   - [ ] Add new unit tests for `undo_move` with drops and promotions
-- [ ] Add model saving/loading
 - [x] Add model saving/loading
 - [x] Add logging and evaluation
 - [ ] Tune hyperparameters and refine architecture as needed
 - [ ] Expand tests for edge cases and advanced rules:
-  - [x] Nifu edge cases (promoted pawns, after captures, pawn drops)
-  - [x] Uchi Fu Zume edge cases (complex king escapes, non-pawn drops)
+  - [ ] Nifu edge cases (promoted pawns, after captures, pawn drops)
+  - [ ] Uchi Fu Zume edge cases (complex king escapes, non-pawn drops)
   - [x] Sennichite edge cases (repetition with drops, captures, and promotions)
-  - [x] Illegal drops and move legality in rare board states
+  - [ ] Illegal drops and move legality in rare board states
   - [x] Checkmate and stalemate detection edge cases
 
 ## 3. Test Strategy
@@ -107,6 +111,13 @@ keisei/
     utils.py
     train.py
     config.py
+    shogi/
+        __init__.py
+        shogi_core_definitions.py
+        shogi_game.py
+        shogi_rules_logic.py
+        shogi_move_execution.py
+        shogi_game_io.py
 
 tests/
     conftest.py
@@ -116,6 +127,9 @@ tests/
     test_experience_buffer.py
     test_utils.py
     test_train.py
+    test_logger.py
+    test_evaluate.py
+    test_model_save_load.py
 ```
 
 ## 5. Next Steps
