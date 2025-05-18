@@ -1,19 +1,27 @@
 """
 Unit tests for ShogiGame class in shogi_game.py
 """
+
 from dataclasses import dataclass, field
 from typing import Dict
 
 import numpy as np
 import pytest
 
-from keisei.shogi.shogi_core_definitions import OBS_PROMOTED_ORDER, OBS_UNPROMOTED_ORDER, Color, Piece, PieceType
+from keisei.shogi.shogi_core_definitions import (
+    OBS_PROMOTED_ORDER,
+    OBS_UNPROMOTED_ORDER,
+    Color,
+    Piece,
+    PieceType,
+)
 from keisei.shogi.shogi_game import ShogiGame
 
 
 @dataclass
 class GameState:
     """Helper class to store a snapshot of the game state."""
+
     board_str: str
     current_player: Color
     move_count: int
@@ -21,14 +29,14 @@ class GameState:
     white_hand: Dict[PieceType, int] = field(default_factory=dict)
 
     @classmethod
-    def from_game(cls, game: ShogiGame) -> 'GameState':
+    def from_game(cls, game: ShogiGame) -> "GameState":
         """Creates a GameState snapshot from a ShogiGame instance."""
         return cls(
             board_str=game.to_string(),
             current_player=game.current_player,
             move_count=game.move_count,
             black_hand=game.hands[Color.BLACK.value].copy(),
-            white_hand=game.hands[Color.WHITE.value].copy()
+            white_hand=game.hands[Color.WHITE.value].copy(),
         )
 
 
@@ -548,7 +556,9 @@ def test_undo_move_forced_promotion(new_game: ShogiGame):
     assert game.get_piece(0, 2) is None
 
 
-def test_undo_move_multiple_moves(new_game: ShogiGame):  # pylint: disable=redefined-outer-name
+def test_undo_move_multiple_moves(
+    new_game: ShogiGame,
+):  # pylint: disable=redefined-outer-name
     """Test undoing multiple moves sequentially."""
     game = new_game
     initial_state = GameState.from_game(game)
@@ -565,7 +575,7 @@ def test_undo_move_multiple_moves(new_game: ShogiGame):  # pylint: disable=redef
 
     # 3. Black P-2f (6,1) -> P-2e (5,1) (capture, promote)
     # Setup: place a white pawn at (5,1) for capture
-    game.set_piece(5, 1, Piece(PieceType.PAWN, Color.WHITE)) # Manually placed piece
+    game.set_piece(5, 1, Piece(PieceType.PAWN, Color.WHITE))  # Manually placed piece
     state_before_move3 = GameState.from_game(game)
 
     move3: tuple = (6, 1, 5, 1, True)
@@ -573,16 +583,35 @@ def test_undo_move_multiple_moves(new_game: ShogiGame):  # pylint: disable=redef
 
     # Check state after 3 moves
     promoted_pawn_at_5_1 = game.get_piece(5, 1)
-    assert promoted_pawn_at_5_1 and promoted_pawn_at_5_1.type == PieceType.PROMOTED_PAWN and promoted_pawn_at_5_1.color == Color.BLACK
-    assert game.hands[Color.BLACK.value].get(PieceType.PAWN, 0) == state_before_move3.black_hand.get(PieceType.PAWN, 0) + 1
+    assert (
+        promoted_pawn_at_5_1
+        and promoted_pawn_at_5_1.type == PieceType.PROMOTED_PAWN
+        and promoted_pawn_at_5_1.color == Color.BLACK
+    )
+    assert (
+        game.hands[Color.BLACK.value].get(PieceType.PAWN, 0)
+        == state_before_move3.black_hand.get(PieceType.PAWN, 0) + 1
+    )
 
     # Undo move 3
     game.undo_move()
-    _assert_game_state(game, state_before_move3) # State includes the manually placed (now restored) W_Pawn at (5,1)
-    piece_at_6_1 = game.get_piece(6,1)
-    assert piece_at_6_1 is not None and piece_at_6_1.type == PieceType.PAWN and piece_at_6_1.color == Color.BLACK
-    piece_at_5_1 = game.get_piece(5,1) # This was the manually placed white pawn, now restored by undo
-    assert piece_at_5_1 is not None and piece_at_5_1.type == PieceType.PAWN and piece_at_5_1.color == Color.WHITE
+    _assert_game_state(
+        game, state_before_move3
+    )  # State includes the manually placed (now restored) W_Pawn at (5,1)
+    piece_at_6_1 = game.get_piece(6, 1)
+    assert (
+        piece_at_6_1 is not None
+        and piece_at_6_1.type == PieceType.PAWN
+        and piece_at_6_1.color == Color.BLACK
+    )
+    piece_at_5_1 = game.get_piece(
+        5, 1
+    )  # This was the manually placed white pawn, now restored by undo
+    assert (
+        piece_at_5_1 is not None
+        and piece_at_5_1.type == PieceType.PAWN
+        and piece_at_5_1.color == Color.WHITE
+    )
 
     # ---- Proposed Fix: Manually "yank" the piece ----
     # This White Pawn at (5,1) was manually placed for move3 and restored by undoing move3.
@@ -592,17 +621,26 @@ def test_undo_move_multiple_moves(new_game: ShogiGame):  # pylint: disable=redef
 
     # Undo move 2
     game.undo_move()
-    _assert_game_state(game, state_after_move1) # This should now pass
-    piece_at_2_3 = game.get_piece(2,3)
-    assert piece_at_2_3 is not None and piece_at_2_3.type == PieceType.PAWN and piece_at_2_3.color == Color.WHITE
-    assert game.get_piece(3,3) is None
+    _assert_game_state(game, state_after_move1)  # This should now pass
+    piece_at_2_3 = game.get_piece(2, 3)
+    assert (
+        piece_at_2_3 is not None
+        and piece_at_2_3.type == PieceType.PAWN
+        and piece_at_2_3.color == Color.WHITE
+    )
+    assert game.get_piece(3, 3) is None
 
     # Undo move 1
     game.undo_move()
     _assert_game_state(game, initial_state)
-    piece_at_6_6 = game.get_piece(6,6)
-    assert piece_at_6_6 is not None and piece_at_6_6.type == PieceType.PAWN and piece_at_6_6.color == Color.BLACK
-    assert game.get_piece(5,6) is None
+    piece_at_6_6 = game.get_piece(6, 6)
+    assert (
+        piece_at_6_6 is not None
+        and piece_at_6_6.type == PieceType.PAWN
+        and piece_at_6_6.color == Color.BLACK
+    )
+    assert game.get_piece(5, 6) is None
+
 
 def _assert_game_state(game: ShogiGame, expected_state: GameState):
     """Helper to assert game matches a previously captured GameState."""

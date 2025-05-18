@@ -10,7 +10,9 @@ import pytest
 from keisei.experience_buffer import ExperienceBuffer  # Added import
 from keisei.ppo_agent import PPOAgent
 from keisei.shogi import ShogiGame  # Corrected import for ShogiGame
-from keisei.shogi.shogi_core_definitions import MoveTuple  # Ensure MoveTuple is imported
+from keisei.shogi.shogi_core_definitions import (
+    MoveTuple,
+)  # Ensure MoveTuple is imported
 from keisei.utils import PolicyOutputMapper
 
 
@@ -99,7 +101,9 @@ def test_ppo_agent_learn():
         assert isinstance(avg_policy_loss, float)
         assert isinstance(avg_value_loss, float)
         assert isinstance(avg_entropy, float)
-    except RuntimeError as e:  # Catch a more specific exception if possible, or document why general Exception is needed.
+    except (
+        RuntimeError
+    ) as e:  # Catch a more specific exception if possible, or document why general Exception is needed.
         pytest.fail(f"agent.learn() raised an exception: {e}")
 
     # Optionally, check if buffer is cleared after learn (if that's the intended behavior of learn or a subsequent step)

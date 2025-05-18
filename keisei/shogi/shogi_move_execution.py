@@ -6,7 +6,14 @@ These functions operate on a ShogiGame instance.
 
 from typing import TYPE_CHECKING, Any, Dict, cast
 
-from .shogi_core_definitions import BASE_TO_PROMOTED_TYPE, PIECE_TYPE_TO_HAND_TYPE, Color, MoveTuple, Piece, PieceType
+from .shogi_core_definitions import (
+    BASE_TO_PROMOTED_TYPE,
+    PIECE_TYPE_TO_HAND_TYPE,
+    Color,
+    MoveTuple,
+    Piece,
+    PieceType,
+)
 
 if TYPE_CHECKING:
     from .shogi_game import ShogiGame  # For type hinting the 'game' parameter

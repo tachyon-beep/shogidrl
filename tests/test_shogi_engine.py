@@ -6,11 +6,13 @@ import numpy as np
 import pytest
 
 from keisei.shogi.shogi_core_definitions import Color, Piece, PieceType
+
 # If OBS_UNPROMOTED_ORDER is used in get_observation, ensure it's imported
 # from keisei.shogi.shogi_core_definitions import OBS_UNPROMOTED_ORDER
 from keisei.shogi.shogi_game import ShogiGame
 
 # --- Tests for Piece Class ---
+
 
 def test_piece_init():
     """Test Piece initialization and attributes."""
@@ -43,10 +45,12 @@ def test_piece_symbol():
 
 # --- Fixtures ---
 
+
 @pytest.fixture
 def new_game() -> ShogiGame:
     """Returns a ShogiGame instance initialized to the starting position."""
     return ShogiGame()
+
 
 @pytest.fixture
 def cleared_game() -> ShogiGame:
@@ -57,22 +61,34 @@ def cleared_game() -> ShogiGame:
             game.set_piece(r_idx, c_idx, None)
     return game
 
+
 # --- Helper for Move Assertions ---
+
 
 def _check_moves(actual_moves, expected_moves_tuples):
     """Helper function to check if actual moves match expected moves (order-agnostic)."""
-    assert set(actual_moves) == set(expected_moves_tuples), \
-        f"Move mismatch: Got {set(actual_moves)}, Expected {set(expected_moves_tuples)}"
+    assert set(actual_moves) == set(
+        expected_moves_tuples
+    ), f"Move mismatch: Got {set(actual_moves)}, Expected {set(expected_moves_tuples)}"
 
 
 # --- Tests for ShogiGame Initialization and Basic Methods ---
 
-def test_shogigame_init_and_reset(new_game: ShogiGame): # pylint: disable=redefined-outer-name
+
+def test_shogigame_init_and_reset(
+    new_game: ShogiGame,
+):  # pylint: disable=redefined-outer-name
     """Test ShogiGame initialization and reset sets up the correct starting board."""
-    game = new_game # Uses the fixture for a fresh game in initial state
+    game = new_game  # Uses the fixture for a fresh game in initial state
     expected_types = [
-        PieceType.LANCE, PieceType.KNIGHT, PieceType.SILVER, PieceType.GOLD,
-        PieceType.KING, PieceType.GOLD, PieceType.SILVER, PieceType.KNIGHT,
+        PieceType.LANCE,
+        PieceType.KNIGHT,
+        PieceType.SILVER,
+        PieceType.GOLD,
+        PieceType.KING,
+        PieceType.GOLD,
+        PieceType.SILVER,
+        PieceType.KNIGHT,
         PieceType.LANCE,
     ]
     # White's back rank (row 0)
@@ -81,27 +97,43 @@ def test_shogigame_init_and_reset(new_game: ShogiGame): # pylint: disable=redefi
         assert p is not None, f"Piece missing at (0, {c})"
         assert p.type == t
         assert p.color == Color.WHITE
-    p_r_w = game.get_piece(1, 1) # White Rook
-    assert p_r_w is not None and p_r_w.type == PieceType.ROOK and p_r_w.color == Color.WHITE
-    p_b_w = game.get_piece(1, 7) # White Bishop
-    assert p_b_w is not None and p_b_w.type == PieceType.BISHOP and p_b_w.color == Color.WHITE
-    for c in range(9): # White Pawns (row 2)
+    p_r_w = game.get_piece(1, 1)  # White Rook
+    assert (
+        p_r_w is not None
+        and p_r_w.type == PieceType.ROOK
+        and p_r_w.color == Color.WHITE
+    )
+    p_b_w = game.get_piece(1, 7)  # White Bishop
+    assert (
+        p_b_w is not None
+        and p_b_w.type == PieceType.BISHOP
+        and p_b_w.color == Color.WHITE
+    )
+    for c in range(9):  # White Pawns (row 2)
         p = game.get_piece(2, c)
         assert p is not None, f"White Pawn missing at (2, {c})"
         assert p.type == PieceType.PAWN
         assert p.color == Color.WHITE
 
     # Black's pieces
-    for c in range(9): # Black Pawns (row 6)
+    for c in range(9):  # Black Pawns (row 6)
         p = game.get_piece(6, c)
         assert p is not None, f"Black Pawn missing at (6, {c})"
         assert p.type == PieceType.PAWN
         assert p.color == Color.BLACK
-    p_b_b = game.get_piece(7, 1) # Black Bishop
-    assert p_b_b is not None and p_b_b.type == PieceType.BISHOP and p_b_b.color == Color.BLACK
-    p_r_b = game.get_piece(7, 7) # Black Rook
-    assert p_r_b is not None and p_r_b.type == PieceType.ROOK and p_r_b.color == Color.BLACK
-    for c, t in enumerate(expected_types): # Black's back rank (row 8)
+    p_b_b = game.get_piece(7, 1)  # Black Bishop
+    assert (
+        p_b_b is not None
+        and p_b_b.type == PieceType.BISHOP
+        and p_b_b.color == Color.BLACK
+    )
+    p_r_b = game.get_piece(7, 7)  # Black Rook
+    assert (
+        p_r_b is not None
+        and p_r_b.type == PieceType.ROOK
+        and p_r_b.color == Color.BLACK
+    )
+    for c, t in enumerate(expected_types):  # Black's back rank (row 8)
         p = game.get_piece(8, c)
         assert p is not None, f"Piece missing at (8, {c})"
         assert p.type == t
@@ -113,19 +145,21 @@ def test_shogigame_init_and_reset(new_game: ShogiGame): # pylint: disable=redefi
             assert game.get_piece(r, c) is None, f"Square ({r},{c}) should be empty"
 
 
-def test_shogigame_to_string(new_game: ShogiGame): # pylint: disable=redefined-outer-name
+def test_shogigame_to_string(
+    new_game: ShogiGame,
+):  # pylint: disable=redefined-outer-name
     """Test ShogiGame.to_string() returns a correct board string."""
     game = new_game
     board_str = game.to_string()
     assert isinstance(board_str, str)
     lines = board_str.split("\n")
-    assert len(lines) == 13 # As per original test, assuming this specific format
+    assert len(lines) == 13  # As per original test, assuming this specific format
 
     def get_pieces_from_line(line_str):
         parts = line_str.split()
         if len(parts) > 1 and parts[0].isdigit():
             return "".join(parts[1:])
-        return "".join(parts) # Fallback if no rank number
+        return "".join(parts)  # Fallback if no rank number
 
     assert get_pieces_from_line(lines[0]) == "lnsgkgsnl"
     assert get_pieces_from_line(lines[2]) == "ppppppppp"
@@ -133,9 +167,9 @@ def test_shogigame_to_string(new_game: ShogiGame): # pylint: disable=redefined-o
     assert get_pieces_from_line(lines[8]) == "LNSGKGSNL"
 
 
-def test_shogigame_is_on_board(): # No fixture needed as it's a static-like check
+def test_shogigame_is_on_board():  # No fixture needed as it's a static-like check
     """Test ShogiGame.is_on_board for valid and invalid coordinates."""
-    game = ShogiGame() # Instance needed to call the method
+    game = ShogiGame()  # Instance needed to call the method
     assert game.is_on_board(0, 0)
     assert game.is_on_board(8, 8)
     assert game.is_on_board(4, 5)
@@ -148,44 +182,128 @@ def test_shogigame_is_on_board(): # No fixture needed as it's a static-like chec
 
 # --- Parameterized Tests for Individual Piece Moves (on an empty board from (4,4)) ---
 
-GOLD_MOVES_FROM_4_4_BLACK = sorted([(3,4), (5,4), (4,3), (4,5), (3,3), (3,5)])
-GOLD_MOVES_FROM_4_4_WHITE = sorted([(5,4), (3,4), (4,3), (4,5), (5,3), (5,5)])
+GOLD_MOVES_FROM_4_4_BLACK = sorted([(3, 4), (5, 4), (4, 3), (4, 5), (3, 3), (3, 5)])
+GOLD_MOVES_FROM_4_4_WHITE = sorted([(5, 4), (3, 4), (4, 3), (4, 5), (5, 3), (5, 5)])
 
 PIECE_MOVE_TEST_CASES = [
     # Pawns
-    pytest.param(Piece(PieceType.PAWN, Color.BLACK), (4,4), sorted([(3,4)]), id="Pawn_B_4,4"),
-    pytest.param(Piece(PieceType.PAWN, Color.WHITE), (4,4), sorted([(5,4)]), id="Pawn_W_4,4"),
-    pytest.param(Piece(PieceType.PROMOTED_PAWN, Color.BLACK), (4,4), GOLD_MOVES_FROM_4_4_BLACK, id="PromotedPawn_B_4,4"),
-    pytest.param(Piece(PieceType.PROMOTED_PAWN, Color.WHITE), (4,4), GOLD_MOVES_FROM_4_4_WHITE, id="PromotedPawn_W_4,4"),
+    pytest.param(
+        Piece(PieceType.PAWN, Color.BLACK), (4, 4), sorted([(3, 4)]), id="Pawn_B_4,4"
+    ),
+    pytest.param(
+        Piece(PieceType.PAWN, Color.WHITE), (4, 4), sorted([(5, 4)]), id="Pawn_W_4,4"
+    ),
+    pytest.param(
+        Piece(PieceType.PROMOTED_PAWN, Color.BLACK),
+        (4, 4),
+        GOLD_MOVES_FROM_4_4_BLACK,
+        id="PromotedPawn_B_4,4",
+    ),
+    pytest.param(
+        Piece(PieceType.PROMOTED_PAWN, Color.WHITE),
+        (4, 4),
+        GOLD_MOVES_FROM_4_4_WHITE,
+        id="PromotedPawn_W_4,4",
+    ),
     # Lances
-    pytest.param(Piece(PieceType.LANCE, Color.BLACK), (4,4), sorted([(3,4),(2,4),(1,4),(0,4)]), id="Lance_B_4,4"),
-    pytest.param(Piece(PieceType.LANCE, Color.WHITE), (4,4), sorted([(5,4),(6,4),(7,4),(8,4)]), id="Lance_W_4,4"),
-    pytest.param(Piece(PieceType.PROMOTED_LANCE, Color.BLACK), (4,4), GOLD_MOVES_FROM_4_4_BLACK, id="PromotedLance_B_4,4"),
-    pytest.param(Piece(PieceType.PROMOTED_LANCE, Color.WHITE), (4,4), GOLD_MOVES_FROM_4_4_WHITE, id="PromotedLance_W_4,4"),
+    pytest.param(
+        Piece(PieceType.LANCE, Color.BLACK),
+        (4, 4),
+        sorted([(3, 4), (2, 4), (1, 4), (0, 4)]),
+        id="Lance_B_4,4",
+    ),
+    pytest.param(
+        Piece(PieceType.LANCE, Color.WHITE),
+        (4, 4),
+        sorted([(5, 4), (6, 4), (7, 4), (8, 4)]),
+        id="Lance_W_4,4",
+    ),
+    pytest.param(
+        Piece(PieceType.PROMOTED_LANCE, Color.BLACK),
+        (4, 4),
+        GOLD_MOVES_FROM_4_4_BLACK,
+        id="PromotedLance_B_4,4",
+    ),
+    pytest.param(
+        Piece(PieceType.PROMOTED_LANCE, Color.WHITE),
+        (4, 4),
+        GOLD_MOVES_FROM_4_4_WHITE,
+        id="PromotedLance_W_4,4",
+    ),
     # Knights
-    pytest.param(Piece(PieceType.KNIGHT, Color.BLACK), (4,4), sorted([(2,3),(2,5)]), id="Knight_B_4,4"),
-    pytest.param(Piece(PieceType.KNIGHT, Color.WHITE), (4,4), sorted([(6,3),(6,5)]), id="Knight_W_4,4"),
-    pytest.param(Piece(PieceType.PROMOTED_KNIGHT, Color.BLACK), (4,4), GOLD_MOVES_FROM_4_4_BLACK, id="PromotedKnight_B_4,4"),
-    pytest.param(Piece(PieceType.PROMOTED_KNIGHT, Color.WHITE), (4,4), GOLD_MOVES_FROM_4_4_WHITE, id="PromotedKnight_W_4,4"),
+    pytest.param(
+        Piece(PieceType.KNIGHT, Color.BLACK),
+        (4, 4),
+        sorted([(2, 3), (2, 5)]),
+        id="Knight_B_4,4",
+    ),
+    pytest.param(
+        Piece(PieceType.KNIGHT, Color.WHITE),
+        (4, 4),
+        sorted([(6, 3), (6, 5)]),
+        id="Knight_W_4,4",
+    ),
+    pytest.param(
+        Piece(PieceType.PROMOTED_KNIGHT, Color.BLACK),
+        (4, 4),
+        GOLD_MOVES_FROM_4_4_BLACK,
+        id="PromotedKnight_B_4,4",
+    ),
+    pytest.param(
+        Piece(PieceType.PROMOTED_KNIGHT, Color.WHITE),
+        (4, 4),
+        GOLD_MOVES_FROM_4_4_WHITE,
+        id="PromotedKnight_W_4,4",
+    ),
     # Silvers
-    pytest.param(Piece(PieceType.SILVER, Color.BLACK), (4,4), sorted([(3,4),(3,3),(3,5),(5,3),(5,5)]), id="Silver_B_4,4"),
-    pytest.param(Piece(PieceType.SILVER, Color.WHITE), (4,4), sorted([(5,4),(5,3),(5,5),(3,3),(3,5)]), id="Silver_W_4,4"),
-    pytest.param(Piece(PieceType.PROMOTED_SILVER, Color.BLACK), (4,4), GOLD_MOVES_FROM_4_4_BLACK, id="PromotedSilver_B_4,4"),
-    pytest.param(Piece(PieceType.PROMOTED_SILVER, Color.WHITE), (4,4), GOLD_MOVES_FROM_4_4_WHITE, id="PromotedSilver_W_4,4"),
+    pytest.param(
+        Piece(PieceType.SILVER, Color.BLACK),
+        (4, 4),
+        sorted([(3, 4), (3, 3), (3, 5), (5, 3), (5, 5)]),
+        id="Silver_B_4,4",
+    ),
+    pytest.param(
+        Piece(PieceType.SILVER, Color.WHITE),
+        (4, 4),
+        sorted([(5, 4), (5, 3), (5, 5), (3, 3), (3, 5)]),
+        id="Silver_W_4,4",
+    ),
+    pytest.param(
+        Piece(PieceType.PROMOTED_SILVER, Color.BLACK),
+        (4, 4),
+        GOLD_MOVES_FROM_4_4_BLACK,
+        id="PromotedSilver_B_4,4",
+    ),
+    pytest.param(
+        Piece(PieceType.PROMOTED_SILVER, Color.WHITE),
+        (4, 4),
+        GOLD_MOVES_FROM_4_4_WHITE,
+        id="PromotedSilver_W_4,4",
+    ),
     # Golds
-    pytest.param(Piece(PieceType.GOLD, Color.BLACK), (4,4), GOLD_MOVES_FROM_4_4_BLACK, id="Gold_B_4,4"),
-    pytest.param(Piece(PieceType.GOLD, Color.WHITE), (4,4), GOLD_MOVES_FROM_4_4_WHITE, id="Gold_W_4,4"),
+    pytest.param(
+        Piece(PieceType.GOLD, Color.BLACK),
+        (4, 4),
+        GOLD_MOVES_FROM_4_4_BLACK,
+        id="Gold_B_4,4",
+    ),
+    pytest.param(
+        Piece(PieceType.GOLD, Color.WHITE),
+        (4, 4),
+        GOLD_MOVES_FROM_4_4_WHITE,
+        id="Gold_W_4,4",
+    ),
 ]
 
+
 @pytest.mark.parametrize(
-    "piece_to_test, start_pos, expected_moves_list",
-    PIECE_MOVE_TEST_CASES
+    "piece_to_test, start_pos, expected_moves_list", PIECE_MOVE_TEST_CASES
 )
-def test_get_individual_piece_moves_on_empty_board( # pylint: disable=redefined-outer-name
+def test_get_individual_piece_moves_on_empty_board(  # pylint: disable=redefined-outer-name
     cleared_game: ShogiGame,
     piece_to_test: Piece,
     start_pos: tuple,
-    expected_moves_list: list
+    expected_moves_list: list,
 ):
     """Tests get_individual_piece_moves for various pieces on an empty board."""
     game = cleared_game
@@ -193,21 +311,30 @@ def test_get_individual_piece_moves_on_empty_board( # pylint: disable=redefined-
     actual_moves = game.get_individual_piece_moves(piece_to_test, r, c)
     _check_moves(actual_moves, expected_moves_list)
 
-def test_get_individual_king_moves_on_empty_board(cleared_game: ShogiGame): # pylint: disable=redefined-outer-name
+
+def test_get_individual_king_moves_on_empty_board(
+    cleared_game: ShogiGame,
+):  # pylint: disable=redefined-outer-name
     """Test get_individual_piece_moves for King on an empty board."""
     game = cleared_game
     king_b = Piece(PieceType.KING, Color.BLACK)
     moves_king_b = game.get_individual_piece_moves(king_b, 4, 4)
-    expected_king_moves = sorted([(3,3),(3,4),(3,5),(4,3),(4,5),(5,3),(5,4),(5,5)])
+    expected_king_moves = sorted(
+        [(3, 3), (3, 4), (3, 5), (4, 3), (4, 5), (5, 3), (5, 4), (5, 5)]
+    )
     _check_moves(moves_king_b, expected_king_moves)
 
     king_w = Piece(PieceType.KING, Color.WHITE)
     moves_king_w = game.get_individual_piece_moves(king_w, 4, 4)
-    _check_moves(moves_king_w, expected_king_moves) # King moves are symmetrical from center
+    _check_moves(
+        moves_king_w, expected_king_moves
+    )  # King moves are symmetrical from center
+
 
 # (Other imports, fixtures like cleared_game, and _check_moves should be above this)
 
 # --- Helper functions for generating expected moves for Bishop/Rook ---
+
 
 def _get_expected_bishop_moves(game: ShogiGame, r: int, c: int) -> list:
     """Generates all valid diagonal moves for a bishop from (r,c) on an empty board."""
@@ -223,10 +350,11 @@ def _get_expected_bishop_moves(game: ShogiGame, r: int, c: int) -> list:
             moves.append((r + d_val, c + d_val))
     return moves
 
+
 def _get_expected_rook_moves(game: ShogiGame, r: int, c: int) -> list:
     """Generates all valid straight moves for a rook from (r,c) on an empty board."""
     moves = []
-    for d_val in range(1, 9): # Max distance
+    for d_val in range(1, 9):  # Max distance
         if game.is_on_board(r - d_val, c):
             moves.append((r - d_val, c))
         if game.is_on_board(r + d_val, c):
@@ -237,35 +365,51 @@ def _get_expected_rook_moves(game: ShogiGame, r: int, c: int) -> list:
             moves.append((r, c + d_val))
     return moves
 
-def _add_king_like_moves(game: ShogiGame, r: int, c: int, base_moves: list, king_move_deltas: list) -> list:
+
+def _add_king_like_moves(
+    game: ShogiGame, r: int, c: int, base_moves: list, king_move_deltas: list
+) -> list:
     """Adds king-like moves to a base set of moves for promoted pieces."""
-    expected_moves = list(base_moves) # Start with the base sliding moves
+    expected_moves = list(base_moves)  # Start with the base sliding moves
     for dr, dc in king_move_deltas:
         nr, nc = r + dr, c + dc
         if game.is_on_board(nr, nc) and (nr, nc) not in expected_moves:
             expected_moves.append((nr, nc))
-    return sorted(expected_moves) # Return sorted for consistent comparison
+    return sorted(expected_moves)  # Return sorted for consistent comparison
+
 
 # --- Parameterized Test for Bishop and Rook Moves ---
 
 BISHOP_ROOK_TEST_CASES = [
-    pytest.param(Piece(PieceType.BISHOP, Color.BLACK), (4,4), "bishop", id="Bishop_B_4,4"),
-    pytest.param(Piece(PieceType.PROMOTED_BISHOP, Color.BLACK), (4,4), "prom_bishop", id="PromBishop_B_4,4"),
-    pytest.param(Piece(PieceType.ROOK, Color.BLACK), (4,4), "rook", id="Rook_B_4,4"),
-    pytest.param(Piece(PieceType.PROMOTED_ROOK, Color.BLACK), (4,4), "prom_rook", id="PromRook_B_4,4"),
+    pytest.param(
+        Piece(PieceType.BISHOP, Color.BLACK), (4, 4), "bishop", id="Bishop_B_4,4"
+    ),
+    pytest.param(
+        Piece(PieceType.PROMOTED_BISHOP, Color.BLACK),
+        (4, 4),
+        "prom_bishop",
+        id="PromBishop_B_4,4",
+    ),
+    pytest.param(Piece(PieceType.ROOK, Color.BLACK), (4, 4), "rook", id="Rook_B_4,4"),
+    pytest.param(
+        Piece(PieceType.PROMOTED_ROOK, Color.BLACK),
+        (4, 4),
+        "prom_rook",
+        id="PromRook_B_4,4",
+    ),
     # You can add White piece scenarios here as well if their basic move generation differs
     # For Bishop/Rook on an empty board from center, Black/White perspective is same for basic moves
 ]
 
+
 @pytest.mark.parametrize(
-    "piece_to_test, start_pos, move_pattern_key",
-    BISHOP_ROOK_TEST_CASES
+    "piece_to_test, start_pos, move_pattern_key", BISHOP_ROOK_TEST_CASES
 )
-def test_get_individual_piece_moves_bishop_rook_parameterized( # pylint: disable=redefined-outer-name
+def test_get_individual_piece_moves_bishop_rook_parameterized(  # pylint: disable=redefined-outer-name
     cleared_game: ShogiGame,
     piece_to_test: Piece,
     start_pos: tuple,
-    move_pattern_key: str
+    move_pattern_key: str,
 ):
     """Tests get_individual_piece_moves for Bishop/Rook types on an empty board."""
     game = cleared_game
@@ -278,23 +422,34 @@ def test_get_individual_piece_moves_bishop_rook_parameterized( # pylint: disable
         expected_moves_list = _get_expected_bishop_moves(game, r, c)
     elif move_pattern_key == "prom_bishop":
         base_b_moves = _get_expected_bishop_moves(game, r, c)
-        king_deltas_for_prom_bishop = [(-1,0), (1,0), (0,-1), (0,1)]
-        expected_moves_list = _add_king_like_moves(game, r, c, base_b_moves, king_deltas_for_prom_bishop)
+        king_deltas_for_prom_bishop = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+        expected_moves_list = _add_king_like_moves(
+            game, r, c, base_b_moves, king_deltas_for_prom_bishop
+        )
     elif move_pattern_key == "rook":
         expected_moves_list = _get_expected_rook_moves(game, r, c)
     elif move_pattern_key == "prom_rook":
         base_r_moves = _get_expected_rook_moves(game, r, c)
-        king_deltas_for_prom_rook = [(-1,-1), (-1,1), (1,-1), (1,1)]
-        expected_moves_list = _add_king_like_moves(game, r, c, base_r_moves, king_deltas_for_prom_rook)
+        king_deltas_for_prom_rook = [(-1, -1), (-1, 1), (1, -1), (1, 1)]
+        expected_moves_list = _add_king_like_moves(
+            game, r, c, base_r_moves, king_deltas_for_prom_rook
+        )
 
     _check_moves(actual_moves, expected_moves_list)
 
-def test_shogigame_get_observation(new_game: ShogiGame): # pylint: disable=redefined-outer-name
+
+def test_shogigame_get_observation(
+    new_game: ShogiGame,
+):  # pylint: disable=redefined-outer-name
     """Test ShogiGame.get_observation() returns correct shape and basic planes."""
     game = new_game
     obs = game.get_observation()
     assert isinstance(obs, np.ndarray)
-    assert obs.shape == (46, 9, 9) # Ensure this shape is accurate for your implementation
+    assert obs.shape == (
+        46,
+        9,
+        9,
+    )  # Ensure this shape is accurate for your implementation
 
     # These plane indices (42-45) and their meanings are assumptions.
     # Please verify them against your get_observation() implementation.
@@ -316,7 +471,7 @@ def test_shogigame_get_observation(new_game: ShogiGame): # pylint: disable=redef
     # These should be uncommented and verified if you have a fixed plane mapping.
 
 
-def test_nifu_detection(new_game: ShogiGame): # pylint: disable=redefined-outer-name
+def test_nifu_detection(new_game: ShogiGame):  # pylint: disable=redefined-outer-name
     """Test ShogiGame.is_nifu detects Nifu (double pawn) correctly."""
     game = new_game
     for col in range(9):
@@ -325,7 +480,9 @@ def test_nifu_detection(new_game: ShogiGame): # pylint: disable=redefined-outer-
     assert not game.is_nifu(Color.BLACK, 4)
     game.set_piece(5, 4, Piece(PieceType.PROMOTED_PAWN, Color.BLACK))
     assert not game.is_nifu(Color.BLACK, 4)
-    game.set_piece(3, 4, Piece(PieceType.PAWN, Color.BLACK)) # Adds a second unpromoted pawn
+    game.set_piece(
+        3, 4, Piece(PieceType.PAWN, Color.BLACK)
+    )  # Adds a second unpromoted pawn
     assert game.is_nifu(Color.BLACK, 4)
 
     for col in range(9):
@@ -334,16 +491,20 @@ def test_nifu_detection(new_game: ShogiGame): # pylint: disable=redefined-outer-
     assert not game.is_nifu(Color.WHITE, 2)
 
 
-def test_nifu_promoted_pawn_does_not_count(cleared_game: ShogiGame): # pylint: disable=redefined-outer-name
+def test_nifu_promoted_pawn_does_not_count(
+    cleared_game: ShogiGame,
+):  # pylint: disable=redefined-outer-name
     """Promoted pawns do not count for Nifu."""
     game = cleared_game
     game.set_piece(4, 4, Piece(PieceType.PROMOTED_PAWN, Color.BLACK))
     assert not game.is_nifu(Color.BLACK, 4)
-    game.set_piece(5, 4, Piece(PieceType.PAWN, Color.BLACK)) # Add an unpromoted pawn
+    game.set_piece(5, 4, Piece(PieceType.PAWN, Color.BLACK))  # Add an unpromoted pawn
     assert game.is_nifu(Color.BLACK, 4)
 
 
-def test_nifu_after_capture_and_drop(cleared_game: ShogiGame): # pylint: disable=redefined-outer-name
+def test_nifu_after_capture_and_drop(
+    cleared_game: ShogiGame,
+):  # pylint: disable=redefined-outer-name
     """
     Tests the behavior of is_nifu (which checks if a pawn already exists on a file,
     making a subsequent drop potentially Nifu).
@@ -354,8 +515,9 @@ def test_nifu_after_capture_and_drop(cleared_game: ShogiGame): # pylint: disable
 
     # 1. Initially, the file is empty.
     # is_nifu (i.e., "does a pawn already exist on this file?") should be False.
-    assert not game.is_nifu(player_color, target_column), \
-        "Initially, is_nifu should be False for an empty file."
+    assert not game.is_nifu(
+        player_color, target_column
+    ), "Initially, is_nifu should be False for an empty file."
 
     # 2. Place ONE Black pawn on file 0.
     game.set_piece(3, target_column, Piece(PieceType.PAWN, player_color))
@@ -363,28 +525,34 @@ def test_nifu_after_capture_and_drop(cleared_game: ShogiGame): # pylint: disable
     # Now, is_nifu ("does a pawn already exist on this file?") should be TRUE.
     # This is because a pawn now exists, so attempting to drop another pawn of the
     # same color on this file would be a Nifu violation.
-    assert game.is_nifu(player_color, target_column), \
-        "After one pawn is placed, is_nifu should be True (a pawn exists)."
+    assert game.is_nifu(
+        player_color, target_column
+    ), "After one pawn is placed, is_nifu should be True (a pawn exists)."
 
     # 3. For completeness, if a second pawn is placed (which would be an illegal move
     #    if game logic correctly uses is_nifu before allowing a drop):
     game.set_piece(4, target_column, Piece(PieceType.PAWN, player_color))
 
     # is_nifu ("does a pawn already exist?") should still be True.
-    assert game.is_nifu(player_color, target_column), \
-        "After a second pawn is placed, is_nifu should still be True (a pawn exists)."
+    assert game.is_nifu(
+        player_color, target_column
+    ), "After a second pawn is placed, is_nifu should still be True (a pawn exists)."
 
 
-def test_nifu_promote_and_drop(cleared_game: ShogiGame): # pylint: disable=redefined-outer-name
+def test_nifu_promote_and_drop(
+    cleared_game: ShogiGame,
+):  # pylint: disable=redefined-outer-name
     """Nifu if a pawn is dropped on a file with an existing unpromoted friendly pawn, even if another is promoted."""
     game = cleared_game
-    game.set_piece(2, 1, Piece(PieceType.PROMOTED_PAWN, Color.BLACK)) # Promoted, doesn't count for Nifu
+    game.set_piece(
+        2, 1, Piece(PieceType.PROMOTED_PAWN, Color.BLACK)
+    )  # Promoted, doesn't count for Nifu
     assert not game.is_nifu(Color.BLACK, 1)
-    game.set_piece(4, 1, Piece(PieceType.PAWN, Color.BLACK)) # Drop an unpromoted pawn
-    assert game.is_nifu(Color.BLACK, 1) # Now Nifu due to the new unpromoted pawn
+    game.set_piece(4, 1, Piece(PieceType.PAWN, Color.BLACK))  # Drop an unpromoted pawn
+    assert game.is_nifu(Color.BLACK, 1)  # Now Nifu due to the new unpromoted pawn
 
 
-def test_uchi_fu_zume(cleared_game: ShogiGame): # pylint: disable=redefined-outer-name
+def test_uchi_fu_zume(cleared_game: ShogiGame):  # pylint: disable=redefined-outer-name
     """Test ShogiGame.is_uchi_fu_zume detects illegal pawn drop mate."""
     game = cleared_game
     game.set_piece(0, 4, Piece(PieceType.KING, Color.WHITE))
@@ -392,14 +560,16 @@ def test_uchi_fu_zume(cleared_game: ShogiGame): # pylint: disable=redefined-oute
     game.set_piece(0, 5, Piece(PieceType.GOLD, Color.BLACK))
     game.set_piece(1, 3, Piece(PieceType.GOLD, Color.BLACK))
     game.set_piece(1, 5, Piece(PieceType.GOLD, Color.BLACK))
-    game.current_player = Color.BLACK # Black is about to drop
-    assert game.is_uchi_fu_zume(1, 4, Color.BLACK) # Pawn drop at (1,4) by Black
+    game.current_player = Color.BLACK  # Black is about to drop
+    assert game.is_uchi_fu_zume(1, 4, Color.BLACK)  # Pawn drop at (1,4) by Black
 
-    game.set_piece(0, 3, None) # King can escape
+    game.set_piece(0, 3, None)  # King can escape
     assert not game.is_uchi_fu_zume(1, 4, Color.BLACK)
 
 
-def test_uchi_fu_zume_complex_escape(cleared_game: ShogiGame): # pylint: disable=redefined-outer-name
+def test_uchi_fu_zume_complex_escape(
+    cleared_game: ShogiGame,
+):  # pylint: disable=redefined-outer-name
     """Uchi Fu Zume: king's escape squares are all attacked, leading to mate by pawn drop."""
     game = cleared_game
     game.set_piece(0, 4, Piece(PieceType.KING, Color.WHITE))
@@ -413,7 +583,9 @@ def test_uchi_fu_zume_complex_escape(cleared_game: ShogiGame): # pylint: disable
     assert game.is_uchi_fu_zume(1, 4, Color.BLACK)
 
 
-def test_uchi_fu_zume_non_pawn_drop(cleared_game: ShogiGame): # pylint: disable=redefined-outer-name
+def test_uchi_fu_zume_non_pawn_drop(
+    cleared_game: ShogiGame,
+):  # pylint: disable=redefined-outer-name
     """is_uchi_fu_zume should be false if evaluating a non-pawn drop scenario (as it's specific to pawns)."""
     # This test verifies that is_uchi_fu_zume correctly identifies situations
     # that are NOT uchi_fu_zume, even if they might be mate by other means.
@@ -429,29 +601,37 @@ def test_uchi_fu_zume_non_pawn_drop(cleared_game: ShogiGame): # pylint: disable=
     # The original test placed a Gold and then called is_uchi_fu_zume.
     # If is_uchi_fu_zume checks for an empty square first (which it should for a drop),
     # then it would return False if the square is occupied.
-    game.set_piece(1, 4, Piece(PieceType.GOLD, Color.BLACK)) # Square is now occupied by Gold
+    game.set_piece(
+        1, 4, Piece(PieceType.GOLD, Color.BLACK)
+    )  # Square is now occupied by Gold
     game.current_player = Color.BLACK
-    assert not game.is_uchi_fu_zume(1, 4, Color.BLACK) # Pawn can't be dropped here, so not uchi_fu_zume via pawn drop
+    assert not game.is_uchi_fu_zume(
+        1, 4, Color.BLACK
+    )  # Pawn can't be dropped here, so not uchi_fu_zume via pawn drop
 
 
-def test_uchi_fu_zume_king_in_check(cleared_game: ShogiGame): # pylint: disable=redefined-outer-name
+def test_uchi_fu_zume_king_in_check(
+    cleared_game: ShogiGame,
+):  # pylint: disable=redefined-outer-name
     """If king is already in check, a pawn drop that blocks check (and isn't mate) is not uchi_fu_zume."""
     game = cleared_game
     game.set_piece(0, 4, Piece(PieceType.KING, Color.WHITE))
     game.set_piece(2, 4, Piece(PieceType.ROOK, Color.BLACK))  # Black rook gives check
-    game.current_player = Color.BLACK # Black's turn (to drop a pawn to block)
+    game.current_player = Color.BLACK  # Black's turn (to drop a pawn to block)
     # A pawn drop by Black at (1,4) would block the check.
     # is_uchi_fu_zume checks if this pawn drop results in an immediate checkmate where king has no escapes.
     # If it just blocks and isn't mate, it's not uchi_fu_zume.
     assert not game.is_uchi_fu_zume(1, 4, Color.BLACK)
 
 
-def test_sennichite_detection(cleared_game: ShogiGame): # pylint: disable=redefined-outer-name
+def test_sennichite_detection(
+    cleared_game: ShogiGame,
+):  # pylint: disable=redefined-outer-name
     """Test ShogiGame detects Sennichite (fourfold repetition) and declares a draw."""
     game = cleared_game
     game.set_piece(8, 4, Piece(PieceType.KING, Color.BLACK))
     game.set_piece(0, 4, Piece(PieceType.KING, Color.WHITE))
-    for _ in range(4): # Perform the sequence 4 times to get 4 identical positions
+    for _ in range(4):  # Perform the sequence 4 times to get 4 identical positions
         game.make_move((8, 4, 7, 4, False))
         game.make_move((0, 4, 1, 4, False))
         game.make_move((7, 4, 8, 4, False))
@@ -460,13 +640,15 @@ def test_sennichite_detection(cleared_game: ShogiGame): # pylint: disable=redefi
     assert game.winner is None, "Sennichite should be a draw (winner=None)."
 
 
-def test_sennichite_with_drops(cleared_game: ShogiGame): # pylint: disable=redefined-outer-name
+def test_sennichite_with_drops(
+    cleared_game: ShogiGame,
+):  # pylint: disable=redefined-outer-name
     """Test sennichite with a sequence involving drops.
     Note: This requires make_move to correctly handle hand updates for drops
     and captures for sennichite to be accurately tested with complex states."""
     game = cleared_game
-    game.set_piece(8, 4, Piece(PieceType.KING, Color.BLACK)) # BK
-    game.set_piece(0, 4, Piece(PieceType.KING, Color.WHITE)) # WK
+    game.set_piece(8, 4, Piece(PieceType.KING, Color.BLACK))  # BK
+    game.set_piece(0, 4, Piece(PieceType.KING, Color.WHITE))  # WK
     game.hands[Color.BLACK.value][PieceType.PAWN] = 4
     game.hands[Color.WHITE.value][PieceType.PAWN] = 4
 
@@ -489,7 +671,9 @@ def test_sennichite_with_drops(cleared_game: ShogiGame): # pylint: disable=redef
     assert game.winner is None
 
 
-def test_sennichite_with_captures(cleared_game: ShogiGame): # pylint: disable=redefined-outer-name
+def test_sennichite_with_captures(
+    cleared_game: ShogiGame,
+):  # pylint: disable=redefined-outer-name
     """Sennichite with repetition involving captures (simplified)."""
     game = cleared_game
     game.set_piece(8, 4, Piece(PieceType.KING, Color.BLACK))
@@ -506,7 +690,9 @@ def test_sennichite_with_captures(cleared_game: ShogiGame): # pylint: disable=re
     assert game.winner is None, "Sennichite should be a draw (winner=None)."
 
 
-def test_illegal_pawn_drop_last_rank(cleared_game: ShogiGame): # pylint: disable=redefined-outer-name
+def test_illegal_pawn_drop_last_rank(
+    cleared_game: ShogiGame,
+):  # pylint: disable=redefined-outer-name
     """Illegal pawn drop on last rank."""
     game = cleared_game
     game.hands[Color.BLACK.value][PieceType.PAWN] = 1
@@ -514,7 +700,9 @@ def test_illegal_pawn_drop_last_rank(cleared_game: ShogiGame): # pylint: disable
     assert not game.can_drop_piece(PieceType.PAWN, 0, 4, Color.BLACK)
 
 
-def test_illegal_knight_drop_last_two_ranks(cleared_game: ShogiGame): # pylint: disable=redefined-outer-name
+def test_illegal_knight_drop_last_two_ranks(
+    cleared_game: ShogiGame,
+):  # pylint: disable=redefined-outer-name
     """Illegal knight drop on last two ranks."""
     game = cleared_game
     game.hands[Color.BLACK.value][PieceType.KNIGHT] = 1
@@ -523,7 +711,9 @@ def test_illegal_knight_drop_last_two_ranks(cleared_game: ShogiGame): # pylint: 
     assert not game.can_drop_piece(PieceType.KNIGHT, 1, 4, Color.BLACK)
 
 
-def test_illegal_lance_drop_last_rank(cleared_game: ShogiGame): # pylint: disable=redefined-outer-name
+def test_illegal_lance_drop_last_rank(
+    cleared_game: ShogiGame,
+):  # pylint: disable=redefined-outer-name
     """Illegal lance drop on last rank."""
     game = cleared_game
     game.hands[Color.BLACK.value][PieceType.LANCE] = 1
@@ -531,7 +721,9 @@ def test_illegal_lance_drop_last_rank(cleared_game: ShogiGame): # pylint: disabl
     assert not game.can_drop_piece(PieceType.LANCE, 0, 4, Color.BLACK)
 
 
-def test_checkmate_minimal(cleared_game: ShogiGame): # pylint: disable=redefined-outer-name
+def test_checkmate_minimal(
+    cleared_game: ShogiGame,
+):  # pylint: disable=redefined-outer-name
     """Minimal checkmate scenario."""
     game = cleared_game
     game.current_player = Color.WHITE
@@ -548,7 +740,9 @@ def test_checkmate_minimal(cleared_game: ShogiGame): # pylint: disable=redefined
     assert game.winner == Color.WHITE
 
 
-def test_stalemate_minimal(cleared_game: ShogiGame): # pylint: disable=redefined-outer-name
+def test_stalemate_minimal(
+    cleared_game: ShogiGame,
+):  # pylint: disable=redefined-outer-name
     """Minimal stalemate scenario."""
     game = cleared_game
     game.current_player = Color.WHITE
@@ -557,7 +751,7 @@ def test_stalemate_minimal(cleared_game: ShogiGame): # pylint: disable=redefined
     game.set_piece(6, 8, Piece(PieceType.GOLD, Color.WHITE))
     game.set_piece(8, 6, Piece(PieceType.GOLD, Color.WHITE))
     game.set_piece(6, 6, Piece(PieceType.KING, Color.WHITE))
-    game.set_piece(0, 0, Piece(PieceType.PAWN, Color.WHITE)) # White's moving piece
+    game.set_piece(0, 0, Piece(PieceType.PAWN, Color.WHITE))  # White's moving piece
 
     stalemating_move = (0, 0, 1, 0, False)
     assert not game.game_over

@@ -7,7 +7,12 @@ from typing import Dict, List
 
 import torch
 
-from keisei.shogi.shogi_core_definitions import BoardMove, DropMove, MoveTuple, PieceType
+from keisei.shogi.shogi_core_definitions import (
+    BoardMove,
+    DropMove,
+    MoveTuple,
+    PieceType,
+)
 
 
 class PolicyOutputMapper:

@@ -9,6 +9,7 @@ import numpy as np
 
 # Import helper modules
 from . import shogi_game_io, shogi_move_execution, shogi_rules_logic
+
 # Import types and fundamental classes from shogi_core_definitions
 from .shogi_core_definitions import PIECE_TYPE_TO_HAND_TYPE  # Used in add_to_hand
 from .shogi_core_definitions import Color, MoveTuple, Piece, PieceType

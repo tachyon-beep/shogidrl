@@ -6,8 +6,12 @@ import pytest
 
 from keisei.shogi.shogi_core_definitions import Color, MoveTuple, Piece, PieceType
 from keisei.shogi.shogi_game import ShogiGame
-from keisei.shogi.shogi_rules_logic import (can_drop_specific_piece, check_for_nifu, check_for_uchi_fu_zume,
-                                            generate_all_legal_moves)
+from keisei.shogi.shogi_rules_logic import (
+    can_drop_specific_piece,
+    check_for_nifu,
+    check_for_uchi_fu_zume,
+    generate_all_legal_moves,
+)
 
 
 @pytest.fixture

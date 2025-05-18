@@ -6,9 +6,17 @@ Functions in this module operate on a ShogiGame instance.
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
 # Ensure all necessary types are imported:
-from .shogi_core_definitions import MoveTuple  # Corrected: MoveTuple is defined and used, not Move
+from .shogi_core_definitions import (
+    MoveTuple,
+)  # Corrected: MoveTuple is defined and used, not Move
 from .shogi_core_definitions import (  # Add any other constants from core_definitions that might be used directly here
-    BASE_TO_PROMOTED_TYPE, PROMOTED_TO_BASE_TYPE, PROMOTED_TYPES_SET, BoardMove, Color, DropMove, Piece, PieceType)
+    BASE_TO_PROMOTED_TYPE,
+    BoardMove,
+    Color,
+    DropMove,
+    Piece,
+    PieceType,
+)
 
 if TYPE_CHECKING:
     from .shogi_game import ShogiGame  # For type hinting the 'game' parameter

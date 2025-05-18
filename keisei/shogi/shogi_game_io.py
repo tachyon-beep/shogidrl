@@ -6,7 +6,12 @@ import numpy as np
 
 import config  # For MAX_MOVES_PER_GAME
 
-from .shogi_core_definitions import OBS_PROMOTED_ORDER, OBS_UNPROMOTED_ORDER, Color, PieceType
+from .shogi_core_definitions import (
+    OBS_PROMOTED_ORDER,
+    OBS_UNPROMOTED_ORDER,
+    Color,
+    PieceType,
+)
 
 if TYPE_CHECKING:
     from .shogi_game import ShogiGame  # For type hinting the 'game' parameter
