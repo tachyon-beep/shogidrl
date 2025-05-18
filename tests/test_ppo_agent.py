@@ -2,10 +2,10 @@
 Unit tests for PPOAgent in ppo_agent.py
 """
 
-import torch
+from typing import List  # Add this import
+
 import numpy as np
 import pytest
-from typing import List  # Add this import
 from keisei.ppo_agent import PPOAgent
 from keisei.utils import PolicyOutputMapper
 from keisei.experience_buffer import ExperienceBuffer  # Added import
@@ -100,7 +100,7 @@ def test_ppo_agent_learn():
         assert isinstance(avg_policy_loss, float)
         assert isinstance(avg_value_loss, float)
         assert isinstance(avg_entropy, float)
-    except Exception as e:
+    except RuntimeError as e:  # Catch a more specific exception if possible, or document why general Exception is needed.
         pytest.fail(f"agent.learn() raised an exception: {e}")
 
     # Optionally, check if buffer is cleared after learn (if that's the intended behavior of learn or a subsequent step)

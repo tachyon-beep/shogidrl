@@ -2,7 +2,6 @@
 Unit test for TrainingLogger in utils.py
 """
 
-import os
 from keisei.utils import TrainingLogger
 
 

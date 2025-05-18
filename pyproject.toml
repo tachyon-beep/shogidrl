@@ -15,6 +15,7 @@ dependencies = [
     "torch>=1.10",
     "numpy",
     "pytest",
+    "pytest-pylint",
     "black",
     "flake8"
 ]

@@ -2,9 +2,10 @@
 Unit tests for PolicyOutputMapper in utils.py
 """
 
+from typing import List
+
 import pytest
 import torch
-from typing import List
 from keisei.utils import PolicyOutputMapper
 from keisei.shogi import MoveTuple
 from keisei.shogi import PieceType

@@ -143,6 +143,13 @@ def test_get_individual_piece_moves_pawn():
     assert len(moves_king) == 8
 
 
+def _check_moves(moves, expected_moves):
+    """Helper function to check if all expected moves are present."""
+    assert len(moves) == len(expected_moves)
+    for m in expected_moves:
+        assert m in moves
+
+
 def test_get_individual_piece_moves_lance_knight():
     """Test get_individual_piece_moves for lance and knight (unpromoted and promoted)."""
     game = ShogiGame()
@@ -150,65 +157,79 @@ def test_get_individual_piece_moves_lance_knight():
     for r in range(9):
         for c in range(9):
             game.set_piece(r, c, None)
-    lance = Piece(PieceType.LANCE, Color.BLACK)
-    moves = game.get_individual_piece_moves(lance, 4, 4)
-    expected = [(3, 4), (2, 4), (1, 4), (0, 4)]
-    for m in expected:
-        assert m in moves
-    lance_w = Piece(PieceType.LANCE, Color.WHITE)
-    moves_w = game.get_individual_piece_moves(lance_w, 4, 4)
-    expected_w = [(5, 4), (6, 4), (7, 4), (8, 4)]
-    for m in expected_w:
-        assert m in moves_w
-    prom_lance = Piece(PieceType.PROMOTED_LANCE, Color.BLACK)
-    moves_prom = game.get_individual_piece_moves(prom_lance, 4, 4)
-    expected_gold = [(3, 4), (5, 4), (4, 3), (4, 5), (3, 3), (3, 5)]
-    for m in expected_gold:
-        assert m in moves_prom
-    knight = Piece(PieceType.KNIGHT, Color.BLACK)
-    moves_k = game.get_individual_piece_moves(knight, 4, 4)
-    assert (2, 3) in moves_k and (2, 5) in moves_k
-    assert len(moves_k) == 2
-    knight_w = Piece(PieceType.KNIGHT, Color.WHITE)
-    moves_kw = game.get_individual_piece_moves(knight_w, 4, 4)
-    assert (6, 3) in moves_kw and (6, 5) in moves_kw
-    assert len(moves_kw) == 2
-    prom_knight = Piece(PieceType.PROMOTED_KNIGHT, Color.BLACK)
-    moves_promk = game.get_individual_piece_moves(prom_knight, 4, 4)
-    expected_gold = [(3, 4), (5, 4), (4, 3), (4, 5), (3, 3), (3, 5)]
-    for m in expected_gold:
-        assert m in moves_promk
+
+    # Lance tests
+    lance_black = Piece(PieceType.LANCE, Color.BLACK)
+    moves_lance_black = game.get_individual_piece_moves(lance_black, 4, 4)
+    expected_lance_black = [(3, 4), (2, 4), (1, 4), (0, 4)]
+    _check_moves(moves_lance_black, expected_lance_black)
+
+    lance_white = Piece(PieceType.LANCE, Color.WHITE)
+    moves_lance_white = game.get_individual_piece_moves(lance_white, 4, 4)
+    expected_lance_white = [(5, 4), (6, 4), (7, 4), (8, 4)]
+    _check_moves(moves_lance_white, expected_lance_white)
+
+    prom_lance_black = Piece(PieceType.PROMOTED_LANCE, Color.BLACK)
+    moves_prom_lance_black = game.get_individual_piece_moves(prom_lance_black, 4, 4)
+    expected_gold_moves = [(3, 4), (5, 4), (4, 3), (4, 5), (3, 3), (3, 5)]
+    _check_moves(moves_prom_lance_black, expected_gold_moves)
+
+    # Knight tests
+    knight_black = Piece(PieceType.KNIGHT, Color.BLACK)
+    moves_knight_black = game.get_individual_piece_moves(knight_black, 4, 4)
+    expected_knight_black = [(2, 3), (2, 5)]
+    _check_moves(moves_knight_black, expected_knight_black)
+
+    knight_white = Piece(PieceType.KNIGHT, Color.WHITE)
+    moves_knight_white = game.get_individual_piece_moves(knight_white, 4, 4)
+    expected_knight_white = [(6, 3), (6, 5)]
+    _check_moves(moves_knight_white, expected_knight_white)
+
+    prom_knight_black = Piece(PieceType.PROMOTED_KNIGHT, Color.BLACK)
+    moves_prom_knight_black = game.get_individual_piece_moves(prom_knight_black, 4, 4)
+    _check_moves(moves_prom_knight_black, expected_gold_moves)
+
+
+def _test_piece_moves(game: ShogiGame, piece: Piece, r: int, c: int, expected_moves: list):
+    """Helper function to test moves for a given piece and position."""
+    moves = game.get_individual_piece_moves(piece, r, c)
+    _check_moves(moves, expected_moves)
 
 
 def test_get_individual_piece_moves_silver_gold():
     """Test get_individual_piece_moves for silver and gold (unpromoted and promoted)."""
     game = ShogiGame()
-    silver = Piece(PieceType.SILVER, Color.BLACK)
-    moves = game.get_individual_piece_moves(silver, 4, 4)
-    expected = [(3, 4), (3, 3), (3, 5), (5, 3), (5, 5)]
-    for m in expected:
-        assert m in moves
-    assert len(moves) == 5
-    silver_w = Piece(PieceType.SILVER, Color.WHITE)
-    moves_w = game.get_individual_piece_moves(silver_w, 4, 4)
-    expected_w = [(5, 4), (5, 3), (5, 5), (3, 3), (3, 5)]
-    for m in expected_w:
-        assert m in moves_w
-    assert len(moves_w) == 5
-    prom_silver = Piece(PieceType.PROMOTED_SILVER, Color.BLACK)
-    moves_prom = game.get_individual_piece_moves(prom_silver, 4, 4)
-    expected_gold = [(3, 4), (5, 4), (4, 3), (4, 5), (3, 3), (3, 5)]
-    for m in expected_gold:
-        assert m in moves_prom
-    gold = Piece(PieceType.GOLD, Color.BLACK)
-    moves_gold = game.get_individual_piece_moves(gold, 4, 4)
-    for m in expected_gold:
-        assert m in moves_gold
-    gold_w = Piece(PieceType.GOLD, Color.WHITE)
-    expected_gold_w = [(5, 4), (3, 4), (4, 3), (4, 5), (5, 3), (5, 5)]
-    moves_gold_w = game.get_individual_piece_moves(gold_w, 4, 4)
-    for m in expected_gold_w:
-        assert m in moves_gold_w
+    # For silver and gold, their moves are relative to their color's forward direction.
+    # Black moves towards smaller row indices.
+    # White moves towards larger row indices.
+
+    # Silver tests
+    silver_black = Piece(PieceType.SILVER, Color.BLACK)
+    expected_silver_black = [(3, 4), (3, 3), (3, 5), (5, 3), (5, 5)]
+    _test_piece_moves(game, silver_black, 4, 4, expected_silver_black)
+
+    silver_white = Piece(PieceType.SILVER, Color.WHITE)
+    expected_silver_white = [(5, 4), (5, 3), (5, 5), (3, 3), (3, 5)]
+    _test_piece_moves(game, silver_white, 4, 4, expected_silver_white)
+
+    prom_silver_black = Piece(PieceType.PROMOTED_SILVER, Color.BLACK)
+    # Promoted silver moves like gold for black
+    expected_prom_silver_black = [(3, 4), (5, 4), (4, 3), (4, 5), (3, 3), (3, 5)]
+    _test_piece_moves(game, prom_silver_black, 4, 4, expected_prom_silver_black)
+
+    prom_silver_white = Piece(PieceType.PROMOTED_SILVER, Color.WHITE)
+    # Promoted silver moves like gold for white
+    expected_prom_silver_white = [(5, 4), (3, 4), (4, 3), (4, 5), (5, 3), (5, 5)]
+    _test_piece_moves(game, prom_silver_white, 4, 4, expected_prom_silver_white)
+
+    # Gold tests
+    gold_black = Piece(PieceType.GOLD, Color.BLACK)
+    expected_gold_black = [(3, 4), (5, 4), (4, 3), (4, 5), (3, 3), (3, 5)]
+    _test_piece_moves(game, gold_black, 4, 4, expected_gold_black)
+
+    gold_white = Piece(PieceType.GOLD, Color.WHITE)
+    expected_gold_white = [(5, 4), (3, 4), (4, 3), (4, 5), (5, 3), (5, 5)]
+    _test_piece_moves(game, gold_white, 4, 4, expected_gold_white)
 
 
 def test_get_individual_piece_moves_bishop_rook():
@@ -552,7 +573,6 @@ def test_checkmate_minimal():
     # For a clean test setup, we ensure it's empty or reset if it were publicly settable.
     # Since it's not directly settable, we rely on a fresh game instance or ensure no prior moves led to its population.
     # For the purpose of this test, a fresh ShogiGame() instance handles this.
-    # If sennichite_history were a public attribute on ShogiGame, it would be: game.sennichite_history = {}
     game.game_over = False
     game.winner = None
     game.current_player = Color.WHITE  # White to make the checkmating move

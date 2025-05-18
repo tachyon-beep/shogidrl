@@ -20,8 +20,7 @@ def test_train_main_runs():
     config.SAVE_FREQ_EPISODES = 1  # Ensure model saving is triggered
     # Ensure MINIBATCH_SIZE is not larger than STEPS_PER_EPOCH for the test
     original_minibatch_size = config.MINIBATCH_SIZE
-    if config.MINIBATCH_SIZE > config.STEPS_PER_EPOCH:
-        config.MINIBATCH_SIZE = config.STEPS_PER_EPOCH
+    config.MINIBATCH_SIZE = min(config.MINIBATCH_SIZE, config.STEPS_PER_EPOCH)
 
     train = importlib.import_module("train")
 

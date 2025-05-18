@@ -1,6 +1,8 @@
 """
 Unit tests for ShogiGame class in shogi_game.py
 """
+from dataclasses import dataclass, field
+from typing import Dict
 
 import pytest
 import numpy as np
@@ -12,6 +14,27 @@ from keisei.shogi.shogi_core_definitions import (
     OBS_UNPROMOTED_ORDER,
     OBS_PROMOTED_ORDER,
 )
+
+
+@dataclass
+class GameState:
+    """Helper class to store a snapshot of the game state."""
+    board_str: str
+    current_player: Color
+    move_count: int
+    black_hand: Dict[PieceType, int] = field(default_factory=dict)
+    white_hand: Dict[PieceType, int] = field(default_factory=dict)
+
+    @classmethod
+    def from_game(cls, game: ShogiGame) -> 'GameState':
+        """Creates a GameState snapshot from a ShogiGame instance."""
+        return cls(
+            board_str=game.to_string(),
+            current_player=game.current_player,
+            move_count=game.move_count,
+            black_hand=game.hands[Color.BLACK.value].copy(),
+            white_hand=game.hands[Color.WHITE.value].copy()
+        )
 
 
 @pytest.fixture
@@ -530,102 +553,66 @@ def test_undo_move_forced_promotion(new_game: ShogiGame):
     assert game.get_piece(0, 2) is None
 
 
-def test_undo_move_multiple_moves(new_game: ShogiGame):
+def test_undo_move_multiple_moves(new_game: ShogiGame):  # pylint: disable=redefined-outer-name
     """Test undoing multiple moves sequentially."""
     game = new_game
-    initial_board_str = game.to_string()
-    initial_player = game.current_player
-    initial_move_count = game.move_count
-    initial_black_hand = game.hands[Color.BLACK.value].copy()
-    initial_white_hand = game.hands[Color.WHITE.value].copy()
+    initial_state = GameState.from_game(game)
 
     # 1. Black P-7f (6,6) -> (5,6)
     move1: tuple = (6, 6, 5, 6, False)
     game.make_move(move1)
+    state_after_move1 = GameState.from_game(game)
+
     # 2. White P-3d (2,3) -> (3,3)
     move2: tuple = (2, 3, 3, 3, False)
     game.make_move(move2)
+    # state_after_move2 = GameState.from_game(game) # Not strictly needed for assertion path
+
     # 3. Black P-2f (6,1) -> P-2e (5,1) (capture, promote)
     # Setup: place a white pawn at (5,1) for capture
-    # IMPORTANT: Store this piece to manually remove it if undo doesn't handle it.
-    # However, a robust undo should handle this. Let's assume it does for now.
-    game.board[5][1] = Piece(PieceType.PAWN, Color.WHITE)
-    move3: tuple = (6, 1, 5, 1, True)  # (from_x, from_y, to_x, to_y, promote)
+    game.set_piece(5, 1, Piece(PieceType.PAWN, Color.WHITE)) # Manually placed piece
+    state_before_move3 = GameState.from_game(game)
+
+    move3: tuple = (6, 1, 5, 1, True)
     game.make_move(move3)
 
     # Check state after 3 moves
     promoted_pawn_at_5_1 = game.get_piece(5, 1)
-    assert promoted_pawn_at_5_1 is not None
-    assert promoted_pawn_at_5_1.type == PieceType.PROMOTED_PAWN
-    assert promoted_pawn_at_5_1.color == Color.BLACK
-    assert (
-        game.hands[Color.BLACK.value].get(PieceType.PAWN, 0)
-        == initial_black_hand.get(PieceType.PAWN, 0) + 1
-    )  # Captured white pawn
+    assert promoted_pawn_at_5_1 and promoted_pawn_at_5_1.type == PieceType.PROMOTED_PAWN and promoted_pawn_at_5_1.color == Color.BLACK
+    assert game.hands[Color.BLACK.value].get(PieceType.PAWN, 0) == state_before_move3.black_hand.get(PieceType.PAWN, 0) + 1
 
-    # Undo move 3 (Black P-2e (promoted) captures P@2e -> P-2f)
+    # Undo move 3
     game.undo_move()
-    pawn_at_6_1_after_undo1 = game.get_piece(6, 1)
-    assert pawn_at_6_1_after_undo1 is not None
-    assert pawn_at_6_1_after_undo1.type == PieceType.PAWN
-    assert pawn_at_6_1_after_undo1.color == Color.BLACK
+    _assert_game_state(game, state_before_move3) # State includes the manually placed (now restored) W_Pawn at (5,1)
+    piece_at_6_1 = game.get_piece(6,1)
+    assert piece_at_6_1 is not None and piece_at_6_1.type == PieceType.PAWN and piece_at_6_1.color == Color.BLACK
+    piece_at_5_1 = game.get_piece(5,1) # This was the manually placed white pawn, now restored by undo
+    assert piece_at_5_1 is not None and piece_at_5_1.type == PieceType.PAWN and piece_at_5_1.color == Color.WHITE
 
-    captured_pawn_restored_at_5_1 = game.get_piece(5, 1)
-    assert captured_pawn_restored_at_5_1 is not None
-    assert captured_pawn_restored_at_5_1.type == PieceType.PAWN
-    assert captured_pawn_restored_at_5_1.color == Color.WHITE
-    assert (
-        game.current_player == Color.BLACK
-    )  # Should be Black's turn again (was White's before undo)
-    assert game.hands[Color.BLACK.value].get(
-        PieceType.PAWN, 0
-    ) == initial_black_hand.get(PieceType.PAWN, 0)
+    # ---- Proposed Fix: Manually "yank" the piece ----
+    # This White Pawn at (5,1) was manually placed for move3 and restored by undoing move3.
+    # It's not part of state_after_move1, so remove it before comparing to that state.
+    game.set_piece(5, 1, None)
+    # ------------------------------------------------
 
-    # Undo move 2 (White P-3d -> P-4d)
+    # Undo move 2
     game.undo_move()
-    pawn_at_2_3_after_undo2 = game.get_piece(2, 3)
-    assert pawn_at_2_3_after_undo2 is not None
-    assert pawn_at_2_3_after_undo2.type == PieceType.PAWN
-    assert pawn_at_2_3_after_undo2.color == Color.WHITE
-    assert game.get_piece(3, 3) is None
-    assert (
-        game.current_player == Color.WHITE
-    )  # Should be White's turn (was Black's before undo)
+    _assert_game_state(game, state_after_move1) # This should now pass
+    piece_at_2_3 = game.get_piece(2,3)
+    assert piece_at_2_3 is not None and piece_at_2_3.type == PieceType.PAWN and piece_at_2_3.color == Color.WHITE
+    assert game.get_piece(3,3) is None
 
-    # Undo move 1 (Black P-7f -> P-6f)
+    # Undo move 1
     game.undo_move()
-    pawn_at_6_6_after_undo3 = game.get_piece(6, 6)
-    assert pawn_at_6_6_after_undo3 is not None
-    assert pawn_at_6_6_after_undo3.type == PieceType.PAWN
-    assert pawn_at_6_6_after_undo3.color == Color.BLACK
-    assert game.get_piece(5, 6) is None
-    assert (
-        game.current_player == Color.BLACK
-    )  # Should be Black's turn (was White's before undo)
+    _assert_game_state(game, initial_state)
+    piece_at_6_6 = game.get_piece(6,6)
+    assert piece_at_6_6 is not None and piece_at_6_6.type == PieceType.PAWN and piece_at_6_6.color == Color.BLACK
+    assert game.get_piece(5,6) is None
 
-    # Manually clear the square that had the test-specific piece for move3
-    # This piece was manually placed on the board for the capture in move3.
-    # Standard undo logic would restore it after undoing move3 (correctly),
-    # but it wouldn't be removed by undoing earlier, unrelated moves (move1, move2).
-    # For this test to assert equality with the absolute initial board state,
-    # this test-specific artifact must be cleared.
-    game.board[5][1] = None
-
-    # Critical check: board string representation
-    current_board_str = game.to_string()
-    assert (
-        current_board_str == initial_board_str
-    ), f"Board state not fully restored after multiple undos.\nExpected:\n{initial_board_str}\nGot:\n{current_board_str}"
-
-    assert (
-        game.current_player == initial_player
-    ), "Current player not restored after multiple undos"
-    assert (
-        game.move_count == initial_move_count
-    ), "Move count not restored after multiple undos"
-    assert (
-        game.hands[Color.BLACK.value] == initial_black_hand
-    ), "Black's hand not restored after multiple undos"
-    assert (
-        game.hands[Color.WHITE.value] == initial_white_hand
-    ), "White's hand not restored after multiple undos"
+def _assert_game_state(game: ShogiGame, expected_state: GameState):
+    """Helper to assert game matches a previously captured GameState."""
+    assert game.to_string() == expected_state.board_str
+    assert game.current_player == expected_state.current_player
+    assert game.move_count == expected_state.move_count
+    assert game.hands[Color.BLACK.value] == expected_state.black_hand
+    assert game.hands[Color.WHITE.value] == expected_state.white_hand
