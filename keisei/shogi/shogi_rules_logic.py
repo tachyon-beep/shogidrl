@@ -3,7 +3,7 @@ Core Shogi game rules, move generation, and validation logic.
 Functions in this module operate on a ShogiGame instance.
 """
 
-from typing import List, Tuple, Optional, Dict, Any, TYPE_CHECKING, Union
+from typing import List, Tuple, Optional, TYPE_CHECKING
 
 # Ensure all necessary types are imported:
 from .shogi_core_definitions import (
