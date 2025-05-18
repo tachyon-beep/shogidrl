@@ -114,7 +114,13 @@ class ExperienceBuffer:
         # Convert lists to tensors
         # Note: self.obs contains numpy arrays. Stack them.
         # Optimized conversion: list of np.ndarrays -> single np.ndarray -> torch.tensor
-        obs_np_array = np.array(self.obs[:num_samples], dtype=np.float32)
+        obs_np_array = np.array(
+            [
+                o.cpu().numpy() if isinstance(o, torch.Tensor) else o
+                for o in self.obs[:num_samples]
+            ],
+            dtype=np.float32,
+        )
         obs_tensor = torch.tensor(obs_np_array, dtype=torch.float32, device=self.device)
 
         actions_tensor = torch.tensor(

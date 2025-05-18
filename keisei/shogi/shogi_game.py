@@ -21,7 +21,7 @@ class ShogiGame:
     Delegates complex rule logic, I/O, and move execution to helper modules.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, max_moves_per_game: int) -> None:  # Added max_moves_per_game
         self.board: List[List[Optional[Piece]]] = [
             [None for _ in range(9)] for _ in range(9)
         ]
@@ -35,6 +35,8 @@ class ShogiGame:
         self.move_history: list = []
         self.game_over: bool = False
         self.winner: Optional[Color] = None
+        self.termination_reason: Optional[str] = None  # Added to store game termination reason
+        self.max_moves_per_game = max_moves_per_game  # Store max_moves_per_game
         self.reset()
 
     def reset(self) -> np.ndarray:  # Modified return type
@@ -88,6 +90,7 @@ class ShogiGame:
         self.move_history = []
         self.game_over = False
         self.winner = None
+        self.termination_reason = None  # Reset termination reason
         return self.get_observation()  # Added this line
 
     def get_piece(self, row: int, col: int) -> Optional[Piece]:
@@ -211,31 +214,35 @@ class ShogiGame:
         Returns:
             A tuple (next_observation, reward, done, info_dict).
         """
+        # Store current player before it's switched by apply_move_to_board
+        player_who_moved = self.current_player
+
         shogi_move_execution.apply_move_to_board(self, move_tuple, is_simulation)
 
         next_observation = self.get_observation()
         done = self.game_over
         reward = 0.0
+        info = {
+            "termination_reason": self.termination_reason,
+            "game_length": self.move_count,
+        }
 
         if done and not is_simulation:
             if self.winner is not None:
-                # Assuming current_player is the one who just moved and possibly won/lost
-                # If self.winner is the current_player, they won.
-                # If self.winner is the other player, current_player lost.
-                # This needs to be from the perspective of the player whose turn it *was*.
-                # The `current_player` has already been switched by `apply_move_to_board`.
-                # So, if `self.winner` is NOT `self.current_player`, the player who just moved won.
-                if self.winner != self.current_player:  # Player who made the move won
+                if self.winner == player_who_moved:  # Player who made the move won
                     reward = 1.0
-                else:  # Player who made the move lost (or it's a draw if winner is None)
+                elif self.winner != player_who_moved and self.winner is not None:  # Player who made the move lost
                     reward = -1.0
+                # if winner is None, it's a draw, reward remains 0.0
             else:  # Draw (e.g. sennichite, max moves if not handled by winner)
-                reward = 0.0  # Or a small penalty/reward depending on rules
+                reward = 0.0
 
-        # If not done, reward is 0. If agent is playing against itself, this needs adjustment
-        # For now, this reward is from the perspective of the player who just made the move.
+        # The self.termination_reason should be set within shogi_move_execution.apply_move_to_board
+        # or by specific game ending condition checks called from there or before.
+        # For example, if apply_move_to_board sets self.game_over = True and self.winner,
+        # it should also set self.termination_reason.
 
-        return next_observation, reward, done, {}
+        return next_observation, reward, done, info
 
     def undo_move(self):
         """

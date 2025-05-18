@@ -22,9 +22,13 @@ def evaluate_agent(agent, num_games=5, logger=None):
     wins = 0
     draws = 0
     losses = 0
+    game_lengths = []
+    termination_reasons_counts = {}
+
     for i in range(num_games):
-        game = ShogiGame()
+        game = ShogiGame(max_moves_per_game=config.MAX_MOVES_PER_GAME_EVAL) # Use a potentially different limit for eval
         obs_np = game.reset()  # Get initial observation
+        current_game_moves = 0
         for _ in range(100):  # Max moves per game
             legal_shogi_moves = game.get_legal_moves()
             if not legal_shogi_moves:
@@ -41,6 +45,7 @@ def evaluate_agent(agent, num_games=5, logger=None):
             obs_np, reward, done, info = game.make_move(
                 selected_shogi_move
             )  # Corrected unpacking
+            current_game_moves +=1
 
             if game.game_over:
                 # Determine winner based on game.winner and game.current_player
@@ -71,10 +76,17 @@ def evaluate_agent(agent, num_games=5, logger=None):
                         draws += 1
                 else:  # No winner explicitly set, but game over (e.g. sennichite, max_moves)
                     draws += 1  # Or handle based on specific game end condition
+                game_lengths.append(current_game_moves)
+                reason = info.get("termination_reason", "unknown")
+                termination_reasons_counts[reason] = termination_reasons_counts.get(reason, 0) + 1
                 break
         # If loop finishes due to max_moves without game.game_over, count as draw
         if not game.game_over:
             draws += 1
+            game_lengths.append(current_game_moves) # Log length even if max_moves hit in eval loop
+            reason = "eval_max_moves" # Specific reason for eval loop termination
+            termination_reasons_counts[reason] = termination_reasons_counts.get(reason, 0) + 1
+
 
     # msg = f"Evaluation: {num_games} games | Wins: {wins} | Draws: {draws} | Losses: {losses}"
     # More detailed logging
@@ -90,15 +102,30 @@ def evaluate_agent(agent, num_games=5, logger=None):
         loss_rate = losses / total_played
         draw_rate = draws / total_played
 
-    msg = (
-        f"Evaluation Complete: Ran {total_played}/{num_games} games.\n"
-        f"  Wins: {wins} ({win_rate:.2%})\n"
-        f"  Losses: {losses} ({loss_rate:.2%})\n"
-        f"  Draws: {draws} ({draw_rate:.2%})"
-    )
+    avg_game_length = sum(game_lengths) / len(game_lengths) if game_lengths else 0
 
+    msg = (
+        f"Evaluation Complete: Ran {total_played}/{num_games} games.\\n"
+        f"  Wins: {wins} ({win_rate:.2%})\\n"
+        f"  Losses: {losses} ({loss_rate:.2%})\\n"
+        f"  Draws: {draws} ({draw_rate:.2%})\\n"
+        f"  Average Game Length: {avg_game_length:.2f} moves"
+    )
     if logger:
         logger.log(msg)
+        # Log to WandB if enabled
+        if wandb.run is not None:
+            wandb.log({
+                "eval/wins": wins,
+                "eval/losses": losses,
+                "eval/draws": draws,
+                "eval/win_rate": win_rate,
+                "eval/loss_rate": loss_rate,
+                "eval/draw_rate": draw_rate,
+                "eval/avg_game_length": avg_game_length,
+                "eval/total_games_evaluated": total_played,
+                **{f"eval/termination_{k}": v for k,v in termination_reasons_counts.items()}
+            }, commit=False) # Commit with main training logs
     else:
         print(msg)
 
@@ -163,7 +190,7 @@ def main():
         os.makedirs(config.MODEL_DIR)
         logger.log(f"Created model directory: {config.MODEL_DIR}")
 
-    game = ShogiGame()
+    game = ShogiGame(max_moves_per_game=config.MAX_MOVES_PER_GAME) # Pass max_moves_per_game
     policy_mapper = PolicyOutputMapper()
 
     agent = PPOAgent(
@@ -198,156 +225,112 @@ def main():
     # Main training loop driven by global timesteps
     for global_timestep in range(1, config.TOTAL_TIMESTEPS + 1):
         legal_shogi_moves = game.get_legal_moves()
-        info = {}  # Initialize info dictionary
-
         if not legal_shogi_moves:
-            logger.log(
-                f"Warning: No legal moves for player {game.current_player} at timestep {global_timestep}. Game should be over."
-            )
-            if not game.game_over:
-                logger.log(
-                    "CRITICAL: No legal moves but game not marked over. Forcing done=True."
-                )
-                done = True
-                info["reason"] = "forced_done_no_legal_moves"
-            else:
-                done = True  # Game is already over, make_move below will likely confirm this with its own info
-                # If game is already over, we effectively skip to the episode end logic
-                # We need to ensure obs_np, reward, etc. are consistent if we bypass make_move
-                # For simplicity, let make_move be called if possible, or handle this state carefully
-                # This path implies the episode ended on the previous step or due to external factor.
-                # Let's assume make_move won't be called if done is True from here.
-                # The episode end logic will handle reset.
-        else:
-            selected_shogi_move, policy_idx, log_prob_action, value_pred = (
-                agent.select_action(
-                    obs_np, legal_shogi_moves=legal_shogi_moves, is_training=True
-                )
-            )
-            next_obs_np, reward, done, info_from_move = game.make_move(
-                selected_shogi_move
-            )
-            info.update(info_from_move if info_from_move else {})  # Merge info
-            episode_reward += reward
-            buffer.add(obs_np, policy_idx, reward, log_prob_action, value_pred, done)
-            obs_np = next_obs_np
+            # This case implies the game ended before the agent could make a move (e.g., checkmate on spawn)
+            # Or, more likely, an issue with game state or legal move generation.
+            logger.log(f"CRITICAL: No legal moves for player {game.current_player} at start of a turn. Game state: {game.to_string()}")
+            # Handle game reset or error appropriately
+            # For now, let's assume this means the episode ended abruptly.
+            if wandb_enabled and wandb.run is not None:
+                wandb.log({
+                    "episode/reward": episode_reward, # Log existing reward
+                    "episode/length": episode_steps, # Log existing steps
+                    "episode/number": total_episodes_completed,
+                    "episode/termination/no_legal_moves_at_turn_start": 1,
+                }, commit=False)
+            obs_np = game.reset()
+            episode_reward = 0
+            episode_steps = 0
+            total_episodes_completed += 1 # Count this as a completed (albeit problematic) episode
+            continue # Skip to next timestep
 
+        info = {}  # Initialize info dictionary
+        obs_tensor_for_buffer = torch.tensor(obs_np, dtype=torch.float32, device=agent.device) # Prepare obs for buffer
+
+        # Select action
+        selected_shogi_move, selected_policy_index, log_prob, value_estimate = agent.select_action(
+            obs_np, legal_shogi_moves=legal_shogi_moves, is_training=True
+        )
+        
+        # Step the environment with the selected move
+        next_obs_np, reward, done, info = game.make_move(selected_shogi_move)
+        
+        episode_reward += reward
         episode_steps += 1
 
-        if done or episode_steps >= config.MAX_MOVES_PER_GAME:
-            reason = info.get("reason", "unknown")
-            if episode_steps >= config.MAX_MOVES_PER_GAME and not done:
-                reason = "max_moves_reached"
-                done = True  # Ensure done is true if max_moves is the reason
+        buffer.add(
+            obs=obs_tensor_for_buffer, # Use the tensor version of obs_np
+            action=selected_policy_index,
+            reward=reward,
+            value=value_estimate, 
+            log_prob=log_prob,
+            done=done,
+        )
+        
+        obs_np = next_obs_np
 
-            log_message = (
-                f"Episode {episode_num + 1} finished after {episode_steps} steps. "
-                f"Total Timesteps: {global_timestep}. Reward: {episode_reward}. "
-                f"Game Over: {done}. Reason: {reason}"
-            )
-            logger.log(log_message)
-            if wandb_enabled:
-                wandb.log(
-                    {
-                        "episode_reward": episode_reward,
-                        "episode_steps": episode_steps,
-                        "episode_num": episode_num + 1,
-                        "total_episodes_completed": total_episodes_completed
-                        + 1,  # Log before increment
-                        "game_over_reason": reason,
-                    },
-                    step=global_timestep,
-                )
-
-            current_obs_before_reset = obs_np  # Save current obs for potential last_value calculation if buffer fills now
-            obs_np = game.reset()
-            episode_num += 1
+        if done:
             total_episodes_completed += 1
+            logger.log(
+                f"Episode {total_episodes_completed} finished after {episode_steps} steps. "
+                f"Reward: {episode_reward:.2f}. Termination: {info.get('termination_reason', 'N/A')}"
+            )
+            if wandb_enabled and wandb.run is not None:
+                wandb.log({
+                    "episode/reward": episode_reward,
+                    "episode/length": episode_steps,
+                    "episode/number": total_episodes_completed,
+                    f"episode/termination/{info.get('termination_reason', 'unknown')}": 1,
+                 }, commit=False) 
+
+            obs_np = game.reset()
             episode_reward = 0
             episode_steps = 0
 
-            # Save model checkpoint based on episodes completed
-            if total_episodes_completed % config.SAVE_FREQ_EPISODES == 0:
-                model_path = os.path.join(
-                    config.MODEL_DIR,
-                    f"ppo_shogi_agent_episode_{total_episodes_completed}_ts_{global_timestep}.pth",
-                )
-                agent.save_model(model_path)
-                logger.log(f"Saved model checkpoint to {model_path}")
-                if wandb_enabled:
-                    try:
-                        artifact = wandb.Artifact(
-                            name=f"model-checkpoint-ep{total_episodes_completed}",
-                            type="model",
-                            description=f"PPO Shogi Agent model checkpoint after {total_episodes_completed} episodes, {global_timestep} timesteps.",
-                            metadata={
-                                "episode": total_episodes_completed,
-                                "timestep": global_timestep,
-                                "path": model_path,
-                            },
-                        )
-                        artifact.add_file(model_path)
-                        wandb.log_artifact(artifact)
-                        logger.log(f"Logged model artifact to W&B: {artifact.name}")
-                    except Exception as e:
-                        logger.log(f"Error logging model artifact to W&B: {e}")
-
-        # If buffer is full, perform learning update
-        if len(buffer) == config.STEPS_PER_EPOCH:
-            logger.log(
-                f"Buffer full at timestep {global_timestep}. Performing PPO update."
-            )
-            last_value: float
-            if done:  # If the episode ended exactly when the buffer got full
-                last_value = 0.0
-            else:  # Episode is still ongoing, get value of current_obs_before_reset or obs_np
-                # If done was true, obs_np is already the reset state.
-                # If done was false, obs_np is the current state from which we'd get last_value.
-                # The variable current_obs_before_reset was saved before reset if an episode ended.
-                # If the episode did not end, obs_np is the correct state.
-                # Let's clarify: if an episode ended, current_obs_before_reset holds the state *before* reset.
-                # If the episode is ongoing, obs_np is the current state.
-                # The key is, what was the state *just before* the buffer became full?
-                # It's `obs_np` if the episode is ongoing, or `current_obs_before_reset` if an episode just ended.
-                # However, `compute_advantages_and_returns` needs the value of the *next* state after the last one added to buffer.
-                # If `done` is true (episode ended), the value of the terminal state is 0.
-                # If `done` is false (episode ongoing), the value is V(s_T) where s_T is `obs_np`.
-                # The logic in `train.py` for `last_value` seems correct: if `done` (meaning the *last* state in buffer was terminal), `last_value` is 0.
-                # Otherwise, `last_value` is `agent.get_value(obs_np)` (the state *after* the last one in buffer).
-                last_value = agent.get_value(
-                    obs_np
-                )  # Get value of the current state (s_T)
-
+        # PPO Update Phase
+        if global_timestep % config.STEPS_PER_EPOCH == 0:
+            last_value = agent.get_value(obs_np) 
             buffer.compute_advantages_and_returns(last_value)
-            avg_policy_loss, avg_value_loss, avg_entropy = agent.learn(
-                buffer
-            )  # Capture losses
-            buffer.clear()
-            log_message_ppo = (
-                f"PPO Update complete. Avg Policy Loss: {avg_policy_loss:.4f}, "
-                f"Avg Value Loss: {avg_value_loss:.4f}, Avg Entropy: {avg_entropy:.4f}"
-            )
-            logger.log(log_message_ppo)
-            if wandb_enabled:
-                wandb.log(
-                    {
-                        "avg_policy_loss": avg_policy_loss,
-                        "avg_value_loss": avg_value_loss,
-                        "avg_entropy": avg_entropy,
-                    },
-                    step=global_timestep,
-                )
+            
+            metrics = agent.learn(buffer) 
+            
+            buffer.clear() 
 
-        # Evaluation runs periodically (e.g., every N global timesteps or M episodes)
-        if global_timestep % config.EVAL_FREQ_TIMESTEPS == 0:
-            logger.log(f"Running periodic evaluation at timestep {global_timestep}.")
-            evaluate_agent(agent, num_games=config.EVAL_NUM_GAMES, logger=logger)
+            logger.log(f"PPO Update at timestep {global_timestep}")
+            if wandb_enabled and wandb.run is not None:
+                # Log PPO metrics
+                # Ensure metrics is a dictionary before logging
+                if isinstance(metrics, dict):
+                    wandb.log(metrics, commit=False) 
+                else:
+                    logger.log(f"Warning: PPO metrics not a dict: {metrics}")
 
-    # Final cleanup or summary
+                # Evaluate agent periodically based on episodes
+                if config.EVAL_FREQ_EPISODES > 0 and \
+                   total_episodes_completed % config.EVAL_FREQ_EPISODES == 0 and \
+                   total_episodes_completed > 0:
+                    logger.log(f"Starting evaluation at episode {total_episodes_completed}...")
+                    evaluate_agent(agent, num_games=config.EVAL_NUM_GAMES, logger=logger)
+
+                # Save model periodically based on episodes
+                if config.SAVE_FREQ_EPISODES > 0 and \
+                   total_episodes_completed % config.SAVE_FREQ_EPISODES == 0 and \
+                   total_episodes_completed > 0:
+                    save_path = os.path.join(
+                        config.MODEL_DIR,
+                        f"ppo_shogi_agent_episode_{total_episodes_completed}_ts_{global_timestep}.pth",
+                    )
+                    agent.save_model(save_path)
+                    logger.log(f"Model saved to {save_path}")
+        
+        if wandb_enabled and wandb.run is not None:
+            wandb.log({"global_timestep": global_timestep}) 
+
+    # --- End of Training ---
     logger.log("Training finished.")
-    if wandb_enabled:
+    if wandb_enabled and wandb.run is not None:
         wandb.finish()
-        logger.log("Weights & Biases run finished.")
+    logger.close()
 
 
 if __name__ == "__main__":

@@ -137,21 +137,38 @@ def apply_move_to_board(
         if game.is_sennichite():
             game.game_over = True
             game.winner = None  # Draw by repetition
+            game.termination_reason = "sennichite"
         elif game.is_checkmate():  # Check for checkmate for the new current_player
             game.game_over = True
             # The player who made the last move (player_making_move) is the winner
             game.winner = player_making_move
+            game.termination_reason = f"checkmate_{game.winner.name.lower()}"
         elif game.is_stalemate():  # Check for stalemate for the new current_player
             game.game_over = True
             game.winner = None  # Draw by stalemate
-
-    # The game instance\'s is_sennichite method will be a wrapper
-    # if game.is_sennichite(): # This check is now done above
-    #     game.game_over = True
-    #     game.winner = None  # Draw
-
-    # Check for game over by checkmate or stalemate (no legal moves for the new current_player)
-    # is typically handled by the game loop after this function returns. # This is now handled here.
+            game.termination_reason = "stalemate"
+        elif game.move_count >= game.max_moves_per_game: # Use game.max_moves_per_game
+            game.game_over = True
+            game.winner = None # Draw
+            game.termination_reason = "max_moves_reached"
+        # Add other termination checks like stalemate if defined
+        # elif self.is_stalemate():
+        #     self.game_over = True
+        #     self.winner = None # Or specific stalemate outcome
+        #     self.termination_reason = "stalemate"
+        elif not game.get_legal_moves():  # No legal moves for current player
+            # This could be stalemate or checkmate if king is also in check.
+            # is_checkmate already covers the check + no legal moves case.
+            # So if we are here, it means no legal moves, but not in check -> stalemate.
+            if not game.is_in_check(game.current_player):
+                game.game_over = True
+                game.winner = None  # Stalemate is a draw
+                game.termination_reason = "stalemate"
+            # If in check, is_checkmate should have caught it. This is a safeguard.
+            else:  # Should be caught by is_checkmate
+                game.game_over = True
+                game.winner = player_making_move
+                game.termination_reason = f"checkmate_{game.winner.name.lower()}_no_legal_moves_fallback"
 
 
 def revert_last_applied_move(game: "ShogiGame") -> None:

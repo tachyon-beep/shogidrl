@@ -23,7 +23,7 @@ def test_ppo_agent_init_and_select_action():
     obs = np.random.rand(46, 9, 9).astype(
         np.float32
     )  # Ensure correct dtype for tensor conversion
-    game = ShogiGame()
+    game = ShogiGame(max_moves_per_game=512)  # Added max_moves_per_game
     legal_moves: List[MoveTuple] = game.get_legal_moves()
 
     # Ensure there's at least one legal move for the test to proceed
@@ -96,11 +96,14 @@ def test_ppo_agent_learn():
 
     # Call the learn method
     try:
-        avg_policy_loss, avg_value_loss, avg_entropy = agent.learn(experience_buffer)
+        metrics = agent.learn(experience_buffer)
+        assert metrics is not None, "learn() should return a metrics dictionary, not None"
         # Check if losses are returned and are floats (or can be zero)
-        assert isinstance(avg_policy_loss, float)
-        assert isinstance(avg_value_loss, float)
-        assert isinstance(avg_entropy, float)
+        assert isinstance(metrics["ppo/policy_loss"], float)
+        assert isinstance(metrics["ppo/value_loss"], float)
+        assert isinstance(metrics["ppo/entropy"], float)
+        assert isinstance(metrics["ppo/kl_divergence_approx"], float)
+        assert isinstance(metrics["ppo/learning_rate"], float)
     except (
         RuntimeError
     ) as e:  # Catch a more specific exception if possible, or document why general Exception is needed.

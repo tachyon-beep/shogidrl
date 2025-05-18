@@ -46,6 +46,7 @@ class PPOAgent:
         self.entropy_coef = entropy_coef
         self.ppo_epochs = ppo_epochs
         self.minibatch_size = minibatch_size
+        self.last_kl_div = 0.0  # Initialize KL divergence tracker
 
     def select_action(
         self,
@@ -172,31 +173,54 @@ class PPOAgent:
     def learn(self, experience_buffer: ExperienceBuffer):
         """
         Perform PPO update using experiences from the buffer.
+        Returns a dictionary of logging metrics.
         """
         self.model.train()  # Set model to train mode
-        batch_data = experience_buffer.get_batch()
-        obs_batch = batch_data["obs"]
-        actions_batch = batch_data["actions"]
-        old_log_probs_batch = batch_data["log_probs"]
-        # old_values_batch = batch_data["values"] # Values from buffer, can be used for clipped value loss
-        advantages_batch = batch_data["advantages"]
-        returns_batch = batch_data["returns"]
+        
+        # Retrieve data from buffer. Ensure tensors are on the correct device.
+        # ExperienceBuffer should handle device placement, but good to be explicit if needed.
+        batch_data = experience_buffer.get_batch() 
 
-        # Normalize advantages (optional but often helpful)
+        # Get current learning rate early, in case we return early
+        current_lr = self.optimizer.param_groups[0]["lr"]
+
+        if not batch_data:
+            # Return default metrics if buffer is empty or provides no data
+            return {
+                "ppo/policy_loss": 0.0,
+                "ppo/value_loss": 0.0,
+                "ppo/entropy": 0.0,
+                "ppo/kl_divergence_approx": 0.0,
+                "ppo/learning_rate": current_lr,
+            }
+
+        obs_batch = batch_data["obs"].to(self.device)
+        actions_batch = batch_data["actions"].to(self.device)
+        old_log_probs_batch = batch_data["log_probs"].to(self.device)
+        advantages_batch = batch_data["advantages"].to(self.device)
+        returns_batch = batch_data["returns"].to(self.device)
+
+        if obs_batch.shape[0] == 0: # Check if tensors are empty after potential filtering
+            return {
+                "ppo/policy_loss": 0.0,
+                "ppo/value_loss": 0.0,
+                "ppo/entropy": 0.0,
+                "ppo/kl_divergence_approx": 0.0,
+                "ppo/learning_rate": current_lr,
+            }
+
+        # Normalize advantages
         advantages_batch = (advantages_batch - advantages_batch.mean()) / (
             advantages_batch.std() + 1e-8
         )
 
-        num_samples = len(obs_batch)
+        num_samples = obs_batch.shape[0]
         indices = np.arange(num_samples)
 
-        # Placeholder for logging losses
-        total_policy_loss, total_value_loss, total_entropy = (
-            0,
-            0,
-            0,
-        )  # Renamed and initialized
-        num_updates = 0  # Initialized
+        total_policy_loss_epoch = 0.0
+        total_value_loss_epoch = 0.0
+        total_entropy_epoch = 0.0
+        num_updates = 0
 
         for epoch in range(self.ppo_epochs):
             np.random.shuffle(indices)
@@ -204,78 +228,88 @@ class PPOAgent:
                 end_idx = start_idx + self.minibatch_size
                 minibatch_indices = indices[start_idx:end_idx]
 
-                # Get minibatch data
-                mb_obs = obs_batch[minibatch_indices]
-                mb_actions = actions_batch[minibatch_indices]
-                mb_old_log_probs = old_log_probs_batch[minibatch_indices]
-                mb_advantages = advantages_batch[minibatch_indices]
-                mb_returns = returns_batch[minibatch_indices]
-                # mb_old_values = old_values_batch[minibatch_indices] # For clipped value loss
+                if len(minibatch_indices) == 0:
+                    continue
 
-                # Evaluate actions and values from the current policy
-                # Assumes self.model.evaluate_actions(obs, actions) returns (log_probs, entropy, values)
-                new_log_probs, entropy, new_values = self.model.evaluate_actions(
-                    mb_obs, mb_actions
-                )
+                obs_minibatch = obs_batch[minibatch_indices]
+                actions_minibatch = actions_batch[minibatch_indices]
+                old_log_probs_minibatch = old_log_probs_batch[minibatch_indices]
+                advantages_minibatch = advantages_batch[minibatch_indices]
+                returns_minibatch = returns_batch[minibatch_indices]
+                
+                if obs_minibatch.shape[0] == 0:
+                    continue
 
-                # Calculate policy ratio
-                ratio = torch.exp(new_log_probs - mb_old_log_probs)
+                new_logits, new_values = self.model(obs_minibatch)
+                new_values = new_values.squeeze(-1) # Squeeze the last dimension
 
-                # Calculate surrogate losses
-                surr1 = ratio * mb_advantages
+                # Ensure shapes are compatible for loss calculation
+                if new_values.shape != returns_minibatch.shape:
+                    # This can happen if batch_size is 1 and squeeze makes new_values scalar
+                    if new_values.numel() == returns_minibatch.numel():
+                        new_values = new_values.reshape(returns_minibatch.shape)
+                    else:
+                        # print(f"Warning: Shape mismatch in learn(). new_values: {new_values.shape}, returns: {returns_minibatch.shape}. Skipping minibatch.")
+                        continue # Skip this minibatch if shapes are incompatible
+
+                probs = F.softmax(new_logits, dim=-1)
+                action_distribution = torch.distributions.Categorical(probs=probs)
+                new_log_probs = action_distribution.log_prob(actions_minibatch)
+                entropy = action_distribution.entropy().mean()
+
+                ratio = torch.exp(new_log_probs - old_log_probs_minibatch)
+                surr1 = ratio * advantages_minibatch
                 surr2 = (
                     torch.clamp(ratio, 1.0 - self.clip_epsilon, 1.0 + self.clip_epsilon)
-                    * mb_advantages
+                    * advantages_minibatch
                 )
                 policy_loss = -torch.min(surr1, surr2).mean()
+                value_loss = F.mse_loss(new_values, returns_minibatch)
+                loss = policy_loss + self.value_loss_coeff * value_loss - self.entropy_coef * entropy
 
-                # Calculate value loss
-                # Standard PPO value loss:
-                value_loss = ((new_values - mb_returns) ** 2).mean()
-                # Optional: Clipped value loss (from some PPO implementations)
-                # value_pred_clipped = mb_old_values + torch.clamp(new_values - mb_old_values,
-                #  -self.clip_epsilon, self.clip_epsilon)
-                # vf_loss1 = (new_values - mb_returns).pow(2)
-                # vf_loss2 = (value_pred_clipped - mb_returns).pow(2)
-                # value_loss = 0.5 * torch.max(vf_loss1, vf_loss2).mean()
-
-                # Total loss
-                loss = (
-                    policy_loss
-                    - self.entropy_coef * entropy.mean()
-                    + self.value_loss_coeff * value_loss
-                )
-
-                # Optimization step
                 self.optimizer.zero_grad()
                 loss.backward()
-                # Optional: Gradient clipping
-                # torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
                 self.optimizer.step()
 
-                total_policy_loss += policy_loss.item()
-                total_value_loss += value_loss.item()
-                total_entropy += entropy.mean().item()
+                total_policy_loss_epoch += policy_loss.item()
+                total_value_loss_epoch += value_loss.item()
+                total_entropy_epoch += entropy.item()
                 num_updates += 1
+        
+        avg_policy_loss = 0.0
+        avg_value_loss = 0.0
+        avg_entropy = 0.0
+        kl_divergence_final_approx = 0.0
 
-        avg_policy_loss = total_policy_loss / num_updates if num_updates > 0 else 0
-        avg_value_loss = total_value_loss / num_updates if num_updates > 0 else 0
-        avg_entropy = total_entropy / num_updates if num_updates > 0 else 0
+        if num_updates > 0:
+            avg_policy_loss = total_policy_loss_epoch / num_updates
+            avg_value_loss = total_value_loss_epoch / num_updates
+            avg_entropy = total_entropy_epoch / num_updates
 
-        return avg_policy_loss, avg_value_loss, avg_entropy
+            with torch.no_grad():
+                final_new_logits, _ = self.model(obs_batch)
+                final_new_probs = F.softmax(final_new_logits, dim=-1)
+                final_action_dist = torch.distributions.Categorical(probs=final_new_probs)
+                final_new_log_probs = final_action_dist.log_prob(actions_batch)
+                kl_divergence_final_approx = (old_log_probs_batch - final_new_log_probs).mean().item()
+        
+        self.last_kl_div = kl_divergence_final_approx
 
-    def save_model(self, path: str):
-        """Save the model and optimizer state to the given path."""
-        torch.save(
-            {
-                "model_state_dict": self.model.state_dict(),
-                "optimizer_state_dict": self.optimizer.state_dict(),
-            },
-            path,
-        )
+        metrics = {
+            "ppo/policy_loss": avg_policy_loss,
+            "ppo/value_loss": avg_value_loss,
+            "ppo/entropy": avg_entropy,
+            "ppo/kl_divergence_approx": self.last_kl_div,
+            "ppo/learning_rate": current_lr,
+        }
+        return metrics
 
-    def load_model(self, path: str, map_location=None):
-        """Load the model and optimizer state from the given path."""
-        checkpoint = torch.load(path, map_location=map_location)
-        self.model.load_state_dict(checkpoint["model_state_dict"])
-        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    def save_model(self, file_path: str):
+        """Saves the model state dictionary to a file."""
+        torch.save(self.model.state_dict(), file_path)
+
+    def load_model(self, file_path: str):
+        """Loads the model state dictionary from a file."""
+        self.model.load_state_dict(torch.load(file_path, map_location=self.device))
+        self.model.to(self.device) # Ensure model is on the correct device after loading

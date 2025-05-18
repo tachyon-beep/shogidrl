@@ -49,17 +49,22 @@ def test_piece_symbol():
 @pytest.fixture
 def new_game() -> ShogiGame:
     """Returns a ShogiGame instance initialized to the starting position."""
-    return ShogiGame()
+    return ShogiGame(max_moves_per_game=512)
 
 
 @pytest.fixture
 def cleared_game() -> ShogiGame:
     """Returns a ShogiGame instance with a completely empty board."""
-    game = ShogiGame()
+    game = ShogiGame(max_moves_per_game=512)
     for r_idx in range(9):
         for c_idx in range(9):
             game.set_piece(r_idx, c_idx, None)
     return game
+
+
+@pytest.fixture
+def game() -> ShogiGame:
+    return ShogiGame(max_moves_per_game=512)  # Added max_moves_per_game
 
 
 # --- Helper for Move Assertions ---
@@ -169,7 +174,7 @@ def test_shogigame_to_string(
 
 def test_shogigame_is_on_board():  # No fixture needed as it's a static-like check
     """Test ShogiGame.is_on_board for valid and invalid coordinates."""
-    game = ShogiGame()  # Instance needed to call the method
+    game = ShogiGame(max_moves_per_game=512)  # Instance needed to call the method
     assert game.is_on_board(0, 0)
     assert game.is_on_board(8, 8)
     assert game.is_on_board(4, 5)
@@ -645,6 +650,7 @@ def test_sennichite_with_drops(
 ):  # pylint: disable=redefined-outer-name
     """Test sennichite with a sequence involving drops.
     Note: This requires make_move to correctly handle hand updates for drops
+
     and captures for sennichite to be accurately tested with complex states."""
     game = cleared_game
     game.set_piece(8, 4, Piece(PieceType.KING, Color.BLACK))  # BK

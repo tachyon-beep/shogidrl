@@ -43,7 +43,7 @@ class GameState:
 @pytest.fixture
 def new_game() -> ShogiGame:
     """Returns a ShogiGame instance initialized to the starting position."""
-    return ShogiGame()
+    return ShogiGame(max_moves_per_game=512)
 
 
 def test_get_observation_initial_state_dimensions(new_game: ShogiGame):

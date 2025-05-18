@@ -17,7 +17,7 @@ from keisei.shogi.shogi_rules_logic import (
 @pytest.fixture
 def empty_game() -> ShogiGame:
     """Returns a ShogiGame instance with an empty board and empty hands."""
-    game = ShogiGame()
+    game = ShogiGame(max_moves_per_game=512)
     for r in range(9):
         for c in range(9):
             game.set_piece(r, c, None)
@@ -277,7 +277,7 @@ def test_generate_legal_moves_no_drops_if_hand_empty(empty_game: ShogiGame):
 
 def test_generate_legal_moves_board_moves_and_drop_moves(empty_game: ShogiGame):
     """Test that legal moves can contain both board moves and drop moves."""
-    game = ShogiGame()  # Start with a standard board
+    game = ShogiGame(max_moves_per_game=100)  # Provide max_moves_per_game
     game.current_player = Color.BLACK
     # Make a few moves to get a pawn in hand for black
     game.make_move((6, 7, 5, 7, False))  # Black pawn P-5g
