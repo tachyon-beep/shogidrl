@@ -176,10 +176,10 @@ class PPOAgent:
         Returns a dictionary of logging metrics.
         """
         self.model.train()  # Set model to train mode
-        
+
         # Retrieve data from buffer. Ensure tensors are on the correct device.
         # ExperienceBuffer should handle device placement, but good to be explicit if needed.
-        batch_data = experience_buffer.get_batch() 
+        batch_data = experience_buffer.get_batch()
 
         # Get current learning rate early, in case we return early
         current_lr = self.optimizer.param_groups[0]["lr"]
@@ -236,7 +236,7 @@ class PPOAgent:
                 old_log_probs_minibatch = old_log_probs_batch[minibatch_indices]
                 advantages_minibatch = advantages_batch[minibatch_indices]
                 returns_minibatch = returns_batch[minibatch_indices]
-                
+
                 if obs_minibatch.shape[0] == 0:
                     continue
 
@@ -276,7 +276,7 @@ class PPOAgent:
                 total_value_loss_epoch += value_loss.item()
                 total_entropy_epoch += entropy.item()
                 num_updates += 1
-        
+
         avg_policy_loss = 0.0
         avg_value_loss = 0.0
         avg_entropy = 0.0
@@ -293,7 +293,7 @@ class PPOAgent:
                 final_action_dist = torch.distributions.Categorical(probs=final_new_probs)
                 final_new_log_probs = final_action_dist.log_prob(actions_batch)
                 kl_divergence_final_approx = (old_log_probs_batch - final_new_log_probs).mean().item()
-        
+
         self.last_kl_div = kl_divergence_final_approx
 
         metrics = {

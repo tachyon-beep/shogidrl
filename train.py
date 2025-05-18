@@ -3,7 +3,7 @@ Minimal train.py main loop for DRL Shogi Client with Weights & Biases integratio
 """
 
 import os  # Ensure os is imported for path operations
-
+from typing import Dict, Any  # For type hinting
 import torch
 from dotenv import load_dotenv  # For loading .env file
 
@@ -23,7 +23,7 @@ def evaluate_agent(agent, num_games=5, logger=None):
     draws = 0
     losses = 0
     game_lengths = []
-    termination_reasons_counts = {}
+    termination_reasons_counts: Dict[str, int] = {}
 
     for i in range(num_games):
         game = ShogiGame(max_moves_per_game=config.MAX_MOVES_PER_GAME_EVAL) # Use a potentially different limit for eval
@@ -94,9 +94,9 @@ def evaluate_agent(agent, num_games=5, logger=None):
     if (
         total_played == 0
     ):  # Avoid division by zero if num_games was 0 or all games aborted early
-        win_rate = 0
-        loss_rate = 0
-        draw_rate = 0
+        win_rate = 0.0
+        loss_rate = 0.0
+        draw_rate = 0.0
     else:
         win_rate = wins / total_played
         loss_rate = losses / total_played
@@ -217,8 +217,7 @@ def main():
 
     obs_np = game.reset()
 
-    episode_num = 0
-    episode_reward = 0
+    episode_reward = 0.0
     episode_steps = 0
     total_episodes_completed = 0  # For SAVE_FREQ_EPISODES
 
@@ -244,17 +243,17 @@ def main():
             total_episodes_completed += 1 # Count this as a completed (albeit problematic) episode
             continue # Skip to next timestep
 
-        info = {}  # Initialize info dictionary
+        info: Dict[str, Any] = {} # Initialize info dictionary
         obs_tensor_for_buffer = torch.tensor(obs_np, dtype=torch.float32, device=agent.device) # Prepare obs for buffer
 
         # Select action
         selected_shogi_move, selected_policy_index, log_prob, value_estimate = agent.select_action(
             obs_np, legal_shogi_moves=legal_shogi_moves, is_training=True
         )
-        
+
         # Step the environment with the selected move
         next_obs_np, reward, done, info = game.make_move(selected_shogi_move)
-        
+
         episode_reward += reward
         episode_steps += 1
 
@@ -262,11 +261,11 @@ def main():
             obs=obs_tensor_for_buffer, # Use the tensor version of obs_np
             action=selected_policy_index,
             reward=reward,
-            value=value_estimate, 
+            value=value_estimate,
             log_prob=log_prob,
             done=done,
         )
-        
+
         obs_np = next_obs_np
 
         if done:
@@ -281,7 +280,7 @@ def main():
                     "episode/length": episode_steps,
                     "episode/number": total_episodes_completed,
                     f"episode/termination/{info.get('termination_reason', 'unknown')}": 1,
-                 }, commit=False) 
+                 }, commit=False)
 
             obs_np = game.reset()
             episode_reward = 0
@@ -289,19 +288,19 @@ def main():
 
         # PPO Update Phase
         if global_timestep % config.STEPS_PER_EPOCH == 0:
-            last_value = agent.get_value(obs_np) 
+            last_value = agent.get_value(obs_np)
             buffer.compute_advantages_and_returns(last_value)
-            
-            metrics = agent.learn(buffer) 
-            
-            buffer.clear() 
+
+            metrics = agent.learn(buffer)
+
+            buffer.clear()
 
             logger.log(f"PPO Update at timestep {global_timestep}")
             if wandb_enabled and wandb.run is not None:
                 # Log PPO metrics
                 # Ensure metrics is a dictionary before logging
                 if isinstance(metrics, dict):
-                    wandb.log(metrics, commit=False) 
+                    wandb.log(metrics, commit=False)
                 else:
                     logger.log(f"Warning: PPO metrics not a dict: {metrics}")
 
@@ -322,9 +321,9 @@ def main():
                     )
                     agent.save_model(save_path)
                     logger.log(f"Model saved to {save_path}")
-        
+
         if wandb_enabled and wandb.run is not None:
-            wandb.log({"global_timestep": global_timestep}) 
+            wandb.log({"global_timestep": global_timestep})
 
     # --- End of Training ---
     logger.log("Training finished.")
