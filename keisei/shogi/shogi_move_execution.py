@@ -120,9 +120,7 @@ def apply_move_to_board(game: "ShogiGame", move_tuple: MoveTuple) -> None:
         )
 
     # Record state hash *after* piece placement but *before* player switch.
-    move_details["state_hash"] = (
-        game._board_state_hash()
-    )  # Assumes _board_state_hash is a method of game
+    move_details["state_hash"] = game.get_board_state_hash()
     game.move_history.append(move_details)
 
     game.move_count += 1

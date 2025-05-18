@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from .shogi_game import ShogiGame  # For type hinting the 'game' parameter
 
 
-def is_piece_type_sliding(game: 'ShogiGame', piece_type: PieceType) -> bool:
+def is_piece_type_sliding(game: "ShogiGame", piece_type: PieceType) -> bool:
     """Helper to identify sliding pieces (including promoted)."""
     # 'game' instance is not strictly needed here if PieceType is self-contained,
     # but kept for consistency if other game state might be relevant in future.

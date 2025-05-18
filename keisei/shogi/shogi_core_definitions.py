@@ -1,20 +1,24 @@
 """
 shogi_core_definitions.py: Core type definitions, enums, constants,
 and the Piece class for the Shogi game engine.
-
-This file is maintained for backward compatibility with code that imports directly from 
-keisei.shogi_core_definitions. New code should import from keisei.shogi.
 """
 
-# Re-export from the new location
-from .shogi.shogi_core_definitions import *
+from typing import Optional, List, Dict, Tuple, Set, Union
+from enum import Enum
 
-# Ensure all symbols are exported
-__all__ = [
-    'Color', 'PieceType', 'Piece', 'MoveTuple', 'BoardMove', 'DropMove',
-    'BASE_TO_PROMOTED_TYPE', 'PROMOTED_TO_BASE_TYPE', 'PROMOTED_TYPES_SET',
-    'PIECE_TYPE_TO_HAND_TYPE', 'OBS_UNPROMOTED_ORDER', 'OBS_PROMOTED_ORDER'
-]
+
+# --- Enums and Constants ---
+class Color(Enum):
+    BLACK = 0  # Sente
+    WHITE = 1  # Gote
+
+
+class PieceType(Enum):
+    PAWN = 0
+    LANCE = 1
+    KNIGHT = 2
+    SILVER = 3
+    GOLD = 4
     BISHOP = 5
     ROOK = 6
     KING = 7

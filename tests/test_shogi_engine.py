@@ -3,7 +3,8 @@ Unit tests for the Piece class in shogi_engine.py
 """
 
 import numpy as np
-from .shogi_engine import Piece, ShogiGame, PieceType, Color
+from keisei.shogi.shogi_core_definitions import Piece, PieceType, Color
+from keisei.shogi.shogi_game import ShogiGame
 
 
 def test_piece_init():
@@ -422,8 +423,8 @@ def test_sennichite_with_drops():
     game.set_piece(0, 4, Piece(PieceType.KING, Color.WHITE))
 
     # Add pawns to both players' hands
-    game.hands[Color.BLACK.value][PieceType.PAWN.value] = 10
-    game.hands[Color.WHITE.value][PieceType.PAWN.value] = 10
+    game.hands[Color.BLACK.value][PieceType.PAWN] = 10
+    game.hands[Color.WHITE.value][PieceType.PAWN] = 10
 
     for _ in range(4):
         game.make_move((8, 4, 7, 4, False))
@@ -440,14 +441,14 @@ def test_sennichite_with_drops():
         if piece:
             game.set_piece(8, 3, None)
             game.hands[Color.BLACK.value][
-                PieceType.PAWN.value
+                PieceType.PAWN
             ] += 1  # Add back to black's hand
 
         piece = game.get_piece(0, 3)
         if piece:
             game.set_piece(0, 3, None)
             game.hands[Color.WHITE.value][
-                PieceType.PAWN.value
+                PieceType.PAWN
             ] += 1  # Add back to white's hand
 
     assert game.is_sennichite()
