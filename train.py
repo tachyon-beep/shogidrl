@@ -112,7 +112,9 @@ def main():
 
     if not wandb_api_key:
         print("WANDB_API_KEY not found in environment variables or .env file.")
-        print("Please set it or run 'wandb login'. For now, W&B logging will be disabled.")
+        print(
+            "Please set it or run 'wandb login'. For now, W&B logging will be disabled."
+        )
         wandb_enabled = False
     else:
         # Ensure the key is in the environment for wandb to pick up if loaded from .env
@@ -249,7 +251,8 @@ def main():
                         "episode_reward": episode_reward,
                         "episode_steps": episode_steps,
                         "episode_num": episode_num + 1,
-                        "total_episodes_completed": total_episodes_completed + 1,  # Log before increment
+                        "total_episodes_completed": total_episodes_completed
+                        + 1,  # Log before increment
                         "game_over_reason": reason,
                     },
                     step=global_timestep,
@@ -276,7 +279,11 @@ def main():
                             name=f"model-checkpoint-ep{total_episodes_completed}",
                             type="model",
                             description=f"PPO Shogi Agent model checkpoint after {total_episodes_completed} episodes, {global_timestep} timesteps.",
-                            metadata={"episode": total_episodes_completed, "timestep": global_timestep, "path": model_path},
+                            metadata={
+                                "episode": total_episodes_completed,
+                                "timestep": global_timestep,
+                                "path": model_path,
+                            },
                         )
                         artifact.add_file(model_path)
                         wandb.log_artifact(artifact)
@@ -311,7 +318,9 @@ def main():
                 )  # Get value of the current state (s_T)
 
             buffer.compute_advantages_and_returns(last_value)
-            avg_policy_loss, avg_value_loss, avg_entropy = agent.learn(buffer)  # Capture losses
+            avg_policy_loss, avg_value_loss, avg_entropy = agent.learn(
+                buffer
+            )  # Capture losses
             buffer.clear()
             log_message_ppo = (
                 f"PPO Update complete. Avg Policy Loss: {avg_policy_loss:.4f}, "

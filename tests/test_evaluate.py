@@ -8,6 +8,7 @@ import train
 
 
 def test_evaluate_agent_runs(tmp_path):
+    """Test that the evaluate_agent function runs without errors and logs results."""
     logger = TrainingLogger(str(tmp_path / "eval.log"), also_stdout=False)
     mapper = PolicyOutputMapper()
     agent = PPOAgent(input_channels=46, policy_output_mapper=mapper)

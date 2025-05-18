@@ -49,7 +49,8 @@ class ExperienceBuffer:
             # Or raise an error, or log a warning.
             # This method assumes a full buffer of STEPS_PER_EPOCH.
             print(
-                f"Warning: compute_advantages_and_returns called on a buffer not yet full. Size: {self.ptr}/{self.buffer_size}"
+                "Warning: compute_advantages_and_returns called on a buffer not "
+                "yet full. Size: {self.ptr}/{self.buffer_size}"
             )
             # Decide if we should proceed or return. For now, let's proceed if there's anything.
             if self.ptr == 0:
@@ -113,9 +114,9 @@ class ExperienceBuffer:
         # Convert lists to tensors
         # Note: self.obs contains numpy arrays. Stack them.
         # Optimized conversion: list of np.ndarrays -> single np.ndarray -> torch.tensor
-        obs_np_array = np.array(self.obs[:num_samples], dtype=np.float32) 
+        obs_np_array = np.array(self.obs[:num_samples], dtype=np.float32)
         obs_tensor = torch.tensor(obs_np_array, dtype=torch.float32, device=self.device)
-        
+
         actions_tensor = torch.tensor(
             self.actions[:num_samples], dtype=torch.int64, device=self.device
         )  # Assuming actions are indices
@@ -124,8 +125,10 @@ class ExperienceBuffer:
         )
         values_tensor = torch.tensor(
             self.values[:num_samples], dtype=torch.float32, device=self.device
-        )  # Old values
-        # dones_tensor = torch.tensor(self.dones[:num_samples], dtype=torch.float32, device=self.device) # Not directly used by PPO loss but good to have
+        )
+        # Old values
+        # dones_tensor = torch.tensor(self.dones[:num_samples], dtype=torch.float32,
+        # device=self.device) # Not directly used by PPO loss but good to have
         advantages_tensor = torch.tensor(
             self.advantages[:num_samples], dtype=torch.float32, device=self.device
         )

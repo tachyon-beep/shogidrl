@@ -2,7 +2,7 @@
 Minimal PPOAgent for DRL Shogi Client.
 """
 
-from typing import Optional, Tuple, List
+from typing import Tuple, List
 import torch
 import torch.nn.functional as F
 import numpy as np

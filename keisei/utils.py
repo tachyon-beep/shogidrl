@@ -1,16 +1,16 @@
 """
 PolicyOutputMapper: Maps Shogi moves to/from policy network output indices.
 """
-
+import datetime
+from typing import List, Dict
 import torch
-from typing import List, Dict, Tuple, Any  # Will change Any to MoveTuple once imported
 from keisei.shogi.shogi_core_definitions import (
     PieceType,
     MoveTuple,
     BoardMove,
     DropMove,
 )
-import datetime
+
 
 
 class PolicyOutputMapper:

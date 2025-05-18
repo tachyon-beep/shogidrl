@@ -8,7 +8,7 @@ import pytest
 from typing import List  # Add this import
 from keisei.ppo_agent import PPOAgent
 from keisei.utils import PolicyOutputMapper
-from keisei.experience_buffer import ExperienceBuffer # Added import
+from keisei.experience_buffer import ExperienceBuffer  # Added import
 from keisei.shogi import ShogiGame  # Corrected import for ShogiGame
 from keisei.shogi.shogi_core_definitions import (
     MoveTuple,
@@ -61,18 +61,18 @@ def test_ppo_agent_learn():
     """Test PPOAgent's learn method with dummy data from an ExperienceBuffer."""
     mapper = PolicyOutputMapper()
     agent = PPOAgent(
-        input_channels=46, 
+        input_channels=46,
         policy_output_mapper=mapper,
-        ppo_epochs=1,       # Keep epochs low for faster test
-        minibatch_size=2    # Keep minibatch size low
+        ppo_epochs=1,  # Keep epochs low for faster test
+        minibatch_size=2,  # Keep minibatch size low
     )
-    
-    buffer_size = 4 # Small buffer for testing
+
+    buffer_size = 4  # Small buffer for testing
     experience_buffer = ExperienceBuffer(
-        buffer_size=buffer_size, 
-        gamma=0.99, 
-        lambda_gae=0.95, 
-        device="cpu" # Use CPU for testing
+        buffer_size=buffer_size,
+        gamma=0.99,
+        lambda_gae=0.95,
+        device="cpu",  # Use CPU for testing
     )
 
     # Populate buffer with some dummy data
@@ -80,17 +80,17 @@ def test_ppo_agent_learn():
     for i in range(buffer_size):
         experience_buffer.add(
             obs=dummy_obs,
-            action=i % agent.num_actions_total, # Cycle through some actions
+            action=i % agent.num_actions_total,  # Cycle through some actions
             reward=float(i),
             log_prob=0.1 * i,
             value=0.5 * i,
-            done=(i == buffer_size - 1) # Last one is 'done'
+            done=(i == buffer_size - 1),  # Last one is 'done'
         )
-    
+
     assert len(experience_buffer) == buffer_size
 
     # Compute advantages and returns
-    last_value = 0.0 # Assuming terminal state after buffer is full for simplicity
+    last_value = 0.0  # Assuming terminal state after buffer is full for simplicity
     experience_buffer.compute_advantages_and_returns(last_value)
 
     # Call the learn method
@@ -106,8 +106,9 @@ def test_ppo_agent_learn():
     # Optionally, check if buffer is cleared after learn (if that's the intended behavior of learn or a subsequent step)
     # For now, just ensuring it runs and returns losses.
     # If learn is supposed to clear the buffer, add:
-    # assert len(experience_buffer) == 0 
+    # assert len(experience_buffer) == 0
     # However, current PPO plan has clear after learn in train.py, not in agent.learn() itself.
+
 
 # Further tests could include:
 # - Testing select_action in eval mode (is_training=False)

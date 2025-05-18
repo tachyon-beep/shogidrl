@@ -117,7 +117,7 @@ class ShogiGame:
 
     def _is_sliding_piece_type(self, piece_type: PieceType) -> bool:
         """Returns True if the piece type is a sliding piece (Lance, Bishop, Rook or their promoted versions)."""
-        return shogi_rules_logic.is_piece_type_sliding(self, piece_type)
+        return shogi_rules_logic.is_piece_type_sliding(piece_type)
 
     def get_individual_piece_moves(
         self, piece: Piece, r_from: int, c_from: int
@@ -391,7 +391,7 @@ class ShogiGame:
         Returns:
             bool: True if the piece must be promoted, False otherwise
         """
-        return shogi_rules_logic.must_promote_specific_piece(self, piece, r_to)
+        return shogi_rules_logic.must_promote_specific_piece(piece, r_to)
 
     def is_checkmate(self) -> bool:
         """

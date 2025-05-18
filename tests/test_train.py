@@ -15,9 +15,9 @@ def test_train_main_runs():
 
     # Override config values for a quick test run
     config.TOTAL_TIMESTEPS = 200  # Significantly reduced for testing
-    config.STEPS_PER_EPOCH = 32   # Ensure learning is triggered
-    config.EVAL_FREQ_TIMESTEPS = 50 # Ensure evaluation is triggered
-    config.SAVE_FREQ_EPISODES = 1 # Ensure model saving is triggered
+    config.STEPS_PER_EPOCH = 32  # Ensure learning is triggered
+    config.EVAL_FREQ_TIMESTEPS = 50  # Ensure evaluation is triggered
+    config.SAVE_FREQ_EPISODES = 1  # Ensure model saving is triggered
     # Ensure MINIBATCH_SIZE is not larger than STEPS_PER_EPOCH for the test
     original_minibatch_size = config.MINIBATCH_SIZE
     if config.MINIBATCH_SIZE > config.STEPS_PER_EPOCH:
@@ -26,7 +26,9 @@ def test_train_main_runs():
     train = importlib.import_module("train")
 
     try:
-        importlib.reload(train)  # Reload train to pick up patched config if it imports config at module level
+        importlib.reload(
+            train
+        )  # Reload train to pick up patched config if it imports config at module level
         train.main()
     finally:
         # Restore original config values
