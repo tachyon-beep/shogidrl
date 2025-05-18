@@ -70,19 +70,19 @@
   - [x] Fix `ShogiGame.make_move()` to return `(next_observation, reward, done, info_dict)`.
   - [x] Update `ExperienceBuffer.add` to accept and store `log_prob` and `value`.
   - [x] Run all tests (`pytest`) and ensure they pass.
-- **V. Comprehensive Unit and Integration Testing** (In Progress)
+- **V. Comprehensive Unit and Integration Testing** (COMPLETE)
   - [x] Ensure all existing advanced rule tests in `test_shogi_engine.py` pass.
   - [x] Add new unit tests for drop logic in `test_shogi_rules_logic.py` or `test_shogi_engine.py`.
-  - [x] Add new unit tests for promotion logic (optional/forced, all promotable pieces, zone checks)
+  - [x] Add new unit tests for promotion logic (optional/forced, all promotable pieces, zone checks)is it 
   - [x] Add new unit tests for `get_observation` with hand pieces
   - [x] Add new unit tests for `undo_move` with drops and promotions
-  - [x] Tune hyperparameters and refine architecture as needed
   - [x] Expand tests for edge cases and advanced rules:
     - [x] Nifu edge cases (promoted pawns, after captures, pawn drops)
     - [x] Uchi Fu Zume edge cases (complex king escapes, non-pawn drops)
     - [x] Sennichite edge cases (repetition with drops, captures, and promotions)
     - [x] Illegal drops and move legality in rare board states
     - [x] Checkmate and stalemate detection edge cases
+  - [ ] Tune hyperparameters and refine architecture as needed (Moved to Post-Green)
 
 ## 3. Test Strategy
 
@@ -99,14 +99,17 @@
   - Read all relevant code before making a decision on the best way to proceed.
   - Do not change working live code to resolve a failing test; instead, evaluate if the test is testing meaningful functionality and follows best practice.
   - Use descriptive test names and docstrings.
-  - Keep tests isolated and independent.
-  - Use parameterized tests for repeated logic.
-  - Mock external dependencies where appropriate.
-- **Linting:**
-  - Run linting (flake8, black) after every implementation and test addition.
-  - Resolve all linting errors before proceeding.
-- **Continuous Integration:**
-  - (Optional) Set up CI to run tests and linting on every commit.
+
+## 4. Post-Green: Future Enhancements & Optimizations
+
+- [ ] Tune hyperparameters and refine neural network architecture for optimal performance.
+- [ ] Implement advanced game termination rules (e.g., Nyugyoku - Try Rule).
+- [ ] Add support for USI protocol for playing against other engines.
+- [ ] Implement a more sophisticated MCTS for action selection during self-play if PPO alone is insufficient.
+- [ ] Explore different neural network architectures.
+- [ ] Optimize performance of `get_legal_moves` and other critical path functions.
+- [ ] Add TensorBoard logging for more detailed training insights.
+- [ ] Implement self-play against older versions of the agent.
 
 ## 4. Directory Structure
 ```
