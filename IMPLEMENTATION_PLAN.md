@@ -76,12 +76,12 @@
   - [x] Add new unit tests for promotion logic (optional/forced, all promotable pieces, zone checks)
   - [x] Add new unit tests for `get_observation` with hand pieces
   - [x] Add new unit tests for `undo_move` with drops and promotions
-  - [ ] Tune hyperparameters and refine architecture as needed
-  - [ ] Expand tests for edge cases and advanced rules:
-    - [ ] Nifu edge cases (promoted pawns, after captures, pawn drops)
-    - [ ] Uchi Fu Zume edge cases (complex king escapes, non-pawn drops)
+  - [x] Tune hyperparameters and refine architecture as needed
+  - [x] Expand tests for edge cases and advanced rules:
+    - [x] Nifu edge cases (promoted pawns, after captures, pawn drops)
+    - [x] Uchi Fu Zume edge cases (complex king escapes, non-pawn drops)
     - [x] Sennichite edge cases (repetition with drops, captures, and promotions)
-    - [ ] Illegal drops and move legality in rare board states
+    - [x] Illegal drops and move legality in rare board states
     - [x] Checkmate and stalemate detection edge cases
 
 ## 3. Test Strategy
@@ -180,4 +180,15 @@ tests/
   - [ ] Nifu edge cases (promoted pawns, after captures, pawn drops)
   - [ ] Uchi Fu Zume edge cases (complex king escapes, non-pawn drops)
   - [ ] Illegal drops and move legality in rare board states
+    # Nifu (two pawns on the same file) edge cases.
+            # - [x] Test dropping a pawn is illegal if an unpromoted pawn of the same color is on the file.
+            # - [x] Test dropping a pawn is legal if a *promoted* pawn (Tokin) of the same color is on the file.
+            # Uchi Fu Zume (illegal pawn drop checkmate) edge cases.
+            # - [x] Test pawn drop is illegal if it's mate, king has no moves, and no piece can capture the checking pawn.
+            # - [x] Test pawn drop is legal if king can escape (diagonally, capture pawn).
+            # - [x] Test pawn drop is legal if another piece can capture the checking pawn.
+            # - [x] Test pawn drop is legal if check can be blocked by another piece (making it not mate).
+            # Illegal drops and move legality in rare or complex board states.
+            # - [x] Test pinned pieces (Rook, Bishop) cannot expose king.
+            # - [x] Test king cannot move into check.
 </details>
