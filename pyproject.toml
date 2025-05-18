@@ -22,3 +22,6 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 where = ["keisei"]
+
+[tool.pylint.messages_control]
+disable = "redefined-outer-name"
