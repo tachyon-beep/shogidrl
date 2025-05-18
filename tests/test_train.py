@@ -16,7 +16,7 @@ def test_train_main_runs():
     original_save_freq = config.SAVE_FREQ_EPISODES  # Added to track original save freq
 
     # Override config values for a quick test run
-    config.TOTAL_TIMESTEPS = 200  # Significantly reduced for testing
+    config.TOTAL_TIMESTEPS = 2000  # Significantly reduced for testing
     config.STEPS_PER_EPOCH = 32  # Ensure learning is triggered
     config.EVAL_FREQ_EPISODES = 50  # Ensure evaluation is triggered
     config.SAVE_FREQ_EPISODES = 1  # Ensure model saving is triggered
