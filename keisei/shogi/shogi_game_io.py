@@ -129,11 +129,9 @@ def convert_game_to_text_representation(game: "ShogiGame") -> str:
         "   a  b  c  d  e  f  g  h  i"
     )  # Shogi board file letters, matching original printout spacing
     # Add hands
-    lines.append(
-        f"Black's hand: { {pt.name: count for pt, count in game.hands[Color.BLACK.value].items() if count > 0} }"
-    )
-    lines.append(
-        f"White's hand: { {pt.name: count for pt, count in game.hands[Color.WHITE.value].items() if count > 0} }"
-    )
+    black_hand_dict = {pt.name: count for pt, count in game.hands[Color.BLACK.value].items() if count > 0}
+    lines.append(f"Black's hand: {black_hand_dict}")
+    white_hand_dict = {pt.name: count for pt, count in game.hands[Color.WHITE.value].items() if count > 0}
+    lines.append(f"White's hand: {white_hand_dict}")
     lines.append(f"Current player: {game.current_player.name}")
     return "\n".join(lines)

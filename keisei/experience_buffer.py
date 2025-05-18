@@ -65,14 +65,14 @@ class ExperienceBuffer:
         # Iterate backwards from the last collected experience
         for t in reversed(range(self.ptr)):
             if t == self.ptr - 1:  # Last step in the buffer
-                next_non_terminal = (
-                    1.0 - self.dones[t]
-                )  # If last step was 'done', next_non_terminal is 0
+                # next_non_terminal = (
+                #     1.0 - self.dones[t]
+                # )  # If last step was 'done', next_non_terminal is 0
                 next_value = last_value  # Value of the state *after* the last action in the buffer
             else:
-                next_non_terminal = (
-                    1.0 - self.dones[t]
-                )  # This is actually for the current step's 'done' status
+                # next_non_terminal = (
+                #     1.0 - self.dones[t]
+                # )  # This is actually for the current step's 'done' status
                 # to determine if V(s_t+1) should be zeroed out.
                 # More accurately, it's (1 - self.dones[t+1]) if we think about future steps,
                 # but for GAE, we use dones[t] to mask future values if current state t is terminal.

@@ -86,7 +86,8 @@ class PPOAgent:
             # Raising an error might be more appropriate here.
             # For now, to prevent crashes if this state is reached unexpectedly:
             print(
-                "CRITICAL WARNING: No legal moves available in select_action. This indicates a game state issue or a bug."
+                "CRITICAL WARNING: No legal moves available in select_action. "
+                "This indicates a game state issue or a bug."
             )
             # Fallback: select action 0, log_prob 0. This is arbitrary and problematic.
             selected_policy_index_val = 0
@@ -232,7 +233,8 @@ class PPOAgent:
                 # Standard PPO value loss:
                 value_loss = ((new_values - mb_returns) ** 2).mean()
                 # Optional: Clipped value loss (from some PPO implementations)
-                # value_pred_clipped = mb_old_values + torch.clamp(new_values - mb_old_values, -self.clip_epsilon, self.clip_epsilon)
+                # value_pred_clipped = mb_old_values + torch.clamp(new_values - mb_old_values,
+                #  -self.clip_epsilon, self.clip_epsilon)
                 # vf_loss1 = (new_values - mb_returns).pow(2)
                 # vf_loss2 = (value_pred_clipped - mb_returns).pow(2)
                 # value_loss = 0.5 * torch.max(vf_loss1, vf_loss2).mean()
