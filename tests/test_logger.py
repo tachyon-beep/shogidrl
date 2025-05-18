@@ -1,8 +1,10 @@
 """
 Unit test for TrainingLogger in utils.py
 """
+
 import os
 from keisei.utils import TrainingLogger
+
 
 def test_training_logger(tmp_path):
     log_path = tmp_path / "test.log"
