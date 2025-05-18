@@ -58,8 +58,8 @@
   - [x] Robust Checkmate Detection (`is_checkmate`)
   - [x] Stalemate Detection (`is_stalemate` - no legal moves, not in check)
 - **IV. `PolicyOutputMapper` Expansion (`utils.py`)**
-  - [ ] Design and implement a comprehensive mapping for all moves (normal, drops, promotions)
-  - [ ] Implement `move_to_index`, `index_to_move`, `get_legal_mask`
+  - [x] Design and implement a comprehensive mapping for all moves (normal, drops, promotions)
+  - [x] Implement `move_to_index`, `index_to_move`, `get_legal_mask`
   - [x] Update `NUM_ACTIONS_TOTAL` in `config.py`
 - **V. Test Coverage for Engine Completion**
   - [ ] Ensure all existing advanced rule tests in `test_shogi_engine.py` pass

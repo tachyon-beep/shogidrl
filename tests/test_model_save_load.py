@@ -12,7 +12,7 @@ def test_model_save_and_load(tmp_path):
     """Test PPOAgent can save and load its model and optimizer state."""
     mapper = PolicyOutputMapper()
     agent = PPOAgent(
-        input_channels=46, num_actions_total=3159, policy_output_mapper=mapper
+        input_channels=46, policy_output_mapper=mapper
     )
     # Modify model weights
     for p in agent.model.parameters():
@@ -22,7 +22,7 @@ def test_model_save_and_load(tmp_path):
     agent.save_model(str(save_path))
     # Create a new agent and load
     agent2 = PPOAgent(
-        input_channels=46, num_actions_total=3159, policy_output_mapper=mapper
+        input_channels=46, policy_output_mapper=mapper
     )
     agent2.load_model(str(save_path))
     # Check that parameters match

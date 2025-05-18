@@ -12,14 +12,18 @@ class ExperienceBuffer:
         self.obs: list = []
         self.actions: list = []
         self.rewards: list = []
+        self.log_probs: list = []  # Added
+        self.values: list = []     # Added
         self.ptr = 0
 
-    def add(self, obs, action, reward):
+    def add(self, obs, action, reward, log_prob, value):
         """Add a transition to the buffer if not full."""
         if self.ptr < self.buffer_size:
             self.obs.append(obs)
             self.actions.append(action)
             self.rewards.append(reward)
+            self.log_probs.append(log_prob)  # Added
+            self.values.append(value)        # Added
             self.ptr += 1
 
     def __len__(self):

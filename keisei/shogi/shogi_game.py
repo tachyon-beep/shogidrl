@@ -43,9 +43,10 @@ class ShogiGame:
         self.winner: Optional[Color] = None
         self.reset()
 
-    def reset(self) -> None:
+    def reset(self) -> np.ndarray:  # Modified return type
         """
         Initializes the board to the standard Shogi starting position.
+        Returns the initial observation.  # Added this line
         """
         self.board = [[None for _ in range(9)] for _ in range(9)]
         # Initialize empty hands for both players (using unpromoted PieceType enums)
@@ -93,6 +94,7 @@ class ShogiGame:
         self.move_history = []
         self.game_over = False
         self.winner = None
+        return self.get_observation()  # Added this line
 
     def get_piece(self, row: int, col: int) -> Optional[Piece]:
         """Returns the piece at the specified position, or None if empty or out of bounds."""
@@ -200,7 +202,7 @@ class ShogiGame:
         """
         return shogi_rules_logic.check_for_sennichite(self)
 
-    def make_move(self, move_tuple: MoveTuple, is_simulation: bool = False):
+    def make_move(self, move_tuple: MoveTuple, is_simulation: bool = False) -> tuple[np.ndarray, float, bool, dict]:
         """
         Executes a move on the board and updates game state.
         The move can be either a board move or a drop move.
@@ -209,8 +211,35 @@ class ShogiGame:
             move_tuple: The move to make.
             is_simulation: True if this move is part of a simulation (e.g., for legal move generation).
                            If True, game-ending checks like checkmate/stalemate might be skipped.
+        
+        Returns:
+            A tuple (next_observation, reward, done, info_dict).
         """
         shogi_move_execution.apply_move_to_board(self, move_tuple, is_simulation)
+
+        next_observation = self.get_observation()
+        done = self.game_over
+        reward = 0.0
+
+        if done and not is_simulation:
+            if self.winner is not None:
+                # Assuming current_player is the one who just moved and possibly won/lost
+                # If self.winner is the current_player, they won.
+                # If self.winner is the other player, current_player lost.
+                # This needs to be from the perspective of the player whose turn it *was*.
+                # The `current_player` has already been switched by `apply_move_to_board`.
+                # So, if `self.winner` is NOT `self.current_player`, the player who just moved won.
+                if self.winner != self.current_player: # Player who made the move won
+                    reward = 1.0
+                else: # Player who made the move lost (or it's a draw if winner is None)
+                    reward = -1.0 
+            else: # Draw (e.g. sennichite, max moves if not handled by winner)
+                reward = 0.0 # Or a small penalty/reward depending on rules
+        
+        # If not done, reward is 0. If agent is playing against itself, this needs adjustment
+        # For now, this reward is from the perspective of the player who just made the move.
+
+        return next_observation, reward, done, {}
 
     def undo_move(self):
         """
@@ -369,9 +398,9 @@ class ShogiGame:
         """
         if not self.is_in_check(self.current_player):
             return False  # Not in check, so not checkmate
-        
+
         legal_moves = self.get_legal_moves()
-        return not legal_moves # Checkmate if in check and no legal moves
+        return not legal_moves  # Checkmate if in check and no legal moves
 
     def is_stalemate(self) -> bool:
         """
@@ -382,4 +411,4 @@ class ShogiGame:
             return False  # In check, so not stalemate (could be checkmate)
 
         legal_moves = self.get_legal_moves()
-        return not legal_moves # Stalemate if not in check and no legal moves
+        return not legal_moves  # Stalemate if not in check and no legal moves
