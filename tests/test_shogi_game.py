@@ -15,14 +15,14 @@ from keisei.shogi.shogi_core_definitions import (
 
 
 @pytest.fixture
-def base_game() -> ShogiGame:
+def new_game() -> ShogiGame:
     """Returns a ShogiGame instance initialized to the starting position."""
     return ShogiGame()
 
 
-def test_get_observation_initial_state_dimensions(game_instance: ShogiGame):
+def test_get_observation_initial_state_dimensions(new_game: ShogiGame):
     """Test the dimensions of the observation from the initial state."""
-    obs = game_instance.get_observation()
+    obs = new_game.get_observation()
     assert isinstance(obs, np.ndarray), "Observation should be a numpy array"
     assert obs.shape == (
         46,
@@ -32,17 +32,17 @@ def test_get_observation_initial_state_dimensions(game_instance: ShogiGame):
 
 
 @pytest.fixture
-def game_with_black_pawn_in_hand(_base_game: ShogiGame) -> ShogiGame:
+def game_with_black_pawn_in_hand(new_game: ShogiGame) -> ShogiGame:
     """Game instance with Black having one pawn in hand."""
-    _base_game.hands[Color.BLACK.value][PieceType.PAWN] = 1
-    return _base_game
+    new_game.hands[Color.BLACK.value][PieceType.PAWN] = 1
+    return new_game
 
 
 def test_get_observation_hand_pieces_black_one_pawn(
-    game_with_black_pawn_in_hand_fixture: ShogiGame,
+    game_with_black_pawn_in_hand: ShogiGame,
 ):
     """Test observation when Black has one pawn in hand."""
-    obs = game_with_black_pawn_in_hand_fixture.get_observation()
+    obs = game_with_black_pawn_in_hand.get_observation()
     # OBS_UNPROMOTED_ORDER is used in shogi_core_definitions for hand piece order in observation
     # but shogi_game_io.py uses PieceType.get_unpromoted_types() directly.
     # Let's align with shogi_game_io.py for hand channel indexing.
@@ -62,17 +62,17 @@ def test_get_observation_hand_pieces_black_one_pawn(
 
 
 @pytest.fixture
-def game_with_white_rook_in_hand(_base_game: ShogiGame) -> ShogiGame:
+def game_with_white_rook_in_hand(new_game: ShogiGame) -> ShogiGame:
     """Game instance with White having one rook in hand."""
-    _base_game.hands[Color.WHITE.value][PieceType.ROOK] = 1
-    return _base_game
+    new_game.hands[Color.WHITE.value][PieceType.ROOK] = 1
+    return new_game
 
 
 def test_get_observation_hand_pieces_white_one_rook(
-    game_with_white_rook_in_hand_fixture: ShogiGame,
+    game_with_white_rook_in_hand: ShogiGame,
 ):
     """Test observation when White has one rook in hand."""
-    obs = game_with_white_rook_in_hand_fixture.get_observation()
+    obs = game_with_white_rook_in_hand.get_observation()
     hand_types_order = PieceType.get_unpromoted_types()
     rook_hand_channel_index = 35 + hand_types_order.index(PieceType.ROOK)
     expected_value = 1 / 18.0
@@ -89,20 +89,20 @@ def test_get_observation_hand_pieces_white_one_rook(
 
 
 @pytest.fixture
-def game_with_mixed_hands(_base_game: ShogiGame) -> ShogiGame:
+def game_with_mixed_hands(new_game: ShogiGame) -> ShogiGame:
     """Game instance with multiple pieces in hand for both players."""
-    _base_game.hands[Color.BLACK.value][PieceType.PAWN] = 3
-    _base_game.hands[Color.BLACK.value][PieceType.GOLD] = 1
-    _base_game.hands[Color.WHITE.value][PieceType.BISHOP] = 2
-    _base_game.hands[Color.WHITE.value][PieceType.SILVER] = 1
-    return _base_game
+    new_game.hands[Color.BLACK.value][PieceType.PAWN] = 3
+    new_game.hands[Color.BLACK.value][PieceType.GOLD] = 1
+    new_game.hands[Color.WHITE.value][PieceType.BISHOP] = 2
+    new_game.hands[Color.WHITE.value][PieceType.SILVER] = 1
+    return new_game
 
 
 def test_get_observation_multiple_hand_pieces_mixed_players(
-    game_with_mixed_hands_fixture: ShogiGame,
+    game_with_mixed_hands: ShogiGame,
 ):
     """Test observation with multiple pieces in hand for both players."""
-    obs = game_with_mixed_hands_fixture.get_observation()
+    obs = game_with_mixed_hands.get_observation()
     hand_types_order = PieceType.get_unpromoted_types()
 
     # Black's hand
@@ -138,10 +138,10 @@ def test_get_observation_multiple_hand_pieces_mixed_players(
     assert np.all(obs[rook_idx_white] == 0.0), "White rook hand plane should be 0"
 
 
-def test_get_observation_empty_hands(game_instance: ShogiGame):
+def test_get_observation_empty_hands(new_game: ShogiGame):
     """Test observation when both players have empty hands (initial state)."""
-    # base_game fixture already has empty hands initially
-    obs = game_instance.get_observation()
+    # new_game fixture already has empty hands initially
+    obs = new_game.get_observation()
 
     # All hand planes (28 through 28 + 7 + 7 - 1 = 41) should be 0
     for i in range(14):  # 7 for black, 7 for white
@@ -151,20 +151,20 @@ def test_get_observation_empty_hands(game_instance: ShogiGame):
         ), f"Hand channel {hand_channel_index} should be 0 for empty hands"
 
 
-def test_get_observation_current_player_plane_black_turn(game_instance: ShogiGame):
+def test_get_observation_current_player_plane_black_turn(new_game: ShogiGame):
     """Test current player plane when it's Black's turn."""
-    game_instance.current_player = Color.BLACK
-    obs = game_instance.get_observation()
+    new_game.current_player = Color.BLACK
+    obs = new_game.get_observation()
     current_player_plane_index = 42
     assert np.all(
         obs[current_player_plane_index] == 1.0
     ), "Current player plane incorrect for Black's turn (should be 1.0)"
 
 
-def test_get_observation_current_player_plane_white_turn(game_instance: ShogiGame):
+def test_get_observation_current_player_plane_white_turn(new_game: ShogiGame):
     """Test current player plane when it's White's turn."""
-    game_instance.current_player = Color.WHITE
-    obs = game_instance.get_observation()
+    new_game.current_player = Color.WHITE
+    obs = new_game.get_observation()
     current_player_plane_index = 42
     assert np.all(
         obs[current_player_plane_index] == 0.0
@@ -172,15 +172,15 @@ def test_get_observation_current_player_plane_white_turn(game_instance: ShogiGam
 
 
 @pytest.fixture
-def game_with_move_count_5(_base_game: ShogiGame) -> ShogiGame:
+def game_with_move_count_5(new_game: ShogiGame) -> ShogiGame:
     """Game instance with move count set to 5."""
-    _base_game.move_count = 5
-    return _base_game
+    new_game.move_count = 5
+    return new_game
 
 
-def test_get_observation_move_count_plane(game_with_move_count_5_fixture: ShogiGame):
+def test_get_observation_move_count_plane(game_with_move_count_5: ShogiGame):
     """Test move count plane."""
-    obs = game_with_move_count_5_fixture.get_observation()
+    obs = game_with_move_count_5.get_observation()
     move_count_plane_index = 43
     expected_value = 5 / 512.0
     assert np.allclose(
@@ -188,10 +188,10 @@ def test_get_observation_move_count_plane(game_with_move_count_5_fixture: ShogiG
     ), f"Move count plane incorrect. Expected {expected_value}, got {obs[move_count_plane_index][0][0]}"
 
 
-def test_get_observation_board_pieces_consistency_after_reset(game: ShogiGame):
+def test_get_observation_board_pieces_consistency_after_reset(new_game: ShogiGame):
     """Test that board piece planes are correctly set after a game reset (initial position)."""
-    # game is already reset
-    obs = game.get_observation()
+    # new_game is already reset
+    obs = new_game.get_observation()
 
     # Check a few key pieces for Black (current player perspective)
     # Black's Pawn at (6,0) (row 6, col 0)
@@ -230,12 +230,12 @@ def test_get_observation_board_pieces_consistency_after_reset(game: ShogiGame):
     ), "Square (6,0) should be empty of white pawns"
 
 
-def test_get_observation_promoted_piece_on_board(game_with_promoted_piece: ShogiGame):
+def test_get_observation_promoted_piece_on_board(new_game: ShogiGame):
     """Test observation when a promoted piece is on the board."""
     # Place a promoted pawn (Tokin) for Black at (2,2)
-    game_with_promoted_piece.set_piece(2, 2, Piece(PieceType.PROMOTED_PAWN, Color.BLACK))
-    game_with_promoted_piece.current_player = Color.BLACK  # Ensure perspective is Black's
-    obs = game_with_promoted_piece.get_observation()
+    new_game.set_piece(2, 2, Piece(PieceType.PROMOTED_PAWN, Color.BLACK))
+    new_game.current_player = Color.BLACK  # Ensure perspective is Black's
+    obs = new_game.get_observation()
 
     # Promoted pawn for current player (Black)
     # Promoted planes start after unpromoted planes (index 8 for current player)
@@ -251,8 +251,8 @@ def test_get_observation_promoted_piece_on_board(game_with_promoted_piece: Shogi
     ), "Unpromoted Black Pawn should not be at (2,2)"
 
     # Place a promoted rook (Dragon) for White at (5,5)
-    game_with_promoted_piece.set_piece(5, 5, Piece(PieceType.PROMOTED_ROOK, Color.WHITE))
-    obs = game_with_promoted_piece.get_observation()  # Re-get obs after change
+    new_game.set_piece(5, 5, Piece(PieceType.PROMOTED_ROOK, Color.WHITE))
+    obs = new_game.get_observation()  # Re-get obs after change
 
     # Promoted rook for opponent (White)
     # Opponent planes start at 14. Promoted opponent planes start at 14 + 8 = 22.
@@ -273,8 +273,9 @@ def test_get_observation_promoted_piece_on_board(game_with_promoted_piece: Shogi
 # --- Tests for undo_move ---
 
 
-def test_undo_move_simple_board_move(game: ShogiGame):
+def test_undo_move_simple_board_move(new_game: ShogiGame):
     """Test undoing a simple pawn move."""
+    game = new_game
     initial_board_str = game.to_string()
     initial_player = game.current_player
     initial_move_count = game.move_count
@@ -303,9 +304,9 @@ def test_undo_move_simple_board_move(game: ShogiGame):
     assert game.get_piece(5, 6) is None
 
 
-def test_undo_move_capture(game_with_capture_setup: ShogiGame):
+def test_undo_move_capture(new_game: ShogiGame):
     """Test undoing a move that involves a capture."""
-    game = game_with_capture_setup
+    game = new_game
     # Setup: Black pawn at (6,6), White pawn at (5,6)
     game.set_piece(6, 6, Piece(PieceType.PAWN, Color.BLACK))
     game.set_piece(5, 6, Piece(PieceType.PAWN, Color.WHITE))
@@ -353,8 +354,9 @@ def test_undo_move_capture(game_with_capture_setup: ShogiGame):
     assert restored_captured_piece.color == Color.WHITE
 
 
-def test_undo_move_drop(game: ShogiGame):
+def test_undo_move_drop(new_game: ShogiGame):
     """Test undoing a drop move."""
+    game = new_game
     game.hands[Color.BLACK.value][PieceType.PAWN] = 1
     game.current_player = Color.BLACK
 
@@ -392,8 +394,9 @@ def test_undo_move_drop(game: ShogiGame):
     ), "Dropped piece not removed from board after undo"
 
 
-def test_undo_move_promotion_no_capture(game: ShogiGame):
+def test_undo_move_promotion_no_capture(new_game: ShogiGame):
     """Test undoing a promotion without a capture."""
+    game = new_game
     # Black pawn at (2,2), moves to (1,2) and promotes
     game.set_piece(2, 2, Piece(PieceType.PAWN, Color.BLACK))
     game.set_piece(1, 2, None)  # Ensure target is empty
@@ -431,9 +434,9 @@ def test_undo_move_promotion_no_capture(game: ShogiGame):
     assert game.get_piece(1, 2) is None
 
 
-def test_undo_move_promotion_with_capture(game_with_promotion_capture: ShogiGame):
+def test_undo_move_promotion_with_capture(new_game: ShogiGame):
     """Test undoing a promotion with a capture."""
-    game = game_with_promotion_capture
+    game = new_game
     # Black pawn at (2,2), White piece at (1,2). Black captures and promotes.
     game.set_piece(2, 2, Piece(PieceType.PAWN, Color.BLACK))
     game.set_piece(1, 2, Piece(PieceType.LANCE, Color.WHITE))
@@ -486,8 +489,9 @@ def test_undo_move_promotion_with_capture(game_with_promotion_capture: ShogiGame
     assert original_captured_piece.color == Color.WHITE
 
 
-def test_undo_move_forced_promotion(game: ShogiGame):
+def test_undo_move_forced_promotion(new_game: ShogiGame):
     """Test undoing a forced promotion (e.g., pawn to last rank)."""
+    game = new_game
     # Black pawn at (1,2), moves to (0,2) and must promote
     game.set_piece(1, 2, Piece(PieceType.PAWN, Color.BLACK))
     game.set_piece(0, 2, None)
@@ -526,8 +530,9 @@ def test_undo_move_forced_promotion(game: ShogiGame):
     assert game.get_piece(0, 2) is None
 
 
-def test_undo_move_multiple_moves(game: ShogiGame):
+def test_undo_move_multiple_moves(new_game: ShogiGame):
     """Test undoing multiple moves sequentially."""
+    game = new_game
     initial_board_str = game.to_string()
     initial_player = game.current_player
     initial_move_count = game.move_count
@@ -610,7 +615,7 @@ def test_undo_move_multiple_moves(game: ShogiGame):
     current_board_str = game.to_string()
     assert (
         current_board_str == initial_board_str
-    ), f"Board state not fully restored after multiple undos\nExpected:\n{initial_board_str}\nGot:\n{current_board_str}"
+    ), f"Board state not fully restored after multiple undos.\nExpected:\n{initial_board_str}\nGot:\n{current_board_str}"
 
     assert (
         game.current_player == initial_player
