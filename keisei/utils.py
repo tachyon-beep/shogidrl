@@ -1,6 +1,7 @@
 """
 PolicyOutputMapper: Maps Shogi moves to/from policy network output indices.
 """
+
 import datetime
 from typing import List, Dict
 import torch
@@ -10,7 +11,6 @@ from keisei.shogi.shogi_core_definitions import (
     BoardMove,
     DropMove,
 )
-
 
 
 class PolicyOutputMapper:
