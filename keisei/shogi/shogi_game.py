@@ -202,7 +202,9 @@ class ShogiGame:
         """
         return shogi_rules_logic.check_for_sennichite(self)
 
-    def make_move(self, move_tuple: MoveTuple, is_simulation: bool = False) -> tuple[np.ndarray, float, bool, dict]:
+    def make_move(
+        self, move_tuple: MoveTuple, is_simulation: bool = False
+    ) -> tuple[np.ndarray, float, bool, dict]:
         """
         Executes a move on the board and updates game state.
         The move can be either a board move or a drop move.
@@ -211,7 +213,7 @@ class ShogiGame:
             move_tuple: The move to make.
             is_simulation: True if this move is part of a simulation (e.g., for legal move generation).
                            If True, game-ending checks like checkmate/stalemate might be skipped.
-        
+
         Returns:
             A tuple (next_observation, reward, done, info_dict).
         """
@@ -229,13 +231,13 @@ class ShogiGame:
                 # This needs to be from the perspective of the player whose turn it *was*.
                 # The `current_player` has already been switched by `apply_move_to_board`.
                 # So, if `self.winner` is NOT `self.current_player`, the player who just moved won.
-                if self.winner != self.current_player: # Player who made the move won
+                if self.winner != self.current_player:  # Player who made the move won
                     reward = 1.0
-                else: # Player who made the move lost (or it's a draw if winner is None)
-                    reward = -1.0 
-            else: # Draw (e.g. sennichite, max moves if not handled by winner)
-                reward = 0.0 # Or a small penalty/reward depending on rules
-        
+                else:  # Player who made the move lost (or it's a draw if winner is None)
+                    reward = -1.0
+            else:  # Draw (e.g. sennichite, max moves if not handled by winner)
+                reward = 0.0  # Or a small penalty/reward depending on rules
+
         # If not done, reward is 0. If agent is playing against itself, this needs adjustment
         # For now, this reward is from the perspective of the player who just made the move.
 

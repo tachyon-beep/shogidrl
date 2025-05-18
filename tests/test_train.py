@@ -3,9 +3,37 @@ Unit tests for train.py (smoke test for main loop).
 """
 
 import importlib
+import config  # Import config directly to modify it
 
 
 def test_train_main_runs():
-    """Smoke test: train.py main() runs without error."""
+    """Smoke test: train.py main() runs without error with reduced timesteps."""
+    original_total_timesteps = config.TOTAL_TIMESTEPS
+    original_steps_per_epoch = config.STEPS_PER_EPOCH
+    original_eval_freq = config.EVAL_FREQ_TIMESTEPS
+    original_save_freq = config.SAVE_FREQ_EPISODES
+
+    # Override config values for a quick test run
+    config.TOTAL_TIMESTEPS = 200  # Significantly reduced for testing
+    config.STEPS_PER_EPOCH = 32   # Ensure learning is triggered
+    config.EVAL_FREQ_TIMESTEPS = 50 # Ensure evaluation is triggered
+    config.SAVE_FREQ_EPISODES = 1 # Ensure model saving is triggered
+    # Ensure MINIBATCH_SIZE is not larger than STEPS_PER_EPOCH for the test
+    original_minibatch_size = config.MINIBATCH_SIZE
+    if config.MINIBATCH_SIZE > config.STEPS_PER_EPOCH:
+        config.MINIBATCH_SIZE = config.STEPS_PER_EPOCH
+
     train = importlib.import_module("train")
-    train.main()
+
+    try:
+        importlib.reload(train)  # Reload train to pick up patched config if it imports config at module level
+        train.main()
+    finally:
+        # Restore original config values
+        config.TOTAL_TIMESTEPS = original_total_timesteps
+        config.STEPS_PER_EPOCH = original_steps_per_epoch
+        config.EVAL_FREQ_TIMESTEPS = original_eval_freq
+        config.SAVE_FREQ_EPISODES = original_save_freq
+        config.MINIBATCH_SIZE = original_minibatch_size
+        # Reload train again to restore its state if necessary, or rely on subsequent tests re-importing
+        importlib.reload(train)

@@ -3,8 +3,13 @@ PolicyOutputMapper: Maps Shogi moves to/from policy network output indices.
 """
 
 import torch
-from typing import List, Dict, Tuple, Any # Will change Any to MoveTuple once imported
-from keisei.shogi.shogi_core_definitions import PieceType, MoveTuple, BoardMove, DropMove
+from typing import List, Dict, Tuple, Any  # Will change Any to MoveTuple once imported
+from keisei.shogi.shogi_core_definitions import (
+    PieceType,
+    MoveTuple,
+    BoardMove,
+    DropMove,
+)
 import datetime
 
 
@@ -36,7 +41,7 @@ class PolicyOutputMapper:
                         self.idx_to_move.append(move_promo)
                         self.move_to_idx[move_promo] = current_idx
                         current_idx += 1
-        
+
         # Define droppable piece types (standard 7, excluding King)
         # Assuming PieceType enum has these members
         droppable_piece_types: List[PieceType] = [
@@ -57,7 +62,7 @@ class PolicyOutputMapper:
                     self.idx_to_move.append(drop_move)
                     self.move_to_idx[drop_move] = current_idx
                     current_idx += 1
-        
+
         self.total_actions = current_idx
 
     def get_total_actions(self) -> int:
@@ -68,16 +73,22 @@ class PolicyOutputMapper:
         """Convert a Shogi MoveTuple to its policy index."""
         idx = self.move_to_idx.get(move)
         if idx is None:
-            raise ValueError(f"Move {move} not found in PolicyOutputMapper's known moves.")
+            raise ValueError(
+                f"Move {move} not found in PolicyOutputMapper's known moves."
+            )
         return idx
 
     def policy_index_to_shogi_move(self, idx: int) -> MoveTuple:
         """Convert a policy index back to its Shogi MoveTuple."""
         if 0 <= idx < self.total_actions:
             return self.idx_to_move[idx]
-        raise IndexError(f"Policy index {idx} is out of bounds (0-{self.total_actions - 1}).")
+        raise IndexError(
+            f"Policy index {idx} is out of bounds (0-{self.total_actions - 1})."
+        )
 
-    def get_legal_mask(self, legal_shogi_moves: List[MoveTuple], device: torch.device) -> torch.Tensor:
+    def get_legal_mask(
+        self, legal_shogi_moves: List[MoveTuple], device: torch.device
+    ) -> torch.Tensor:
         """
         Create a boolean mask tensor for legal actions.
 
@@ -101,7 +112,7 @@ class PolicyOutputMapper:
                 # For now, we'll assume legal_shogi_moves are always mappable.
                 # If not, it indicates a discrepancy between ShogiGame's move generation
                 # and PolicyOutputMapper's understanding of moves.
-                pass # Or print a warning: print(f"Warning: Legal move {move} not found in mapper.")
+                pass  # Or print a warning: print(f"Warning: Legal move {move} not found in mapper.")
         return mask
 
 

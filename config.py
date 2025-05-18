@@ -19,7 +19,11 @@ INPUT_CHANNELS = 46  # As per DESIGN.md
 NUM_ACTIONS_TOTAL = 3159  # As per DESIGN.md (update if PolicyOutputMapper changes)
 SAVE_FREQ_EPISODES = 100
 DEVICE = "cuda"  # or 'cpu'
+VALUE_LOSS_COEFF = 0.5  # Coefficient for the value loss in PPO
 
 MODEL_DIR = "models/"
-LOG_DIR = "logs/"
-LOG_FILE = LOG_DIR + "shogi_training_log.txt"
+LOG_FILE = "logs/training_log.txt"
+
+# Evaluation parameters
+EVAL_FREQ_TIMESTEPS = 20000  # Evaluate every N global timesteps
+EVAL_NUM_GAMES = 10  # Number of games to play during evaluation

@@ -19,7 +19,9 @@ if TYPE_CHECKING:
     from .shogi_game import ShogiGame  # For type hinting the 'game' parameter
 
 
-def apply_move_to_board(game: "ShogiGame", move_tuple: MoveTuple, is_simulation: bool = False) -> None:
+def apply_move_to_board(
+    game: "ShogiGame", move_tuple: MoveTuple, is_simulation: bool = False
+) -> None:
     """
     Make a move and update the game state.
     Operates on the 'game' (ShogiGame instance).
@@ -201,29 +203,41 @@ def revert_last_applied_move(game: "ShogiGame") -> None:
 
         captured_piece_data = last_move_details.get("captured")
         if captured_piece_data:  # captured_piece_data is a Piece object
-            game.set_piece(orig_r_to, orig_c_to, captured_piece_data)  # Restore captured piece to board
+            game.set_piece(
+                orig_r_to, orig_c_to, captured_piece_data
+            )  # Restore captured piece to board
 
             if captured_piece_data.type != PieceType.KING:
-                hand_equivalent_type = PIECE_TYPE_TO_HAND_TYPE.get(captured_piece_data.type)
-                
+                hand_equivalent_type = PIECE_TYPE_TO_HAND_TYPE.get(
+                    captured_piece_data.type
+                )
+
                 # Ensure hand_equivalent_type is a valid PieceType before using as a key
                 if hand_equivalent_type is None:
                     # This case should ideally not be reached if PIECE_TYPE_TO_HAND_TYPE is comprehensive
                     # for all capturable, non-king pieces.
                     # If it's a base type not in the map (e.g. Gold), it should be the type itself.
-                    if captured_piece_data.type in PieceType.get_unpromoted_types() and captured_piece_data.type != PieceType.KING:
+                    if (
+                        captured_piece_data.type in PieceType.get_unpromoted_types()
+                        and captured_piece_data.type != PieceType.KING
+                    ):
                         hand_equivalent_type = captured_piece_data.type
                     else:
                         # This indicates an issue with the piece type or the mapping
-                        raise ValueError(f"Cannot determine hand equivalent for captured piece type: {captured_piece_data.type}")
+                        raise ValueError(
+                            f"Cannot determine hand equivalent for captured piece type: {captured_piece_data.type}"
+                        )
 
-                if game.hands[player_who_made_move.value].get(hand_equivalent_type, 0) > 0:
+                if (
+                    game.hands[player_who_made_move.value].get(hand_equivalent_type, 0)
+                    > 0
+                ):
                     game.hands[player_who_made_move.value][hand_equivalent_type] -= 1
                 else:
                     # This would be an inconsistency: a non-King piece was captured,
                     # should have been added to hand, but not found to remove.
                     # Consider logging a warning or raising an error for debugging.
-                    pass # Or raise error
+                    pass  # Or raise error
         else:
             game.set_piece(orig_r_to, orig_c_to, None)  # Square becomes empty
 

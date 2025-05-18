@@ -10,9 +10,7 @@ import train
 def test_evaluate_agent_runs(tmp_path):
     logger = TrainingLogger(str(tmp_path / "eval.log"), also_stdout=False)
     mapper = PolicyOutputMapper()
-    agent = PPOAgent(
-        input_channels=46, policy_output_mapper=mapper
-    )
+    agent = PPOAgent(input_channels=46, policy_output_mapper=mapper)
     # Should run without error and log results
     train.evaluate_agent(agent, num_games=2, logger=logger)
     logger.close()

@@ -14,8 +14,10 @@ from .shogi_game import ShogiGame
 
 __all__ = [
     # Core types
-    'Color', 'PieceType', 'Piece', 'MoveTuple',
-
+    "Color",
+    "PieceType",
+    "Piece",
+    "MoveTuple",
     # Game class
-    'ShogiGame',
+    "ShogiGame",
 ]

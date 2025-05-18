@@ -8,4 +8,4 @@ from .shogi_game import ShogiGame
 
 # These exports allow code that previously imported from shogi_engine.py
 # to continue working without changes
-__all__ = ['Color', 'PieceType', 'Piece', 'ShogiGame', 'MoveTuple']
+__all__ = ["Color", "PieceType", "Piece", "ShogiGame", "MoveTuple"]

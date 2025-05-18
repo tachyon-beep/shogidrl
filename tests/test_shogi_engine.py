@@ -93,7 +93,7 @@ def test_shogigame_to_string():
     assert isinstance(board_str, str)
     lines = board_str.split("\n")
     # Expected lines: 9 for board, 1 for file letters, 2 for hands, 1 for current player
-    assert len(lines) == 13 
+    assert len(lines) == 13
 
     # Helper to extract piece characters from a board line string
     def get_pieces_from_line(line_str):
@@ -555,7 +555,7 @@ def test_checkmate_minimal():
     # If sennichite_history were a public attribute on ShogiGame, it would be: game.sennichite_history = {}
     game.game_over = False
     game.winner = None
-    game.current_player = Color.WHITE # White to make the checkmating move
+    game.current_player = Color.WHITE  # White to make the checkmating move
 
     # Setup:
     # Black King at (8,4)
@@ -563,19 +563,20 @@ def test_checkmate_minimal():
     # White Gold at (7,3) (covers Black King's escape to (8,3))
     # White Gold at (7,5) (covers Black King's escape to (8,5))
     game.set_piece(8, 4, Piece(PieceType.KING, Color.BLACK))
-    game.set_piece(6, 4, Piece(PieceType.GOLD, Color.WHITE)) # The moving piece
+    game.set_piece(6, 4, Piece(PieceType.GOLD, Color.WHITE))  # The moving piece
     game.set_piece(7, 3, Piece(PieceType.GOLD, Color.WHITE))
     game.set_piece(7, 5, Piece(PieceType.GOLD, Color.WHITE))
 
     # White makes the checkmating move: Gold (6,4) -> (7,4)
-    checkmating_move = (6, 4, 7, 4, False) # (r_from, c_from, r_to, c_to, promote)
-    
+    checkmating_move = (6, 4, 7, 4, False)  # (r_from, c_from, r_to, c_to, promote)
+
     assert not game.game_over, "Game should not be over before the checkmating move."
-    
+
     game.make_move(checkmating_move)
 
     assert game.game_over, "Game should be over after checkmate."
     assert game.winner == Color.WHITE, f"Winner should be White, but got {game.winner}"
+
 
 def test_stalemate_minimal():
     """Minimal stalemate scenario."""
@@ -594,7 +595,9 @@ def test_stalemate_minimal():
     # A fresh game instance is sufficient for a clean state.
     game.game_over = False
     game.winner = None
-    game.current_player = Color.WHITE # White to make the move leading to stalemate for Black
+    game.current_player = (
+        Color.WHITE
+    )  # White to make the move leading to stalemate for Black
 
     # Setup:
     # Black King at (8,8)
@@ -606,14 +609,16 @@ def test_stalemate_minimal():
     game.set_piece(6, 8, Piece(PieceType.GOLD, Color.WHITE))
     game.set_piece(8, 6, Piece(PieceType.GOLD, Color.WHITE))
     game.set_piece(6, 6, Piece(PieceType.KING, Color.WHITE))
-    game.set_piece(0, 0, Piece(PieceType.PAWN, Color.WHITE)) # White's moving piece
+    game.set_piece(0, 0, Piece(PieceType.PAWN, Color.WHITE))  # White's moving piece
 
     # White makes a move that doesn't affect the stalemate net: Pawn (0,0) -> (1,0)
-    stalemating_move = (0, 0, 1, 0, False) # (r_from, c_from, r_to, c_to, promote)
+    stalemating_move = (0, 0, 1, 0, False)  # (r_from, c_from, r_to, c_to, promote)
 
     assert not game.game_over, "Game should not be over before the stalemating move."
-    
+
     game.make_move(stalemating_move)
 
     assert game.game_over, "Game should be over after stalemate."
-    assert game.winner is None, f"Winner should be None for stalemate, but got {game.winner}"
+    assert (
+        game.winner is None
+    ), f"Winner should be None for stalemate, but got {game.winner}"

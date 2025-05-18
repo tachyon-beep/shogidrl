@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
 # --- Helper functions for move generation and validation ---
 
+
 def is_piece_type_sliding(piece_type: PieceType) -> bool:  # Removed 'game' parameter
     """Returns True if the piece type is a sliding piece (Lance, Bishop, Rook or their promoted versions)."""
     return piece_type in (
@@ -388,7 +389,9 @@ def can_promote_specific_piece(
     return False
 
 
-def must_promote_specific_piece(piece: Piece, r_to: int) -> bool:  # Removed 'game' parameter
+def must_promote_specific_piece(
+    piece: Piece, r_to: int
+) -> bool:  # Removed 'game' parameter
     """Checks if a piece *must* promote when moving to r_to."""
     # Pawns and Lances must promote if they reach the last rank.
     if piece.type == PieceType.PAWN or piece.type == PieceType.LANCE:
@@ -481,12 +484,12 @@ def generate_all_legal_moves(game: "ShogiGame") -> List[MoveTuple]:
 
                 for r_to, c_to in potential_squares:
                     # Check for promotion possibilities
-                    can_promote = can_promote_specific_piece(
-                        game, piece, r_from, r_to
-                    )
-                    must_promote = must_promote_specific_piece(piece, r_to) # Removed game argument
+                    can_promote = can_promote_specific_piece(game, piece, r_from, r_to)
+                    must_promote = must_promote_specific_piece(
+                        piece, r_to
+                    )  # Removed game argument
 
-                    current_move_tuples_to_check: List[BoardMove] # Declare type here
+                    current_move_tuples_to_check: List[BoardMove]  # Declare type here
                     if must_promote:
                         # Only one move: promotion is forced
                         current_move_tuples_to_check = [
@@ -506,7 +509,9 @@ def generate_all_legal_moves(game: "ShogiGame") -> List[MoveTuple]:
 
                     for board_move_tuple in current_move_tuples_to_check:
                         # Simulate the move
-                        game.make_move(board_move_tuple, is_simulation=True) # Pass is_simulation=True
+                        game.make_move(
+                            board_move_tuple, is_simulation=True
+                        )  # Pass is_simulation=True
                         # Check if the current player's king is NOT in check after this move
                         if not is_king_in_check_after_simulated_move(
                             game, original_player_color
@@ -532,7 +537,9 @@ def generate_all_legal_moves(game: "ShogiGame") -> List[MoveTuple]:
                                 piece_type_to_drop,
                             )
                             # Simulate the drop
-                            game.make_move(drop_move_tuple, is_simulation=True) # Pass is_simulation=True
+                            game.make_move(
+                                drop_move_tuple, is_simulation=True
+                            )  # Pass is_simulation=True
                             # Check if the current player's king is NOT in check after this drop
                             if not is_king_in_check_after_simulated_move(
                                 game, original_player_color
