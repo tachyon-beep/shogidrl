@@ -2,7 +2,6 @@
 Unit tests for PPOAgent model saving and loading.
 """
 
-import os
 import torch
 from keisei.ppo_agent import PPOAgent
 from keisei.utils import PolicyOutputMapper

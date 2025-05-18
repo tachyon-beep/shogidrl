@@ -5,7 +5,6 @@ from .shogi_core_definitions import (
     PieceType,
     OBS_UNPROMOTED_ORDER,
     OBS_PROMOTED_ORDER,
-    Piece,
 )
 
 import numpy as np

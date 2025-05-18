@@ -3,8 +3,8 @@ shogi_core_definitions.py: Core type definitions, enums, constants,
 and the Piece class for the Shogi game engine.
 """
 
-from typing import Optional, List, Dict, Tuple, Set, Union
 from enum import Enum
+from typing import List, Dict, Tuple, Set, Union
 
 
 # --- Enums and Constants ---
