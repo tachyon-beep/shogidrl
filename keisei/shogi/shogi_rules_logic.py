@@ -10,7 +10,7 @@ from .shogi_core_definitions import (
     Piece,
     Color,
     PieceType,
-    MoveTuple,
+    MoveTuple,  # Corrected: MoveTuple is defined and used, not Move
     BoardMove,
     DropMove,
     BASE_TO_PROMOTED_TYPE,
@@ -23,17 +23,17 @@ if TYPE_CHECKING:
     from .shogi_game import ShogiGame  # For type hinting the 'game' parameter
 
 
-def is_piece_type_sliding(game: "ShogiGame", piece_type: PieceType) -> bool:
-    """Helper to identify sliding pieces (including promoted)."""
-    # 'game' instance is not strictly needed here if PieceType is self-contained,
-    # but kept for consistency if other game state might be relevant in future.
-    return piece_type in [
+# --- Helper functions for move generation and validation ---
+
+def is_piece_type_sliding(piece_type: PieceType) -> bool:  # Removed 'game' parameter
+    """Returns True if the piece type is a sliding piece (Lance, Bishop, Rook or their promoted versions)."""
+    return piece_type in (
         PieceType.LANCE,
         PieceType.BISHOP,
         PieceType.ROOK,
         PieceType.PROMOTED_BISHOP,
         PieceType.PROMOTED_ROOK,
-    ]
+    )
 
 
 def generate_piece_potential_moves(
@@ -388,15 +388,9 @@ def can_promote_specific_piece(
     return False
 
 
-def must_promote_specific_piece(game: "ShogiGame", piece: Piece, r_to: int) -> bool:
-    """
-    Checks if a piece *must* be promoted on reaching r_to.
-    (Formerly ShogiGame.must_promote_piece)
-    """
-    if piece.is_promoted:
-        return False
-
-    # Pawns and Lances on the very last rank
+def must_promote_specific_piece(piece: Piece, r_to: int) -> bool:  # Removed 'game' parameter
+    """Checks if a piece *must* promote when moving to r_to."""
+    # Pawns and Lances must promote if they reach the last rank.
     if piece.type == PieceType.PAWN or piece.type == PieceType.LANCE:
         if (piece.color == Color.BLACK and r_to == 0) or (
             piece.color == Color.WHITE and r_to == 8
@@ -490,7 +484,7 @@ def generate_all_legal_moves(game: "ShogiGame") -> List[MoveTuple]:
                     can_promote = can_promote_specific_piece(
                         game, piece, r_from, r_to
                     )
-                    must_promote = must_promote_specific_piece(game, piece, r_to)
+                    must_promote = must_promote_specific_piece(piece, r_to) # Removed game argument
 
                     current_move_tuples_to_check: List[BoardMove] # Declare type here
                     if must_promote:

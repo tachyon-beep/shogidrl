@@ -36,7 +36,7 @@
 - [x] Integrate GAE and learning steps.
 - [x] Write/expand unit tests for RL logic.
 
-### Phase 5: Advanced Rules & Engine Completion
+### Phase 5: Integration, Testing, and Refinement (Iterative)
 - **I. Piece Drops Implementation (`shogi_engine.py`)**
   - [x] Manage Pieces in Hand (initialize `self.hands`, update `make_move`/`undo_move` for captures)
   - [x] Generate Legal Drop Moves (in `get_legal_moves`, handle `(None, None, r_to, c_to, piece_type, is_drop=True)`)
@@ -57,25 +57,32 @@
   - [x] Integrate `sennichite` into game over condition and repetition history
   - [x] Robust Checkmate Detection (`is_checkmate`)
   - [x] Stalemate Detection (`is_stalemate` - no legal moves, not in check)
-- **IV. `PolicyOutputMapper` Expansion (`utils.py`)**
-  - [x] Design and implement a comprehensive mapping for all moves (normal, drops, promotions)
-  - [x] Implement `move_to_index`, `index_to_move`, `get_legal_mask`
-  - [x] Update `NUM_ACTIONS_TOTAL` in `config.py`
-- **V. Test Coverage for Engine Completion**
-  - [ ] Ensure all existing advanced rule tests in `test_shogi_engine.py` pass
-  - [ ] Add new unit tests for drop logic (all piece types, valid/invalid squares, hand updates)
-  - [ ] Add new unit tests for promotion logic (optional/forced, all promotable pieces, zone checks)
-  - [ ] Add new unit tests for `get_observation` with hand pieces
+- **IV. Expand `PolicyOutputMapper` and Integrate with `PPOAgent` (COMPLETE)**
+  - [x] Expand `PolicyOutputMapper` in `keisei/utils.py` to include all possible moves (board moves with and without promotion, drop moves).
+  - [x] Ensure `total_actions` in `PolicyOutputMapper` is correctly calculated (should be 13527).
+  - [x] Implement `shogi_move_to_policy_index(move)` and `policy_index_to_shogi_move(idx)` in `PolicyOutputMapper`.
+  - [x] Implement `get_legal_mask(legal_shogi_moves, device)` in `PolicyOutputMapper`.
+  - [x] Update `PPOAgent` constructor to take `PolicyOutputMapper` instance and derive `num_actions_total`.
+  - [x] Update `PPOAgent.select_action` to use `PolicyOutputMapper.get_legal_mask()` for filtering actions.
+  - [x] Ensure `PPOAgent.select_action` returns the selected Shogi move, policy index, log probability, and value.
+  - [x] Update `train.py` to correctly instantiate and use the updated `PPOAgent` and `PolicyOutputMapper`.
+  - [x] Fix `ShogiGame.reset()` to return an observation.
+  - [x] Fix `ShogiGame.make_move()` to return `(next_observation, reward, done, info_dict)`.
+  - [x] Update `ExperienceBuffer.add` to accept and store `log_prob` and `value`.
+  - [x] Run all tests (`pytest`) and ensure they pass.
+- **V. Comprehensive Unit and Integration Testing** (In Progress)
+  - [x] Ensure all existing advanced rule tests in `test_shogi_engine.py` pass.
+  - [x] Add new unit tests for drop logic in `test_shogi_rules_logic.py` or `test_shogi_engine.py`.
+  - [x] Add new unit tests for promotion logic (optional/forced, all promotable pieces, zone checks)
+  - [x] Add new unit tests for `get_observation` with hand pieces
   - [ ] Add new unit tests for `undo_move` with drops and promotions
-- [x] Add model saving/loading
-- [x] Add logging and evaluation
-- [ ] Tune hyperparameters and refine architecture as needed
-- [ ] Expand tests for edge cases and advanced rules:
-  - [ ] Nifu edge cases (promoted pawns, after captures, pawn drops)
-  - [ ] Uchi Fu Zume edge cases (complex king escapes, non-pawn drops)
-  - [x] Sennichite edge cases (repetition with drops, captures, and promotions)
-  - [ ] Illegal drops and move legality in rare board states
-  - [x] Checkmate and stalemate detection edge cases
+  - [ ] Tune hyperparameters and refine architecture as needed
+  - [ ] Expand tests for edge cases and advanced rules:
+    - [ ] Nifu edge cases (promoted pawns, after captures, pawn drops)
+    - [ ] Uchi Fu Zume edge cases (complex king escapes, non-pawn drops)
+    - [x] Sennichite edge cases (repetition with drops, captures, and promotions)
+    - [ ] Illegal drops and move legality in rare board states
+    - [x] Checkmate and stalemate detection edge cases
 
 ## 3. Test Strategy
 
@@ -151,3 +158,26 @@ tests/
 - Under no circumstances should you implement or add lines like `# pylint: disable=protected-access`, `# noqa`, `# type: ignore`, or any similar directive to bypass linting, type checking, or test errors. All code and tests must comply with linting and type checking requirements by design, not by disabling checks. This applies to all files, tests, and instructions in the project.
 - All code and tests must pass type checking with mypy.
 - All code and tests must pass linting and formatting before merging or committing.
+
+<details>
+<summary>IV. Fix `ShogiGame` and `ExperienceBuffer` APIs and ensure all tests pass (COMPLETE)</summary>
+
+- **Task**: Modify `ShogiGame.reset()` to return an observation (DONE)
+- **Task**: Modify `ShogiGame.make_move()` to return `(next_observation, reward, done, info_dict)` (DONE)
+- **Task**: Update `ExperienceBuffer.add()` to accept `log_prob` and `value` (DONE)
+- **Task**: Update `train.py` to correctly use the modified `ShogiGame` and `ExperienceBuffer` APIs. (DONE)
+- **Task**: Ensure all existing unit tests pass after these changes. (DONE)
+- **Task**: Add new unit tests for drop logic in `shogi_rules_logic.py` (e.g., nifu, uchi-fu-zume, cannot drop piece with no moves). (DONE)
+- **Task**: Add new unit tests for promotion logic in `shogi_rules_logic.py` (e.g., can_promote, must_promote, promotion zones). (DONE)
+</details>
+
+<details>
+<summary>V. Continue Test Coverage and Refinement</summary>
+
+- **Task**: Add new unit tests for `ShogiGame.get_observation()` with pieces in hand.
+- **Task**: Tune hyperparameters and refine architecture as needed
+- **Task**: Expand tests for edge cases and advanced rules:
+  - [ ] Nifu edge cases (promoted pawns, after captures, pawn drops)
+  - [ ] Uchi Fu Zume edge cases (complex king escapes, non-pawn drops)
+  - [ ] Illegal drops and move legality in rare board states
+</details>
