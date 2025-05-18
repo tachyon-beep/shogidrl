@@ -12,12 +12,17 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
-    "torch>=1.10",
-    "numpy",
-    "pytest",
+    "torch==2.0.1",
+    "numpy==1.24.3",
+    "pytest==7.4.0",
     "pytest-pylint",
-    "black",
-    "flake8"
+    "black==23.7.0",
+    "tensorboard==2.13.0",
+    "matplotlib==3.7.2",
+    "pylint==2.17.5",
+    "mypy==1.5.1",
+    "isort==5.12.0",
+    "shogi-engine==0.0.5",
 ]
 
 [tool.setuptools.packages.find]
