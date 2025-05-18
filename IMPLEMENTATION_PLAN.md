@@ -14,22 +14,22 @@
 ## 2. Implementation Phases
 
 ### Phase 1: Core Game Mechanics (`shogi_engine.py`)
-- Implement `Piece` class.
-- Implement `ShogiGame` class with board setup, move logic, and state management.
-- Write unit tests for each method and class as they are implemented.
-- Ensure all code passes linting (e.g., flake8, black).
+- [x] Implement `Piece` class.
+- [x] Implement `ShogiGame` class with board setup, move logic, and state management.
+- [x] Write unit tests for each method and class as they are implemented.
+- [x] Ensure all code passes linting (e.g., flake8, black).
 
 ### Phase 2: State Representation & Action Mapping
-- Implement `get_observation()` in `ShogiGame`.
-- Implement `PolicyOutputMapper` in `utils.py`.
-- Write unit tests for state representation and action mapping.
+- [x] Implement `get_observation()` in `ShogiGame`.
+- [x] Implement `PolicyOutputMapper` in `utils.py`.
+- [x] Write unit tests for state representation and action mapping.
 
 ### Phase 3: RL Loop Structure & Random Agent
-- Implement `ActorCritic` in `neural_network.py` (initial dummy forward pass).
-- Implement `PPOAgent` in `ppo_agent.py` (random action selection initially).
-- Implement `ExperienceBuffer` in `experience_buffer.py`.
-- Implement `train.py` main loop (random agent, no learning).
-- Write unit tests for all new classes and methods.
+- [x] Implement `ActorCritic` in `neural_network.py` (initial dummy forward pass).
+- [x] Implement `PPOAgent` in `ppo_agent.py` (random action selection initially).
+- [x] Implement `ExperienceBuffer` in `experience_buffer.py`.
+- [x] Implement `train.py` main loop (random agent, no learning).
+- [x] Write unit tests for all new classes and methods.
 
 ### Phase 4: Full PPO Implementation
 - [x] Complete `ActorCritic` and `PPOAgent` with full PPO logic.
@@ -63,7 +63,8 @@
   - [ ] Add new unit tests for `get_observation` with hand pieces
   - [ ] Add new unit tests for `undo_move` with drops and promotions
 - [ ] Add model saving/loading
-- [ ] Add logging and evaluation
+- [x] Add model saving/loading
+- [x] Add logging and evaluation
 - [ ] Tune hyperparameters and refine architecture as needed
 - [ ] Expand tests for edge cases and advanced rules:
   - [x] Nifu edge cases (promoted pawns, after captures, pawn drops)
