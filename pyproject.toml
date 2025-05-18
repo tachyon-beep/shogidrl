@@ -25,3 +25,6 @@ where = ["keisei"]
 
 [tool.pylint.messages_control]
 disable = "redefined-outer-name"
+
+[tool.mypy]
+check_untyped_defs = true

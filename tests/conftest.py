@@ -4,7 +4,6 @@ conftest.py: Shared fixtures for all tests in the DRL Shogi Client project.
 
 import pytest
 
-
 # Place all test scaffolding here, not in individual test files.
 
 

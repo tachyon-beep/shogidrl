@@ -1,16 +1,12 @@
 # shogi_game_io.py
 
-from .shogi_core_definitions import (
-    Color,
-    PieceType,
-    OBS_UNPROMOTED_ORDER,
-    OBS_PROMOTED_ORDER,
-)
+from typing import TYPE_CHECKING
 
 import numpy as np
+
 import config  # For MAX_MOVES_PER_GAME
 
-from typing import TYPE_CHECKING
+from .shogi_core_definitions import OBS_PROMOTED_ORDER, OBS_UNPROMOTED_ORDER, Color, PieceType
 
 if TYPE_CHECKING:
     from .shogi_game import ShogiGame  # For type hinting the 'game' parameter

@@ -3,14 +3,11 @@ Unit tests for Shogi game logic functions in shogi_rules_logic.py
 """
 
 import pytest
-from keisei.shogi.shogi_core_definitions import Piece, PieceType, Color, MoveTuple
+
+from keisei.shogi.shogi_core_definitions import Color, MoveTuple, Piece, PieceType
 from keisei.shogi.shogi_game import ShogiGame
-from keisei.shogi.shogi_rules_logic import (
-    can_drop_specific_piece,
-    generate_all_legal_moves,
-    check_for_nifu,
-    check_for_uchi_fu_zume,
-)
+from keisei.shogi.shogi_rules_logic import (can_drop_specific_piece, check_for_nifu, check_for_uchi_fu_zume,
+                                            generate_all_legal_moves)
 
 
 @pytest.fixture

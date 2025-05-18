@@ -6,10 +6,9 @@ from typing import List
 
 import pytest
 import torch
-from keisei.utils import PolicyOutputMapper
-from keisei.shogi import MoveTuple
-from keisei.shogi import PieceType
 
+from keisei.shogi import MoveTuple, PieceType
+from keisei.utils import PolicyOutputMapper
 
 # Test for the new PolicyOutputMapper
 

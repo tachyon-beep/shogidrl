@@ -4,7 +4,7 @@ and the Piece class for the Shogi game engine.
 """
 
 from enum import Enum
-from typing import List, Dict, Tuple, Set, Union
+from typing import Dict, List, Set, Tuple, Union
 
 
 # --- Enums and Constants ---

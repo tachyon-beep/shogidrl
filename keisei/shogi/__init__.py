@@ -9,7 +9,7 @@ This package contains all the components related to the Shogi game:
 """
 
 # Export the main components for easy access
-from .shogi_core_definitions import Color, PieceType, Piece, MoveTuple
+from .shogi_core_definitions import Color, MoveTuple, Piece, PieceType
 from .shogi_game import ShogiGame
 
 __all__ = [

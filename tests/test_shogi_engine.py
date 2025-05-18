@@ -2,13 +2,13 @@
 Unit tests for the Piece class and ShogiGame move generation in shogi_engine.py
 """
 
-import pytest
 import numpy as np
-from keisei.shogi.shogi_core_definitions import Piece, PieceType, Color
+import pytest
+
+from keisei.shogi.shogi_core_definitions import Color, Piece, PieceType
 # If OBS_UNPROMOTED_ORDER is used in get_observation, ensure it's imported
 # from keisei.shogi.shogi_core_definitions import OBS_UNPROMOTED_ORDER
 from keisei.shogi.shogi_game import ShogiGame
-
 
 # --- Tests for Piece Class ---
 

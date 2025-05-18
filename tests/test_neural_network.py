@@ -3,6 +3,7 @@ Unit tests for ActorCritic in neural_network.py
 """
 
 import torch
+
 from keisei.neural_network import ActorCritic
 
 

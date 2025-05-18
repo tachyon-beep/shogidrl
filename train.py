@@ -2,17 +2,18 @@
 Minimal train.py main loop for DRL Shogi Client with Weights & Biases integration.
 """
 
-import torch
 import os  # Ensure os is imported for path operations
-from dotenv import load_dotenv  # For loading .env file
-import wandb  # Weights & Biases
 
-from keisei.shogi.shogi_engine import ShogiGame
-from keisei.shogi.shogi_core_definitions import Color  # Added import
-from keisei.utils import PolicyOutputMapper, TrainingLogger
-from keisei.ppo_agent import PPOAgent
-from keisei.experience_buffer import ExperienceBuffer
+import torch
+from dotenv import load_dotenv  # For loading .env file
+
 import config
+import wandb  # Weights & Biases
+from keisei.experience_buffer import ExperienceBuffer
+from keisei.ppo_agent import PPOAgent
+from keisei.shogi.shogi_core_definitions import Color  # Added import
+from keisei.shogi.shogi_engine import ShogiGame
+from keisei.utils import PolicyOutputMapper, TrainingLogger
 
 
 def evaluate_agent(agent, num_games=5, logger=None):

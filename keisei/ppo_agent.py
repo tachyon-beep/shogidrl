@@ -2,15 +2,16 @@
 Minimal PPOAgent for DRL Shogi Client.
 """
 
-from typing import Tuple, List
+from typing import List, Tuple
+
+import numpy as np
 import torch
 import torch.nn.functional as F
-import numpy as np
 
-from keisei.neural_network import ActorCritic
-from keisei.utils import PolicyOutputMapper
-from keisei.shogi.shogi_core_definitions import MoveTuple
 from keisei.experience_buffer import ExperienceBuffer  # Added import
+from keisei.neural_network import ActorCritic
+from keisei.shogi.shogi_core_definitions import MoveTuple
+from keisei.utils import PolicyOutputMapper
 
 
 class PPOAgent:

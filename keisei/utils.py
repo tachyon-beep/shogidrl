@@ -3,20 +3,17 @@ PolicyOutputMapper: Maps Shogi moves to/from policy network output indices.
 """
 
 import datetime
-from typing import List, Dict
+from typing import Dict, List
+
 import torch
-from keisei.shogi.shogi_core_definitions import (
-    PieceType,
-    MoveTuple,
-    BoardMove,
-    DropMove,
-)
+
+from keisei.shogi.shogi_core_definitions import BoardMove, DropMove, MoveTuple, PieceType
 
 
 class PolicyOutputMapper:
     """Maps Shogi moves to/from policy network output indices."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initializes the PolicyOutputMapper by generating all possible move representations."""
         self.idx_to_move: List[MoveTuple] = []
         self.move_to_idx: Dict[MoveTuple, int] = {}
@@ -119,13 +116,13 @@ class PolicyOutputMapper:
 class TrainingLogger:
     """Simple logger for training and evaluation."""
 
-    def __init__(self, log_path: str, also_stdout: bool = True):
+    def __init__(self, log_path: str, also_stdout: bool = True) -> None:
         """Initializes the TrainingLogger."""
         self.log_path = log_path
         self.also_stdout = also_stdout
         self.log_file = open(log_path, "a", encoding="utf-8")
 
-    def log(self, msg: str):
+    def log(self, msg: str) -> None:
         """Logs a message with a timestamp."""
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         line = f"[{timestamp}] {msg}\n"
@@ -134,6 +131,6 @@ class TrainingLogger:
         if self.also_stdout:
             print(line, end="")
 
-    def close(self):
+    def close(self) -> None:
         """Closes the log file."""
         self.log_file.close()

@@ -2,9 +2,9 @@
 Unit test for evaluate_agent in train.py
 """
 
+import train
 from keisei.ppo_agent import PPOAgent
 from keisei.utils import PolicyOutputMapper, TrainingLogger
-import train
 
 
 def test_evaluate_agent_runs(tmp_path):

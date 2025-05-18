@@ -4,16 +4,11 @@ Unit tests for ShogiGame class in shogi_game.py
 from dataclasses import dataclass, field
 from typing import Dict
 
-import pytest
 import numpy as np
+import pytest
+
+from keisei.shogi.shogi_core_definitions import OBS_PROMOTED_ORDER, OBS_UNPROMOTED_ORDER, Color, Piece, PieceType
 from keisei.shogi.shogi_game import ShogiGame
-from keisei.shogi.shogi_core_definitions import (
-    Piece,
-    PieceType,
-    Color,
-    OBS_UNPROMOTED_ORDER,
-    OBS_PROMOTED_ORDER,
-)
 
 
 @dataclass

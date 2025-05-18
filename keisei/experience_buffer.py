@@ -2,8 +2,8 @@
 Minimal ExperienceBuffer for DRL Shogi Client.
 """
 
-import torch  # Add torch import for tensor conversion
 import numpy as np  # Add numpy import for optimized tensor conversion
+import torch  # Add torch import for tensor conversion
 
 
 class ExperienceBuffer:
