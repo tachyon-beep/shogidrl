@@ -1,2 +1,4 @@
 torch>=1.10
 numpy
+wandb
+python-dotenv

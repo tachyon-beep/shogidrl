@@ -1,15 +1,18 @@
 """
-Minimal train.py main loop for DRL Shogi Client (random agent, no learning).
+Minimal train.py main loop for DRL Shogi Client with Weights & Biases integration.
 """
 
 import torch
+import os  # Ensure os is imported for path operations
+from dotenv import load_dotenv  # For loading .env file
+import wandb  # Weights & Biases
+
 from keisei.shogi.shogi_engine import ShogiGame
 from keisei.shogi.shogi_core_definitions import Color  # Added import
 from keisei.utils import PolicyOutputMapper, TrainingLogger
 from keisei.ppo_agent import PPOAgent
 from keisei.experience_buffer import ExperienceBuffer
 import config
-import os  # Ensure os is imported for path operations
 
 
 def evaluate_agent(agent, num_games=5, logger=None):
@@ -101,6 +104,53 @@ def evaluate_agent(agent, num_games=5, logger=None):
 
 def main():
     """Main training loop for PPO DRL Shogi Client."""  # Updated docstring
+
+    # --- Weights & Biases Setup ---
+    # Load environment variables from .env file
+    load_dotenv()
+    wandb_api_key = os.getenv("WANDB_API_KEY")
+
+    if not wandb_api_key:
+        print("WANDB_API_KEY not found in environment variables or .env file.")
+        print("Please set it or run 'wandb login'. For now, W&B logging will be disabled.")
+        wandb_enabled = False
+    else:
+        # Ensure the key is in the environment for wandb to pick up if loaded from .env
+        os.environ["WANDB_API_KEY"] = wandb_api_key
+        wandb_enabled = True
+
+    if wandb_enabled:
+        try:
+            wandb.init(
+                project="shogi-drl",  # Or your preferred project name
+                config={
+                    "total_timesteps": config.TOTAL_TIMESTEPS,
+                    "steps_per_epoch": config.STEPS_PER_EPOCH,
+                    "ppo_epochs": config.PPO_EPOCHS,
+                    "minibatch_size": config.MINIBATCH_SIZE,
+                    "learning_rate": config.LEARNING_RATE,
+                    "gamma": config.GAMMA,
+                    "clip_epsilon": config.CLIP_EPSILON,
+                    "lambda_gae": config.LAMBDA_GAE,
+                    "entropy_coeff": config.ENTROPY_COEFF,
+                    "value_loss_coeff": config.VALUE_LOSS_COEFF,
+                    "max_moves_per_game": config.MAX_MOVES_PER_GAME,
+                    "input_channels": config.INPUT_CHANNELS,
+                    "num_actions_total": config.NUM_ACTIONS_TOTAL,
+                    "save_freq_episodes": config.SAVE_FREQ_EPISODES,
+                    "device": config.DEVICE,
+                    # Add any other relevant hyperparameters from config.py
+                },
+                name=f"ppo_run_{os.getpid()}",  # Example run name
+                # Optional: resume="allow", id=YOUR_RUN_ID # For resuming runs
+            )
+            print("Weights & Biases initialized successfully.")
+        except Exception as e:
+            print(f"Error initializing Weights & Biases: {e}")
+            print("Proceeding without W&B logging.")
+            wandb_enabled = False
+    # --- End W&B Setup ---
+
     logger = TrainingLogger(config.LOG_FILE)
     logger.log("Starting DRL Shogi Client Training")
     logger.log(f"Using device: {config.DEVICE}")
@@ -187,11 +237,24 @@ def main():
                 reason = "max_moves_reached"
                 done = True  # Ensure done is true if max_moves is the reason
 
-            logger.log(
+            log_message = (
                 f"Episode {episode_num + 1} finished after {episode_steps} steps. "
                 f"Total Timesteps: {global_timestep}. Reward: {episode_reward}. "
                 f"Game Over: {done}. Reason: {reason}"
             )
+            logger.log(log_message)
+            if wandb_enabled:
+                wandb.log(
+                    {
+                        "episode_reward": episode_reward,
+                        "episode_steps": episode_steps,
+                        "episode_num": episode_num + 1,
+                        "total_episodes_completed": total_episodes_completed + 1,  # Log before increment
+                        "game_over_reason": reason,
+                    },
+                    step=global_timestep,
+                )
+
             current_obs_before_reset = obs_np  # Save current obs for potential last_value calculation if buffer fills now
             obs_np = game.reset()
             episode_num += 1
@@ -207,6 +270,19 @@ def main():
                 )
                 agent.save_model(model_path)
                 logger.log(f"Saved model checkpoint to {model_path}")
+                if wandb_enabled:
+                    try:
+                        artifact = wandb.Artifact(
+                            name=f"model-checkpoint-ep{total_episodes_completed}",
+                            type="model",
+                            description=f"PPO Shogi Agent model checkpoint after {total_episodes_completed} episodes, {global_timestep} timesteps.",
+                            metadata={"episode": total_episodes_completed, "timestep": global_timestep, "path": model_path},
+                        )
+                        artifact.add_file(model_path)
+                        wandb.log_artifact(artifact)
+                        logger.log(f"Logged model artifact to W&B: {artifact.name}")
+                    except Exception as e:
+                        logger.log(f"Error logging model artifact to W&B: {e}")
 
         # If buffer is full, perform learning update
         if len(buffer) == config.STEPS_PER_EPOCH:
@@ -235,23 +311,33 @@ def main():
                 )  # Get value of the current state (s_T)
 
             buffer.compute_advantages_and_returns(last_value)
-            avg_policy_loss, avg_value_loss, avg_entropy = agent.learn(
-                buffer
-            )  # Capture losses
+            avg_policy_loss, avg_value_loss, avg_entropy = agent.learn(buffer)  # Capture losses
             buffer.clear()
-            logger.log(
+            log_message_ppo = (
                 f"PPO Update complete. Avg Policy Loss: {avg_policy_loss:.4f}, "
                 f"Avg Value Loss: {avg_value_loss:.4f}, Avg Entropy: {avg_entropy:.4f}"
             )
+            logger.log(log_message_ppo)
+            if wandb_enabled:
+                wandb.log(
+                    {
+                        "avg_policy_loss": avg_policy_loss,
+                        "avg_value_loss": avg_value_loss,
+                        "avg_entropy": avg_entropy,
+                    },
+                    step=global_timestep,
+                )
 
         # Evaluation runs periodically (e.g., every N global timesteps or M episodes)
         if global_timestep % config.EVAL_FREQ_TIMESTEPS == 0:
             logger.log(f"Running periodic evaluation at timestep {global_timestep}.")
             evaluate_agent(agent, num_games=config.EVAL_NUM_GAMES, logger=logger)
 
+    # Final cleanup or summary
     logger.log("Training finished.")
-    evaluate_agent(agent, num_games=10, logger=logger)  # Final evaluation
-    logger.close()
+    if wandb_enabled:
+        wandb.finish()
+        logger.log("Weights & Biases run finished.")
 
 
 if __name__ == "__main__":
