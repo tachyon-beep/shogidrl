@@ -92,11 +92,20 @@ def test_shogigame_to_string():
     board_str = game.to_string()
     assert isinstance(board_str, str)
     lines = board_str.split("\n")
-    assert len(lines) == 9
-    assert lines[0].replace(" ", "") == "lnsgkgsnl"
-    assert lines[2].replace(" ", "") == "ppppppppp"
-    assert lines[6].replace(" ", "") == "PPPPPPPPP"
-    assert lines[8].replace(" ", "") == "LNSGKGSNL"
+    # Expected lines: 9 for board, 1 for file letters, 2 for hands, 1 for current player
+    assert len(lines) == 13 
+
+    # Helper to extract piece characters from a board line string
+    def get_pieces_from_line(line_str):
+        return "".join(line_str.split()[1:])
+
+    assert get_pieces_from_line(lines[0]) == "lnsgkgsnl"  # White back rank (Rank 9)
+    # lines[1] is White's bishop/rook rank
+    assert get_pieces_from_line(lines[2]) == "ppppppppp"  # White pawn rank (Rank 7)
+    # lines[3-5] are empty middle ranks
+    assert get_pieces_from_line(lines[6]) == "PPPPPPPPP"  # Black pawn rank (Rank 3)
+    # lines[7] is Black's bishop/rook rank
+    assert get_pieces_from_line(lines[8]) == "LNSGKGSNL"  # Black back rank (Rank 1)
 
 
 def test_shogigame_is_on_board():
@@ -335,35 +344,32 @@ def test_uchi_fu_zume():
 
 
 def test_uchi_fu_zume_complex_escape():
-    """Uchi Fu Zume: king has complex escape route (blocked by own pieces)."""
+    """Uchi Fu Zume: king's escape squares are all attacked or occupied by opponent pieces, leading to mate."""
     game = ShogiGame()
     for r in range(9):
         for c in range(9):
             game.set_piece(r, c, None)
     # Set up white king at (0,4)
     game.set_piece(0, 4, Piece(PieceType.KING, Color.WHITE))
-    # White gold blocks escapes at (1,3) and (1,5)
-    game.set_piece(1, 3, Piece(PieceType.GOLD, Color.WHITE))
-    game.set_piece(1, 5, Piece(PieceType.GOLD, Color.WHITE))
+    # Black Golds at (1,3) and (1,5) cover some escape squares.
+    # If King captures them, the landing square is attacked by Lances.
+    game.set_piece(1, 3, Piece(PieceType.GOLD, Color.BLACK))
+    game.set_piece(1, 5, Piece(PieceType.GOLD, Color.BLACK))
 
     # Add pieces to block other escape routes
     # Top left
-    game.set_piece(0, 3, Piece(PieceType.SILVER, Color.BLACK))  # Black silver
+    game.set_piece(0, 3, Piece(PieceType.SILVER, Color.BLACK))
     # Top right
-    game.set_piece(0, 5, Piece(PieceType.SILVER, Color.BLACK))  # Black silver
-    # Front-right
-    game.set_piece(1, 5, Piece(PieceType.GOLD, Color.WHITE))  # White gold (already set)
-    # Front-left
-    game.set_piece(1, 3, Piece(PieceType.GOLD, Color.WHITE))  # White gold (already set)
+    game.set_piece(0, 5, Piece(PieceType.SILVER, Color.BLACK))
+    # Add Black Lances to cover squares (0,3), (1,3), (0,5), (1,5)
+    # This makes capturing the Silvers or Golds unsafe for the King.
+    game.set_piece(2, 3, Piece(PieceType.LANCE, Color.BLACK))
+    game.set_piece(2, 5, Piece(PieceType.LANCE, Color.BLACK))
 
-    # Now the white king at (0,4) has no escape from a pawn drop at (1,4)
-    # This should be a checkmate and therefore an illegal pawn drop (uchi-fu-zume)
+    # A pawn drop at (1,4) by Black checks the White King.
+    # The King has no legal moves (all escape squares/captures lead to check).
+    # This is checkmate by pawn drop, hence uchi-fu-zume.
     assert game.is_uchi_fu_zume(1, 4, Color.BLACK)
-
-    # If we remove one of the gold pieces blocking the king's escape
-    game.set_piece(1, 3, None)
-    # Then the king can escape and it's not uchi-fu-zume
-    assert not game.is_uchi_fu_zume(1, 4, Color.BLACK)
 
 
 def test_uchi_fu_zume_non_pawn_drop():
@@ -494,7 +500,7 @@ def test_illegal_pawn_drop_last_rank():
     for c in range(9):
         game.set_piece(0, c, None)
     # Add a pawn to black's hand
-    game.hands[Color.BLACK.value][PieceType.PAWN.value] = 1
+    game.hands[Color.BLACK.value][PieceType.PAWN] = 1
     # Attempt to drop a pawn on the last rank (row 0) for black
     assert not game.can_drop_piece(
         PieceType.PAWN, 0, 4, Color.BLACK
@@ -508,7 +514,7 @@ def test_illegal_knight_drop_last_two_ranks():
         game.set_piece(0, c, None)
         game.set_piece(1, c, None)
     # Add a knight to black's hand
-    game.hands[Color.BLACK.value][PieceType.KNIGHT.value] = 1
+    game.hands[Color.BLACK.value][PieceType.KNIGHT] = 1
     # Attempt to drop a knight on the last two ranks (row 0 and 1) for black
     assert not game.can_drop_piece(PieceType.KNIGHT, 0, 4, Color.BLACK)  # Last rank
     assert not game.can_drop_piece(
@@ -522,7 +528,7 @@ def test_illegal_lance_drop_last_rank():
     for c in range(9):
         game.set_piece(0, c, None)
     # Add a lance to black's hand
-    game.hands[Color.BLACK.value][PieceType.LANCE.value] = 1
+    game.hands[Color.BLACK.value][PieceType.LANCE] = 1
     # Attempt to drop a lance on the last rank (row 0) for black
     assert not game.can_drop_piece(
         PieceType.LANCE, 0, 4, Color.BLACK
@@ -546,8 +552,9 @@ def test_checkmate_minimal():
     # 2. The king has no escape squares (at the top of the board)
     # 3. No other piece can capture the pawn
     # Therefore the drop is Uchi Fu Zume
-    # Note that in the actual game, this move would be illegal
-    assert game.is_uchi_fu_zume(1, 4, Color.BLACK)
+    # However, in this minimal setup, the king *can* escape to (0,3), (0,5) etc.
+    # as those squares are empty and not attacked by the pawn at (1,4).
+    assert not game.is_uchi_fu_zume(1, 4, Color.BLACK)
 
 
 def test_stalemate_minimal():

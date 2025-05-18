@@ -3,7 +3,7 @@ Minimal train.py main loop for DRL Shogi Client (random agent, no learning).
 """
 
 import torch
-from keisei.shogi_engine import ShogiGame
+from keisei.shogi.shogi_engine import ShogiGame
 from keisei.utils import PolicyOutputMapper, TrainingLogger
 from keisei.ppo_agent import PPOAgent
 from keisei.experience_buffer import ExperienceBuffer
@@ -12,7 +12,6 @@ import config
 
 def evaluate_agent(agent, num_games=5, logger=None):
     """Run evaluation games with the current agent and log win/draw/loss stats."""
-    from keisei.shogi_engine import ShogiGame
 
     wins = 0
     draws = 0

@@ -15,6 +15,6 @@ from .shogi.shogi_game import ShogiGame
 __all__ = [
     # Shogi core types
     'Color', 'PieceType', 'Piece', 'MoveTuple', 'ShogiGame',
-    
+
     # Let the other modules be imported explicitly
 ]
