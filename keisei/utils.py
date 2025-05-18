@@ -10,6 +10,7 @@ class PolicyOutputMapper:
     """Maps Shogi moves to/from policy network output indices."""
 
     def __init__(self):
+        """Initializes the PolicyOutputMapper."""
         # Expanded: map a few basic moves for demonstration
         self.idx_to_shogi_move_spec = [
             (6, 0, 5, 0, False),  # Black pawn forward
@@ -55,11 +56,13 @@ class TrainingLogger:
     """Simple logger for training and evaluation."""
 
     def __init__(self, log_path: str, also_stdout: bool = True):
+        """Initializes the TrainingLogger."""
         self.log_path = log_path
         self.also_stdout = also_stdout
         self.log_file = open(log_path, "a", encoding="utf-8")
 
     def log(self, msg: str):
+        """Logs a message with a timestamp."""
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         line = f"[{timestamp}] {msg}\n"
         self.log_file.write(line)
@@ -68,4 +71,5 @@ class TrainingLogger:
             print(line, end="")
 
     def close(self):
+        """Closes the log file."""
         self.log_file.close()

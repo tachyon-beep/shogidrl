@@ -3,73 +3,83 @@ Unit tests for the Piece class in shogi_engine.py
 """
 
 import numpy as np
-from keisei.shogi_engine import Piece, ShogiGame
+from .shogi_engine import Piece, ShogiGame, PieceType, Color
 
 
 def test_piece_init():
     """Test Piece initialization and attributes."""
-    p = Piece(0, 0)
-    assert p.type == 0
-    assert p.color == 0
+    p = Piece(PieceType.PAWN, Color.BLACK)
+    assert p.type == PieceType.PAWN
+    assert p.color == Color.BLACK
     assert not p.is_promoted
-    p2 = Piece(5, 1, True)
-    assert p2.type == 5
-    assert p2.color == 1
+    p2 = Piece(PieceType.PROMOTED_BISHOP, Color.WHITE)
+    assert p2.type == PieceType.PROMOTED_BISHOP
+    assert p2.color == Color.WHITE
     assert p2.is_promoted
 
 
 def test_piece_symbol():
     """Test Piece.symbol() returns correct string for type and color."""
-    p = Piece(0, 0)
+    p = Piece(PieceType.PAWN, Color.BLACK)
     assert p.symbol() == "P"
-    p2 = Piece(0, 1)
+    p2 = Piece(PieceType.PAWN, Color.WHITE)
     assert p2.symbol() == "p"
-    p3 = Piece(8, 0)
+    p3 = Piece(PieceType.PROMOTED_PAWN, Color.BLACK)
     assert p3.symbol() == "+P"
-    p4 = Piece(8, 1)
+    p4 = Piece(PieceType.PROMOTED_PAWN, Color.WHITE)
     assert p4.symbol() == "+p"
-    p5 = Piece(7, 0)
+    p5 = Piece(PieceType.KING, Color.BLACK)
     assert p5.symbol() == "K"
-    p6 = Piece(7, 1)
+    p6 = Piece(PieceType.KING, Color.WHITE)
     assert p6.symbol() == "k"
 
 
 def test_shogigame_init_and_reset():
     """Test ShogiGame initialization and reset sets up the correct starting board."""
     game = ShogiGame()
-    expected_types = [1, 2, 3, 4, 7, 4, 3, 2, 1]
+    expected_types = [
+        PieceType.LANCE,
+        PieceType.KNIGHT,
+        PieceType.SILVER,
+        PieceType.GOLD,
+        PieceType.KING,
+        PieceType.GOLD,
+        PieceType.SILVER,
+        PieceType.KNIGHT,
+        PieceType.LANCE,
+    ]
     for c, t in enumerate(expected_types):
         p = game.get_piece(0, c)
         assert p is not None
         assert p.type == t
-        assert p.color == 1
+        assert p.color == Color.WHITE
     p_r = game.get_piece(1, 1)
     assert p_r is not None
-    assert p_r.type == 6 and p_r.color == 1
+    assert p_r.type == PieceType.ROOK and p_r.color == Color.WHITE
     p_b = game.get_piece(1, 7)
     assert p_b is not None
-    assert p_b.type == 5 and p_b.color == 1
+    assert p_b.type == PieceType.BISHOP and p_b.color == Color.WHITE
     for c in range(9):
         p = game.get_piece(2, c)
         assert p is not None
-        assert p.type == 0
-        assert p.color == 1
+        assert p.type == PieceType.PAWN
+        assert p.color == Color.WHITE
     for c in range(9):
         p = game.get_piece(6, c)
         assert p is not None
-        assert p.type == 0
-        assert p.color == 0
+        assert p.type == PieceType.PAWN
+        assert p.color == Color.BLACK
     p_b = game.get_piece(7, 1)
     assert p_b is not None
-    assert p_b.type == 5 and p_b.color == 0
+    assert p_b.type == PieceType.BISHOP and p_b.color == Color.BLACK
     p_r = game.get_piece(7, 7)
     assert p_r is not None
-    assert p_r.type == 6 and p_r.color == 0
+    assert p_r.type == PieceType.ROOK and p_r.color == Color.BLACK
     for c, t in enumerate(expected_types):
         p = game.get_piece(8, c)
         assert p is not None
         assert p.type == t
-        assert p.color == 0
+        assert p.color == Color.BLACK
     for r in range(3, 6):
         for c in range(9):
             assert game.get_piece(r, c) is None
@@ -104,21 +114,20 @@ def test_shogigame_is_on_board():
 def test_get_individual_piece_moves_pawn():
     """Test get_individual_piece_moves for pawn (unpromoted and promoted)."""
     game = ShogiGame()
-    pawn = Piece(0, 0)
+    pawn = Piece(PieceType.PAWN, Color.BLACK)
     moves = game.get_individual_piece_moves(pawn, 4, 4)
     assert (3, 4) in moves
     assert len(moves) == 1
-    pawn_w = Piece(0, 1)
+    pawn_w = Piece(PieceType.PAWN, Color.WHITE)
     moves_w = game.get_individual_piece_moves(pawn_w, 4, 4)
     assert (5, 4) in moves_w
     assert len(moves_w) == 1
-    prom_pawn = Piece(8, 0)
-    prom_pawn.is_promoted = True
+    prom_pawn = Piece(PieceType.PROMOTED_PAWN, Color.BLACK)
     moves_prom = game.get_individual_piece_moves(prom_pawn, 4, 4)
     expected = [(3, 4), (5, 4), (4, 3), (4, 5), (3, 3), (3, 5)]
     for m in expected:
         assert m in moves_prom
-    king = Piece(7, 0)
+    king = Piece(PieceType.KING, Color.BLACK)
     moves_king = game.get_individual_piece_moves(king, 4, 4)
     assert (3, 3) in moves_king and (5, 5) in moves_king and (4, 5) in moves_king
     assert len(moves_king) == 8
@@ -131,32 +140,30 @@ def test_get_individual_piece_moves_lance_knight():
     for r in range(9):
         for c in range(9):
             game.set_piece(r, c, None)
-    lance = Piece(1, 0)
+    lance = Piece(PieceType.LANCE, Color.BLACK)
     moves = game.get_individual_piece_moves(lance, 4, 4)
     expected = [(3, 4), (2, 4), (1, 4), (0, 4)]
     for m in expected:
         assert m in moves
-    lance_w = Piece(1, 1)
+    lance_w = Piece(PieceType.LANCE, Color.WHITE)
     moves_w = game.get_individual_piece_moves(lance_w, 4, 4)
     expected_w = [(5, 4), (6, 4), (7, 4), (8, 4)]
     for m in expected_w:
         assert m in moves_w
-    prom_lance = Piece(9, 0)
-    prom_lance.is_promoted = True
+    prom_lance = Piece(PieceType.PROMOTED_LANCE, Color.BLACK)
     moves_prom = game.get_individual_piece_moves(prom_lance, 4, 4)
     expected_gold = [(3, 4), (5, 4), (4, 3), (4, 5), (3, 3), (3, 5)]
     for m in expected_gold:
         assert m in moves_prom
-    knight = Piece(2, 0)
+    knight = Piece(PieceType.KNIGHT, Color.BLACK)
     moves_k = game.get_individual_piece_moves(knight, 4, 4)
     assert (2, 3) in moves_k and (2, 5) in moves_k
     assert len(moves_k) == 2
-    knight_w = Piece(2, 1)
+    knight_w = Piece(PieceType.KNIGHT, Color.WHITE)
     moves_kw = game.get_individual_piece_moves(knight_w, 4, 4)
     assert (6, 3) in moves_kw and (6, 5) in moves_kw
     assert len(moves_kw) == 2
-    prom_knight = Piece(10, 0)
-    prom_knight.is_promoted = True
+    prom_knight = Piece(PieceType.PROMOTED_KNIGHT, Color.BLACK)
     moves_promk = game.get_individual_piece_moves(prom_knight, 4, 4)
     expected_gold = [(3, 4), (5, 4), (4, 3), (4, 5), (3, 3), (3, 5)]
     for m in expected_gold:
@@ -166,29 +173,28 @@ def test_get_individual_piece_moves_lance_knight():
 def test_get_individual_piece_moves_silver_gold():
     """Test get_individual_piece_moves for silver and gold (unpromoted and promoted)."""
     game = ShogiGame()
-    silver = Piece(3, 0)
+    silver = Piece(PieceType.SILVER, Color.BLACK)
     moves = game.get_individual_piece_moves(silver, 4, 4)
     expected = [(3, 4), (3, 3), (3, 5), (5, 3), (5, 5)]
     for m in expected:
         assert m in moves
     assert len(moves) == 5
-    silver_w = Piece(3, 1)
+    silver_w = Piece(PieceType.SILVER, Color.WHITE)
     moves_w = game.get_individual_piece_moves(silver_w, 4, 4)
     expected_w = [(5, 4), (5, 3), (5, 5), (3, 3), (3, 5)]
     for m in expected_w:
         assert m in moves_w
     assert len(moves_w) == 5
-    prom_silver = Piece(11, 0)
-    prom_silver.is_promoted = True
+    prom_silver = Piece(PieceType.PROMOTED_SILVER, Color.BLACK)
     moves_prom = game.get_individual_piece_moves(prom_silver, 4, 4)
     expected_gold = [(3, 4), (5, 4), (4, 3), (4, 5), (3, 3), (3, 5)]
     for m in expected_gold:
         assert m in moves_prom
-    gold = Piece(4, 0)
+    gold = Piece(PieceType.GOLD, Color.BLACK)
     moves_gold = game.get_individual_piece_moves(gold, 4, 4)
     for m in expected_gold:
         assert m in moves_gold
-    gold_w = Piece(4, 1)
+    gold_w = Piece(PieceType.GOLD, Color.WHITE)
     expected_gold_w = [(5, 4), (3, 4), (4, 3), (4, 5), (5, 3), (5, 5)]
     moves_gold_w = game.get_individual_piece_moves(gold_w, 4, 4)
     for m in expected_gold_w:
@@ -202,15 +208,14 @@ def test_get_individual_piece_moves_bishop_rook():
     for r in range(9):
         for c in range(9):
             game.set_piece(r, c, None)
-    bishop = Piece(5, 0)
+    bishop = Piece(PieceType.BISHOP, Color.BLACK)
     moves = game.get_individual_piece_moves(bishop, 4, 4)
     for d in range(1, 5):
         assert (4 - d, 4 - d) in moves
         assert (4 - d, 4 + d) in moves
         assert (4 + d, 4 - d) in moves
         assert (4 + d, 4 + d) in moves
-    prom_bishop = Piece(12, 0)
-    prom_bishop.is_promoted = True
+    prom_bishop = Piece(PieceType.PROMOTED_BISHOP, Color.BLACK)
     moves_prom = game.get_individual_piece_moves(prom_bishop, 4, 4)
     for d in range(1, 5):
         assert (4 - d, 4 - d) in moves_prom
@@ -219,15 +224,14 @@ def test_get_individual_piece_moves_bishop_rook():
         assert (4 + d, 4 + d) in moves_prom
     for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
         assert (4 + dr, 4 + dc) in moves_prom
-    rook = Piece(6, 0)
+    rook = Piece(PieceType.ROOK, Color.BLACK)
     moves_r = game.get_individual_piece_moves(rook, 4, 4)
     for d in range(1, 5):
         assert (4 - d, 4) in moves_r
         assert (4 + d, 4) in moves_r
         assert (4, 4 - d) in moves_r
         assert (4, 4 + d) in moves_r
-    prom_rook = Piece(13, 0)
-    prom_rook.is_promoted = True
+    prom_rook = Piece(PieceType.PROMOTED_ROOK, Color.BLACK)
     moves_promr = game.get_individual_piece_moves(prom_rook, 4, 4)
     for d in range(1, 5):
         assert (4 - d, 4) in moves_promr
@@ -257,22 +261,22 @@ def test_nifu_detection():
     game = ShogiGame()
     # Black has pawns on all files at row 6
     for col in range(9):
-        assert game.is_nifu(0, col)
+        assert game.is_nifu(Color.BLACK, col)
     # Remove pawn from file 4
     game.set_piece(6, 4, None)
-    assert not game.is_nifu(0, 4)
+    assert not game.is_nifu(Color.BLACK, 4)
     # Add a promoted pawn (should not count for Nifu)
-    game.set_piece(5, 4, Piece(8, 0, True))
-    assert not game.is_nifu(0, 4)
+    game.set_piece(5, 4, Piece(PieceType.PROMOTED_PAWN, Color.BLACK))
+    assert not game.is_nifu(Color.BLACK, 4)
     # Add an unpromoted black pawn back
-    game.set_piece(3, 4, Piece(0, 0, False))
-    assert game.is_nifu(0, 4)
+    game.set_piece(3, 4, Piece(PieceType.PAWN, Color.BLACK))
+    assert game.is_nifu(Color.BLACK, 4)
     # White pawns
     for col in range(9):
-        assert game.is_nifu(1, col)
+        assert game.is_nifu(Color.WHITE, col)
     # Remove white pawn from file 2
     game.set_piece(2, 2, None)
-    assert not game.is_nifu(1, 2)
+    assert not game.is_nifu(Color.WHITE, 2)
 
 
 def test_nifu_promoted_pawn_does_not_count():
@@ -280,29 +284,29 @@ def test_nifu_promoted_pawn_does_not_count():
     game = ShogiGame()
     for c in range(9):
         game.set_piece(6, c, None)
-    game.set_piece(4, 4, Piece(8, 0, True))  # Promoted pawn
-    assert not game.is_nifu(0, 4)
-    game.set_piece(5, 4, Piece(0, 0, False))
-    assert game.is_nifu(0, 4)
+    game.set_piece(4, 4, Piece(PieceType.PROMOTED_PAWN, Color.BLACK))  # Promoted pawn
+    assert not game.is_nifu(Color.BLACK, 4)
+    game.set_piece(5, 4, Piece(PieceType.PAWN, Color.BLACK))
+    assert game.is_nifu(Color.BLACK, 4)
 
 
 def test_nifu_after_capture_and_drop():
     """Nifu after pawn is captured and dropped again."""
     game = ShogiGame()
     game.set_piece(6, 0, None)
-    assert not game.is_nifu(0, 0)
-    game.set_piece(3, 0, Piece(0, 0, False))
-    assert game.is_nifu(0, 0)
+    assert not game.is_nifu(Color.BLACK, 0)
+    game.set_piece(3, 0, Piece(PieceType.PAWN, Color.BLACK))
+    assert game.is_nifu(Color.BLACK, 0)
 
 
 def test_nifu_promote_and_drop():
     """Nifu after pawn is promoted and a new pawn is dropped."""
     game = ShogiGame()
     game.set_piece(6, 1, None)
-    game.set_piece(2, 1, Piece(8, 0, True))
-    assert not game.is_nifu(0, 1)
-    game.set_piece(4, 1, Piece(0, 0, False))
-    assert game.is_nifu(0, 1)
+    game.set_piece(2, 1, Piece(PieceType.PROMOTED_PAWN, Color.BLACK))
+    assert not game.is_nifu(Color.BLACK, 1)
+    game.set_piece(4, 1, Piece(PieceType.PAWN, Color.BLACK))
+    assert game.is_nifu(Color.BLACK, 1)
 
 
 def test_uchi_fu_zume():
@@ -312,21 +316,21 @@ def test_uchi_fu_zume():
     for r in range(9):
         for c in range(9):
             game.set_piece(r, c, None)
-    game.set_piece(0, 4, Piece(7, 1))  # White king
+    game.set_piece(0, 4, Piece(PieceType.KING, Color.WHITE))  # White king
     # Block king's escape squares
-    game.set_piece(0, 3, Piece(4, 0))  # Black gold
-    game.set_piece(0, 5, Piece(4, 0))  # Black gold
-    game.set_piece(1, 3, Piece(4, 0))  # Black gold
-    game.set_piece(1, 5, Piece(4, 0))  # Black gold
+    game.set_piece(0, 3, Piece(PieceType.GOLD, Color.BLACK))  # Black gold
+    game.set_piece(0, 5, Piece(PieceType.GOLD, Color.BLACK))  # Black gold
+    game.set_piece(1, 3, Piece(PieceType.GOLD, Color.BLACK))  # Black gold
+    game.set_piece(1, 5, Piece(PieceType.GOLD, Color.BLACK))  # Black gold
     # Black to drop pawn at (1,4) for mate
-    assert game.is_uchi_fu_zume(1, 4, 0)
+    assert game.is_uchi_fu_zume(1, 4, Color.BLACK)
     # If king can escape, not mate
     game.set_piece(0, 3, None)
-    assert not game.is_uchi_fu_zume(1, 4, 0)
+    assert not game.is_uchi_fu_zume(1, 4, Color.BLACK)
     # If not a pawn drop, not mate (simulate with a gold drop)
     game.set_piece(1, 4, None)
-    game.set_piece(1, 4, Piece(4, 0))
-    assert not game.is_uchi_fu_zume(1, 4, 0)
+    game.set_piece(1, 4, Piece(PieceType.GOLD, Color.BLACK))
+    assert not game.is_uchi_fu_zume(1, 4, Color.BLACK)
 
 
 def test_uchi_fu_zume_complex_escape():
@@ -336,29 +340,29 @@ def test_uchi_fu_zume_complex_escape():
         for c in range(9):
             game.set_piece(r, c, None)
     # Set up white king at (0,4)
-    game.set_piece(0, 4, Piece(7, 1))
+    game.set_piece(0, 4, Piece(PieceType.KING, Color.WHITE))
     # White gold blocks escapes at (1,3) and (1,5)
-    game.set_piece(1, 3, Piece(4, 1))
-    game.set_piece(1, 5, Piece(4, 1))
-    
+    game.set_piece(1, 3, Piece(PieceType.GOLD, Color.WHITE))
+    game.set_piece(1, 5, Piece(PieceType.GOLD, Color.WHITE))
+
     # Add pieces to block other escape routes
     # Top left
-    game.set_piece(0, 3, Piece(3, 0))  # Black silver
+    game.set_piece(0, 3, Piece(PieceType.SILVER, Color.BLACK))  # Black silver
     # Top right
-    game.set_piece(0, 5, Piece(3, 0))  # Black silver
+    game.set_piece(0, 5, Piece(PieceType.SILVER, Color.BLACK))  # Black silver
     # Front-right
-    game.set_piece(1, 5, Piece(4, 1))  # White gold (already set)
+    game.set_piece(1, 5, Piece(PieceType.GOLD, Color.WHITE))  # White gold (already set)
     # Front-left
-    game.set_piece(1, 3, Piece(4, 1))  # White gold (already set)
-    
+    game.set_piece(1, 3, Piece(PieceType.GOLD, Color.WHITE))  # White gold (already set)
+
     # Now the white king at (0,4) has no escape from a pawn drop at (1,4)
     # This should be a checkmate and therefore an illegal pawn drop (uchi-fu-zume)
-    assert game.is_uchi_fu_zume(1, 4, 0)
-    
+    assert game.is_uchi_fu_zume(1, 4, Color.BLACK)
+
     # If we remove one of the gold pieces blocking the king's escape
     game.set_piece(1, 3, None)
     # Then the king can escape and it's not uchi-fu-zume
-    assert not game.is_uchi_fu_zume(1, 4, 0)
+    assert not game.is_uchi_fu_zume(1, 4, Color.BLACK)
 
 
 def test_uchi_fu_zume_non_pawn_drop():
@@ -367,9 +371,9 @@ def test_uchi_fu_zume_non_pawn_drop():
     for r in range(9):
         for c in range(9):
             game.set_piece(r, c, None)
-    game.set_piece(0, 4, Piece(7, 1))
-    game.set_piece(1, 4, Piece(4, 0))  # Gold drop
-    assert not game.is_uchi_fu_zume(1, 4, 0)
+    game.set_piece(0, 4, Piece(PieceType.KING, Color.WHITE))
+    game.set_piece(1, 4, Piece(PieceType.GOLD, Color.BLACK))  # Gold drop
+    assert not game.is_uchi_fu_zume(1, 4, Color.BLACK)
 
 
 def test_uchi_fu_zume_king_in_check():
@@ -378,9 +382,9 @@ def test_uchi_fu_zume_king_in_check():
     for r in range(9):
         for c in range(9):
             game.set_piece(r, c, None)
-    game.set_piece(0, 4, Piece(7, 1))
-    game.set_piece(2, 4, Piece(6, 0))  # Black rook gives check
-    assert not game.is_uchi_fu_zume(1, 4, 0)
+    game.set_piece(0, 4, Piece(PieceType.KING, Color.WHITE))
+    game.set_piece(2, 4, Piece(PieceType.ROOK, Color.BLACK))  # Black rook gives check
+    assert not game.is_uchi_fu_zume(1, 4, Color.BLACK)
 
 
 def test_sennichite_detection():
@@ -391,14 +395,14 @@ def test_sennichite_detection():
         for c in range(9):
             game.set_piece(r, c, None)
     # Place kings only
-    game.set_piece(8, 4, Piece(7, 0))
-    game.set_piece(0, 4, Piece(7, 1))
+    game.set_piece(8, 4, Piece(PieceType.KING, Color.BLACK))
+    game.set_piece(0, 4, Piece(PieceType.KING, Color.WHITE))
     # Repeat a simple move back and forth 4 times
     for _ in range(4):
-        move1 = (8, 4, 7, 4, 0)  # Black king up
-        move2 = (0, 4, 1, 4, 0)  # White king down
-        move3 = (7, 4, 8, 4, 0)  # Black king back
-        move4 = (1, 4, 0, 4, 0)  # White king back
+        move1 = (8, 4, 7, 4, False)  # Black king up
+        move2 = (0, 4, 1, 4, False)  # White king down
+        move3 = (7, 4, 8, 4, False)  # Black king back
+        move4 = (1, 4, 0, 4, False)  # White king back
         game.make_move(move1)
         game.make_move(move2)
         game.make_move(move3)
@@ -414,34 +418,38 @@ def test_sennichite_with_drops():
     for r in range(9):
         for c in range(9):
             game.set_piece(r, c, None)
-    game.set_piece(8, 4, Piece(7, 0))
-    game.set_piece(0, 4, Piece(7, 1))
-    
+    game.set_piece(8, 4, Piece(PieceType.KING, Color.BLACK))
+    game.set_piece(0, 4, Piece(PieceType.KING, Color.WHITE))
+
     # Add pawns to both players' hands
-    game.hands[0][0] = 10
-    game.hands[1][0] = 10
-    
+    game.hands[Color.BLACK.value][PieceType.PAWN.value] = 10
+    game.hands[Color.WHITE.value][PieceType.PAWN.value] = 10
+
     for _ in range(4):
-        game.make_move((8, 4, 7, 4, 0))
-        game.make_move((0, 4, 1, 4, 0))
-        game.make_move((None, None, 8, 3, "drop_pawn_black"))
-        game.make_move((None, None, 0, 3, "drop_pawn_white"))
-        
+        game.make_move((8, 4, 7, 4, False))
+        game.make_move((0, 4, 1, 4, False))
+        game.make_move((None, None, 8, 3, PieceType.PAWN))
+        game.make_move((None, None, 0, 3, PieceType.PAWN))
+
         # Move the kings back
-        game.make_move((7, 4, 8, 4, 0))
-        game.make_move((1, 4, 0, 4, 0))
-        
+        game.make_move((7, 4, 8, 4, False))
+        game.make_move((1, 4, 0, 4, False))
+
         # Capture the pawns to return them to hand
         piece = game.get_piece(8, 3)
         if piece:
             game.set_piece(8, 3, None)
-            game.hands[0][0] += 1  # Add back to black's hand
-            
+            game.hands[Color.BLACK.value][
+                PieceType.PAWN.value
+            ] += 1  # Add back to black's hand
+
         piece = game.get_piece(0, 3)
         if piece:
             game.set_piece(0, 3, None)
-            game.hands[1][0] += 1  # Add back to white's hand
-    
+            game.hands[Color.WHITE.value][
+                PieceType.PAWN.value
+            ] += 1  # Add back to white's hand
+
     assert game.is_sennichite()
     assert game.game_over
     assert game.winner is None
@@ -457,23 +465,23 @@ def test_sennichite_with_captures():
         for c in range(9):
             game.set_piece(r, c, None)
     # Place kings only
-    game.set_piece(8, 4, Piece(7, 0))
-    game.set_piece(0, 4, Piece(7, 1))
+    game.set_piece(8, 4, Piece(PieceType.KING, Color.BLACK))
+    game.set_piece(0, 4, Piece(PieceType.KING, Color.WHITE))
     # Repeat a simple move back and forth 4 times
     for _ in range(4):
-        move1 = (8, 4, 7, 4, 0)  # Black king up
-        move2 = (0, 4, 1, 4, 0)  # White king down
-        move3 = (7, 4, 8, 4, 0)  # Black king back
-        move4 = (1, 4, 0, 4, 0)  # White king back
+        move1 = (8, 4, 7, 4, False)  # Black king up
+        move2 = (0, 4, 1, 4, False)  # White king down
+        move3 = (7, 4, 8, 4, False)  # Black king back
+        move4 = (1, 4, 0, 4, False)  # White king back
         game.make_move(move1)
         game.make_move(move2)
         game.make_move(move3)
         game.make_move(move4)
-    
+
     # The sennichite detection is tested in test_sennichite_detection
     # So just validate that we are indeed getting 4 identical positions
     assert game.is_sennichite(), "Sennichite (fourfold repetition) should be detected."
-    
+
     # After 4 repetitions, Sennichite should be detected and game marked as over
     assert game.game_over, "Game should be over due to Sennichite."
     assert game.winner is None, "Sennichite should be a draw (winner=None)."
@@ -485,9 +493,11 @@ def test_illegal_pawn_drop_last_rank():
     for c in range(9):
         game.set_piece(0, c, None)
     # Add a pawn to black's hand
-    game.hands[0][0] = 1
+    game.hands[Color.BLACK.value][PieceType.PAWN.value] = 1
     # Attempt to drop a pawn on the last rank (row 0) for black
-    assert not game.can_drop_piece(0, 0, 4, 0)  # Should be illegal
+    assert not game.can_drop_piece(
+        PieceType.PAWN, 0, 4, Color.BLACK
+    )  # Should be illegal
 
 
 def test_illegal_knight_drop_last_two_ranks():
@@ -497,10 +507,12 @@ def test_illegal_knight_drop_last_two_ranks():
         game.set_piece(0, c, None)
         game.set_piece(1, c, None)
     # Add a knight to black's hand
-    game.hands[0][2] = 1
+    game.hands[Color.BLACK.value][PieceType.KNIGHT.value] = 1
     # Attempt to drop a knight on the last two ranks (row 0 and 1) for black
-    assert not game.can_drop_piece(2, 0, 4, 0)  # Last rank
-    assert not game.can_drop_piece(2, 1, 4, 0)  # Second-to-last rank
+    assert not game.can_drop_piece(PieceType.KNIGHT, 0, 4, Color.BLACK)  # Last rank
+    assert not game.can_drop_piece(
+        PieceType.KNIGHT, 1, 4, Color.BLACK
+    )  # Second-to-last rank
 
 
 def test_illegal_lance_drop_last_rank():
@@ -509,9 +521,11 @@ def test_illegal_lance_drop_last_rank():
     for c in range(9):
         game.set_piece(0, c, None)
     # Add a lance to black's hand
-    game.hands[0][1] = 1
+    game.hands[Color.BLACK.value][PieceType.LANCE.value] = 1
     # Attempt to drop a lance on the last rank (row 0) for black
-    assert not game.can_drop_piece(1, 0, 4, 0)  # Should be illegal
+    assert not game.can_drop_piece(
+        PieceType.LANCE, 0, 4, Color.BLACK
+    )  # Should be illegal
 
 
 def test_checkmate_minimal():
@@ -520,11 +534,11 @@ def test_checkmate_minimal():
     for r in range(9):
         for c in range(9):
             game.set_piece(r, c, None)
-    game.set_piece(0, 4, Piece(7, 1))  # White king
-    
+    game.set_piece(0, 4, Piece(PieceType.KING, Color.WHITE))  # White king
+
     # Add a black pawn to black's hand
-    game.hands[0][0] = 1
-    
+    game.hands[Color.BLACK.value][PieceType.PAWN] = 1
+
     # Now check if dropping a pawn at (1,4) by black (color 0) would checkmate the white king
     # This should be true because:
     # 1. The pawn would put the king in check
@@ -532,7 +546,7 @@ def test_checkmate_minimal():
     # 3. No other piece can capture the pawn
     # Therefore the drop is Uchi Fu Zume
     # Note that in the actual game, this move would be illegal
-    assert game.is_uchi_fu_zume(1, 4, 0)
+    assert game.is_uchi_fu_zume(1, 4, Color.BLACK)
 
 
 def test_stalemate_minimal():
@@ -541,7 +555,7 @@ def test_stalemate_minimal():
     for r in range(9):
         for c in range(9):
             game.set_piece(r, c, None)
-    game.set_piece(0, 4, Piece(7, 1))
+    game.set_piece(0, 4, Piece(PieceType.KING, Color.WHITE))
     # No legal moves for white, not in check
     # This is a stub: actual stalemate logic may need to be implemented
-    # assert game.is_stalemate(1)  # Uncomment if stalemate detection is implemented
+    # assert game.is_stalemate(Color.WHITE)  # Uncomment if stalemate detection is implemented

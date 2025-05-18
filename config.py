@@ -1,4 +1,9 @@
-# Configuration for DRL Shogi Client
+"""
+Configuration for Deep Reinforcement Learning (DRL) Shogi Client.
+
+This module contains all configuration parameters used throughout the Keisei project,
+including model hyperparameters, training settings, file paths, and game constants.
+"""
 
 TOTAL_TIMESTEPS = 10_000_000
 STEPS_PER_EPOCH = 4096

@@ -1,0 +1,1298 @@
+"""
+shogi_engine.py: Core Shogi game mechanics for DRL Shogi Client.
+"""
+
+from typing import Optional, List, Any, Dict, Tuple, Set, Union
+from enum import Enum
+import numpy as np
+import config  # MAX_MOVES_PER_GAME and other constants
+
+
+# --- Enums and Constants ---
+class Color(Enum):
+    BLACK = 0  # Sente
+    WHITE = 1  # Gote
+
+
+class PieceType(Enum):
+    PAWN = 0
+    LANCE = 1
+    KNIGHT = 2
+    SILVER = 3
+    GOLD = 4
+    BISHOP = 5
+    ROOK = 6
+    KING = 7
+    PROMOTED_PAWN = 8  # Tokin
+    PROMOTED_LANCE = 9  # Promoted Lance
+    PROMOTED_KNIGHT = 10  # Promoted Knight
+    PROMOTED_SILVER = 11  # Promoted Silver
+    # Gold does not promote
+    PROMOTED_BISHOP = 12  # Horse
+    PROMOTED_ROOK = 13  # Dragon
+    # King does not promote
+
+    # Helper for unpromoted hand types
+    @classmethod
+    def get_unpromoted_types(cls) -> List["PieceType"]:
+        return [
+            cls.PAWN,
+            cls.LANCE,
+            cls.KNIGHT,
+            cls.SILVER,
+            cls.GOLD,
+            cls.BISHOP,
+            cls.ROOK,
+        ]
+
+
+PROMOTED_TYPES_SET: Set[PieceType] = {
+    PieceType.PROMOTED_PAWN,
+    PieceType.PROMOTED_LANCE,
+    PieceType.PROMOTED_KNIGHT,
+    PieceType.PROMOTED_SILVER,
+    PieceType.PROMOTED_BISHOP,
+    PieceType.PROMOTED_ROOK,
+}
+
+BASE_TO_PROMOTED_TYPE: Dict[PieceType, PieceType] = {
+    PieceType.PAWN: PieceType.PROMOTED_PAWN,
+    PieceType.LANCE: PieceType.PROMOTED_LANCE,
+    PieceType.KNIGHT: PieceType.PROMOTED_KNIGHT,
+    PieceType.SILVER: PieceType.PROMOTED_SILVER,
+    PieceType.BISHOP: PieceType.PROMOTED_BISHOP,
+    PieceType.ROOK: PieceType.PROMOTED_ROOK,
+}
+
+PROMOTED_TO_BASE_TYPE: Dict[PieceType, PieceType] = {
+    v: k for k, v in BASE_TO_PROMOTED_TYPE.items()
+}
+
+# For II.7: add_to_hand()
+PIECE_TYPE_TO_HAND_TYPE: Dict[PieceType, PieceType] = {
+    PieceType.PAWN: PieceType.PAWN,
+    PieceType.LANCE: PieceType.LANCE,
+    PieceType.KNIGHT: PieceType.KNIGHT,
+    PieceType.SILVER: PieceType.SILVER,
+    PieceType.GOLD: PieceType.GOLD,
+    PieceType.BISHOP: PieceType.BISHOP,
+    PieceType.ROOK: PieceType.ROOK,
+    PieceType.PROMOTED_PAWN: PieceType.PAWN,
+    PieceType.PROMOTED_LANCE: PieceType.LANCE,
+    PieceType.PROMOTED_KNIGHT: PieceType.KNIGHT,
+    PieceType.PROMOTED_SILVER: PieceType.SILVER,
+    PieceType.PROMOTED_BISHOP: PieceType.BISHOP,
+    PieceType.PROMOTED_ROOK: PieceType.ROOK,
+    # Kings (PieceType.KING) and Gold (PieceType.GOLD) don't change type when captured.
+    # King is handled separately in add_to_hand. Gold is already its base type.
+}
+
+# For observation channels (II.2)
+# Unpromoted: P, L, N, S, G, B, R, K (8 types)
+# Promoted: +P, +L, +N, +S, +B, +R (6 types)
+# Total board piece planes per player = 8 (unpromoted) + 6 (promoted) = 14
+# Total board piece planes = 14 * 2 = 28
+# Hands: 7 piece types * 2 players = 14 planes
+# Other: current player, move count = 2 planes
+# Total expected channels for current obs structure: 28 (board) + 14 (hands) + 2 (meta) = 44
+# Original code uses 46 channels, planes 44 and 45 are "reserved".
+# We will use 8 planes for unpromoted (0-7), 6 for promoted (8-13) for the current player section
+# And similarly for opponent.
+
+# Unpromoted pieces for observation channels
+OBS_UNPROMOTED_ORDER = [
+    PieceType.PAWN,
+    PieceType.LANCE,
+    PieceType.KNIGHT,
+    PieceType.SILVER,
+    PieceType.GOLD,
+    PieceType.BISHOP,
+    PieceType.ROOK,
+    PieceType.KING,
+]
+# Promoted pieces for observation channels
+OBS_PROMOTED_ORDER = [
+    PieceType.PROMOTED_PAWN,
+    PieceType.PROMOTED_LANCE,
+    PieceType.PROMOTED_KNIGHT,
+    PieceType.PROMOTED_SILVER,
+    PieceType.PROMOTED_BISHOP,
+    PieceType.PROMOTED_ROOK,
+]
+
+# --- Type Aliases for Moves ---
+BoardMove = Tuple[int, int, int, int, bool]
+DropMove = Tuple[None, None, int, int, PieceType]  # PieceType is your existing Enum
+MoveTuple = Union[BoardMove, DropMove]
+
+
+class Piece:
+    """
+    Represents a Shogi piece with type and color.
+    Promotion status is derived from its type.
+    """
+
+    def __init__(self, piece_type: PieceType, color: Color):
+        self.type: PieceType = piece_type
+        self.color: Color = color
+
+    @property
+    def is_promoted(self) -> bool:
+        """Returns True if the piece type is a promoted type."""
+        return self.type in PROMOTED_TYPES_SET
+
+    def symbol(self) -> str:
+        """
+        Returns a character representation of the piece for display/logging.
+        Relies on self.type being the canonical representation (e.g., PROMOTED_PAWN for a tokin).
+        """
+        # Adjusted to use PieceType Enum values as keys
+        base_symbols = {
+            PieceType.PAWN: "P",
+            PieceType.LANCE: "L",
+            PieceType.KNIGHT: "N",
+            PieceType.SILVER: "S",
+            PieceType.GOLD: "G",
+            PieceType.BISHOP: "B",
+            PieceType.ROOK: "R",
+            PieceType.KING: "K",
+            PieceType.PROMOTED_PAWN: "+P",
+            PieceType.PROMOTED_LANCE: "+L",
+            PieceType.PROMOTED_KNIGHT: "+N",
+            PieceType.PROMOTED_SILVER: "+S",
+            PieceType.PROMOTED_BISHOP: "+B",
+            PieceType.PROMOTED_ROOK: "+R",
+        }
+        s = base_symbols.get(self.type, "?")
+        if self.color == Color.WHITE:
+            s = s.lower()  # Lowercase for Gote (White)
+        return s
+
+    def __repr__(self):
+        return f"Piece(type={self.type.name}, color={self.color.name})"
+
+
+class ShogiGame:
+    """
+    Represents the Shogi game state, board, and basic operations.
+    """
+
+    def __init__(self) -> None:
+        self.board: List[List[Optional[Piece]]] = [
+            [None for _ in range(9)] for _ in range(9)
+        ]
+        # Key is PieceType (unpromoted), value is count
+        self.hands: List[Dict[PieceType, int]] = [
+            {},
+            {},
+        ]  # [Black's hand, White's hand]
+        self.move_count: int = 0
+        self.current_player: Color = Color.BLACK
+        self.move_history: list = []
+        self.game_over: bool = False
+        self.winner: Optional[Color] = None
+        self.reset()
+
+    def reset(self) -> None:
+        """
+        Initializes the board to the standard Shogi starting position.
+        """
+        self.board = [[None for _ in range(9)] for _ in range(9)]
+        # Initialize empty hands for both players (using unpromoted PieceType enums)
+        self.hands = [
+            {pt: 0 for pt in PieceType.get_unpromoted_types()},
+            {pt: 0 for pt in PieceType.get_unpromoted_types()},
+        ]
+
+        # Piece types for the back rank (Lance, Knight, Silver, Gold, King)
+        back_rank_types = [
+            PieceType.LANCE,
+            PieceType.KNIGHT,
+            PieceType.SILVER,
+            PieceType.GOLD,
+            PieceType.KING,
+            PieceType.GOLD,
+            PieceType.SILVER,
+            PieceType.KNIGHT,
+            PieceType.LANCE,
+        ]
+
+        # White pieces (Gote, player 1, top rows 0-2)
+        for c, pt_enum in enumerate(back_rank_types):
+            self.board[0][c] = Piece(pt_enum, Color.WHITE)
+        self.board[1][1] = Piece(
+            PieceType.ROOK, Color.WHITE
+        )  # White's Rook (Standard: 2h -> file 7 by code's view of white)
+        # Code has Rook on its left [1][1], Bishop on its right [1][7]
+        # Corrected: Standard Gote: Rook at 8b (board[1][1]), Bishop at 2b (board[1][7])
+        # The original code had this correct for standard setup.
+        self.board[1][7] = Piece(PieceType.BISHOP, Color.WHITE)  # White's Bishop
+        for c in range(9):
+            self.board[2][c] = Piece(PieceType.PAWN, Color.WHITE)
+
+        # Black pieces (Sente, player 0, bottom rows 6-8)
+        for c in range(9):
+            self.board[6][c] = Piece(PieceType.PAWN, Color.BLACK)
+        self.board[7][1] = Piece(
+            PieceType.BISHOP, Color.BLACK
+        )  # Black's Bishop (Standard: 8h -> file 1 by code's view of black)
+        self.board[7][7] = Piece(PieceType.ROOK, Color.BLACK)  # Black's Rook
+        for c, pt_enum in enumerate(back_rank_types):
+            self.board[8][c] = Piece(pt_enum, Color.BLACK)
+
+        # Empty middle
+        for r in range(3, 6):
+            for c in range(9):
+                self.board[r][c] = None
+
+        self.move_count = 0
+        self.current_player = Color.BLACK
+        self.move_history = []
+        self.game_over = False
+        self.winner = None
+
+    def get_piece(self, row: int, col: int) -> Optional[Piece]:
+        if self.is_on_board(row, col):
+            return self.board[row][col]
+        return None
+
+    def set_piece(self, row: int, col: int, piece: Optional[Piece]) -> None:
+        if self.is_on_board(row, col):
+            self.board[row][col] = piece
+
+    def to_string(self) -> str:
+        lines = []
+        for r_idx, row_data in enumerate(self.board):
+            line_str = f"{8-r_idx+1} "  # Shogi board rank numbers (9 down to 1)
+            line_pieces = []
+            for p in row_data:
+                if p:
+                    symbol = p.symbol()
+                    # Ensure consistent width for alignment
+                    if len(symbol) == 1:  # P, L, N, S, G, B, R, K (and lowercase)
+                        line_pieces.append(" " + symbol)
+                    else:  # +P, +L, etc. (and lowercase)
+                        line_pieces.append(symbol)
+                else:
+                    line_pieces.append(" . ")  # Add spaces around dot for alignment
+            lines.append(line_str + "".join(line_pieces))
+        # Add file numbers at the bottom
+        lines.append("   a  b  c  d  e  f  g  h  i")  # Shogi board file letters
+        # Add hands
+        lines.append(
+            f"Black's hand: { {pt.name: count for pt, count in self.hands[Color.BLACK.value].items() if count > 0} }"
+        )
+        lines.append(
+            f"White's hand: { {pt.name: count for pt, count in self.hands[Color.WHITE.value].items() if count > 0} }"
+        )
+        lines.append(f"Current player: {self.current_player.name}")
+        return "\n".join(lines)
+
+    def is_on_board(self, row: int, col: int) -> bool:
+        # Removed `row is None or col is None` check as per I.4
+        return 0 <= row < 9 and 0 <= col < 9
+
+    def _is_sliding_piece_type(self, piece_type: PieceType) -> bool:
+        """Helper to identify sliding pieces (including promoted)."""
+        return piece_type in [
+            PieceType.LANCE,
+            PieceType.BISHOP,
+            PieceType.ROOK,
+            PieceType.PROMOTED_BISHOP,
+            PieceType.PROMOTED_ROOK,
+        ]
+
+    def get_individual_piece_moves(
+        self, piece: Piece, r_from: int, c_from: int
+    ) -> list[tuple[int, int]]:
+        """
+        Returns a list of (r_to, c_to) tuples for a piece, considering its
+        fundamental movement rules and path-blocking by other pieces.
+        This function generates squares a piece *attacks* or can move to if empty.
+        It stops at the first piece encountered. If that piece is an opponent,
+        the square is included (as a capture). If friendly, it's not included.
+        """
+        moves = []
+        # Black (Sente, 0) moves towards smaller row indices, White (Gote, 1) towards larger
+        forward = -1 if piece.color == Color.BLACK else 1
+
+        piece_type = piece.type
+
+        # Define move offsets
+        # Gold-like moves (Gold, +P, +L, +N, +S)
+        gold_move_offsets = [
+            (forward, 0),
+            (forward, -1),
+            (forward, 1),
+            (0, -1),
+            (0, 1),
+            (-forward, 0),  # Backwards for Gold
+        ]
+        # King moves
+        king_move_offsets = [
+            (-1, -1),
+            (-1, 0),
+            (-1, 1),
+            (0, -1),
+            (0, 1),
+            (1, -1),
+            (1, 0),
+            (1, 1),
+        ]
+        # Knight moves
+        knight_move_offsets = [(forward * 2, -1), (forward * 2, 1)]
+        # Silver moves
+        silver_move_offsets = [
+            (forward, 0),
+            (forward, -1),
+            (forward, 1),
+            (-forward, -1),
+            (-forward, 1),  # Backwards-diagonal
+        ]
+        # Promoted Rook King-like additions (diagonals)
+        promoted_rook_extra_offsets = [(-1, -1), (-1, 1), (1, -1), (1, 1)]
+        # Promoted Bishop King-like additions (orthogonals) - III.1
+        promoted_bishop_extra_offsets = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+
+        # --- Non-sliding pieces first ---
+        current_offsets = []
+        is_sliding = False
+
+        if piece_type == PieceType.PAWN:
+            current_offsets = [(forward, 0)]
+        elif piece_type == PieceType.KNIGHT:
+            current_offsets = knight_move_offsets
+        elif piece_type == PieceType.SILVER:
+            current_offsets = silver_move_offsets
+        elif (
+            piece_type == PieceType.GOLD
+            or piece_type == PieceType.PROMOTED_PAWN
+            or piece_type == PieceType.PROMOTED_LANCE
+            or piece_type == PieceType.PROMOTED_KNIGHT
+            or piece_type == PieceType.PROMOTED_SILVER
+        ):
+            current_offsets = gold_move_offsets
+        elif piece_type == PieceType.KING:
+            current_offsets = king_move_offsets
+
+        # Apply non-sliding moves
+        for dr, dc in current_offsets:
+            nr, nc = r_from + dr, c_from + dc
+            if self.is_on_board(nr, nc):
+                target_piece = self.get_piece(nr, nc)
+                if target_piece is None or target_piece.color != piece.color:
+                    # Can move to empty square or capture opponent
+                    # II.11: Ensure not adding own king (already handled by target_piece.color != piece.color)
+                    moves.append((nr, nc))
+
+        # --- Sliding pieces ---
+        sliding_directions = []
+        if piece_type == PieceType.LANCE:
+            is_sliding = True
+            sliding_directions = [(forward, 0)]
+        elif piece_type == PieceType.BISHOP or piece_type == PieceType.PROMOTED_BISHOP:
+            is_sliding = True
+            sliding_directions.extend([(-1, -1), (-1, 1), (1, -1), (1, 1)])
+            if (
+                piece_type == PieceType.PROMOTED_BISHOP
+            ):  # Add King's orthogonal moves (III.1)
+                for dr, dc in promoted_bishop_extra_offsets:
+                    nr, nc = r_from + dr, c_from + dc
+                    if self.is_on_board(nr, nc):
+                        target_piece = self.get_piece(nr, nc)
+                        if target_piece is None or target_piece.color != piece.color:
+                            moves.append((nr, nc))
+        elif piece_type == PieceType.ROOK or piece_type == PieceType.PROMOTED_ROOK:
+            is_sliding = True
+            sliding_directions.extend([(-1, 0), (1, 0), (0, -1), (0, 1)])
+            if piece_type == PieceType.PROMOTED_ROOK:  # Add King's diagonal moves
+                for dr, dc in promoted_rook_extra_offsets:
+                    nr, nc = r_from + dr, c_from + dc
+                    if self.is_on_board(nr, nc):
+                        target_piece = self.get_piece(nr, nc)
+                        if target_piece is None or target_piece.color != piece.color:
+                            moves.append((nr, nc))
+
+        if is_sliding:
+            for dr_slide, dc_slide in sliding_directions:
+                for i in range(1, 9):  # Max 8 steps
+                    nr, nc = r_from + dr_slide * i, c_from + dc_slide * i
+                    if not self.is_on_board(nr, nc):
+                        break  # Off board
+                    target_piece = self.get_piece(nr, nc)
+                    if target_piece is None:
+                        moves.append((nr, nc))  # Empty square
+                    else:
+                        if target_piece.color != piece.color:
+                            # II.11: Ensure not adding own king (covered by color check)
+                            # Can capture opponent
+                            moves.append((nr, nc))
+                        # Whether friendly or opponent, path is blocked
+                        break
+        return list(
+            set(moves)
+        )  # Remove duplicates that might arise from combined moves (e.g., +B, +R)
+
+    def get_observation(self) -> np.ndarray:
+        """
+        Returns the current board state as a (Channels, 9, 9) NumPy array for RL input.
+        Channels:
+        Player planes (current player POV):
+         0-7: Unpromoted pieces (P, L, N, S, G, B, R, K)
+         8-13: Promoted pieces (+P, +L, +N, +S, +B, +R)
+        Opponent planes:
+         14-21: Unpromoted pieces
+         22-27: Promoted pieces
+        Hand planes:
+         28-34: Current player's hand (P, L, N, S, G, B, R) - 7 types
+         35-41: Opponent's hand (P, L, N, S, G, B, R) - 7 types
+        Meta planes:
+         42: Current player (all 1.0 if Black, all 0.0 if White playing as Black's opponent view)
+         43: Move count (normalized)
+         44, 45: Reserved (all zeros)
+        Total: 14 (player) + 14 (opponent) + 7 (player hand) + 7 (opp hand) + 2 (meta) = 44 channels.
+        Original code specifies 46 channels, so 44 and 45 are explicitly kept.
+        """
+        obs = np.zeros((46, 9, 9), dtype=np.float32)
+
+        # Map PieceType to its index in OBS_UNPROMOTED_ORDER or OBS_PROMOTED_ORDER
+        unpromoted_map = {pt: i for i, pt in enumerate(OBS_UNPROMOTED_ORDER)}
+        promoted_map = {pt: i for i, pt in enumerate(OBS_PROMOTED_ORDER)}
+
+        for r in range(9):
+            for c in range(9):
+                p = self.board[r][c]
+                if p is None:
+                    continue
+
+                is_current_player_piece = p.color == self.current_player
+                player_base_channel = (
+                    0 if is_current_player_piece else 14
+                )  # Planes 0-13 for current, 14-27 for opp
+
+                channel_offset = -1
+
+                if p.is_promoted:
+                    if p.type in promoted_map:
+                        # Offset for promoted planes (e.g., 8 for current player, 22 for opponent)
+                        promoted_block_offset = 8 if is_current_player_piece else 22
+                        channel_offset = promoted_block_offset + promoted_map[p.type]
+                else:  # Unpromoted or non-promotable (King, Gold)
+                    if p.type in unpromoted_map:
+                        # Offset for unpromoted planes (e.g., 0 for current player, 14 for opponent)
+                        unpromoted_block_offset = 0 if is_current_player_piece else 14
+                        channel_offset = (
+                            unpromoted_block_offset + unpromoted_map[p.type]
+                        )
+
+                if channel_offset != -1:
+                    obs[channel_offset, r, c] = 1.0
+
+        # Pieces in hand (7 channels per player: P,L,N,S,G,B,R)
+        hand_piece_order = PieceType.get_unpromoted_types()  # P, L, N, S, G, B, R
+
+        # Current player's hand (channels 28-34)
+        current_player_hand_start_ch = 28
+        for i, piece_type_enum in enumerate(hand_piece_order):
+            count = self.hands[self.current_player.value].get(piece_type_enum, 0)
+            if count > 0:
+                ch = current_player_hand_start_ch + i
+                obs[ch, :, :] = count / 18.0  # Normalize (e.g., by max pawns)
+
+        # Opponent's hand (channels 35-41)
+        opponent_hand_start_ch = 35
+        opponent_color_val = (
+            Color.WHITE.value
+            if self.current_player == Color.BLACK
+            else Color.BLACK.value
+        )
+        for i, piece_type_enum in enumerate(hand_piece_order):
+            count = self.hands[opponent_color_val].get(piece_type_enum, 0)
+            if count > 0:
+                ch = opponent_hand_start_ch + i
+                obs[ch, :, :] = count / 18.0
+
+        # Current player plane (42)
+        # Standard DRL: current player is always "black" from NN's perspective.
+        # If self.current_player is Black (0), this plane is 1s.
+        # If self.current_player is White (1), and NN expects to play as "black",
+        # then board is already flipped. This plane indicates who is to move on this state.
+        # The problem statement: "all ones if Black, zeros if White".
+        # This implies the observation is *not* always from Black's literal perspective,
+        # but from the *current player's* perspective, and this plane denotes original color.
+        obs[42, :, :] = 1.0 if self.current_player == Color.BLACK else 0.0
+
+        # Move count plane (43)
+        max_moves = float(getattr(config, "MAX_MOVES_PER_GAME", 512))
+        obs[43, :, :] = self.move_count / max_moves if max_moves > 0 else 0.0
+
+        # Planes 44, 45 are reserved and remain zeros.
+        return obs
+
+    def is_nifu(self, color: Color, col: int) -> bool:
+        """Checks for two unpromoted pawns of the same color on the given file."""
+        for r in range(9):
+            p = self.get_piece(r, col)
+            if (
+                p
+                and p.type == PieceType.PAWN
+                and p.color == color
+                and not p.is_promoted
+            ):  # Redundant not p.is_promoted if type is PAWN
+                return True
+        return False
+
+    def is_uchi_fu_zume(self, drop_row: int, drop_col: int, color: Color) -> bool:
+        """
+        Returns True if dropping a pawn at (drop_row, drop_col) by 'color'
+        results in immediate checkmate (Uchi Fu Zume).
+        """
+        if self.get_piece(drop_row, drop_col) is not None:
+            return False  # Square occupied
+
+        opp_color = Color.WHITE if color == Color.BLACK else Color.BLACK
+        king_pos: Optional[Tuple[int, int]] = None
+        for r_k in range(9):
+            for c_k in range(9):
+                p_k = self.get_piece(r_k, c_k)
+                if p_k and p_k.type == PieceType.KING and p_k.color == opp_color:
+                    king_pos = (r_k, c_k)
+                    break
+            if king_pos:
+                break
+        if not king_pos:
+            return False  # Should not happen
+
+        king_r, king_c = king_pos
+
+        # Check if dropped pawn delivers check
+        pawn_attack_row = drop_row + (-1 if color == Color.BLACK else 1)
+        if not (king_r == pawn_attack_row and king_c == drop_col):
+            return False  # Pawn drop doesn't check the king
+
+        # Temporarily place the pawn
+        dropped_pawn = Piece(PieceType.PAWN, color)
+        self.set_piece(drop_row, drop_col, dropped_pawn)
+
+        # Check if opponent has any legal moves to escape checkmate
+        # Temporarily switch player to simulate opponent's turn
+        original_player = self.current_player
+        self.current_player = opp_color
+
+        opponent_has_legal_move = False
+        # Need a lightweight way to check if king can escape or pawn can be captured
+        # without full get_legal_moves which can be recursive or too heavy.
+
+        # 1. Can the king escape?
+        king_piece_at_kr_kc = self.get_piece(king_r, king_c)  # Should be the king
+        if king_piece_at_kr_kc:
+            king_moves = self.get_individual_piece_moves(
+                king_piece_at_kr_kc, king_r, king_c
+            )
+            for kr_new, kc_new in king_moves:
+                target_sq_piece = self.get_piece(kr_new, kc_new)
+                if target_sq_piece and target_sq_piece.color == opp_color:
+                    continue  # Can't move to own piece
+
+                # Simulate king move
+                self.set_piece(king_r, king_c, None)
+                original_piece_at_escape_sq = self.get_piece(kr_new, kc_new)
+                self.set_piece(kr_new, kc_new, king_piece_at_kr_kc)
+
+                if not self._is_square_attacked(kr_new, kc_new, color):
+                    opponent_has_legal_move = True
+
+                # Undo simulated king move
+                self.set_piece(king_r, king_c, king_piece_at_kr_kc)
+                self.set_piece(kr_new, kc_new, original_piece_at_escape_sq)
+                if opponent_has_legal_move:
+                    break
+            if opponent_has_legal_move:  # King can escape
+                self.set_piece(drop_row, drop_col, None)  # Remove test pawn
+                self.current_player = original_player
+                return False
+
+        # 2. Can the dropped pawn be captured by any opponent piece?
+        # Or can any piece block the check? (More complex; standard Uchi Fu Zume usually focuses on escape/capture pawn)
+        # For Uchi Fu Zume, the specific check is if the *only* way out of check is to move a piece other than the king,
+        # AND that piece being moved results in the king still being safe.
+        # A simpler check often used: can the pawn be captured by a piece such that the king is no longer in check?
+        for r_att in range(9):
+            for c_att in range(9):
+                attacker_piece = self.get_piece(r_att, c_att)
+                if attacker_piece and attacker_piece.color == opp_color:
+                    # Check if this piece can capture the dropped pawn at (drop_row, drop_col)
+                    # Note: get_individual_piece_moves already handles path blocking for captures
+                    possible_attacker_moves = self.get_individual_piece_moves(
+                        attacker_piece, r_att, c_att
+                    )
+                    if (drop_row, drop_col) in possible_attacker_moves:
+                        # Simulate capture
+                        original_attacker_on_board = self.get_piece(
+                            r_att, c_att
+                        )  # this is attacker_piece
+                        # The pawn at (drop_row, drop_col) is captured by attacker_piece
+                        self.set_piece(drop_row, drop_col, original_attacker_on_board)
+                        self.set_piece(r_att, c_att, None)
+
+                        if not self._is_square_attacked(
+                            king_r, king_c, color
+                        ):  # Is king safe after capture?
+                            opponent_has_legal_move = True
+
+                        # Undo simulated capture
+                        self.set_piece(r_att, c_att, original_attacker_on_board)
+                        self.set_piece(
+                            drop_row, drop_col, dropped_pawn
+                        )  # Put test pawn back
+                        if opponent_has_legal_move:
+                            break
+            if opponent_has_legal_move:
+                break
+
+        # Restore board and current player
+        self.set_piece(drop_row, drop_col, None)
+        self.current_player = original_player
+
+        return (
+            not opponent_has_legal_move
+        )  # If no legal move for opponent, it's Uchi Fu Zume
+
+    def _is_square_attacked(self, row: int, col: int, attacker_color: Color) -> bool:
+        """
+        Returns True if the square (row, col) is attacked by any piece of attacker_color.
+        Relies on get_individual_piece_moves which handles path blocking. (III.3)
+        """
+        for r_attacker in range(9):
+            for c_attacker in range(9):
+                p_attacker = self.get_piece(r_attacker, c_attacker)
+                if p_attacker and p_attacker.color == attacker_color:
+                    # Get squares this piece attacks
+                    attacked_squares = self.get_individual_piece_moves(
+                        p_attacker, r_attacker, c_attacker
+                    )
+                    if (row, col) in attacked_squares:
+                        return True
+        return False
+
+    def get_legal_moves(self) -> List[MoveTuple]:
+        """
+        Generate all legal moves for the current player.
+        Move tuple format:
+        - Board move: (r_from, c_from, r_to, c_to, promote_flag: bool)
+        - Drop move: (None, None, r_to, c_to, piece_type_to_drop: PieceType)
+        """
+        legal_moves: List[MoveTuple] = []
+        current_p_color = self.current_player
+
+        # 1. Generate board moves
+        for r_from in range(9):
+            for c_from in range(9):
+                piece = self.get_piece(r_from, c_from)
+                if not piece or piece.color != current_p_color:
+                    continue
+
+                # Get fundamental moves (includes captures of opponents, stops at own pieces)
+                # This already accounts for path blocking.
+                possible_tos = self.get_individual_piece_moves(piece, r_from, c_from)
+
+                for r_to, c_to in possible_tos:
+                    # At this point, (r_to, c_to) is either empty or an opponent's piece
+                    # because get_individual_piece_moves handles not moving to own piece spots.
+
+                    # Check for promotion
+                    can_promote_option = self.can_promote_piece(piece, r_from, r_to)
+                    must_promote_now = self.must_promote_piece(piece, r_to)
+
+                    # Option 1: Move without promotion
+                    if not must_promote_now:
+                        move_tuple_no_promo = (r_from, c_from, r_to, c_to, False)
+                        # Simulate to check if king would be in check
+                        captured_piece = self.get_piece(r_to, c_to)
+                        original_piece_type = (
+                            piece.type
+                        )  # For restoration if type changes due to lookahead in II.10
+
+                        self.set_piece(r_to, c_to, piece)
+                        self.set_piece(r_from, c_from, None)
+                        if not self._king_in_check_after_move(current_p_color):
+                            # II.10: Rare promotion rule
+                            is_stranded_if_no_promo = False
+                            if (
+                                can_promote_option
+                            ):  # Only check if promotion was an option
+                                # If piece has no moves from (r_to, c_to) if unpromoted, then must_promote_now
+                                # should be true. This part of II.10 is complex: "player can only decline an
+                                # optional promotion if the piece, in its unpromoted state, would still have
+                                # legal moves from the destination square. This means if can_promote_option
+                                # is true, but declining would strand it, then the no_promo move is illegal.
+                                temp_piece_unpromoted = Piece(
+                                    PROMOTED_TO_BASE_TYPE.get(piece.type, piece.type),
+                                    piece.color,
+                                )
+                                # Need a lightweight check for moves from (r_to, c_to) for temp_piece_unpromoted
+                                # without full legality (king check etc.)
+                                potential_next_moves = self.get_individual_piece_moves(
+                                    temp_piece_unpromoted, r_to, c_to
+                                )
+                                if (
+                                    not potential_next_moves
+                                    and self.is_in_promotion_zone(
+                                        r_from, current_p_color
+                                    )
+                                    or self.is_in_promotion_zone(r_to, current_p_color)
+                                ):
+                                    # If it could promote, and not promoting strands it, this non-promoted move
+                                    # is illegal *unless* it was already non-promotable
+                                    if (
+                                        piece.type
+                                        not in [PieceType.GOLD, PieceType.KING]
+                                        and piece.type not in PROMOTED_TYPES_SET
+                                    ):
+                                        is_stranded_if_no_promo = True
+
+                            if not is_stranded_if_no_promo:
+                                legal_moves.append(move_tuple_no_promo)
+
+                        # Undo simulation
+                        piece.type = original_piece_type  # Restore type if changed by II.10 lookahead (unlikely here)
+                        self.set_piece(r_from, c_from, piece)
+                        self.set_piece(r_to, c_to, captured_piece)
+
+                    # Option 2: Move with promotion
+                    if can_promote_option:  # Covers must_promote_now as well
+                        move_tuple_promo = (r_from, c_from, r_to, c_to, True)
+                        promoted_type = BASE_TO_PROMOTED_TYPE.get(piece.type)
+                        if promoted_type:  # Ensure piece is promotable
+                            # Simulate with promotion
+                            captured_piece = self.get_piece(r_to, c_to)
+                            original_type = piece.type
+
+                            piece.type = (
+                                promoted_type  # Temporarily promote for check test
+                            )
+                            self.set_piece(r_to, c_to, piece)
+                            self.set_piece(r_from, c_from, None)
+
+                            if not self._king_in_check_after_move(current_p_color):
+                                legal_moves.append(move_tuple_promo)
+
+                            # Undo simulation
+                            piece.type = original_type  # Revert type
+                            self.set_piece(r_from, c_from, piece)
+                            self.set_piece(r_to, c_to, captured_piece)
+
+        # 2. Generate drop moves
+        player_hand = self.hands[current_p_color.value]
+        for piece_type_to_drop_enum, count in player_hand.items():
+            if count > 0:
+                for r_to in range(9):
+                    for c_to in range(9):
+                        if (
+                            self.get_piece(r_to, c_to) is None
+                        ):  # Can only drop on empty square
+                            if self.can_drop_piece(
+                                piece_type_to_drop_enum, r_to, c_to, current_p_color
+                            ):
+                                move_tuple_drop = (
+                                    None,
+                                    None,
+                                    r_to,
+                                    c_to,
+                                    piece_type_to_drop_enum,
+                                )
+
+                                # Simulate drop (II.9: debit hand)
+                                self.hands[current_p_color.value][
+                                    piece_type_to_drop_enum
+                                ] -= 1
+                                dropped_p = Piece(
+                                    piece_type_to_drop_enum, current_p_color
+                                )
+                                self.set_piece(r_to, c_to, dropped_p)
+
+                                if not self._king_in_check_after_move(current_p_color):
+                                    legal_moves.append(move_tuple_drop)
+
+                                # Undo simulation (II.9: credit hand)
+                                self.set_piece(r_to, c_to, None)
+                                self.hands[current_p_color.value][
+                                    piece_type_to_drop_enum
+                                ] += 1
+
+        return list(
+            set(legal_moves)
+        )  # Ensure uniqueness if any complex interactions generated duplicates
+
+    def _king_in_check_after_move(self, player_color: Color) -> bool:
+        king_pos = None
+        for r_k in range(9):
+            for c_k in range(9):
+                p = self.get_piece(r_k, c_k)
+                if p and p.type == PieceType.KING and p.color == player_color:
+                    king_pos = (r_k, c_k)
+                    break
+            if king_pos:
+                break
+        if not king_pos:
+            # This implies king was captured or removed, which shouldn't happen if moves are generated for the king.
+            # If king is not on board, it's effectively a game-over state or an error.
+            # For self-check detection, if the king is missing, it's as if it's in perpetual check.
+            return True
+
+        opponent_color = Color.WHITE if player_color == Color.BLACK else Color.BLACK
+        return self._is_square_attacked(king_pos[0], king_pos[1], opponent_color)
+
+    def _board_state_hash(self) -> tuple:
+        """Returns a hashable representation of board, hands, and current player."""
+        board_tuple = tuple(
+            tuple((p.type.value, p.color.value) if p else None for p in row)
+            for row in self.board
+        )
+        hands_tuple = (
+            tuple(
+                sorted(
+                    (pt.value, count)
+                    for pt, count in self.hands[Color.BLACK.value].items()
+                )
+            ),
+            tuple(
+                sorted(
+                    (pt.value, count)
+                    for pt, count in self.hands[Color.WHITE.value].items()
+                )
+            ),
+        )
+        return (board_tuple, hands_tuple, self.current_player.value)
+
+    def is_sennichite(self) -> bool:
+        """
+        Returns True if the current board state has occurred four times (Sennichite).
+        II.8: Logic depends on when state is added to history vs when this is checked.
+        Assuming make_move adds current state's hash to history, then calls this.
+        So, count >= 4 in history means it's the 4th time.
+        """
+        current_hash = self._board_state_hash()
+        count = 0
+        for move_record in self.move_history:
+            if move_record.get("state_hash") == current_hash:
+                count += 1
+        # The current state is *about* to be the result of a move.
+        # The history contains hashes of states *after* previous moves.
+        # If make_move appends the hash of the state *after* the current move to history
+        # *before* calling is_sennichite, then count in history must be >= 4.
+        # If is_sennichite is called on a state, and history has 3 prior identical ones,
+        # then current one makes it 4.
+        # The original code's `make_move` seems to store the hash, then check.
+        # `self.move_history.append` happens, then `if self.is_sennichite()`.
+        # The `state_hash` stored is `self._board_state_hash()` *after* piece
+        # placement but *before* player switch.
+        # `is_sennichite` then calls `self._board_state_hash()` again (same result if
+        # player not switched yet for hashing).
+
+        # Let's re-evaluate: make_move computes state_hash of the *resulting board*.
+        # This state_hash is added to move_history.
+        # Then is_sennichite() is called. It gets current_state_hash (same as what was just added).
+        # It iterates history. The state_counts will include the one just added.
+        # So if state_counts[current_state_hash] is 4, it's the 4th time.
+        state_counts: Dict[Any, int] = {}
+        for (
+            move_record
+        ) in (
+            self.move_history
+        ):  # move_history contains the hash of the state just reached
+            state_h = move_record.get("state_hash")
+            if state_h:
+                state_counts[state_h] = state_counts.get(state_h, 0) + 1
+
+        current_board_final_hash = (
+            self._board_state_hash()
+        )  # Hash after player switch would differ
+        # Hash for sennichite includes whose turn it is.
+
+        # The hash added to history includes current_player *before* switch.
+        # The hash for sennichite comparison should be consistent.
+        # _board_state_hash includes self.current_player.
+        # In make_move:
+        # 1. move pieces
+        # 2. state_hash = _board_state_hash() (current_player is still P_old) -> stored in history
+        # 3. current_player = 1 - current_player (P_new)
+        # 4. if is_sennichite(): ...
+        # In is_sennichite:
+        # 1. current_state_hash = _board_state_hash() (current_player is P_new) -> THIS IS THE PROBLEM
+        # Sennichite requires same board AND same player to move.
+        # The hash stored in history is (board_P_old_moved, P_old_turn).
+        # The hash calculated by is_sennichite is (board_P_old_moved, P_new_turn). They won't match.
+
+        # Correct approach for Sennichite:
+        # The state for repetition is (board_position, hands, player_to_move).
+        # When make_move records history, it should record the state *before* current_player is switched.
+        # state_hash_for_history = (board_tuple, hands_tuple, self.current_player.value) # player *about* to move
+        # This is what _board_state_hash() does.
+        # So, self.move_history will contain state_hashes where current_player is the one whose turn it *was*.
+        # When self.is_sennichite() is called, self.current_player has ALREADY been switched.
+        # Therefore, we need to compare the current board state + current player,
+        # with historical (board state + historical player).
+
+        # Let's use the current player for the hash in is_sennichite:
+        # This hash represents the state the *new* current player is facing.
+        state_to_check_for_repetition = self._board_state_hash()
+
+        occurrences = 0
+        for record in self.move_history:
+            if record.get("state_hash") == state_to_check_for_repetition:
+                occurrences += 1
+
+        # If this current state (board + current_player to move) has happened 3 times *before* in history,
+        # this is the 4th time.
+        # The move_history contains state_hashes *after* a move was made, with player_to_move for *that* state.
+        # If current make_move appends hash for state *after* move & *before* player switch,
+        # then is_sennichite is called *after* player switch. The hashes won't match.
+
+        # Simpler: just count identical hashes in the history. If the hash of the state
+        # *just achieved by the previous player* is now appearing for the 4th time.
+        # The `state_hash` stored in `move_history` by `make_move` is for the board
+        # state *after* the move and includes `self.current_player` *before* it's switched.
+        # `is_sennichite` is called *after* `self.current_player` is switched.
+        # So, the `current_state_hash` calculated in `is_sennichite` uses the *new* current player.
+        # This means we are checking if the state (board, hands, new_current_player) has repeated.
+
+        # As per prompt II.8: "If state is added *before* check: Modify condition to >= 4"
+        # The state_hash being added to history by make_move is `(board, hands, old_player_whose_turn_it_was)`.
+        # is_sennichite then calculates `current_state_hash = (board, hands, new_player_whose_turn_it_is)`.
+        # These hashes can't be directly compared for sennichite unless we adjust one.
+
+        # Let's assume sennichite means: current player (e.g. Black) makes a move.
+        # The resulting position (board, hands, with White now to move) has occurred 3 times previously
+        # where it was also White to move on that same board+hands.
+
+        # The hash for comparison must be the state the current player is now facing.
+        # So, `is_sennichite` calculates this hash.
+        # Then iterates history. If any historical state_hash matches this, increment count.
+        # The prompt suggests the check (`>=3` vs `>=4`) is the main issue.
+        # Original logic: counts identical `state_hash` values in `self.move_history`.
+        # If `make_move` correctly stores the hash of the (board, hands, player_who_just_moved_perspective),
+        # and `is_sennichite` is called *after* current_player flips,
+        # then the hash for sennichite comparison should be: (current_board, current_hands, new_current_player).
+        # We count how many times *this exact state* has appeared in `move_history.state_hash`.
+
+        final_state_hash_of_move = (
+            self.move_history[-1].get("state_hash") if self.move_history else None
+        )
+        if not final_state_hash_of_move:  # Should not happen if called after a move
+            return False
+
+        count_of_this_state = 0
+        for record in self.move_history:
+            if record.get("state_hash") == final_state_hash_of_move:
+                count_of_this_state += 1
+
+        # If this is the 4th occurrence of (board, hands, player_who_just_made_move)
+        return count_of_this_state >= 4
+
+    def make_move(self, move_tuple: MoveTuple):
+        """
+        Make a move and update the game state.
+        Board move: (r_from, c_from, r_to, c_to, promote_flag: bool)
+        Drop move: (None, None, r_to, c_to, piece_type_to_drop: PieceType)
+        """
+        r_from_orig, c_from_orig, r_to_orig, c_to_orig, move_info_orig = move_tuple
+        player_making_move = self.current_player
+        move_details: Dict[str, Any] = {
+            "move": move_tuple,
+            "captured": None,
+            "is_drop": False,
+            "original_type_before_promotion": None,
+        }
+
+        # Type narrowing for move_tuple variants
+        if (
+            r_from_orig is None
+            and c_from_orig is None
+            and isinstance(move_info_orig, PieceType)
+        ):  # Drop move
+            # Unpack for clarity within this block, r_from/c_from are known None
+            r_to, c_to, piece_type_to_drop = r_to_orig, c_to_orig, move_info_orig
+
+            if self.hands[player_making_move.value].get(piece_type_to_drop, 0) > 0:
+                self.hands[player_making_move.value][piece_type_to_drop] -= 1
+                dropped_piece = Piece(piece_type_to_drop, player_making_move)
+                self.set_piece(r_to, c_to, dropped_piece)
+
+                move_details["is_drop"] = True
+                move_details["dropped_piece_type"] = piece_type_to_drop
+            else:
+                raise ValueError(
+                    f"Cannot drop {piece_type_to_drop.name}: not in hand for {player_making_move.name}"
+                )
+        # Ensure r_from_orig, c_from_orig are not None for board moves, and move_info_orig is bool
+        elif (
+            r_from_orig is not None
+            and c_from_orig is not None
+            and isinstance(move_info_orig, bool)
+        ):  # Board move
+            # Unpack for clarity, r_from/c_from are int, move_info is bool
+            r_from, c_from, r_to, c_to, promote_flag = (
+                r_from_orig,
+                c_from_orig,
+                r_to_orig,
+                c_to_orig,
+                move_info_orig,
+            )
+
+            moving_piece = self.get_piece(r_from, c_from)
+            if not moving_piece or moving_piece.color != player_making_move:
+                raise ValueError(
+                    f"Invalid move: no piece or wrong color at ({r_from},{c_from}) for {player_making_move.name}"
+                )
+
+            captured_target_on_square = self.get_piece(r_to, c_to)
+            if captured_target_on_square:
+                move_details["captured"] = Piece(
+                    captured_target_on_square.type, captured_target_on_square.color
+                )
+                self.add_to_hand(captured_target_on_square, player_making_move)
+
+            original_type = moving_piece.type  # Store before potential promotion
+
+            if promote_flag:
+                if moving_piece.type in BASE_TO_PROMOTED_TYPE:
+                    move_details["original_type_before_promotion"] = moving_piece.type
+                    moving_piece.type = BASE_TO_PROMOTED_TYPE[moving_piece.type]
+                elif (
+                    moving_piece.type not in PROMOTED_TYPES_SET
+                    and moving_piece.type not in [PieceType.GOLD, PieceType.KING]
+                ):
+                    # This condition means it's a base type that cannot be promoted (e.g. Gold/King if
+                    # they weren't filtered)
+                    # OR it's an attempt to promote an already promoted piece (which should be caught by
+                    # can_promote_piece)
+                    # If can_promote_piece was true, and it's not G/K/already promoted, but not in
+                    # BASE_TO_PROMOTED_TYPE, it's an issue.
+                    # For simplicity, if promote_flag is true, but it's not a base type that can promote, it's an error.
+                    # This is better handled by get_legal_moves ensuring only valid promotions are flagged.
+                    # Here we assume promote_flag is valid if set.
+                    pass  # If it's Gold/King/already promoted, promote_flag should have been False from get_legal_moves
+
+            self.set_piece(r_to, c_to, moving_piece)
+            self.set_piece(r_from, c_from, None)
+            move_details["was_promoted_in_move"] = original_type != moving_piece.type
+        else:
+            # This case should ideally not be reached if get_legal_moves produces valid MoveTuple items
+            raise TypeError(
+                f"Invalid move_tuple structure received by make_move: {move_tuple}"
+            )
+
+        # Record state hash *after* piece placement but *before* player switch.
+        # This hash represents the board state achieved by player_making_move,
+        # where player_making_move is still self.current_player.
+        move_details["state_hash"] = self._board_state_hash()
+        self.move_history.append(move_details)
+
+        self.move_count += 1
+        self.current_player = (
+            Color.WHITE if player_making_move == Color.BLACK else Color.BLACK
+        )
+
+        if self.is_sennichite():
+            self.game_over = True
+            self.winner = None  # Draw
+
+        # Check for game over by checkmate or stalemate (no legal moves)
+        # This should typically be done by the game loop after make_move returns
+        # by calling get_legal_moves() for the new current_player.
+
+    def undo_move(self):
+        if not self.move_history:
+            raise RuntimeError("No move to undo")
+
+        last_move_details = self.move_history.pop()
+        move_tuple = last_move_details["move"]
+        r_from, c_from, r_to, c_to, _ = (
+            move_tuple  # move_info not directly used for undo positions
+        )
+
+        # Switch current player back first
+        self.current_player = (
+            Color.WHITE if self.current_player == Color.BLACK else Color.BLACK
+        )
+        player_who_made_move = (
+            self.current_player
+        )  # Now refers to the player whose move is being undone
+
+        if last_move_details["is_drop"]:
+            dropped_piece_type = last_move_details["dropped_piece_type"]
+            # Piece that was dropped is on (r_to, c_to)
+            self.set_piece(r_to, c_to, None)
+            # II.5: Return to correct hand. player_who_made_move is correct here after current_player switch.
+            self.hands[player_who_made_move.value][dropped_piece_type] += 1
+        else:  # Board move
+            moved_piece = self.get_piece(r_to, c_to)  # This is the piece that moved
+            if not moved_piece:
+                raise RuntimeError(
+                    f"Undo error: No piece found at destination {r_to},{c_to} for non-drop."
+                )
+
+            # Restore piece to its original square
+            self.set_piece(r_from, c_from, moved_piece)
+            # Restore captured piece, if any
+            captured_piece_data = last_move_details["captured"]
+            if captured_piece_data:  # This was a copy, create a new Piece
+                restored_captured_piece = Piece(
+                    captured_piece_data.type, captured_piece_data.color
+                )
+                self.set_piece(r_to, c_to, restored_captured_piece)
+                # Remove from hand of player_who_made_move
+                hand_type_of_captured = PIECE_TYPE_TO_HAND_TYPE.get(
+                    captured_piece_data.type
+                )
+                if hand_type_of_captured:  # Should always be true for capturable pieces
+                    self.hands[player_who_made_move.value][hand_type_of_captured] -= 1
+                else:  # Should not happen if captured piece was valid
+                    pass  # Error or log
+            else:  # No capture, destination was empty
+                self.set_piece(r_to, c_to, None)
+
+            # Handle demotion (II.6)
+            if last_move_details.get("was_promoted_in_move", False):
+                original_base_type = last_move_details.get(
+                    "original_type_before_promotion"
+                )
+                if original_base_type and moved_piece.type in PROMOTED_TO_BASE_TYPE:
+                    moved_piece.type = original_base_type
+                else:
+                    # This case implies an issue if was_promoted_in_move is true but no original_type
+                    # or not a promoted type
+                    pass  # Error or log
+
+        self.move_count -= 1
+        self.game_over = False
+        self.winner = None
+
+    def is_in_check(self, player_color: Color) -> bool:
+        king_pos = None
+        for r_k in range(9):
+            for c_k in range(9):
+                p = self.get_piece(r_k, c_k)
+                if p and p.type == PieceType.KING and p.color == player_color:
+                    king_pos = (r_k, c_k)
+                    break
+            if king_pos:
+                break
+        if not king_pos:
+            return True  # No king found is a critical error, treat as check.
+
+        opponent_color = Color.WHITE if player_color == Color.BLACK else Color.BLACK
+        return self._is_square_attacked(king_pos[0], king_pos[1], opponent_color)
+
+    def sfen_encode_move(self, move_tuple) -> str:  # TODO: Implement fully
+        # (r_from, c_from, r_to, c_to, promote_flag/piece_type)
+        # Board: 7g7f, 7g7f+
+        # Drop: P*5e
+        raise NotImplementedError("sfen_encode_move not yet implemented")
+
+    def add_to_hand(self, captured_piece: Piece, capturing_player_color: Color) -> None:
+        """Adds a captured piece (as unpromoted) to the capturing player's hand."""
+        if captured_piece.type == PieceType.KING:  # II.7
+            return  # Kings are not captured/added to hand
+
+        hand_piece_type = PIECE_TYPE_TO_HAND_TYPE.get(captured_piece.type)
+        if hand_piece_type is None:
+            # This should not happen if captured_piece.type is a valid game piece type (excluding King)
+            raise ValueError(
+                f"Invalid piece type {captured_piece.type} to add to hand."
+            )
+
+        self.hands[capturing_player_color.value][hand_piece_type] += 1
+
+    def remove_from_hand(self, piece_type: PieceType, color: Color) -> bool:
+        """Removes a piece from hand. piece_type must be the base unpromoted type."""
+        if piece_type not in PieceType.get_unpromoted_types():
+            # Or if piece_type == PieceType.KING, though KING isn't in get_unpromoted_types
+            return False
+
+        if self.hands[color.value].get(piece_type, 0) > 0:
+            self.hands[color.value][piece_type] -= 1
+            return True
+        return False
+
+    def get_pieces_in_hand(self, color: Color) -> Dict[PieceType, int]:
+        return self.hands[color.value].copy()
+
+    def is_in_promotion_zone(self, row: int, color: Color) -> bool:
+        if color == Color.BLACK:  # Moves towards row 0
+            return 0 <= row <= 2
+        else:  # Color.WHITE, moves towards row 8
+            return 6 <= row <= 8
+
+    def can_drop_piece(
+        self, piece_type: PieceType, row: int, col: int, color: Color
+    ) -> bool:
+        """Checks if a piece of given base type can be legally dropped."""
+        if self.get_piece(row, col) is not None:
+            return False
+        if self.hands[color.value].get(piece_type, 0) <= 0:
+            return False
+
+        # Pawn specific checks
+        if piece_type == PieceType.PAWN:
+            if self.is_nifu(color, col):
+                return False
+            # Cannot drop pawn on the last rank where it has no moves
+            if (color == Color.BLACK and row == 0) or (
+                color == Color.WHITE and row == 8
+            ):
+                return False
+            if self.is_uchi_fu_zume(row, col, color):
+                return False
+
+        # Lance specific checks
+        if piece_type == PieceType.LANCE:
+            if (color == Color.BLACK and row == 0) or (
+                color == Color.WHITE and row == 8
+            ):
+                return False
+
+        # Knight specific checks
+        if piece_type == PieceType.KNIGHT:
+            if (color == Color.BLACK and row <= 1) or (
+                color == Color.WHITE and row >= 7
+            ):
+                return False
+        return True
+
+    def can_promote_piece(self, piece: Piece, r_from: int, r_to: int) -> bool:
+        """Checks if a piece *can* be promoted given its type and move."""
+        if piece.type in [PieceType.GOLD, PieceType.KING] or piece.is_promoted:
+            return False
+
+        # Check if the piece type itself is promotable (e.g. not already a +P)
+        if piece.type not in BASE_TO_PROMOTED_TYPE:  # Not a base type that can promote
+            return False
+
+        # Must start in, end in, or cross promotion zone
+        if self.is_in_promotion_zone(r_from, piece.color) or self.is_in_promotion_zone(
+            r_to, piece.color
+        ):
+            return True
+        return False
+
+    def must_promote_piece(self, piece: Piece, r_to: int) -> bool:
+        """Checks if a piece *must* be promoted on reaching r_to (II.13)."""
+        if piece.is_promoted:  # Already promoted, no forced promotion
+            return False
+
+        # Pawns and Lances on the very last rank
+        if piece.type == PieceType.PAWN or piece.type == PieceType.LANCE:
+            if (piece.color == Color.BLACK and r_to == 0) or (
+                piece.color == Color.WHITE and r_to == 8
+            ):
+                return True
+
+        # Knights on the last two ranks
+        if piece.type == PieceType.KNIGHT:
+            if (piece.color == Color.BLACK and r_to <= 1) or (
+                piece.color == Color.WHITE and r_to >= 7
+            ):
+                return True
+        return False
