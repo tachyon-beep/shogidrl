@@ -33,3 +33,16 @@ disable = "redefined-outer-name"
 
 [tool.mypy]
 check_untyped_defs = true
+
+[tool.flake8]
+exclude = [
+    ".git",
+    "__pycache__",
+    "env",
+    "venv",
+    ".tox",
+    ".eggs",
+    "*.egg-info"
+]
+max-line-length = 120
+extend-ignore = "E203"  # Optional: if you use black, this avoids conflicts
