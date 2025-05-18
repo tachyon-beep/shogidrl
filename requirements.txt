@@ -1,6 +1,6 @@
 annotated-types==0.7.0
 astroid==3.3.10
-black==25.1.0
+black==24.3.0
 certifi==2025.4.26
 charset-normalizer==3.4.2
 click==8.2.0
