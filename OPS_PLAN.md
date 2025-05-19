@@ -100,4 +100,82 @@ This document outlines the steps for operating, monitoring, and optimizing the D
 
 *   **PPO Algorithm Implementation:** Completed (Phases 1-3 of original plan). `ExperienceBuffer` enhanced, `PPOAgent` updated with `learn` method, `train.py` refactored for PPO loop.
 *   **Configuration Management:** Consolidated into `/home/john/keisei/config.py`. New config values (`VALUE_LOSS_COEFF`, `EVAL_FREQ_TIMESTEPS`, `EVAL_NUM_GAMES`) added. Hyperparameters updated for an initial PPO run.
-*   **Weights & Biases Integration:** Completed. API key in `.env`, `wandb` and `python-dotenv` in `requirements.txt`, W
+*   **Weights & Biases Integration:** Completed. API key in `.env`, `wandb` and `python-dotenv` in `requirements.txt`, W&B logging integrated into `train.py`, and run configuration in `config.py`.
+*   **Experience Replay Buffer:** Enhanced `ExperienceBuffer` with GAE and return computation. Integrated into the PPO training loop.
+*   **Actor-Critic Network:** Defined `ActorCritic` model in `neural_network.py`. Integrated with the PPO agent and experience buffer.
+*   **Policy Output Mapping:** Implemented `PolicyOutputMapper` for action space mapping between the neural network and the Shogi engine.
+*   **Training Orchestration:** Refactored `train.py` to coordinate the training loop, including self-play, learning, and checkpointing. Integrated W&B logging.
+*   **Documentation:** Initial updates made to this OPS plan document. Code comments and docstrings added in key areas.
+
+## Immediate Next Steps (Post-Green Light)
+
+1. **Testing & Validation:**
+   - Thoroughly test the complete training pipeline.
+   - Validate the correctness of the Shogi game logic, PPO implementation, and neural network training.
+   - Ensure proper logging and checkpointing functionality.
+
+2. **Monitoring & Logging Setup:**
+   - Finalize the integration with Weights & Biases for experiment tracking.
+   - Set up logging for key metrics, including episode rewards, PPO losses, and model parameters.
+
+3. **Hyperparameter Tuning:**
+   - Experiment with different hyperparameter settings in `config.py` for optimal PPO performance.
+   - Consider learning rate schedules, batch sizes, and network architecture variations.
+
+4. **Documentation & Cleanup:**
+   - Update and complete this OPS plan document.
+   - Clean up any debug code, unnecessary comments, and temporary files.
+   - Ensure all code is properly commented and documented.
+
+5. **Release Preparation:**
+   - Review the V1.0 release checklist.
+   - Complete all items in the checklist, including code quality, documentation, testing, and packaging.
+   - Prepare for the release announcement and distribution.
+
+## V1.0 Release Preparation Checklist (as of 2025-05-19)
+
+To ensure a robust and maintainable V1.0 release, the following best practices and checks should be completed:
+
+1. **Code Quality & Linting**
+   - Run linters (e.g., `flake8`, `pylint`, `black`) and resolve all warnings/errors.
+   - Remove unused imports, variables, and dead code.
+   - Ensure consistent code formatting across the codebase.
+
+2. **Documentation**
+   - Update the `README.md` with clear installation, usage, and contribution instructions.
+   - Add or update docstrings for all public functions, classes, and modules.
+   - Ensure API/CLI usage is documented.
+   - Provide a `CHANGELOG.md` summarizing major changes.
+
+3. **Testing**
+   - Ensure high test coverage (unit, integration, and smoke tests).
+   - All tests should pass reliably (run CI if available).
+   - Add tests for any critical or newly added features.
+
+4. **Dependency Management**
+   - Pin dependencies in `requirements.txt`/`pyproject.toml`.
+   - Remove unused dependencies.
+   - Check for known vulnerabilities (e.g., `pip-audit`).
+
+5. **Versioning & Metadata**
+   - Bump version numbers in code and packaging files.
+   - Add license and copyright.
+   - Ensure author and project metadata are correct.
+
+6. **Packaging & Distribution**
+   - Test packaging (e.g., `python setup.py sdist bdist_wheel`).
+   - Try installing the package in a clean environment.
+   - If publishing to PyPI, verify the long description renders correctly.
+
+7. **Clean Up**
+   - Remove debug prints, TODOs, and commented-out code.
+   - Clean up logs, temp files, and artifacts from the repo.
+
+8. **Release Process**
+   - Tag the release in version control (e.g., `git tag v1.0.0`).
+   - Prepare release notes summarizing features and breaking changes.
+
+9. **Optional: Continuous Integration/Deployment**
+   - Set up or verify CI/CD pipelines for tests and releases.
+
+This checklist should be reviewed and completed before tagging and publishing the V1.0 release. Peer review and sign-off are recommended for each item.

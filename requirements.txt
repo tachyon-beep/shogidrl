@@ -12,3 +12,4 @@ sympy==1.14.0
 torch==2.7.0
 triton==3.3.0
 wandb==0.19.11
+tqdm
