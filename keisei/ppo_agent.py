@@ -281,32 +281,27 @@ class PPOAgent:
         }
         return metrics
 
-    def save_model(self, file_path: str) -> None:
-        """Saves the model and optimizer state dictionaries to a file."""
+    def save_model(self, file_path: str, global_timestep: int = 0, total_episodes_completed: int = 0) -> None:
+        """Saves the model, optimizer, and training state to a file."""
         torch.save({
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
+            'global_timestep': global_timestep,
+            'total_episodes_completed': total_episodes_completed,
         }, file_path)
-        print(f"PPOAgent model and optimizer saved to {file_path}")
+        print(f"PPOAgent model, optimizer, and state saved to {file_path}")
 
-    def load_model(self, file_path: str) -> None:
-        """Loads the model and optimizer state dictionaries from a file."""
+    def load_model(self, file_path: str) -> dict:
+        """Loads the model, optimizer, and training state from a file. Returns the checkpoint dict."""
         if not os.path.exists(file_path):
             print(f"Warning: Model checkpoint not found at {file_path}. Agent not loaded.")
-            return
-
+            return {}
         checkpoint = torch.load(file_path, map_location=self.device)
         self.model.load_state_dict(checkpoint['model_state_dict'])
-
         if 'optimizer_state_dict' in checkpoint:
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            # If optimizer states need to be moved to device explicitly (usually not if model is on device)
-            # for state in self.optimizer.state.values():
-            #     for k, v in state.items():
-            #         if isinstance(v, torch.Tensor):
-            #             state[k] = v.to(self.device)
         else:
             print(f"Warning: Optimizer state not found in checkpoint {file_path}. Optimizer not loaded/reset.")
-
-        self.model.to(self.device) # Ensure model is on the correct device
-        print(f"PPOAgent model and optimizer loaded from {file_path}")
+        self.model.to(self.device)
+        print(f"PPOAgent model, optimizer, and state loaded from {file_path}")
+        return checkpoint
