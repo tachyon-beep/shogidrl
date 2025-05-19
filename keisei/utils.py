@@ -1,12 +1,14 @@
 """
-PolicyOutputMapper: Maps Shogi moves to/from policy network output indices.
+utils.py: Contains PolicyOutputMapper and TrainingLogger.
 """
-
+import os
 import datetime
 from typing import Dict, List
 
 import torch
 
+# Ensure these imports are correct based on your project structure
+# The user's provided file had these, which look good:
 from keisei.shogi.shogi_core_definitions import (
     BoardMove,
     DropMove,
@@ -45,15 +47,9 @@ class PolicyOutputMapper:
                         current_idx += 1
 
         # Define droppable piece types (standard 7, excluding King)
-        # Assuming PieceType enum has these members
         droppable_piece_types: List[PieceType] = [
-            PieceType.PAWN,
-            PieceType.LANCE,
-            PieceType.KNIGHT,
-            PieceType.SILVER,
-            PieceType.GOLD,
-            PieceType.BISHOP,
-            PieceType.ROOK,
+            PieceType.PAWN, PieceType.LANCE, PieceType.KNIGHT, PieceType.SILVER,
+            PieceType.GOLD, PieceType.BISHOP, PieceType.ROOK,
         ]
 
         # Generate Drop Moves: (None, None, to_r, to_c, piece_type_to_drop: PieceType)
@@ -93,13 +89,6 @@ class PolicyOutputMapper:
     ) -> torch.Tensor:
         """
         Create a boolean mask tensor for legal actions.
-
-        Args:
-            legal_shogi_moves: A list of legal MoveTuple objects from ShogiGame.
-            device: The torch device to create the tensor on.
-
-        Returns:
-            A boolean tensor of shape (total_actions,) where True indicates a legal action.
         """
         mask = torch.zeros(self.total_actions, dtype=torch.bool, device=device)
         for move in legal_shogi_moves:
@@ -110,12 +99,66 @@ class PolicyOutputMapper:
                 # This can happen if ShogiGame generates a move tuple format
                 # that doesn't exactly match what PolicyOutputMapper expects
                 # or if a move is somehow illegal yet generated.
-                # For robustness, we can log this or handle as per requirements.
-                # For now, we'll assume legal_shogi_moves are always mappable.
-                # If not, it indicates a discrepancy between ShogiGame's move generation
-                # and PolicyOutputMapper's understanding of moves.
-                pass  # Or print a warning: print(f"Warning: Legal move {move} not found in mapper.")
+                # Consider logging this for debugging:
+                # print(f"Warning: Legal move {move} from ShogiGame not found in PolicyOutputMapper.")
+                pass
         return mask
+
+    # --- NEW METHODS FOR USI CONVERSION ---
+    def _usi_sq(self, r: int, c: int) -> str:
+        """Converts 0-indexed (row, col) to USI square string (e.g., (0,0) -> "9a")."""
+        if not (0 <= r <= 8 and 0 <= c <= 8):
+            raise ValueError(f"Invalid Shogi coordinate for USI: row {r}, col {c}")
+        file = str(9 - c)  # Column 0 is file 9, column 8 is file 1
+        rank = chr(ord('a') + r)  # Row 0 is rank 'a', row 8 is rank 'i'
+        return file + rank
+
+    def _get_usi_char_for_drop(self, piece_type: PieceType) -> str:
+        """Helper to get the uppercase USI character for a droppable piece type."""
+        # Standard USI drop piece characters (uppercase)
+        if piece_type == PieceType.PAWN:
+            return "P"
+        if piece_type == PieceType.LANCE:
+            return "L"
+        if piece_type == PieceType.KNIGHT:
+            return "N"
+        if piece_type == PieceType.SILVER:
+            return "S"
+        if piece_type == PieceType.GOLD:
+            return "G"
+        if piece_type == PieceType.BISHOP:
+            return "B"
+        if piece_type == PieceType.ROOK:
+            return "R"
+
+        raise ValueError(f"PieceType {piece_type.name if hasattr(piece_type, 'name') else piece_type} "
+                         f"is not a standard droppable piece for USI notation or is invalid.")
+
+    def shogi_move_to_usi(self, move_tuple: MoveTuple) -> str:
+        """
+        Converts an internal MoveTuple representation to a USI string.
+        Board move: (from_r, from_c, to_r, to_c, promote_bool) -> e.g., "7g7f" or "2b3a+"
+        Drop move: (None, None, to_r, to_c, piece_type) -> e.g., "P*5e"
+        """
+        if move_tuple[0] is not None and move_tuple[1] is not None:  # Board move
+            from_r, from_c, to_r, to_c = int(move_tuple[0]), int(move_tuple[1]), int(move_tuple[2]), int(move_tuple[3])
+            promote = bool(move_tuple[4])
+
+            from_sq_str = self._usi_sq(from_r, from_c)
+            to_sq_str = self._usi_sq(to_r, to_c)
+            promo_char = "+" if promote else ""
+            return f"{from_sq_str}{to_sq_str}{promo_char}"
+
+        elif move_tuple[0] is None and move_tuple[1] is None and isinstance(move_tuple[4], PieceType):  # Drop move
+            to_r, to_c = int(move_tuple[2]), int(move_tuple[3])
+            piece_to_drop: PieceType = move_tuple[4]
+
+            piece_char = self._get_usi_char_for_drop(piece_to_drop)
+            to_sq_str = self._usi_sq(to_r, to_c)
+            return f"{piece_char}*{to_sq_str}"
+        else:
+            raise ValueError(f"Invalid MoveTuple format for USI conversion: {move_tuple}")
+    # --- END OF NEW METHODS ---
 
 
 class TrainingLogger:
@@ -125,6 +168,10 @@ class TrainingLogger:
         """Initializes the TrainingLogger."""
         self.log_path = log_path
         self.also_stdout = also_stdout
+        # Ensure directory for log_path exists if it's not just a filename
+        log_dir = os.path.dirname(log_path)
+        if log_dir and not os.path.exists(log_dir):
+            os.makedirs(log_dir)
         self.log_file = open(log_path, "a", encoding="utf-8")
 
     def log(self, msg: str) -> None:
@@ -132,10 +179,11 @@ class TrainingLogger:
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         line = f"[{timestamp}] {msg}\n"
         self.log_file.write(line)
-        self.log_file.flush()
+        self.log_file.flush() # Ensure it's written immediately
         if self.also_stdout:
-            print(line, end="")
+            print(line.strip()) # Use print for stdout, strip newline as print adds one
 
     def close(self) -> None:
         """Closes the log file."""
-        self.log_file.close()
+        if self.log_file and not self.log_file.closed:
+            self.log_file.close()

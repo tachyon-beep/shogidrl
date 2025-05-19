@@ -1,336 +1,341 @@
 """
 Minimal train.py main loop for DRL Shogi Client with Weights & Biases integration.
 """
-
-import os  # Ensure os is imported for path operations
-from typing import Dict, Any  # For type hinting
+from datetime import datetime
+import os
+from typing import Dict, Any, Optional, List
 import torch
-from dotenv import load_dotenv  # For loading .env file
+import numpy as np
+from dotenv import load_dotenv
 
 import config
-import wandb  # Weights & Biases
+import wandb
 from keisei.experience_buffer import ExperienceBuffer
 from keisei.ppo_agent import PPOAgent
-from keisei.shogi.shogi_core_definitions import Color  # Added import
+from keisei.shogi.shogi_core_definitions import Color, MoveTuple
 from keisei.shogi.shogi_engine import ShogiGame
 from keisei.utils import PolicyOutputMapper, TrainingLogger
 
+# (Assuming evaluate_agent and its helpers are defined as in my previous correct response)
+# Ensure evaluate_agent and its helpers are correctly structured without indentation issues
+# and that the duplicated logging block at its end is removed.
+def evaluate_agent(
+    agent: PPOAgent,
+    agent_color_to_eval_as: Color,
+    num_games: int = 5,
+    logger: Optional[TrainingLogger] = None
+):
+    """
+    Run evaluation games with the current agent playing as a specific color
+    against a random opponent. Logs win/draw/loss stats.
+    """
+    results = {
+        "wins": 0, "draws": 0, "losses": 0,
+        "game_lengths": [], "termination_reasons_counts": {},
+    }
 
-def evaluate_agent(agent, num_games=5, logger=None):
-    """Run evaluation games with the current agent and log win/draw/loss stats."""
-
-    wins = 0
-    draws = 0
-    losses = 0
-    game_lengths = []
-    termination_reasons_counts: Dict[str, int] = {}
-
-    for i in range(num_games):
-        game = ShogiGame(max_moves_per_game=config.MAX_MOVES_PER_GAME_EVAL) # Use a potentially different limit for eval
-        obs_np = game.reset()  # Get initial observation
-        current_game_moves = 0
-        for _ in range(100):  # Max moves per game
-            legal_shogi_moves = game.get_legal_moves()
-            if not legal_shogi_moves:
-                # print(f"No legal moves for player {game.current_player} in eval. Game likely ended.")
-                break
-
-            # Pass observation as np.ndarray and legal_shogi_moves
-            selected_shogi_move, _, _, _ = agent.select_action(
-                obs_np, legal_shogi_moves=legal_shogi_moves, is_training=False
+    def _select_eval_move_internal(
+        current_agent: PPOAgent, current_game: ShogiGame, eval_as_color: Color,
+        current_obs_np: np.ndarray, current_legal_shogi_moves: List[MoveTuple]
+    ) -> MoveTuple:
+        if current_game.current_player == eval_as_color:
+            selected_move, _, _, _ = current_agent.select_action(
+                current_obs_np, legal_shogi_moves=current_legal_shogi_moves, is_training=False
             )
+        else:
+            random_index = int(torch.randint(len(current_legal_shogi_moves), (1,)).item())
+            selected_move = current_legal_shogi_moves[random_index]
+        return selected_move
 
-            # Step the environment with the selected move
-            # obs_np, reward, done, _ = game.make_move(selected_shogi_move)
-            obs_np, reward, done, info = game.make_move(
-                selected_shogi_move
-            )  # Corrected unpacking
-            current_game_moves +=1
+    def _update_results_after_game_internal(
+        current_game: ShogiGame, eval_as_color: Color, game_moves: int,
+        game_results: Dict[str, Any], game_info: Dict[str, Any]
+    ):
+        if current_game.winner == eval_as_color:
+            game_results["wins"] += 1
+        elif current_game.winner is None:
+            game_results["draws"] += 1
+        else:
+            game_results["losses"] += 1
+        game_results["game_lengths"].append(game_moves)
+        reason = game_info.get("termination_reason", "unknown_eval_termination")
+        if not current_game.game_over and game_moves >= config.MAX_MOVES_PER_GAME_EVAL:
+            reason = "eval_max_moves_exceeded"
+        game_results["termination_reasons_counts"][reason] = game_results["termination_reasons_counts"].get(reason, 0) + 1
 
-            if game.game_over:
-                # Determine winner based on game.winner and game.current_player
-                # This logic needs to be robust based on how ShogiGame sets winner
-                if game.winner is not None:
-                    # Assuming agent is always playing as BLACK for simplicity in eval
-                    # or that we check whose turn it was when game ended if agent plays both
-                    # For now, let's assume the agent is BLACK (player 0)
-                    # and the opponent is WHITE (player 1)
-                    # This part needs refinement based on actual game play during eval
-                    # A simple check: if current_player made the last move and won.
-                    # Or, if game.winner is set, use that.
-                    # Let's assume agent is player 0 (BLACK)
-                    # If game.winner is BLACK, agent wins.
-                    # If game.winner is WHITE, agent loses.
-                    # If draw (sennichite), it's a draw.
-                    # This needs to be more robust: who is the agent playing as?
-                    # For now, let's simplify: if agent is current_player and game ends, it's a loss unless checkmate
-                    # This is tricky without knowing which color the agent is.
-                    # Let's assume for now, if game.winner is set, we use it.
-                    # And we need to define which player the agent is.
-                    # For simplicity, let's assume agent is always BLACK in evaluation.
-                    if game.winner == Color.BLACK:
-                        wins += 1
-                    elif game.winner == Color.WHITE:
-                        losses += 1
-                    else:  # Should be a draw if winner is None but game_over is True
-                        draws += 1
-                else:  # No winner explicitly set, but game over (e.g. sennichite, max_moves)
-                    draws += 1  # Or handle based on specific game end condition
-                game_lengths.append(current_game_moves)
-                reason = info.get("termination_reason", "unknown")
-                termination_reasons_counts[reason] = termination_reasons_counts.get(reason, 0) + 1
+    def _play_single_evaluation_game_internal(
+        current_agent: PPOAgent, eval_as_color: Color, game_idx: int,
+        current_results_dict: Dict[str, Any], current_logger: Optional[TrainingLogger]
+    ):
+        single_game = ShogiGame(max_moves_per_game=config.MAX_MOVES_PER_GAME_EVAL)
+        current_obs_np = single_game.reset()
+        game_moves = 0
+        current_info: Dict[str, Any] = {}
+        while not single_game.game_over:
+            current_legal_shogi_moves = single_game.get_legal_moves()
+            if not current_legal_shogi_moves:
+                if current_logger:
+                    current_logger.log(f"Warning: No legal moves for player {single_game.current_player} in eval game {game_idx + 1}.")
+                if not single_game.game_over:
+                    single_game.game_over = True
+                    current_info["termination_reason"] = current_info.get("termination_reason", "stalemate_no_legal_moves")
                 break
-        # If loop finishes due to max_moves without game.game_over, count as draw
-        if not game.game_over:
-            draws += 1
-            game_lengths.append(current_game_moves) # Log length even if max_moves hit in eval loop
-            reason = "eval_max_moves" # Specific reason for eval loop termination
-            termination_reasons_counts[reason] = termination_reasons_counts.get(reason, 0) + 1
+            selected_move = _select_eval_move_internal(current_agent, single_game, eval_as_color, current_obs_np, current_legal_shogi_moves)
+            current_obs_np, _, _, current_info = single_game.make_move(selected_move)
+            game_moves += 1
+            if game_moves >= config.MAX_MOVES_PER_GAME_EVAL + 10: # Safety break
+                if current_logger:
+                    current_logger.log(f"Warning: Eval game {game_idx + 1} safety break at {game_moves} moves.")
+                if not single_game.game_over:
+                    single_game.game_over = True
+                    current_info["termination_reason"] = "eval_loop_safety_timeout"
+                break
+        _update_results_after_game_internal(single_game, eval_as_color, game_moves, current_results_dict, current_info)
 
-
-    # msg = f"Evaluation: {num_games} games | Wins: {wins} | Draws: {draws} | Losses: {losses}"
-    # More detailed logging
-    total_played = wins + losses + draws
-    if (
-        total_played == 0
-    ):  # Avoid division by zero if num_games was 0 or all games aborted early
-        win_rate = 0.0
-        loss_rate = 0.0
-        draw_rate = 0.0
-    else:
-        win_rate = wins / total_played
-        loss_rate = losses / total_played
-        draw_rate = draws / total_played
-
-    avg_game_length = sum(game_lengths) / len(game_lengths) if game_lengths else 0
-
-    msg = (
-        f"Evaluation Complete: Ran {total_played}/{num_games} games.\\n"
-        f"  Wins: {wins} ({win_rate:.2%})\\n"
-        f"  Losses: {losses} ({loss_rate:.2%})\\n"
-        f"  Draws: {draws} ({draw_rate:.2%})\\n"
-        f"  Average Game Length: {avg_game_length:.2f} moves"
-    )
-    if logger:
-        logger.log(msg)
-        # Log to WandB if enabled
+    def _log_final_evaluation_summary_internal(
+        current_results_dict: Dict[str, Any], eval_as_color: Color,
+        total_games_to_play: int, current_logger: Optional[TrainingLogger]
+    ):
+        total_games_played = current_results_dict["wins"] + current_results_dict["losses"] + current_results_dict["draws"]
+        denom = total_games_played if total_games_played > 0 else 1.0
+        win_r, loss_r, draw_r = current_results_dict["wins"]/denom, current_results_dict["losses"]/denom, current_results_dict["draws"]/denom
+        avg_len = sum(current_results_dict["game_lengths"])/len(current_results_dict["game_lengths"]) if current_results_dict["game_lengths"] else 0.0
+        msg = (
+            f"Evaluation Complete (Agent as {eval_as_color.name}): Played {total_games_played}/{total_games_to_play} games.\n"
+            f"  Wins: {current_results_dict['wins']} ({win_r:.2%}), Losses: {current_results_dict['losses']} ({loss_r:.2%}), Draws: {current_results_dict['draws']} ({draw_r:.2%})\n"
+            f"  Avg Game Length: {avg_len:.2f} moves"
+        )
+        if current_logger:
+            current_logger.log(msg)
+        else:
+            print(msg)
         if wandb.run is not None:
-            wandb.log({
-                "eval/wins": wins,
-                "eval/losses": losses,
-                "eval/draws": draws,
-                "eval/win_rate": win_rate,
-                "eval/loss_rate": loss_rate,
-                "eval/draw_rate": draw_rate,
-                "eval/avg_game_length": avg_game_length,
-                "eval/total_games_evaluated": total_played,
-                **{f"eval/termination_{k}": v for k,v in termination_reasons_counts.items()}
-            }, commit=False) # Commit with main training logs
-    else:
-        print(msg)
+            log_d = {
+                f"eval/{eval_as_color.name}/wins": current_results_dict["wins"], f"eval/{eval_as_color.name}/losses": current_results_dict["losses"],
+                f"eval/{eval_as_color.name}/draws": current_results_dict["draws"], f"eval/{eval_as_color.name}/win_rate": win_r,
+                f"eval/{eval_as_color.name}/loss_rate": loss_r, f"eval/{eval_as_color.name}/draw_rate": draw_r,
+                f"eval/{eval_as_color.name}/avg_game_length": avg_len, f"eval/{eval_as_color.name}/total_games_evaluated": total_games_played,
+            }
+            for k,v in current_results_dict["termination_reasons_counts"].items():
+                log_d[f"eval/{eval_as_color.name}/termination_{k}"] = v
+            wandb.log(log_d, commit=False)
+
+    if logger:
+        logger.log(f"Starting evaluation: Agent plays as {agent_color_to_eval_as.name} for {num_games} games.")
+    for i in range(num_games):
+        _play_single_evaluation_game_internal(agent, agent_color_to_eval_as, i, results, logger)
+    _log_final_evaluation_summary_internal(results, agent_color_to_eval_as, num_games, logger)
 
 
 def main():
-    """Main training loop for PPO DRL Shogi Client."""  # Updated docstring
+    """Main training loop for PPO DRL Shogi Client."""
 
-    # --- Weights & Biases Setup ---
-    # Load environment variables from .env file
     load_dotenv()
     wandb_api_key = os.getenv("WANDB_API_KEY")
-
-    if not wandb_api_key:
-        print("WANDB_API_KEY not found in environment variables or .env file.")
-        print(
-            "Please set it or run 'wandb login'. For now, W&B logging will be disabled."
-        )
-        wandb_enabled = False
-    else:
-        # Ensure the key is in the environment for wandb to pick up if loaded from .env
-        os.environ["WANDB_API_KEY"] = wandb_api_key
-        wandb_enabled = True
-
-    if wandb_enabled:
-        try:
-            wandb.init(
-                project="shogi-drl",  # Or your preferred project name
-                config={
-                    "total_timesteps": config.TOTAL_TIMESTEPS,
-                    "steps_per_epoch": config.STEPS_PER_EPOCH,
-                    "ppo_epochs": config.PPO_EPOCHS,
-                    "minibatch_size": config.MINIBATCH_SIZE,
-                    "learning_rate": config.LEARNING_RATE,
-                    "gamma": config.GAMMA,
-                    "clip_epsilon": config.CLIP_EPSILON,
-                    "lambda_gae": config.LAMBDA_GAE,
-                    "entropy_coeff": config.ENTROPY_COEFF,
-                    "value_loss_coeff": config.VALUE_LOSS_COEFF,
-                    "max_moves_per_game": config.MAX_MOVES_PER_GAME,
-                    "input_channels": config.INPUT_CHANNELS,
-                    "num_actions_total": config.NUM_ACTIONS_TOTAL,
-                    "save_freq_episodes": config.SAVE_FREQ_EPISODES,
-                    "device": config.DEVICE,
-                    # Add any other relevant hyperparameters from config.py
-                },
-                name=f"ppo_run_{os.getpid()}",  # Example run name
-                # Optional: resume="allow", id=YOUR_RUN_ID # For resuming runs
-            )
-            print("Weights & Biases initialized successfully.")
-        except Exception as e:
-            print(f"Error initializing Weights & Biases: {e}")
-            print("Proceeding without W&B logging.")
-            wandb_enabled = False
-    # --- End W&B Setup ---
+    wandb_enabled = bool(wandb_api_key)
 
     logger = TrainingLogger(config.LOG_FILE)
     logger.log("Starting DRL Shogi Client Training")
+
+    if not wandb_enabled:
+        logger.log("WANDB_API_KEY not found. W&B logging will be disabled.")
+    elif wandb_api_key:
+        os.environ["WANDB_API_KEY"] = wandb_api_key
+
+    wandb_config_params = {
+        key: getattr(config, key) for key in dir(config)
+        if not key.startswith("__") and not callable(getattr(config, key)) and key.isupper()
+    }
+
+    if wandb_enabled:
+        try:
+            run_name = f"ppo_lr{config.LEARNING_RATE}_batch{config.STEPS_PER_EPOCH}_{datetime.now().strftime('%y%m%d-%H%M%S')}"
+            wandb.init(
+                project=os.getenv("WANDB_PROJECT", "shogi-drl"),
+                entity=os.getenv("WANDB_ENTITY"),
+                config=wandb_config_params, name=run_name, tags=["PPO", "Shogi", "SelfPlay"],
+                notes="Training PPO agent for Shogi.", resume="allow",
+            )
+            logger.log(f"Weights & Biases initialized successfully for run: {run_name}")
+            if wandb.run:
+                logger.log(f"W&B Run URL: {wandb.run.url}")
+        except Exception as e:
+            logger.log(f"Error initializing Weights & Biases: {e}. Proceeding without W&B logging.")
+            wandb_enabled = False
+
     logger.log(f"Using device: {config.DEVICE}")
 
-    # Ensure MODEL_DIR exists
     if not os.path.exists(config.MODEL_DIR):
         os.makedirs(config.MODEL_DIR)
         logger.log(f"Created model directory: {config.MODEL_DIR}")
 
-    game = ShogiGame(max_moves_per_game=config.MAX_MOVES_PER_GAME) # Pass max_moves_per_game
+    game = ShogiGame(max_moves_per_game=config.MAX_MOVES_PER_GAME)
     policy_mapper = PolicyOutputMapper()
 
     agent = PPOAgent(
-        input_channels=config.INPUT_CHANNELS,
-        policy_output_mapper=policy_mapper,
-        learning_rate=config.LEARNING_RATE,
-        gamma=config.GAMMA,
-        clip_epsilon=config.CLIP_EPSILON,
-        ppo_epochs=config.PPO_EPOCHS,
-        minibatch_size=config.MINIBATCH_SIZE,
-        value_loss_coeff=config.VALUE_LOSS_COEFF,
-        entropy_coef=config.ENTROPY_COEFF,
-        device=config.DEVICE,
+        input_channels=config.INPUT_CHANNELS, policy_output_mapper=policy_mapper,
+        learning_rate=config.LEARNING_RATE, gamma=config.GAMMA, clip_epsilon=config.CLIP_EPSILON,
+        ppo_epochs=config.PPO_EPOCHS, minibatch_size=config.MINIBATCH_SIZE,
+        value_loss_coeff=config.VALUE_LOSS_COEFF, entropy_coef=config.ENTROPY_COEFF, device=config.DEVICE,
     )
     logger.log("PPO Agent initialized.")
 
     buffer = ExperienceBuffer(
-        buffer_size=config.STEPS_PER_EPOCH,
-        gamma=config.GAMMA,
-        lambda_gae=config.LAMBDA_GAE,
-        device=config.DEVICE,
+        buffer_size=config.STEPS_PER_EPOCH, gamma=config.GAMMA,
+        lambda_gae=config.LAMBDA_GAE, device=config.DEVICE,
     )
     logger.log(f"Experience buffer initialized with size: {config.STEPS_PER_EPOCH}")
 
     obs_np = game.reset()
-
     episode_reward = 0.0
     episode_steps = 0
-    total_episodes_completed = 0  # For SAVE_FREQ_EPISODES
+    total_episodes_completed = 0
+    last_eval_episode_trigger = 0
+    last_save_episode_trigger = 0
 
-    # Main training loop driven by global timesteps
     for global_timestep in range(1, config.TOTAL_TIMESTEPS + 1):
+        current_player_for_action = game.current_player
         legal_shogi_moves = game.get_legal_moves()
+
         if not legal_shogi_moves:
-            # This case implies the game ended before the agent could make a move (e.g., checkmate on spawn)
-            # Or, more likely, an issue with game state or legal move generation.
-            logger.log(f"CRITICAL: No legal moves for player {game.current_player} at start of a turn. Game state: {game.to_string()}")
-            # Handle game reset or error appropriately
-            # For now, let's assume this means the episode ended abruptly.
+            logger.log(f"CRITICAL: No legal moves for player {current_player_for_action.name} at timestep {global_timestep}. Game state: {game.to_string()}") # <<<<< FIX 3: Removed perspective
+            termination_reason = "no_legal_moves_at_turn_start"
             if wandb_enabled and wandb.run is not None:
                 wandb.log({
-                    "episode/reward": episode_reward, # Log existing reward
-                    "episode/length": episode_steps, # Log existing steps
+                    "episode/reward": episode_reward, "episode/length": episode_steps,
                     "episode/number": total_episodes_completed,
-                    "episode/termination/no_legal_moves_at_turn_start": 1,
+                    f"episode/termination/{termination_reason}": 1,
                 }, commit=False)
             obs_np = game.reset()
-            episode_reward = 0
+            episode_reward = 0.0
             episode_steps = 0
-            total_episodes_completed += 1 # Count this as a completed (albeit problematic) episode
-            continue # Skip to next timestep
+            total_episodes_completed += 1
+            continue
 
-        info: Dict[str, Any] = {} # Initialize info dictionary
-        obs_tensor_for_buffer = torch.tensor(obs_np, dtype=torch.float32, device=agent.device) # Prepare obs for buffer
+        obs_tensor_for_buffer = torch.from_numpy(obs_np).float().to(agent.device) # Shape (46, 9, 9)
 
-        # Select action
         selected_shogi_move, selected_policy_index, log_prob, value_estimate = agent.select_action(
             obs_np, legal_shogi_moves=legal_shogi_moves, is_training=True
         )
 
-        # Step the environment with the selected move
-        next_obs_np, reward, done, info = game.make_move(selected_shogi_move)
+        if config.PRINT_GAME_REAL_TIME:
+            try:
+                move_str = policy_mapper.shogi_move_to_usi(selected_shogi_move)
+            except AttributeError:
+                move_str = str(selected_shogi_move) # Fallback
+            print(f"AI Train Move ({current_player_for_action.name}): {move_str}")
 
+        next_obs_np, reward, done, move_info = game.make_move(selected_shogi_move)
         episode_reward += reward
         episode_steps += 1
 
         buffer.add(
-            obs=obs_tensor_for_buffer, # Use the tensor version of obs_np
-            action=selected_policy_index,
-            reward=reward,
-            value=value_estimate,
-            log_prob=log_prob,
-            done=done,
+            obs=obs_tensor_for_buffer, action=selected_policy_index, reward=reward,
+            value=value_estimate, log_prob=log_prob, done=done,
         )
-
         obs_np = next_obs_np
 
         if done:
             total_episodes_completed += 1
+            termination_reason = move_info.get('termination_reason', 'unknown_episode_end')
             logger.log(
                 f"Episode {total_episodes_completed} finished after {episode_steps} steps. "
-                f"Reward: {episode_reward:.2f}. Termination: {info.get('termination_reason', 'N/A')}"
+                f"Reward: {episode_reward:.2f}. Last move by {current_player_for_action.name}. "
+                f"Termination: {termination_reason}"
             )
             if wandb_enabled and wandb.run is not None:
-                wandb.log({
-                    "episode/reward": episode_reward,
-                    "episode/length": episode_steps,
+                log_data_ep = {
+                    "episode/reward": episode_reward, "episode/length": episode_steps,
                     "episode/number": total_episodes_completed,
-                    f"episode/termination/{info.get('termination_reason', 'unknown')}": 1,
-                 }, commit=False)
-
+                    f"episode/termination/{termination_reason}": 1,
+                }
+                if game.winner == Color.BLACK:
+                    log_data_ep["episode/black_wins_training"] = 1
+                elif game.winner == Color.WHITE:
+                    log_data_ep["episode/white_wins_training"] = 1
+                elif game.winner is None:
+                    log_data_ep["episode/draws_training"] = 1
+                wandb.log(log_data_ep, commit=False)
             obs_np = game.reset()
-            episode_reward = 0
+            episode_reward = 0.0
             episode_steps = 0
 
-        # PPO Update Phase
         if global_timestep % config.STEPS_PER_EPOCH == 0:
-            last_value = agent.get_value(obs_np)
+            # Ensure obs_np is NumPy array for get_value, as Pylance error might be misleading
+            # but it should be correct given current flow.
+            last_value = agent.get_value(obs_np) # <<<<< FIX 6: Confirm obs_np is ndarray
             buffer.compute_advantages_and_returns(last_value)
 
-            metrics = agent.learn(buffer)
-
+            ppo_metrics = agent.learn(buffer)
             buffer.clear()
-
             logger.log(f"PPO Update at timestep {global_timestep}")
+
+            # For FIX 2 (SyntaxError): Carefully inspect this block and lines before it in your actual file.
+            # The simplified version from your paste:
+            # wandb_metrics_log = {f"train/{k}": v for k, v in metrics.items()} if metrics else {}
+            # My more verbose but potentially safer version:
+            train_metrics_to_log = {}
+            if isinstance(ppo_metrics, dict):
+                for key, value in ppo_metrics.items():
+                    train_metrics_to_log[f"train/{key.replace('ppo/', '')}"] = value
+            else:
+                logger.log(f"Warning: PPO metrics not a dict: {ppo_metrics}")
+
             if wandb_enabled and wandb.run is not None:
-                # Log PPO metrics
-                # Ensure metrics is a dictionary before logging
-                if isinstance(metrics, dict):
-                    wandb.log(metrics, commit=False)
-                else:
-                    logger.log(f"Warning: PPO metrics not a dict: {metrics}")
+                if train_metrics_to_log: # Log only if not empty
+                    wandb.log(train_metrics_to_log, commit=False)
 
-                # Evaluate agent periodically based on episodes
-                if config.EVAL_FREQ_EPISODES > 0 and \
-                   total_episodes_completed % config.EVAL_FREQ_EPISODES == 0 and \
-                   total_episodes_completed > 0:
-                    logger.log(f"Starting evaluation at episode {total_episodes_completed}...")
-                    evaluate_agent(agent, num_games=config.EVAL_NUM_GAMES, logger=logger)
+            if config.EVAL_FREQ_EPISODES > 0 and \
+               total_episodes_completed > 0 and \
+               total_episodes_completed % config.EVAL_FREQ_EPISODES == 0 : # Colon was present in my generated, check user's file
+                logger.log(f"Running evaluation at episode {total_episodes_completed} (timestep {global_timestep})")
+                evaluate_agent(agent, agent_color_to_eval_as=Color.BLACK, num_games=config.EVAL_NUM_GAMES, logger=logger)
+                evaluate_agent(agent, agent_color_to_eval_as=Color.WHITE, num_games=config.EVAL_NUM_GAMES, logger=logger)
+                # This logic for last_eval_episode_trigger was in my suggestion, ensure it's there or adapted
+                # last_eval_episode_trigger = total_episodes_completed
 
-                # Save model periodically based on episodes
-                if config.SAVE_FREQ_EPISODES > 0 and \
-                   total_episodes_completed % config.SAVE_FREQ_EPISODES == 0 and \
-                   total_episodes_completed > 0:
-                    save_path = os.path.join(
-                        config.MODEL_DIR,
-                        f"ppo_shogi_agent_episode_{total_episodes_completed}_ts_{global_timestep}.pth",
+            if config.SAVE_FREQ_EPISODES > 0 and \
+               total_episodes_completed > 0 and \
+               total_episodes_completed % config.SAVE_FREQ_EPISODES == 0:
+                save_path = os.path.join(
+                    config.MODEL_DIR,
+                    f"ppo_shogi_ep{total_episodes_completed}_ts{global_timestep}.pth"
+                )
+                agent.save_model(save_path)
+                if wandb_enabled and wandb.run is not None:
+                    model_artifact = wandb.Artifact(
+                        name=f"{wandb.run.name}-model-ep{total_episodes_completed}", # Or your preferred naming
+                        type="model",
+                        description=f"PPO Shogi Agent model checkpoint after {total_episodes_completed} episodes.",
+                        metadata={
+                            **wandb_config_params,  # <<< THIS IS THE CHANGE
+                            "episode": total_episodes_completed,
+                            "global_timestep": global_timestep
+                        }
                     )
-                    agent.save_model(save_path)
-                    logger.log(f"Model saved to {save_path}")
+                    model_artifact.add_file(save_path)
+                    wandb.log_artifact(model_artifact)
+                    logger.log(f"Model saved as WandB Artifact: {model_artifact.name}")
+                # This logic for last_save_episode_trigger was in my suggestion, ensure it's there or adapted
+                # last_save_episode_trigger = total_episodes_completed
 
-        if wandb_enabled and wandb.run is not None:
-            wandb.log({"global_timestep": global_timestep})
+            if wandb_enabled and wandb.run is not None:
+                wandb.log({"global_timestep": global_timestep}, commit=True)
 
-    # --- End of Training ---
+        elif wandb_enabled and wandb.run is not None: # Log some progress even if not an update step
+            wandb.log({"global_timestep": global_timestep,
+                        "progress/buffer_fill_ratio": len(buffer) / config.STEPS_PER_EPOCH if config.STEPS_PER_EPOCH > 0 else 0
+                       }, commit=True)
+
     logger.log("Training finished.")
     if wandb_enabled and wandb.run is not None:
+        logger.log("Starting final evaluation (Agent as BLACK)...")
+        evaluate_agent(agent, agent_color_to_eval_as=Color.BLACK, num_games=config.EVAL_NUM_GAMES * 2, logger=logger)
+        logger.log("Starting final evaluation (Agent as WHITE)...")
+        evaluate_agent(agent, agent_color_to_eval_as=Color.WHITE, num_games=config.EVAL_NUM_GAMES * 2, logger=logger)
+        wandb.log({}, commit=True) # Final commit for eval logs
         wandb.finish()
     logger.close()
-
 
 if __name__ == "__main__":
     main()

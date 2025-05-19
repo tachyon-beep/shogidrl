@@ -6,7 +6,7 @@ from typing import List  # Add this import
 
 import numpy as np
 import pytest
-
+import torch
 from keisei.experience_buffer import ExperienceBuffer  # Added import
 from keisei.ppo_agent import PPOAgent
 from keisei.shogi import ShogiGame  # Corrected import for ShogiGame
@@ -77,15 +77,17 @@ def test_ppo_agent_learn():
     )
 
     # Populate buffer with some dummy data
-    dummy_obs = np.random.rand(46, 9, 9).astype(np.float32)
+    dummy_obs_np = np.random.rand(46, 9, 9).astype(np.float32)
+    dummy_obs_tensor = torch.from_numpy(dummy_obs_np).to(torch.device("cpu")) # Convert to tensor on CPU
+
     for i in range(buffer_size):
         experience_buffer.add(
-            obs=dummy_obs,
-            action=i % agent.num_actions_total,  # Cycle through some actions
+            obs=dummy_obs_tensor,  # <<< PASS THE TENSOR HERE
+            action=i % agent.num_actions_total,
             reward=float(i),
             log_prob=0.1 * i,
             value=0.5 * i,
-            done=(i == buffer_size - 1),  # Last one is 'done'
+            done=(i == buffer_size - 1),
         )
 
     assert len(experience_buffer) == buffer_size

@@ -4,6 +4,7 @@ Unit test for evaluate_agent in train.py
 
 import train
 from keisei.ppo_agent import PPOAgent
+from keisei.shogi.shogi_core_definitions import Color
 from keisei.utils import PolicyOutputMapper, TrainingLogger
 
 
@@ -13,8 +14,8 @@ def test_evaluate_agent_runs(tmp_path):
     mapper = PolicyOutputMapper()
     agent = PPOAgent(input_channels=46, policy_output_mapper=mapper)
     # Should run without error and log results
-    train.evaluate_agent(agent, num_games=2, logger=logger)
+    train.evaluate_agent(agent, agent_color_to_eval_as=Color.BLACK, num_games=2, logger=logger)
     logger.close()
     with open(tmp_path / "eval.log", encoding="utf-8") as f:
         lines = f.readlines()
-    assert any("Evaluation Complete:" in line for line in lines)
+    assert any("Evaluation Complete (Agent as BLACK):" in line for line in lines)

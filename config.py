@@ -37,3 +37,12 @@ LOG_FILE = "logs/training_log.txt"
 EVAL_FREQ_EPISODES = 100 # Evaluate every N episodes
 EVAL_NUM_GAMES = 10  # Number of games to play during evaluation
 MAX_MOVES_PER_GAME_EVAL = 256 # Max moves for evaluation games, can be different from training
+
+# --- Real-time Game Printing Configuration ---
+# Set to True to print game states and moves to the console during training/evaluation.
+# Setting this to True will significantly slow down training.
+PRINT_GAME_REAL_TIME = False
+
+# Delay in seconds between printing each move when PRINT_GAME_REAL_TIME is True.
+# Helps make the game progression viewable.
+REAL_TIME_PRINT_DELAY = 0.5  # e.g., 0.5 seconds, adjust to your preference
