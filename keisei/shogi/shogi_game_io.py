@@ -111,18 +111,17 @@ def convert_game_to_text_representation(game: "ShogiGame") -> str:
         for p in row_data:
             if p:
                 symbol = p.symbol()
-                # Ensure consistent width for alignment
-                if len(symbol) == 1:  # P, L, N, S, G, B, R, K (and lowercase)
-                    line_pieces.append(" " + symbol)
-                else:  # +P, +L, etc. (and lowercase)
-                    line_pieces.append(symbol)
+                if len(symbol) == 1:  # e.g., P
+                    line_pieces.append(f" {symbol} ") # Results in " P "
+                else:  # e.g., +P
+                    line_pieces.append(f"{symbol} ")  # Results in "+P "
             else:
-                line_pieces.append(" . ")  # Add spaces around dot for alignment
+                line_pieces.append(" . ") # Consistent 3-char width
         lines.append(line_str + "".join(line_pieces))
-    # Add file numbers at the bottom
+    # Add file numbers at the bottom, ensuring 3-char spacing
     lines.append(
-        "   a  b  c  d  e  f  g  h  i"
-    )  # Shogi board file letters, matching original printout spacing
+        "  a  b  c  d  e  f  g  h  i" # Adjusted spacing: 2 spaces before 'a', then 2 between letters
+    )
     # Add hands
     black_hand_dict = {pt.name: count for pt, count in game.hands[Color.BLACK.value].items() if count > 0}
     lines.append(f"Black's hand: {black_hand_dict}")
