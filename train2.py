@@ -14,16 +14,17 @@ This is a scaffold for Phase 1 of the training_update.md plan.
 import argparse
 import json
 import os
-import torch
-import config
+import sys # Added import sys
 import numpy as np
-from tqdm import tqdm
+import torch
 from datetime import datetime
+from tqdm import tqdm
 
+import config as app_config # Import the config module directly
+from keisei.experience_buffer import ExperienceBuffer
 from keisei.ppo_agent import PPOAgent
 from keisei.shogi.shogi_engine import ShogiGame
 from keisei.utils import PolicyOutputMapper, TrainingLogger
-from keisei.experience_buffer import ExperienceBuffer
 
 # --- CLI ARGUMENTS ---
 def parse_args():
@@ -36,29 +37,32 @@ def parse_args():
     parser.add_argument('--seed', type=int, default=None, help='Random seed for reproducibility')
     parser.add_argument('--total-timesteps', type=int, default=None, help='Override total timesteps for training (for testing)')
     parser.add_argument('--dev', action='store_true', help='Run in short dev/test mode (quick training, minimal steps)')
-    # Add more CLI args as needed for overrides
     return parser.parse_args()
 
 # --- CONFIG OVERRIDE ---
-def apply_config_overrides(args):
+def apply_config_overrides(args, cfg_module):
     # Load config from JSON if provided
     if args.config:
-        with open(args.config, 'r') as f:
+        with open(args.config, 'r', encoding='utf-8') as f:
             config_json = json.load(f)
         for k, v in config_json.items():
-            if hasattr(config, k):
-                setattr(config, k, v)
+            if hasattr(cfg_module, k):
+                setattr(cfg_module, k, v)
+            else:
+                print(f"Warning: Config key '{k}' from JSON not found in base config module.", file=sys.stderr)
+
     # CLI overrides (device, etc.)
     if args.device:
-        config.DEVICE = args.device
+        cfg_module.DEVICE = args.device
     if args.total_timesteps is not None:
-        config.TOTAL_TIMESTEPS = args.total_timesteps
-    # Add more CLI overrides as needed
-    # --- PATCH: force short training for dev/test mode ---
+        cfg_module.TOTAL_TIMESTEPS = args.total_timesteps
     if hasattr(args, 'dev') and getattr(args, 'dev', False):
-        config.TOTAL_TIMESTEPS = 10  # or a small number for quick runs
-        config.SAVE_FREQ_EPISODES = 1
-    return config
+        cfg_module.TOTAL_TIMESTEPS = 100 
+        cfg_module.SAVE_FREQ_EPISODES = 1
+        cfg_module.STEPS_PER_EPOCH = 50 
+        cfg_module.MINIBATCH_SIZE = 16 
+        cfg_module.PPO_EPOCHS = 2 
+    return cfg_module
 
 # --- CHECKPOINT AUTO-DETECTION ---
 def find_latest_checkpoint(model_dir):
@@ -75,22 +79,26 @@ def find_latest_checkpoint(model_dir):
             ep = int(parts[4])
             ts = int(parts[6].split('.')[0])
             return (ep, ts)
-        except Exception:
+        except IndexError: # More specific exception
             print(f"Warning: Ignoring file in checkpoint dir that doesn't match expected pattern: {f}")
             return (0, 0)
+        except ValueError: # More specific exception
+            print(f"Warning: Ignoring file in checkpoint dir due to non-integer episode/timestep: {f}")
+            return (0,0)
     ckpts.sort(key=extract_ts, reverse=True)
     return os.path.join(model_dir, ckpts[0])
 
 # --- CONFIG SERIALIZATION FOR LOGGING ---
-def serialize_config(cfg):
+def serialize_config(cfg_module):
     # Only log uppercase attributes (convention for config constants)
-    d = {k: getattr(cfg, k) for k in dir(cfg) if k.isupper() and not k.startswith('__')}
+    d = {k: getattr(cfg_module, k) for k in dir(cfg_module) if k.isupper() and not k.startswith('__')}
     return json.dumps(d, indent=2)
 
 # --- MAIN TRAINING LOOP (SCAFFOLD) ---
 def main():
     args = parse_args()
-    cfg = apply_config_overrides(args)
+    cfg = app_config # Use the module directly
+    cfg = apply_config_overrides(args, cfg) # Pass the module to be modified
 
     # Set up run directory (all outputs in one folder per run)
     run_name = args.run_name or f"shogi_run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
@@ -112,10 +120,7 @@ def main():
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
 
-    # Initialize logger
-    logger = TrainingLogger(log_file)
-    logger.log(f"Starting run: {run_name}")
-    logger.log(f"Config: {serialize_config(cfg)}")
+    # Initialize logger (now handled by with statement below)
 
     # Initialize environment and agent
     game = ShogiGame(max_moves_per_game=cfg.MAX_MOVES_PER_GAME)
@@ -133,7 +138,7 @@ def main():
         device=cfg.DEVICE,
     )
     experience_buffer = ExperienceBuffer(
-        buffer_size=cfg.STEPS_PER_EPOCH,
+        buffer_size=cfg.STEPS_PER_EPOCH, # Use STEPS_PER_EPOCH for buffer_size
         gamma=cfg.GAMMA,
         lambda_gae=cfg.LAMBDA_GAE,
         device=cfg.DEVICE,
@@ -146,71 +151,134 @@ def main():
         ckpt_path = args.resume
     else:
         ckpt_path = find_latest_checkpoint(model_dir)
-    if ckpt_path:
-        logger.log(f"Resuming from checkpoint: {ckpt_path}")
-        print(f"Resuming from checkpoint: {ckpt_path}")
-        ckpt = agent.load_model(ckpt_path)
-        if ckpt:
-            global_timestep = ckpt.get('global_timestep', 0)
-            total_episodes_completed = ckpt.get('total_episodes_completed', 0)
-            if 'optimizer_state_dict' in ckpt:
-                agent.optimizer.load_state_dict(ckpt['optimizer_state_dict'])
-    else:
-        logger.log("No checkpoint found. Starting fresh training.")
-        print("No checkpoint found. Starting fresh training.")
+    
+    # Use TrainingLogger with a context manager
+    with TrainingLogger(log_file) as logger:
+        logger.log(f"Starting run: {run_name}")
+        logger.log(f"Effective Config: {serialize_config(cfg)}") # Pass the module
 
-    # --- Main training loop (full logic) ---
-    pbar = tqdm(total=cfg.TOTAL_TIMESTEPS, initial=global_timestep, desc="Training Progress")
-    obs = game.reset()
-    done = False
-    episode_reward = 0.0
-    move_count = 0
-    while global_timestep < cfg.TOTAL_TIMESTEPS:
-        legal_moves = game.get_legal_moves()
-        if not legal_moves:
-            done = True
-            reward = 0.0
-            action_idx = 0
-            log_prob = 0.0
-            value = 0.0
-            action = None
-            next_obs = game.reset()  # Ensure next_obs is always defined
+        if ckpt_path and os.path.exists(ckpt_path):
+            logger.log(f"Resuming from checkpoint: {ckpt_path}")
+            print(f"Resuming from checkpoint: {ckpt_path}")
+            ckpt = agent.load_model(ckpt_path)
+            if ckpt:
+                global_timestep = ckpt.get('global_timestep', 0)
+                total_episodes_completed = ckpt.get('total_episodes_completed', 0)
+                logger.log(f"Resumed at timestep {global_timestep}, episodes {total_episodes_completed}")
+                print(f"Resumed at timestep {global_timestep}, episodes {total_episodes_completed}")
+                if agent.last_kl_div is not None: 
+                    logger.log(f"Resumed with last KL divergence: {agent.last_kl_div:.4f}")
+            else:
+                logger.log(f"Failed to load checkpoint data from {ckpt_path}. Starting fresh.")
+                print(f"Failed to load checkpoint data from {ckpt_path}. Starting fresh.")
         else:
-            action, action_idx, log_prob, value = agent.select_action(obs, legal_moves)
-            # Apply action to game using make_move
-            next_obs, reward, done, info = game.make_move(action)
-        # Only add experience if action is valid (skip if no legal moves and action is None)
-        if action is not None or legal_moves:
-            obs_tensor = torch.tensor(obs, dtype=torch.float32)
-            experience_buffer.add(obs_tensor, action_idx, reward, log_prob, value, done)
-        obs = next_obs
-        episode_reward += reward
-        global_timestep += 1
-        move_count += 1
-        pbar.update(1)
-        if done or (move_count >= cfg.MAX_MOVES_PER_GAME):
-            total_episodes_completed += 1
-            logger.log(f"Episode {total_episodes_completed} finished. Reward: {episode_reward}")
-            obs = game.reset()
-            episode_reward = 0.0
-            move_count = 0
-            done = False
-            # Save checkpoint
-            # Only save checkpoint if SAVE_FREQ_EPISODES > 0 and not at episode 0
-            if cfg.SAVE_FREQ_EPISODES > 0 and total_episodes_completed > 0 and total_episodes_completed % cfg.SAVE_FREQ_EPISODES == 0:
-                ckpt_path = os.path.join(model_dir, f"ppo_shogi_ep{total_episodes_completed}_ts{global_timestep}.pth")
-                agent.save_model(ckpt_path, global_timestep=global_timestep, total_episodes_completed=total_episodes_completed)
-            # Optionally: evaluation, logging, etc.
-        # PPO update step
-        if len(experience_buffer) >= cfg.STEPS_PER_EPOCH:
-            agent.learn(experience_buffer)
-            experience_buffer.clear()
-    logger.close()
+            logger.log("No checkpoint found or specified path invalid. Starting fresh training.")
+            print("No checkpoint found or specified path invalid. Starting fresh training.")
+
+        # --- Main training loop (full logic) ---
+        pbar = tqdm(total=cfg.TOTAL_TIMESTEPS, initial=global_timestep, desc="Training Progress")
+        obs = game.reset() # game.reset() now returns obs directly (np.ndarray)
+        current_episode_reward = 0
+        current_episode_length = 0
+        # Initialize reward and next_obs for the first iteration of the loop
+        reward = 0.0
+        next_obs = obs # Initialize next_obs with the initial observation
+        done = False
+
+        for _ in range(global_timestep, cfg.TOTAL_TIMESTEPS): # Changed t_step to _
+            pbar.update(1)
+            global_timestep += 1
+            current_episode_length += 1
+
+            # Ensure obs is correctly shaped for the agent (e.g., add batch dim if needed by agent)
+            # obs_for_agent = np.expand_dims(obs, axis=0) if obs.ndim == 3 else obs
+            # The PPOAgent.select_action expects obs without batch dim, it adds it internally.
+            obs_for_buffer = obs # Store the original observation state for the buffer
+
+            legal_moves = game.get_legal_moves()
+            if not legal_moves:
+                # This case should ideally be handled by game termination logic
+                logger.log(f"Episode {total_episodes_completed + 1}: No legal moves available at timestep {current_episode_length}. Game might have ended unexpectedly.")
+                done = True # Treat as done
+            
+            if not done:
+                selected_shogi_move, action_idx, log_prob, value = agent.select_action(
+                    obs, legal_moves, is_training=True
+                )
+            else: # If done (either from game or no legal moves)
+                selected_shogi_move, action_idx, log_prob, value = None, -1, 0.0, 0.0 # Dummy values
+
+            if selected_shogi_move is not None:
+                next_obs_full, reward, done, game_info = game.make_move(selected_shogi_move) # Changed game.step to game.make_move, info to game_info
+                next_obs = next_obs_full # next_obs_full is already the observation ndarray
+                current_player_name = "Sente" if game.current_player == 0 else "Gote"
+                usi_move = policy_mapper.shogi_move_to_usi(selected_shogi_move)
+                log_message = f"Time: {global_timestep}, Ep: {total_episodes_completed + 1}, Step: {current_episode_length}, Player: {current_player_name}, Move (USI): {usi_move}, Reward: {reward:.2f}, Done: {done}"
+                if done and game_info.get("termination_reason"):
+                    log_message += f", Termination: {game_info['termination_reason']}"
+                logger.log(log_message)
+            else: # No move was made (e.g., if done or no legal moves)
+                # If already done, next_obs might not be valid or needed for buffer if we don\'t add this step.
+                # If we must add to buffer, use current obs as next_obs, and reward is likely 0 or a penalty.
+                # For simplicity, if no move is made because it\'s done, we might not add this to buffer,
+                # or ensure reward/next_obs are sensible. Assuming `done` is true here.
+                # obs_for_buffer is already set
+                reward = 0.0 # Or some terminal reward/penalty if applicable
+                # `done` is already true or set above
+
+            # Add to experience buffer
+            # ExperienceBuffer.add expects: obs, action, reward, log_prob, value, done
+            experience_buffer.add(
+                torch.tensor(obs_for_buffer, dtype=torch.float32, device=agent.device), # Ensure obs is a tensor on the correct device
+                action_idx, 
+                reward, 
+                log_prob, 
+                value,
+                done
+            )
+            obs = next_obs
+            current_episode_reward += reward
+
+            if done:
+                total_episodes_completed += 1
+                logger.log(f"Episode {total_episodes_completed} finished. Length: {current_episode_length}, Reward: {current_episode_reward:.2f}")
+                pbar.set_description(f"Training Progress | Last Ep Reward: {current_episode_reward:.2f}")
+                obs = game.reset() # game.reset() now returns obs directly (np.ndarray)
+                current_episode_reward = 0
+                current_episode_length = 0
+                # Save model periodically by episode count
+                if total_episodes_completed % cfg.SAVE_FREQ_EPISODES == 0:
+                    ckpt_path_ep = os.path.join(model_dir, f"ppo_shogi_ep{total_episodes_completed}_ts{global_timestep}.pth")
+                    agent.save_model(ckpt_path_ep, global_timestep, total_episodes_completed)
+                    logger.log(f"Model saved to {ckpt_path_ep}")
+
+            # Perform PPO update if buffer is full
+            if len(experience_buffer) >= cfg.STEPS_PER_EPOCH: # Check buffer length
+                next_value_np = agent.get_value(next_obs) 
+                experience_buffer.compute_advantages_and_returns(next_value_np) # Corrected method name
+                learn_metrics = agent.learn(experience_buffer)
+                experience_buffer.clear()
+                kl_div = learn_metrics.get("ppo/kl_divergence_approx", 0.0)
+                logger.log(f"PPO Update at Timestep {global_timestep}. Metrics: {json.dumps(learn_metrics)}")
+                # KL divergence is a key PPO metric. It measures the difference between the old and new policies.
+                # If it gets too high, the policy updates are too drastic and can destabilize training.
+                # Some PPO implementations use adaptive KL penalties or early stopping for updates if KL exceeds a threshold.
+                pbar_postfix = {
+                    "kl_div": f"{kl_div:.3f}",
+                    "policy_loss": f"{learn_metrics.get('ppo/policy_loss', 0.0):.3f}",
+                    "value_loss": f"{learn_metrics.get('ppo/value_loss', 0.0):.3f}",
+                    "entropy": f"{learn_metrics.get('ppo/entropy', 0.0):.3f}",
+                    "lr": f"{learn_metrics.get('ppo/learning_rate', 0.0):.1e}"
+                }
+                pbar.set_postfix(pbar_postfix)
+
+        pbar.close()
+        logger.log("Training finished.")
 
     # --- Ensure checkpoint is saved at end of training ---
-    ckpt_path = os.path.join(model_dir, f"ppo_shogi_ep{total_episodes_completed}_ts{global_timestep}.pth")
-    if not os.path.exists(ckpt_path):
-        agent.save_model(ckpt_path, global_timestep=global_timestep, total_episodes_completed=total_episodes_completed)
+    final_ckpt_path = os.path.join(model_dir, f"ppo_shogi_ep{total_episodes_completed}_ts{global_timestep}_final.pth")
+    agent.save_model(final_ckpt_path, global_timestep, total_episodes_completed)
+    print(f"Final model saved to {final_ckpt_path}")
 
 if __name__ == "__main__":
     main()

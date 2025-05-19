@@ -14,6 +14,7 @@ from keisei.shogi.shogi_core_definitions import (
     Color,
     Piece,
     PieceType,
+    get_unpromoted_types,
 )
 from keisei.shogi.shogi_game import ShogiGame
 
@@ -72,7 +73,7 @@ def test_get_observation_hand_pieces_black_one_pawn(
     # OBS_UNPROMOTED_ORDER is used in shogi_core_definitions for hand piece order in observation
     # but shogi_game_io.py uses PieceType.get_unpromoted_types() directly.
     # Let's align with shogi_game_io.py for hand channel indexing.
-    hand_types_order = PieceType.get_unpromoted_types()
+    hand_types_order = get_unpromoted_types()
     pawn_hand_channel_index = 28 + hand_types_order.index(PieceType.PAWN)
     expected_value = 1 / 18.0
     assert np.allclose(
@@ -99,7 +100,7 @@ def test_get_observation_hand_pieces_white_one_rook(
 ):
     """Test observation when White has one rook in hand."""
     obs = game_with_white_rook_in_hand.get_observation()
-    hand_types_order = PieceType.get_unpromoted_types()
+    hand_types_order = get_unpromoted_types()
     rook_hand_channel_index = 35 + hand_types_order.index(PieceType.ROOK)
     expected_value = 1 / 18.0
     assert np.allclose(
@@ -129,7 +130,7 @@ def test_get_observation_multiple_hand_pieces_mixed_players(
 ):
     """Test observation with multiple pieces in hand for both players."""
     obs = game_with_mixed_hands.get_observation()
-    hand_types_order = PieceType.get_unpromoted_types()
+    hand_types_order = get_unpromoted_types()
 
     # Black's hand
     pawn_idx_black = 28 + hand_types_order.index(PieceType.PAWN)

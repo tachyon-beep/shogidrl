@@ -2,17 +2,19 @@
 Minimal PPOAgent for DRL Shogi Client.
 """
 
-import os # For checking file existence in load_model
-from typing import List, Tuple, Dict, Any # Added Dict, Any
-
+import os
+import sys # For stderr
 import numpy as np
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F # For F.softmax
+from typing import List, Tuple, Dict, Optional, TYPE_CHECKING # Removed Any
 
 from keisei.experience_buffer import ExperienceBuffer
 from keisei.neural_network import ActorCritic
-from keisei.shogi.shogi_core_definitions import MoveTuple # Assuming MoveTuple is defined
 from keisei.utils import PolicyOutputMapper
+
+if TYPE_CHECKING:
+    from keisei.shogi.shogi_core_definitions import MoveTuple
 
 
 class PPOAgent:
@@ -50,106 +52,70 @@ class PPOAgent:
     def select_action(
         self,
         obs: np.ndarray,
-        legal_shogi_moves: List[MoveTuple], # Type hint for Shogi moves
+        legal_shogi_moves: List['MoveTuple'], # Type hint for Shogi moves, quoted
         is_training: bool = True,
-    ) -> Tuple[Any, int, float, float]: # Return Shogi move (Any for now), policy index, log_prob, value
+    ) -> Tuple[Optional['MoveTuple'], int, float, float]: # Return Shogi move (Any for now), policy index, log_prob, value # Quoted
         """
         Select an action given an observation and legal Shogi moves.
         Returns the selected Shogi move, its policy index, log probability, and value estimate.
         """
-        self.model.train(is_training)
+        self.model.train(is_training) # Set model to train or eval mode
 
         obs_tensor = torch.tensor(
             obs, dtype=torch.float32, device=self.device
         ).unsqueeze(0)
 
-        with torch.no_grad():
-            action_logits, value = self.model(obs_tensor)
-
+        # Construct the legal mask tensor
         legal_mask = self.policy_output_mapper.get_legal_mask(
             legal_shogi_moves, self.device
         )
 
-        masked_logits = torch.where(
-            legal_mask, action_logits, torch.tensor(float("-inf"), device=self.device)
-        )
-
-        selected_policy_index_val: int
-        log_prob_val: float
-
+        # If no legal moves are available, this is a terminal state or an error.
+        # The game engine should ideally handle terminal states before calling select_action.
+        # If it must be handled here, returning a dummy action or raising an error are options.
         if not legal_mask.any():
-            error_msg = (
-                "PPOAgent.select_action() called with no legal moves available. "
-                "This usually means the game has already ended or there's an issue "
-                "in the game state or legal move generation."
-            )
-            # Consider logging this with a proper logger if available
-            print(f"CRITICAL ERROR in select_action: {error_msg}")
-            raise ValueError(error_msg)
+            print("Warning: PPOAgent.select_action called with no legal moves. This might indicate an issue.", file=sys.stderr)
+            # Fallback: return a dummy action or handle as appropriate for the game.
+            # For now, let get_action_and_value handle it, which might lead to uniform random if all masked.
+            # Or, we could return a specific indicator:
+            # return None, -1, 0.0, 0.0 # Example: No move, invalid index, zero log_prob, zero value
 
-        probs = F.softmax(masked_logits, dim=-1)
-
-        if torch.isnan(probs).any():
-            print("Warning: NaN detected in action probabilities. Attempting fallback to uniform over legal moves.")
-            if legal_mask.any():
-                probs = legal_mask.float() / legal_mask.sum()
-            else: # Should have been caught by the earlier `if not legal_mask.any():`
-                  # This fallback is a last resort to prevent crashes with Categorical
-                print("Critical Warning: No legal moves and NaN in probs. Uniform over ALL actions.")
-                probs = torch.ones_like(action_logits, device=self.device) / self.num_actions_total
-
-            probs = torch.nan_to_num(probs, nan=0.0) # Clean any remaining NaNs
-            if probs.sum() < 1e-8: # If all probs became zero or sum is too small
-                print("Critical Warning: Probs sum to zero after NaN fallback. Uniform over ALL actions.")
-                probs = torch.ones_like(action_logits, device=self.device) / self.num_actions_total
-
-        if is_training:
-            action_distribution = torch.distributions.Categorical(probs=probs)
-            selected_policy_index_tensor = action_distribution.sample()
-            log_prob_tensor = action_distribution.log_prob(selected_policy_index_tensor)
-        else: # Evaluation mode
-            selected_policy_index_tensor = torch.argmax(probs, dim=-1)
-            if probs.sum() > 1e-8: # Avoid issues with Categorical if probs are effectively all zero
-                action_distribution = torch.distributions.Categorical(probs=probs)
-                log_prob_tensor = action_distribution.log_prob(selected_policy_index_tensor)
-            else:
-                print("Warning: Probs sum to zero in eval mode. Defaulting log_prob.")
-                log_prob_tensor = torch.tensor(0.0, device=self.device)
+        # Get action, log_prob, and value from the ActorCritic model
+        # Pass deterministic based on not is_training
+        selected_policy_index_tensor, log_prob_tensor, value_tensor = self.model.get_action_and_value(
+            obs_tensor, legal_mask=legal_mask, deterministic=not is_training
+        )
 
         selected_policy_index_val = int(selected_policy_index_tensor.item())
         log_prob_val = float(log_prob_tensor.item())
+        value_float = float(value_tensor.item()) # Value is already squeezed in get_action_and_value
 
-        selected_shogi_move = self.policy_output_mapper.policy_index_to_shogi_move(
-            selected_policy_index_val
-        )
-
-        if selected_shogi_move is None:
-             # This should ideally not happen if legal_mask.any() was true and policy_output_mapper is robust
-            error_msg = (
-                f"PolicyOutputMapper returned None for a selected policy index {selected_policy_index_val}. "
-                f"This implies an issue with the action mapping or that the selected index was unexpectedly invalid "
-                f"despite legal_mask checks. Logits: {action_logits.cpu().numpy().tolist()}, "
-                f"MaskedLogits: {masked_logits.cpu().numpy().tolist()}, Probs: {probs.cpu().numpy().tolist()}"
+        selected_shogi_move: Optional['MoveTuple'] = None # Quoted
+        try:
+            selected_shogi_move = self.policy_output_mapper.policy_index_to_shogi_move(
+                selected_policy_index_val
             )
-            print(f"CRITICAL ERROR in select_action: {error_msg}")
-            raise ValueError(error_msg)
-
+        except IndexError as e:
+            print(f"Error in PPOAgent.select_action: Policy index {selected_policy_index_val} out of bounds. {e}", file=sys.stderr)
+            # This case should be rare if legal_mask is applied correctly and policy_output_mapper is consistent.
+            # Handle by returning no move or re-raising, depending on desired robustness.
+            return None, -1, 0.0, value_float # Or raise the error
 
         return (
             selected_shogi_move,
             selected_policy_index_val,
             log_prob_val,
-            float(value.item()),
+            value_float,
         )
 
     def get_value(self, obs_np: np.ndarray) -> float:
         """Get the value prediction from the critic for a given NumPy observation."""
-        self.model.eval()
+        self.model.eval() # Set model to evaluation mode
         obs_tensor = torch.tensor(
             obs_np, dtype=torch.float32, device=self.device
         ).unsqueeze(0)
         with torch.no_grad():
-            _, value_estimate = self.model(obs_tensor) # Model returns (action_logits, value)
+            _, _, value_estimate = self.model.get_action_and_value(obs_tensor, deterministic=True) # Get value deterministically
         return float(value_estimate.item())
 
     def learn(self, experience_buffer: ExperienceBuffer) -> Dict[str, float]:
@@ -167,9 +133,11 @@ class PPOAgent:
         current_lr = self.optimizer.param_groups[0]["lr"]
 
         if not batch_data or batch_data["obs"].shape[0] == 0:
-            print("Warning: PPO learn called with no data in buffer.")
+            print("Warning: PPOAgent.learn called with empty batch_data.", file=sys.stderr)
             return {
-                "ppo/policy_loss": 0.0, "ppo/value_loss": 0.0, "ppo/entropy": 0.0,
+                "ppo/policy_loss": 0.0,
+                "ppo/value_loss": 0.0,
+                "ppo/entropy": 0.0,
                 "ppo/kl_divergence_approx": self.last_kl_div,
                 "ppo/learning_rate": current_lr,
             }
@@ -197,64 +165,49 @@ class PPOAgent:
                 end_idx = start_idx + self.minibatch_size
                 minibatch_indices = indices[start_idx:end_idx]
 
-                if len(minibatch_indices) == 0:
-                    continue
-
-                # Slice minibatch data
                 obs_minibatch = obs_batch[minibatch_indices]
                 actions_minibatch = actions_batch[minibatch_indices]
                 old_log_probs_minibatch = old_log_probs_batch[minibatch_indices]
                 advantages_minibatch = advantages_batch[minibatch_indices]
                 returns_minibatch = returns_batch[minibatch_indices]
 
-                if obs_minibatch.shape[0] == 0: # Should not happen if len(minibatch_indices) > 0
-                    continue
+                # Get new log_probs, entropy, and value from the model
+                # Note on entropy: legal_mask is not passed here. Entropy is calculated
+                # over all actions. For entropy over legal actions only, legal masks
+                # for the batch would need to be stored and passed.
+                new_log_probs, entropy, new_values = self.model.evaluate_actions(
+                    obs_minibatch, actions_minibatch # No legal_mask passed here
+                )
 
-                new_logits, new_values_raw = self.model(obs_minibatch)
-                new_values = new_values_raw.squeeze(-1) # Expected shape: (minibatch_size,)
-
-                # Ensure returns_minibatch and new_values have compatible shapes for loss calculation
-                # Typically, both should be 1D tensors of shape (current_minibatch_size,).
-                # ExperienceBuffer should ensure returns_minibatch is already 1D.
-                if new_values.shape != returns_minibatch.shape:
-                    # This can happen if minibatch_size is 1 and squeeze turns new_values into a 0-D scalar.
-                    # Or if returns_minibatch was (N, 1) and new_values became (N,).
-                    if new_values.numel() == returns_minibatch.numel():
-                        try:
-                            returns_minibatch_view = returns_minibatch.view_as(new_values)
-                            value_loss = F.mse_loss(new_values, returns_minibatch_view)
-                        except RuntimeError as e:
-                            print(f"Warning: Shape mismatch & reshape error in learn(). new_values: {new_values.shape}, "
-                                  f"returns: {returns_minibatch.shape}. Error: {e}. Skipping minibatch.")
-                            continue
-                    else:
-                        print(f"Warning: Incompatible elements in learn(). new_values: {new_values.shape} ({new_values.numel()}), "
-                              f"returns: {returns_minibatch.shape} ({returns_minibatch.numel()}). Skipping minibatch.")
-                        continue
-                else:
-                    value_loss = F.mse_loss(new_values, returns_minibatch)
-
-                probs = F.softmax(new_logits, dim=-1)
-                action_distribution = torch.distributions.Categorical(probs=probs)
-                new_log_probs = action_distribution.log_prob(actions_minibatch)
-                entropy = action_distribution.entropy().mean()
-
+                # PPO Loss Calculation
                 ratio = torch.exp(new_log_probs - old_log_probs_minibatch)
+
+                # Clipped surrogate objective
                 surr1 = ratio * advantages_minibatch
                 surr2 = torch.clamp(ratio, 1.0 - self.clip_epsilon, 1.0 + self.clip_epsilon) * advantages_minibatch
-
                 policy_loss = -torch.min(surr1, surr2).mean()
-                # value_loss already calculated above with shape handling
-                loss = policy_loss + self.value_loss_coeff * value_loss - self.entropy_coef * entropy
+
+                # Value loss (MSE)
+                value_loss = F.mse_loss(new_values, returns_minibatch)
+
+                # Entropy bonus
+                entropy_loss = -entropy.mean()
+
+                # Total loss
+                loss = (
+                    policy_loss
+                    + self.value_loss_coeff * value_loss
+                    + self.entropy_coef * entropy_loss
+                )
 
                 self.optimizer.zero_grad()
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5) # Optional: gradient clipping
                 self.optimizer.step()
 
                 total_policy_loss_epoch += policy_loss.item()
-                total_value_loss_epoch += value_loss.item() # Use the calculated value_loss
-                total_entropy_epoch += entropy.item()
+                total_value_loss_epoch += value_loss.item()
+                total_entropy_epoch += entropy_loss.item()
                 num_updates += 1
 
         avg_policy_loss = total_policy_loss_epoch / num_updates if num_updates > 0 else 0.0
@@ -300,8 +253,13 @@ class PPOAgent:
         self.model.load_state_dict(checkpoint['model_state_dict'])
         if 'optimizer_state_dict' in checkpoint:
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            # Ensure optimizer state is also moved to the correct device if necessary
+            # This is often handled by PyTorch if model parameters are on the device already
+            # or by explicitly iterating through optimizer state and moving tensors.
+            # For Adam, this might involve: for state in self.optimizer.state.values():
+            # for k, v in state.items(): if isinstance(v, torch.Tensor): state[k] = v.to(self.device)
         else:
-            print(f"Warning: Optimizer state not found in checkpoint {file_path}. Optimizer not loaded/reset.")
+            print("Warning: Optimizer state not found in checkpoint. Initializing optimizer from scratch.", file=sys.stderr)
         self.model.to(self.device)
         print(f"PPOAgent model, optimizer, and state loaded from {file_path}")
-        return checkpoint
+        return checkpoint # Return the loaded checkpoint dictionary

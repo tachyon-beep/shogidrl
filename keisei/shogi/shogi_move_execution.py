@@ -10,17 +10,18 @@ from .shogi_core_definitions import (
     BASE_TO_PROMOTED_TYPE,
     PIECE_TYPE_TO_HAND_TYPE,
     Color,
-    MoveTuple,
     Piece,
     PieceType,
+    get_unpromoted_types,
 )
 
 if TYPE_CHECKING:
     from .shogi_game import ShogiGame  # For type hinting the 'game' parameter
+    from .shogi_core_definitions import MoveTuple  # Added for type hinting
 
 
 def apply_move_to_board(
-    game: "ShogiGame", move_tuple: MoveTuple, is_simulation: bool = False
+    game: "ShogiGame", move_tuple: "MoveTuple", is_simulation: bool = False
 ) -> None:
     """
     Make a move and update the game state.
@@ -147,9 +148,9 @@ def apply_move_to_board(
             game.game_over = True
             game.winner = None  # Draw by stalemate
             game.termination_reason = "stalemate"
-        elif game.move_count >= game.max_moves_per_game: # Use game.max_moves_per_game
+        elif game.move_count >= game.max_moves_per_game:  # Use game.max_moves_per_game
             game.game_over = True
-            game.winner = None # Draw
+            game.winner = None  # Draw
             game.termination_reason = "max_moves_reached"
         # Add other termination checks like stalemate if defined
         # elif self.is_stalemate():
@@ -180,7 +181,7 @@ def revert_last_applied_move(game: "ShogiGame") -> None:
         raise RuntimeError("No move to undo")
 
     last_move_details = game.move_history.pop()
-    move_tuple: MoveTuple = last_move_details["move"]
+    move_tuple: "MoveTuple" = last_move_details["move"]
 
     # Switch current player back first
     game.current_player = (
@@ -235,7 +236,7 @@ def revert_last_applied_move(game: "ShogiGame") -> None:
                     # for all capturable, non-king pieces.
                     # If it's a base type not in the map (e.g. Gold), it should be the type itself.
                     if (
-                        captured_piece_data.type in PieceType.get_unpromoted_types()
+                        captured_piece_data.type in get_unpromoted_types()
                         and captured_piece_data.type != PieceType.KING
                     ):
                         hand_equivalent_type = captured_piece_data.type
@@ -261,4 +262,5 @@ def revert_last_applied_move(game: "ShogiGame") -> None:
     game.move_count -= 1
     game.game_over = False
     game.winner = None
+    game.termination_reason = None  # Reset termination reason
     # Repetition history and sennichite status will be naturally re-evaluated by game logic.

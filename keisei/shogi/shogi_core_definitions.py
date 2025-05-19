@@ -31,18 +31,31 @@ class PieceType(Enum):
     PROMOTED_ROOK = 13  # Dragon
     # King does not promote
 
-    # Helper for unpromoted hand types
-    @classmethod
-    def get_unpromoted_types(cls) -> List["PieceType"]:
-        return [
-            cls.PAWN,
-            cls.LANCE,
-            cls.KNIGHT,
-            cls.SILVER,
-            cls.GOLD,
-            cls.BISHOP,
-            cls.ROOK,
-        ]
+
+# --- Custom Types for Moves ---
+# BoardMoveTuple: (from_row, from_col, to_row, to_col, promote_flag)
+BoardMoveTuple = Tuple[int, int, int, int, bool]
+
+# DropMoveTuple: (None, None, to_row, to_col, piece_type_to_drop)
+# Using None for from_row, from_col to distinguish from board moves.
+# piece_type_to_drop should be one of the unpromoted PieceType enums.
+DropMoveTuple = Tuple[None, None, int, int, PieceType]
+
+# MoveTuple is a union of the two types of moves.
+MoveTuple = Union[BoardMoveTuple, DropMoveTuple]
+
+
+# Helper for unpromoted hand types
+def get_unpromoted_types() -> List[PieceType]:
+    return [
+        PieceType.PAWN,
+        PieceType.LANCE,
+        PieceType.KNIGHT,
+        PieceType.SILVER,
+        PieceType.GOLD,
+        PieceType.BISHOP,
+        PieceType.ROOK,
+    ]
 
 
 PROMOTED_TYPES_SET: Set[PieceType] = {
@@ -118,11 +131,6 @@ OBS_PROMOTED_ORDER = [
     PieceType.PROMOTED_BISHOP,
     PieceType.PROMOTED_ROOK,
 ]
-
-# --- Type Aliases for Moves ---
-BoardMove = Tuple[int, int, int, int, bool]
-DropMove = Tuple[None, None, int, int, PieceType]  # PieceType is your existing Enum
-MoveTuple = Union[BoardMove, DropMove]
 
 
 class Piece:

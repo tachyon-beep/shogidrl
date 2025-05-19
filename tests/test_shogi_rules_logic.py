@@ -4,7 +4,7 @@ Unit tests for Shogi game logic functions in shogi_rules_logic.py
 
 import pytest
 
-from keisei.shogi.shogi_core_definitions import Color, MoveTuple, Piece, PieceType
+from keisei.shogi.shogi_core_definitions import Color, MoveTuple, Piece, PieceType, get_unpromoted_types
 from keisei.shogi.shogi_game import ShogiGame
 from keisei.shogi.shogi_rules_logic import (
     can_drop_specific_piece,
@@ -23,8 +23,8 @@ def empty_game() -> ShogiGame:
             game.set_piece(r, c, None)
     # Initialize hands for both players to be empty for all droppable piece types
     # Corrected method name from get_hand_piece_types to get_unpromoted_types
-    game.hands[Color.BLACK.value] = {pt: 0 for pt in PieceType.get_unpromoted_types()}
-    game.hands[Color.WHITE.value] = {pt: 0 for pt in PieceType.get_unpromoted_types()}
+    game.hands[Color.BLACK.value] = {pt: 0 for pt in get_unpromoted_types()}
+    game.hands[Color.WHITE.value] = {pt: 0 for pt in get_unpromoted_types()}
     game.current_player = Color.BLACK  # Default to Black's turn
     return game
 
@@ -267,7 +267,7 @@ def test_generate_legal_moves_no_drops_if_hand_empty(empty_game: ShogiGame):
     empty_game.current_player = Color.BLACK
     # Ensure hands are empty (fixture does this, but double check for clarity)
     empty_game.hands[Color.BLACK.value] = {
-        pt: 0 for pt in PieceType.get_unpromoted_types()
+        pt: 0 for pt in get_unpromoted_types()
     }
 
     legal_moves = generate_all_legal_moves(empty_game)
@@ -732,15 +732,13 @@ def test_gamelm_king_cannot_move_into_check(empty_game: ShogiGame):
         for c_idx in range(9):
             empty_game.set_piece(r_idx, c_idx, None)
     empty_game.hands[Color.BLACK.value] = {
-        pt: 0 for pt in PieceType.get_unpromoted_types()
+        pt: 0 for pt in get_unpromoted_types()
     }
     empty_game.hands[Color.WHITE.value] = {
-        pt: 0 for pt in PieceType.get_unpromoted_types()
+        pt: 0 for pt in get_unpromoted_types()
     }
-    empty_game.move_history = []  # Also clear move history
 
-    # Simpler scenario: King not initially in check, cannot move into check
-    # empty_game.reset() # This was the problematic line
+    # Scenario 2: King is on edge, only one escape square, but it's attacked.
     empty_game.current_player = Color.BLACK
     empty_game.set_piece(7, 7, Piece(PieceType.KING, Color.BLACK))  # BK
     empty_game.set_piece(0, 0, Piece(PieceType.ROOK, Color.WHITE))  # WR

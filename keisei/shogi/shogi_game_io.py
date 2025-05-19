@@ -10,7 +10,7 @@ from .shogi_core_definitions import (
     OBS_PROMOTED_ORDER,
     OBS_UNPROMOTED_ORDER,
     Color,
-    PieceType,
+    get_unpromoted_types,  # Import the standalone function
 )
 
 if TYPE_CHECKING:
@@ -73,7 +73,7 @@ def generate_neural_network_observation(game: "ShogiGame") -> np.ndarray:
                 obs[channel_offset, r, c] = 1.0
 
     # Pieces in hand (7 channels per player: P,L,N,S,G,B,R)
-    hand_piece_order = PieceType.get_unpromoted_types()
+    hand_piece_order = get_unpromoted_types()  # Use the imported function
 
     # Current player's hand (channels 28-34)
     current_player_hand_start_ch = 28

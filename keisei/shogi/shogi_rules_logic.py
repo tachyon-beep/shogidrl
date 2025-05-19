@@ -11,15 +11,14 @@ from .shogi_core_definitions import (
 )  # Corrected: MoveTuple is defined and used, not Move
 from .shogi_core_definitions import (  # Add any other constants from core_definitions that might be used directly here
     BASE_TO_PROMOTED_TYPE,
-    BoardMove,
     Color,
-    DropMove,
     Piece,
     PieceType,
 )
 
 if TYPE_CHECKING:
     from .shogi_game import ShogiGame  # For type hinting the 'game' parameter
+    from .shogi_core_definitions import BoardMoveTuple, DropMoveTuple # Added for type hinting
 
 
 # --- Helper functions for move generation and validation ---
@@ -488,7 +487,7 @@ def generate_all_legal_moves(game: "ShogiGame") -> List[MoveTuple]:
                         piece, r_to
                     )  # Removed game argument
 
-                    current_move_tuples_to_check: List[BoardMove]  # Declare type here
+                    current_move_tuples_to_check: List['BoardMoveTuple']  # Declare type here
                     if must_promote:
                         # Only one move: promotion is forced
                         current_move_tuples_to_check = [
@@ -528,7 +527,7 @@ def generate_all_legal_moves(game: "ShogiGame") -> List[MoveTuple]:
                         if can_drop_specific_piece(
                             game, piece_type_to_drop, r_to, c_to, original_player_color
                         ):
-                            drop_move_tuple: DropMove = (
+                            drop_move_tuple: 'DropMoveTuple' = (
                                 None,
                                 None,
                                 r_to,

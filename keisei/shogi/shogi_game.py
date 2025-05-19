@@ -3,7 +3,7 @@ shogi_game.py: Main ShogiGame class for DRL Shogi Client.
 Orchestrates game state and delegates complex logic to helper modules.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING  # Added TYPE_CHECKING
 
 import numpy as np
 
@@ -12,7 +12,10 @@ from . import shogi_game_io, shogi_move_execution, shogi_rules_logic
 
 # Import types and fundamental classes from shogi_core_definitions
 from .shogi_core_definitions import PIECE_TYPE_TO_HAND_TYPE  # Used in add_to_hand
-from .shogi_core_definitions import Color, MoveTuple, Piece, PieceType
+from .shogi_core_definitions import Color, Piece, PieceType, get_unpromoted_types # Added get_unpromoted_types
+
+if TYPE_CHECKING:
+    from .shogi_core_definitions import MoveTuple
 
 
 class ShogiGame:
@@ -47,8 +50,8 @@ class ShogiGame:
         self.board = [[None for _ in range(9)] for _ in range(9)]
         # Initialize empty hands for both players (using unpromoted PieceType enums)
         self.hands = [
-            {pt: 0 for pt in PieceType.get_unpromoted_types()},
-            {pt: 0 for pt in PieceType.get_unpromoted_types()},
+            {pt: 0 for pt in get_unpromoted_types()},
+            {pt: 0 for pt in get_unpromoted_types()},
         ]
 
         # Piece types for the back rank (Lance, Knight, Silver, Gold, King)
@@ -145,7 +148,7 @@ class ShogiGame:
             self, row, col, attacker_color
         )
 
-    def get_legal_moves(self) -> List[MoveTuple]:
+    def get_legal_moves(self) -> List['MoveTuple']:  # Quoted
         """Returns a list of all legal moves for the current player."""
         return shogi_rules_logic.generate_all_legal_moves(self)
 
@@ -172,12 +175,14 @@ class ShogiGame:
                 sorted(
                     (pt.value, count)
                     for pt, count in self.hands[Color.BLACK.value].items()
+                    if count > 0  # Only include pieces with count > 0
                 )
             ),
             tuple(
                 sorted(
                     (pt.value, count)
                     for pt, count in self.hands[Color.WHITE.value].items()
+                    if count > 0  # Only include pieces with count > 0
                 )
             ),
         )
@@ -200,7 +205,7 @@ class ShogiGame:
         return shogi_rules_logic.check_for_sennichite(self)
 
     def make_move(
-        self, move_tuple: MoveTuple, is_simulation: bool = False
+        self, move_tuple: 'MoveTuple', is_simulation: bool = False  # Quoted
     ) -> tuple[np.ndarray, float, bool, dict]:
         """
         Executes a move on the board and updates game state.
@@ -262,16 +267,16 @@ class ShogiGame:
             if king_pos:
                 break
         if not king_pos:
-            # No king found is a critical error, or means game might have ended.
-            # Depending on exact rules for this state, can be True or raise error.
-            # Original code implies True for safety.
-            return True
+            # No king found is a critical error, indicates an impossible game state.
+            raise RuntimeError(
+                f"King of color {player_color} not found on the board. This indicates an illegal game state."
+            )
 
         opponent_color = Color.WHITE if player_color == Color.BLACK else Color.BLACK
         # Uses the wrapper for _is_square_attacked
         return self._is_square_attacked(king_pos[0], king_pos[1], opponent_color)
 
-    def sfen_encode_move(self, move_tuple: MoveTuple) -> str:
+    def sfen_encode_move(self, move_tuple: 'MoveTuple') -> str:  # Quoted
         """
         Encodes a move in SFEN (Shogi Forsyth-Edwards Notation) format.
         This is a standard notation for recording Shogi positions and moves.
@@ -311,7 +316,7 @@ class ShogiGame:
         Returns:
             bool: True if the piece was successfully removed, False otherwise
         """
-        if piece_type not in PieceType.get_unpromoted_types():
+        if piece_type not in get_unpromoted_types(): # Use imported function
             return False
 
         if self.hands[color.value].get(piece_type, 0) > 0:
