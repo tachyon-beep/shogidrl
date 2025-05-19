@@ -18,7 +18,7 @@ import config # Your project's configuration file
 
 from keisei.experience_buffer import ExperienceBuffer
 from keisei.ppo_agent import PPOAgent
-from keisei.shogi.shogi_core_definitions import Color, MoveTuple, PieceType # Ensure PieceType is imported
+from keisei.shogi.shogi_core_definitions import Color, MoveTuple
 from keisei.shogi.shogi_engine import ShogiGame
 from keisei.utils import PolicyOutputMapper, TrainingLogger
 
