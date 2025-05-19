@@ -1,20 +1,17 @@
 from __future__ import annotations
+
 """
 utils.py: Contains PolicyOutputMapper and TrainingLogger.
 """
 import datetime
 import sys
-from typing import Dict, List, TYPE_CHECKING, TextIO
+from typing import TYPE_CHECKING, Dict, List, TextIO
 
 import torch
 
 # Ensure these imports are correct based on your project structure
-from keisei.shogi.shogi_core_definitions import (
-    BoardMoveTuple,
-    DropMoveTuple,
-    PieceType,
-    get_unpromoted_types, # Import the standalone function
-)
+from keisei.shogi.shogi_core_definitions import get_unpromoted_types  # Import the standalone function
+from keisei.shogi.shogi_core_definitions import BoardMoveTuple, DropMoveTuple, PieceType
 
 if TYPE_CHECKING:
     from keisei.shogi.shogi_core_definitions import MoveTuple

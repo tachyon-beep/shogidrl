@@ -4,14 +4,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-import config  # For MAX_MOVES_PER_GAME
-
-from .shogi_core_definitions import (
-    OBS_PROMOTED_ORDER,
-    OBS_UNPROMOTED_ORDER,
-    Color,
-    get_unpromoted_types,  # Import the standalone function
-)
+from .shogi_core_definitions import get_unpromoted_types  # Import the standalone function
+from .shogi_core_definitions import OBS_PROMOTED_ORDER, OBS_UNPROMOTED_ORDER, Color
 
 if TYPE_CHECKING:
     from .shogi_game import ShogiGame  # For type hinting the 'game' parameter
@@ -98,7 +92,8 @@ def generate_neural_network_observation(game: "ShogiGame") -> np.ndarray:
     obs[42, :, :] = 1.0 if game.current_player == Color.BLACK else 0.0
 
     # Move count plane (43)
-    max_moves = float(getattr(config, "MAX_MOVES_PER_GAME", 512))
+    # Use game.max_moves_per_game for consistency
+    max_moves = float(game.max_moves_per_game)
     obs[43, :, :] = game.move_count / max_moves if max_moves > 0 else 0.0
 
     # Planes 44, 45 are reserved and remain zeros.

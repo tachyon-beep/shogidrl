@@ -3,11 +3,11 @@ Minimal ActorCritic neural network for DRL Shogi Client (dummy forward pass).
 """
 
 import sys  # For stderr
-from typing import Tuple, Optional  # Added Optional
+from typing import Optional, Tuple  # Added Optional
 
 import torch
-from torch import nn  # Corrected import
 import torch.nn.functional as F
+from torch import nn  # Corrected import
 
 
 class ActorCritic(nn.Module):

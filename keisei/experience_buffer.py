@@ -3,7 +3,8 @@ Minimal ExperienceBuffer for DRL Shogi Client.
 """
 
 #import numpy as np
-import torch # Ensure torch is imported
+import torch  # Ensure torch is imported
+
 
 class ExperienceBuffer:
     """Experience buffer for storing transitions during RL training."""

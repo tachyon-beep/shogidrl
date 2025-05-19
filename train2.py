@@ -15,9 +15,9 @@ import argparse
 import json
 import os
 import sys # Added import sys
+from datetime import datetime
 import numpy as np
 import torch
-from datetime import datetime
 from tqdm import tqdm
 
 import config as app_config # Import the config module directly
@@ -57,11 +57,11 @@ def apply_config_overrides(args, cfg_module):
     if args.total_timesteps is not None:
         cfg_module.TOTAL_TIMESTEPS = args.total_timesteps
     if hasattr(args, 'dev') and getattr(args, 'dev', False):
-        cfg_module.TOTAL_TIMESTEPS = 100 
+        cfg_module.TOTAL_TIMESTEPS = 100
         cfg_module.SAVE_FREQ_EPISODES = 1
-        cfg_module.STEPS_PER_EPOCH = 50 
-        cfg_module.MINIBATCH_SIZE = 16 
-        cfg_module.PPO_EPOCHS = 2 
+        cfg_module.STEPS_PER_EPOCH = 50
+        cfg_module.MINIBATCH_SIZE = 16
+        cfg_module.PPO_EPOCHS = 2
     return cfg_module
 
 # --- CHECKPOINT AUTO-DETECTION ---
@@ -151,7 +151,7 @@ def main():
         ckpt_path = args.resume
     else:
         ckpt_path = find_latest_checkpoint(model_dir)
-    
+
     # Use TrainingLogger with a context manager
     with TrainingLogger(log_file) as logger:
         logger.log(f"Starting run: {run_name}")
@@ -166,7 +166,7 @@ def main():
                 total_episodes_completed = ckpt.get('total_episodes_completed', 0)
                 logger.log(f"Resumed at timestep {global_timestep}, episodes {total_episodes_completed}")
                 print(f"Resumed at timestep {global_timestep}, episodes {total_episodes_completed}")
-                if agent.last_kl_div is not None: 
+                if agent.last_kl_div is not None:
                     logger.log(f"Resumed with last KL divergence: {agent.last_kl_div:.4f}")
             else:
                 logger.log(f"Failed to load checkpoint data from {ckpt_path}. Starting fresh.")
@@ -200,7 +200,7 @@ def main():
                 # This case should ideally be handled by game termination logic
                 logger.log(f"Episode {total_episodes_completed + 1}: No legal moves available at timestep {current_episode_length}. Game might have ended unexpectedly.")
                 done = True # Treat as done
-            
+
             if not done:
                 selected_shogi_move, action_idx, log_prob, value = agent.select_action(
                     obs, legal_moves, is_training=True
@@ -230,9 +230,9 @@ def main():
             # ExperienceBuffer.add expects: obs, action, reward, log_prob, value, done
             experience_buffer.add(
                 torch.tensor(obs_for_buffer, dtype=torch.float32, device=agent.device), # Ensure obs is a tensor on the correct device
-                action_idx, 
-                reward, 
-                log_prob, 
+                action_idx,
+                reward,
+                log_prob,
                 value,
                 done
             )
@@ -254,7 +254,7 @@ def main():
 
             # Perform PPO update if buffer is full
             if len(experience_buffer) >= cfg.STEPS_PER_EPOCH: # Check buffer length
-                next_value_np = agent.get_value(next_obs) 
+                next_value_np = agent.get_value(next_obs)
                 experience_buffer.compute_advantages_and_returns(next_value_np) # Corrected method name
                 learn_metrics = agent.learn(experience_buffer)
                 experience_buffer.clear()

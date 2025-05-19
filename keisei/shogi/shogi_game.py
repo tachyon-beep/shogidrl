@@ -3,16 +3,15 @@ shogi_game.py: Main ShogiGame class for DRL Shogi Client.
 Orchestrates game state and delegates complex logic to helper modules.
 """
 
-from typing import Dict, List, Optional, TYPE_CHECKING  # Added TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List, Optional  # Added TYPE_CHECKING
 
 import numpy as np
 
 # Import helper modules
 from . import shogi_game_io, shogi_move_execution, shogi_rules_logic
-
 # Import types and fundamental classes from shogi_core_definitions
 from .shogi_core_definitions import PIECE_TYPE_TO_HAND_TYPE  # Used in add_to_hand
-from .shogi_core_definitions import Color, Piece, PieceType, get_unpromoted_types # Added get_unpromoted_types
+from .shogi_core_definitions import Color, Piece, PieceType, get_unpromoted_types  # Added get_unpromoted_types
 
 if TYPE_CHECKING:
     from .shogi_core_definitions import MoveTuple

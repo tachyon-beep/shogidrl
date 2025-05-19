@@ -7,26 +7,16 @@ name = "keisei"
 version = "0.1.0"
 description = "DRL Shogi Client: Deep Reinforcement Learning for Shogi using PPO"
 authors = [
-    { name = "Your Name", email = "your.email@example.com" }
+    { name = "John Morrissey", email = "john@foundryside.dev" }
 ]
 readme = "README.md"
-requires-python = ">=3.8"
+license = "MIT"
+requires-python = ">=3.12"
 dependencies = [
     "torch",
     "numpy",
     "python-dotenv",
-    "wandb", # wandb will pull in its own dependencies like GitPython, pydantic, sentry-sdk, setproctitle
-    "requests",     # Keeping for now, pending user clarification
-    # "setproctitle", # Removed, will be installed as a wandb dependency
-    # "GitPython",    # Removed, will be installed as a wandb dependency
-    # "pydantic",     # Removed, will be installed as a wandb dependency
-    # "sentry-sdk",   # Removed, will be installed as a wandb dependency
-    # "Jinja2", # Kept removed
-    # "MarkupSafe", # Kept removed
-    # "networkx", # Kept removed
-    # "sympy", # Kept removed
-    # "triton", # Kept removed
-    # matplotlib was in dependencies but seems more like a dev/visualization tool
+    "wandb" # wandb will pull in its own dependencies like GitPython, pydantic, sentry-sdk, setproctitle
 ]
 
 [project.optional-dependencies]
@@ -72,7 +62,7 @@ dev = [
 where = ["keisei"]
 
 [pytest]
-addopts = --pylint
+addopts = "--pylint"
 
 [tool.pylint.messages_control]
 disable = "redefined-outer-name"
@@ -92,3 +82,10 @@ exclude = [
 ]
 max-line-length = 120
 extend-ignore = "E203"
+
+[tool.isort]
+profile = "black"
+line_length = 120
+known_first_party = ["keisei"]
+multi_line_output = 3
+include_trailing_comma = true

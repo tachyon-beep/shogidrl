@@ -3,11 +3,12 @@ Minimal PPOAgent for DRL Shogi Client.
 """
 
 import os
-import sys # For stderr
+import sys  # For stderr
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple  # Removed Any
+
 import numpy as np
 import torch
-import torch.nn.functional as F # For F.softmax
-from typing import List, Tuple, Dict, Optional, TYPE_CHECKING # Removed Any
+import torch.nn.functional as F  # For F.softmax
 
 from keisei.experience_buffer import ExperienceBuffer
 from keisei.neural_network import ActorCritic
