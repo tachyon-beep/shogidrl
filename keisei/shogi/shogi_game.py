@@ -4,7 +4,7 @@ Orchestrates game state and delegates complex logic to helper modules.
 """
 
 import copy  # Added for __deepcopy__
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple  # Added Any
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -143,7 +143,7 @@ class ShogiGame:
     def is_on_board(self, row: int, col: int) -> bool:
         return 0 <= row < 9 and 0 <= col < 9
 
-    def __deepcopy__(self, memo):
+    def __deepcopy__(self, memo: Dict[int, Any]): # Added type hint for memo
         if id(self) in memo:
             return memo[id(self)]
 
@@ -171,7 +171,7 @@ class ShogiGame:
 
     def get_individual_piece_moves(
         self, piece: Piece, r_from: int, c_from: int
-    ) -> list[tuple[int, int]]:
+    ) -> List[Tuple[int, int]]: # Changed from list[tuple[int, int]]
         return shogi_rules_logic.generate_piece_potential_moves(
             self, piece, r_from, c_from
         )
@@ -200,7 +200,7 @@ class ShogiGame:
             self, row, col, attacker_color
         )
 
-    def get_legal_moves(self) -> List["MoveTuple"]:
+    def get_legal_moves(self) -> List[MoveTuple]: # Changed from List["MoveTuple"]
         return shogi_rules_logic.generate_all_legal_moves(self)
 
     def _king_in_check_after_move(self, player_color: Color) -> bool:
@@ -229,26 +229,25 @@ class ShogiGame:
 
     def _get_sfen_drop_char(self, piece_type: PieceType) -> str:
         """Helper to get the uppercase SFEN character for a droppable piece type."""
-        if piece_type == PieceType.PAWN:
-            return "P"
-        if piece_type == PieceType.LANCE:
-            return "L"
-        if piece_type == PieceType.KNIGHT:
-            return "N"
-        if piece_type == PieceType.SILVER:
-            return "S"
-        if piece_type == PieceType.GOLD:
-            return "G"
-        if piece_type == PieceType.BISHOP:
-            return "B"
-        if piece_type == PieceType.ROOK:
-            return "R"
-        raise ValueError(
-            f"PieceType {piece_type.name if hasattr(piece_type, 'name') else piece_type} "
-            f"is not a standard droppable piece for SFEN notation or is invalid."
-        )
+        # Using a mapping for clarity and directness
+        sfen_char_map: Dict[PieceType, str] = {
+            PieceType.PAWN: "P",
+            PieceType.LANCE: "L",
+            PieceType.KNIGHT: "N",
+            PieceType.SILVER: "S",
+            PieceType.GOLD: "G",
+            PieceType.BISHOP: "B",
+            PieceType.ROOK: "R",
+        }
+        char = sfen_char_map.get(piece_type)
+        if char is None:
+            raise ValueError(
+                f"PieceType {piece_type.name if hasattr(piece_type, 'name') else piece_type} "
+                f"is not a standard droppable piece for SFEN notation or is invalid."
+            )
+        return char
 
-    def sfen_encode_move(self, move_tuple: "MoveTuple") -> str:
+    def sfen_encode_move(self, move_tuple: MoveTuple) -> str: # Changed from "MoveTuple"
         """
         Encodes a move in SFEN (Shogi Forsyth-Edwards Notation) format.
         Board move: (from_r, from_c, to_r, to_c, promote_bool) -> e.g., "7g7f" or "2b3a+"
@@ -498,7 +497,7 @@ class ShogiGame:
     @classmethod
     def from_sfen(
         cls, sfen_str: str, max_moves_for_game_instance: int = 500
-    ) -> "ShogiGame":
+    ) -> "ShogiGame": # Keep "ShogiGame" due to forward reference
         """Loads a game state from an SFEN string."""
         parts = sfen_str.strip().split()
         if len(parts) != 4:
@@ -818,7 +817,7 @@ class ShogiGame:
         # --- Part 3: Update history and game state (delegating parts to shogi_move_execution) ---
         # Store state hash *after* the move is made on the board, but *before* player switch.
         # The hash should reflect the board, hands, and the player *who just made the move*.
-        current_state_hash = self._board_state_hash() # Corrected call
+        current_state_hash = self._board_state_hash() 
         move_details_for_history["state_hash"] = current_state_hash
 
         if not is_simulation:
@@ -829,10 +828,10 @@ class ShogiGame:
 
         # Call apply_move_to_board to switch player, increment move count, and check game end.
         # Pass the original move_tuple as it might be used by apply_move_to_board for its logic,
-        # though we\\'ve handled direct board changes here.
+        # though we've handled direct board changes here.
         shogi_move_execution.apply_move_to_board(self, move_tuple, is_simulation)
 
-    def undo_move(self):
+    def undo_move(self) -> None: # Added return type hint
         """
         Reverts the last move made, restoring the previous game state.
         """

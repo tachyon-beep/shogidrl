@@ -4,10 +4,10 @@ Functions in this module operate on a ShogiGame instance.
 """
 
 from copy import deepcopy  # ensure deep copy is available
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import TYPE_CHECKING, List, Optional, Tuple, Set # Added Set
 
 # Ensure all necessary types are imported:
-from .shogi_core_definitions import (  # Corrected: MoveTuple is defined and used, not Move; Add any other constants from core_definitions that might be used directly here
+from .shogi_core_definitions import ( 
     BASE_TO_PROMOTED_TYPE,
     Color,
     DropMoveTuple,
@@ -17,7 +17,7 @@ from .shogi_core_definitions import (  # Corrected: MoveTuple is defined and use
 )
 
 if TYPE_CHECKING:
-    from .shogi_core_definitions import BoardMoveTuple  # Added for type hinting
+    from .shogi_core_definitions import BoardMoveTuple # Added for type hinting
     from .shogi_game import ShogiGame  # For type hinting the 'game' parameter
 
 
@@ -36,12 +36,12 @@ def find_king(game: "ShogiGame", color: Color) -> Optional[Tuple[int, int]]:
 # ADDED: is_in_check function to be called by ShogiGame.is_in_check
 def is_in_check(game: "ShogiGame", player_color: Color, debug_recursion: bool = False) -> bool:
     """Checks if the king of 'player_color' is in check."""
-    king_pos = find_king(game, player_color)
+    king_pos: Optional[Tuple[int, int]] = find_king(game, player_color)
 
     if not king_pos:
         if debug_recursion:
             # Try to get SFEN, but game object might be in an intermediate state for this print
-            sfen_str = "unavailable (game object might be partial)"
+            sfen_str: str = "unavailable (game object might be partial)"
             try:
                 sfen_str = game.to_sfen_string()
             except Exception: # pylint: disable=broad-except
@@ -49,7 +49,7 @@ def is_in_check(game: "ShogiGame", player_color: Color, debug_recursion: bool = 
             print(f"DEBUG_IS_IN_CHECK: King of color {player_color} not found. Game state (SFEN): {sfen_str}. Returning True (check).")
         return True  # King not found implies a lost/invalid state, effectively in check.
 
-    opponent_color = Color.WHITE if player_color == Color.BLACK else Color.BLACK
+    opponent_color: Color = Color.WHITE if player_color == Color.BLACK else Color.BLACK
 
     if debug_recursion:
         print(f"DEBUG_IS_IN_CHECK: [{player_color}] King at {king_pos}. Checking if attacked by {opponent_color}. Debug on.")
@@ -62,18 +62,19 @@ def is_in_check(game: "ShogiGame", player_color: Color, debug_recursion: bool = 
 
 def is_piece_type_sliding(piece_type: PieceType) -> bool:  # Removed 'game' parameter
     """Returns True if the piece type is a sliding piece (Lance, Bishop, Rook or their promoted versions)."""
-    return piece_type in (
+    sliding_types: Set[PieceType] = {
         PieceType.LANCE,
         PieceType.BISHOP,
         PieceType.ROOK,
         PieceType.PROMOTED_BISHOP,
         PieceType.PROMOTED_ROOK,
-    )
+    }
+    return piece_type in sliding_types
 
 
 def generate_piece_potential_moves(
     game: "ShogiGame", piece: Piece, r_from: int, c_from: int
-) -> list[tuple[int, int]]:
+) -> List[Tuple[int, int]]: # Changed to List[Tuple[int, int]]
     """
     Returns a list of (r_to, c_to) tuples for a piece, considering its
     fundamental movement rules and path-blocking by other pieces.
@@ -82,16 +83,16 @@ def generate_piece_potential_moves(
     the square is included (as a capture). If friendly, it's not included.
     (Formerly ShogiGame.get_individual_piece_moves)
     """
-    moves = []
+    moves: List[Tuple[int, int]] = []
     # Black (Sente, 0) moves towards smaller row indices, White (Gote, 1) towards larger
-    forward = (
+    forward: int = (
         -1 if piece.color == Color.BLACK else 1
     )  # Assuming game instance has Color enum
 
-    piece_type = piece.type
+    piece_type: PieceType = piece.type
 
     # Define move offsets
-    gold_move_offsets = [
+    gold_move_offsets: List[Tuple[int, int]] = [
         (forward, 0),
         (forward, -1),
         (forward, 1),
@@ -99,7 +100,7 @@ def generate_piece_potential_moves(
         (0, 1),
         (-forward, 0),  # Backwards for Gold
     ]
-    king_move_offsets = [
+    king_move_offsets: List[Tuple[int, int]] = [
         (-1, -1),
         (-1, 0),
         (-1, 1),
@@ -109,19 +110,19 @@ def generate_piece_potential_moves(
         (1, 0),
         (1, 1),
     ]
-    knight_move_offsets = [(forward * 2, -1), (forward * 2, 1)]
-    silver_move_offsets = [
+    knight_move_offsets: List[Tuple[int, int]] = [(forward * 2, -1), (forward * 2, 1)]
+    silver_move_offsets: List[Tuple[int, int]] = [
         (forward, 0),
         (forward, -1),
         (forward, 1),
         (-forward, -1),
         (-forward, 1),  # Backwards-diagonal
     ]
-    promoted_rook_extra_offsets = [(-1, -1), (-1, 1), (1, -1), (1, 1)]
-    promoted_bishop_extra_offsets = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    promoted_rook_extra_offsets: List[Tuple[int, int]] = [(-1, -1), (-1, 1), (1, -1), (1, 1)]
+    promoted_bishop_extra_offsets: List[Tuple[int, int]] = [(-1, 0), (1, 0), (0, -1), (0, 1)]
 
-    current_offsets = []
-    is_sliding = False
+    current_offsets: List[Tuple[int, int]] = []
+    is_sliding: bool = False
 
     if piece_type == PieceType.PAWN:
         current_offsets = [(forward, 0)]
@@ -143,11 +144,11 @@ def generate_piece_potential_moves(
     for dr, dc in current_offsets:
         nr, nc = r_from + dr, c_from + dc
         if game.is_on_board(nr, nc):
-            target_piece = game.get_piece(nr, nc)
+            target_piece: Optional[Piece] = game.get_piece(nr, nc)
             if target_piece is None or target_piece.color != piece.color:
                 moves.append((nr, nc))
 
-    sliding_directions = []
+    sliding_directions: List[Tuple[int, int]] = []
     if piece_type == PieceType.LANCE:
         is_sliding = True
         sliding_directions = [(forward, 0)]
@@ -185,7 +186,7 @@ def generate_piece_potential_moves(
                     if target_piece.color != piece.color:
                         moves.append((nr, nc))
                     break
-    return list(set(moves))  # Remove duplicates
+    return list(set(moves))  # Remove duplicates, type is List[Tuple[int, int]]
 
 
 def check_for_nifu(game: "ShogiGame", color: Color, col: int) -> bool:
@@ -660,11 +661,11 @@ def check_for_sennichite(game: "ShogiGame") -> bool:
 
     # This hash represents the board state achieved by the *previous* player's move,
     # and importantly, the game._board_state_hash() includes whose turn it *was* when that state was recorded.
-    last_recorded_state_hash = game.move_history[-1].get("state_hash")
+    last_recorded_state_hash: Optional[Tuple] = game.move_history[-1].get("state_hash")
     if not last_recorded_state_hash:
         return False  # Should not happen if history is populated correctly
 
-    count = 0
+    count: int = 0
     for move_record in game.move_history:
         if move_record.get("state_hash") == last_recorded_state_hash:
             count += 1
