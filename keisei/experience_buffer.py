@@ -25,8 +25,8 @@ class ExperienceBuffer:
         self.values: list[float] = []
         self.dones: list[bool] = []
         self.legal_masks: list[torch.Tensor] = []  # Added to store legal masks
-        self.advantages: list[float] = []  # Populated by compute_advantages_and_returns
-        self.returns: list[float] = []  # Populated by compute_advantages_and_returns
+        self.advantages: list[torch.Tensor] = []  # Populated by compute_advantages_and_returns
+        self.returns: list[torch.Tensor] = []  # Populated by compute_advantages_and_returns
         self.ptr = 0
 
     def add(
@@ -86,8 +86,8 @@ class ExperienceBuffer:
         )
         masks_tensor = 1.0 - dones_tensor
 
-        advantages_list = [0.0] * self.ptr
-        returns_list = [0.0] * self.ptr
+        advantages_list: list[torch.Tensor] = [torch.tensor(0.0, device=self.device)] * self.ptr
+        returns_list: list[torch.Tensor] = [torch.tensor(0.0, device=self.device)] * self.ptr
         gae = torch.tensor(0.0, device=self.device)  # Ensure gae is always a tensor
 
         # last_value is V(S_t+1) for the last state in the buffer
@@ -109,8 +109,8 @@ class ExperienceBuffer:
             )
             gae = delta + self.gamma * self.lambda_gae * masks_tensor[t] * gae
 
-            advantages_list[t] = gae.item()  # Store as float
-            returns_list[t] = (gae + values_tensor[t]).item()  # Store as float
+            advantages_list[t] = gae  # Store as tensor
+            returns_list[t] = gae + values_tensor[t]  # Store as tensor
 
         self.advantages = advantages_list
         self.returns = returns_list
@@ -152,12 +152,8 @@ class ExperienceBuffer:
             self.values[:num_samples], dtype=torch.float32, device=self.device
         )
 
-        advantages_tensor = torch.tensor(
-            self.advantages[:num_samples], dtype=torch.float32, device=self.device
-        )
-        returns_tensor = torch.tensor(
-            self.returns[:num_samples], dtype=torch.float32, device=self.device
-        )
+        advantages_tensor = torch.stack(self.advantages[:num_samples])
+        returns_tensor = torch.stack(self.returns[:num_samples])
 
         # Dones can be bool or float, PPO often uses float for masking.
         dones_tensor = torch.tensor(
