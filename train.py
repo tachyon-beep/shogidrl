@@ -243,9 +243,10 @@ def main():
         # Initialize reward and next_obs for the first iteration of the loop
         reward = 0.0
         next_obs = obs  # Initialize next_obs with the initial observation
-        done = False
+        # done = False # done is initialized before each episode, so this line is not strictly needed here
 
         for _ in range(global_timestep, cfg.TOTAL_TIMESTEPS):  # Changed t_step to _
+            done = False # Reset done at the beginning of each step
             pbar.update(1)
             global_timestep += 1
             current_episode_length += 1
@@ -314,16 +315,20 @@ def main():
 
             # Add to experience buffer
             # ExperienceBuffer.add expects: obs, action, reward, log_prob, value, done
-            experience_buffer.add(
-                torch.tensor(
-                    obs_for_buffer, dtype=torch.float32, device=agent.device
-                ),  # Ensure obs is a tensor on the correct device
-                action_idx,
-                reward,
-                log_prob,
-                value,
-                done,
-            )
+            # Only add to buffer if an action was actually taken (action_idx != -1).
+            # This prevents adding entries when `done` is set true because no legal moves were available *before* action selection.
+            if action_idx != -1:
+                experience_buffer.add(
+                    torch.tensor(
+                        obs_for_buffer, dtype=torch.float32, device=agent.device
+                    ),  # Ensure obs is a tensor on the correct device
+                    action_idx,
+                    reward,
+                    log_prob,
+                    value,
+                    done, # This `done` reflects the state *after* the move or if no legal moves (but action_idx would be -1)
+                )
+            
             obs = next_obs
             current_episode_reward += reward
 
