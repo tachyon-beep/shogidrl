@@ -19,6 +19,7 @@ from datetime import datetime
 import numpy as np
 import torch
 from tqdm import tqdm
+import re # Add import for regular expressions
 
 import config as app_config  # Import the config module directly
 from keisei.experience_buffer import ExperienceBuffer
@@ -112,27 +113,59 @@ def find_latest_checkpoint(model_dir):
     if not ckpts:
         return None
 
-    # Sort by global timestep or episode if present in filename
-    def extract_ts(f):
-        # Example: ppo_shogi_agent_episode_100_ts_41355.pth
-        try:
-            parts = f.split("_")
-            ep = int(parts[4])
-            ts = int(parts[6].split(".")[0])
-            return (ep, ts)
-        except IndexError:  # More specific exception
-            print(
-                f"Warning: Ignoring file in checkpoint dir that doesn't match expected pattern: {f}"
-            )
-            return (0, 0)
-        except ValueError:  # More specific exception
-            print(
-                f"Warning: Ignoring file in checkpoint dir due to non-integer episode/timestep: {f}"
-            )
-            return (0, 0)
+    # Regex to capture episode and timestep from filenames like:
+    # ppo_shogi_agent_episode_100_ts_41355.pth
+    # ppo_shogi_ep100_ts41355.pth
+    # ppo_shogi_ep_100_ts_41355_extra_info.pth
+    # ppo_shogi_ep{total_episodes_completed}_ts{global_timestep}.pth (from save logic)
+    # ppo_shogi_ep{total_episodes_completed}_ts{global_timestep}_final.pth (from final save logic)
+    checkpoint_pattern = re.compile(r"episode_(\d+).*ts_(\d+)|ep(\d+).*ts(\d+)")
 
-    ckpts.sort(key=extract_ts, reverse=True)
-    return os.path.join(model_dir, ckpts[0])
+    def extract_ts(filename):
+        match = checkpoint_pattern.search(filename)
+        if match:
+            # The pattern has two groups for episode and two for timestep due to the OR | condition
+            # e.g. (ep_v1, ts_v1, None, None) or (None, None, ep_v2, ts_v2)
+            # We need to check which group matched.
+            if match.group(1) is not None and match.group(2) is not None:
+                try:
+                    ep = int(match.group(1))
+                    ts = int(match.group(2))
+                    return (ep, ts)
+                except ValueError:
+                    print(
+                        f"Warning: Checkpoint file {filename} matched pattern but had non-integer episode/timestep."
+                    )
+                    return (0, 0) # Treat as lowest priority
+            elif match.group(3) is not None and match.group(4) is not None:
+                try:
+                    ep = int(match.group(3))
+                    ts = int(match.group(4))
+                    return (ep, ts)
+                except ValueError:
+                    print(
+                        f"Warning: Checkpoint file {filename} matched pattern but had non-integer episode/timestep."
+                    )
+                    return (0, 0) # Treat as lowest priority
+        else:
+            print(
+                f"Warning: Ignoring file in checkpoint dir that doesn't match expected pattern: {filename}"
+            )
+            return (0, 0)  # Treat as lowest priority if no match
+
+    # Filter out files that don't match and sort the rest
+    valid_ckpts = []
+    for f in ckpts:
+        ep_ts = extract_ts(f)
+        if ep_ts != (0,0): # Only consider if successfully parsed
+            valid_ckpts.append((f, ep_ts))
+    
+    if not valid_ckpts:
+        return None
+
+    # Sort by episode, then by timestep, descending
+    valid_ckpts.sort(key=lambda x: x[1], reverse=True)
+    return os.path.join(model_dir, valid_ckpts[0][0])
 
 
 # --- CONFIG SERIALIZATION FOR LOGGING ---
@@ -238,7 +271,7 @@ def main():
             total=cfg.TOTAL_TIMESTEPS, initial=global_timestep, desc="Training Progress"
         )
         obs = game.reset()  # game.reset() now returns obs directly (np.ndarray)
-        current_episode_reward = 0
+        current_episode_reward = 0.0 # Initialize as float
         current_episode_length = 0
         # Initialize reward and next_obs for the first iteration of the loop
         reward = 0.0
@@ -283,9 +316,16 @@ def main():
 
                 # Determine reward - placeholder logic
                 if game.game_over:
+                    # Sparse rewards: Reward is only given at the end of the game.
+                    # This is a common approach in games with clear win/loss/draw outcomes.
                     if game.winner == game.current_player:  # Current player is the one who just moved
                         reward = 1.0
                     elif game.winner is None:  # Draw
+                        # Currently, a draw is treated the same as a loss for the player who didn't win.
+                        # (i.e., if the opponent didn't win, and it's a draw, the reward is 0.0,
+                        # which is less than the win reward of 1.0).
+                        # Consider if a different reward for draws (e.g., small positive, or distinct from loss)
+                        # would be beneficial. For now, 0.0 is used.
                         reward = 0.0
                     else:  # Opponent won
                         reward = -1.0
@@ -341,7 +381,7 @@ def main():
                     f"Training Progress | Last Ep Reward: {current_episode_reward:.2f}"
                 )
                 obs = game.reset()  # game.reset() now returns obs directly (np.ndarray)
-                current_episode_reward = 0
+                current_episode_reward = 0.0
                 current_episode_length = 0
                 # Save model periodically by episode count
                 if total_episodes_completed % cfg.SAVE_FREQ_EPISODES == 0:
