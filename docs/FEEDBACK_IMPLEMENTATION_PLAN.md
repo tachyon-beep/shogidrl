@@ -89,11 +89,11 @@ This document outlines the plan to address the feedback received on May 21, 2025
 
 ## 3. Shogi Game & Rule Modules
 
-### 3.1. Dead / Duplicitous Code - WIP
+### 3.1. Dead / Duplicitous Code - DONE
 
 *   **Issue**: Commented-out example code in move application logic; clarity of reserved channels in NN observation.
 *   **Actions**:
-    1.  **WIP** Review `keisei/shogi/shogi_move_execution.py` (and related files like `shogi_game.py`) and remove all commented-out example code related to move application. Consolidate move logic if necessary.
+    1.  **DONE** Review `keisei/shogi/shogi_move_execution.py` (and related files like `shogi_game.py`) and remove all commented-out example code related to move application. Consolidate move logic if necessary. (Fixes to `apply_move_to_board` and `undo_move` logic implemented).
     2.  In `keisei/shogi/shogi_game_io.py` (`generate_neural_network_observation`):
         *   **DONE** Add a more detailed comment explaining *why* channels 44 and 45 are reserved.
         *   **DONE** Kept channel count at 46 as per original spec, updated docstring.
@@ -101,13 +101,16 @@ This document outlines the plan to address the feedback received on May 21, 2025
 *   **Files**: `keisei/shogi/shogi_move_execution.py`, `keisei/shogi/shogi_game.py`, `keisei/shogi/shogi_game_io.py`.
 *   **Priority**: Medium.
 
-### 3.2. `is_uchi_fu_zume` & `can_drop_specific_piece` Performance - TODO
+### 3.2. `is_uchi_fu_zume` & `can_drop_specific_piece` Performance - WIP
 
 *   **Issue**: Expensive deep copies for pawn-drop-mate checks.
 *   **Actions**:
-    1.  **TODO** Profile `generate_all_legal_moves`.
-    2.  **TODO** Investigate less computationally intensive checks.
-*   **Files**: `keisei/shogi/shogi_rules_logic.py`.
+    1.  **DONE** Profile `generate_all_legal_moves`.
+    2.  **WIP** Investigate less computationally intensive checks.
+        *   **DONE** Refactored `check_for_uchi_fu_zume` to remove `deepcopy` by simulating pawn drops and manually reverting.
+        *   **DONE** Refactored `generate_all_legal_moves` to use a make/undo approach for board moves and drop moves, eliminating `deepcopy` for move validation.
+        *   **DONE** Successfully ran profiling script after refactoring, confirming significant reduction in `deepcopy` calls and overall performance improvement for `generate_all_legal_moves`.
+*   **Files**: `keisei/shogi/shogi_rules_logic.py`, `keisei/shogi/shogi_game.py`, `keisei/shogi/shogi_move_execution.py`.
 *   **Priority**: High.
 
 ### 3.3. SFEN Serialization / Deserialization - TODO
@@ -163,20 +166,20 @@ This document outlines the plan to address the feedback received on May 21, 2025
     *   **DONE** 1.1 (Dead Code)
     *   **DONE** 1.2 (`done` Logic & Buffer)
     *   **DONE** 2.1 (Agent `select_action` Guard)
-    *   **TODO** 3.2 (Profile `uchi-fu-zume` - initial investigation)
+    *   **WIP** 3.2 (Profile `uchi-fu-zume` - initial investigation, refactoring complete, performance confirmed)
 2.  **Phase 2 (Medium Priority - Robustness & Refinements):**
     *   **DONE** 1.3 (Reward Handling Clarification)
     *   **DONE** 1.4 (Checkpoint Robustness)
     *   **DONE** 2.2 (Buffer Trigger Logic)
     *   **DONE** 2.3 (PPO GAE & Entropy)
-    *   **WIP** 3.1 (Shogi Dead Code & NN Obs)
+    *   **DONE** 3.1 (Shogi Dead Code & NN Obs)
     *   **TODO** 3.3 (SFEN Parsing)
     *   **TODO** 4.1 (SRP - `train.py` Refactor)
     *   **TODO** 4.2 (Error Handling)
     *   **WIP** 4.3 (Type Hints)
 3.  **Phase 3 (Lower Priority - Performance & UX):**
     *   **TODO** 1.5 (Progress Bar Decoupling - if deemed necessary)
-    *   **TODO** 3.2 (Implement `uchi-fu-zume` optimization - this could be long)
+    *   **DONE** 3.2 (Implement `uchi-fu-zume` optimization - this could be long)
     *   **WIP** 4.4 (Comment Cleanup)
 
 This plan will be reviewed and updated as implementation progresses.

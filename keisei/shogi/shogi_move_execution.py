@@ -77,25 +77,39 @@ def apply_move_to_board(
             game.termination_reason = "Max moves reached"
 
 
-def revert_last_applied_move(game: "ShogiGame") -> None:
+def revert_last_applied_move(game: "ShogiGame", simulation_undo_details: Optional[Dict[str, Any]] = None) -> None:
     """
     Reverts the last move made in the game.
     Operates on the 'game' (ShogiGame instance).
+    If simulation_undo_details is provided, it uses that to undo a simulated move.
     """
-    if not game.move_history:
-        raise RuntimeError("No move to undo")
+    last_move_details: Dict[str, Any]
+    player_who_made_the_undone_move: Color
 
-    last_move_details: Dict[str, Any] = game.move_history.pop()
+    if simulation_undo_details:
+        last_move_details = simulation_undo_details
+        # Restore player and move count from before the simulated move
+        game.current_player = last_move_details["player_who_made_the_move"]
+        player_who_made_the_undone_move = game.current_player # This is correct now
+        game.move_count = last_move_details["move_count_before_move"]
+        # No board_history manipulation for simulated moves
+    else:
+        if not game.move_history:
+            raise RuntimeError("No move to undo from history")
+        last_move_details = game.move_history.pop()
+        if game.board_history:
+            game.board_history.pop() # Pop only if not a simulation
+        
+        # For historical undo, player and move count are decremented/switched
+        game.current_player = (
+            Color.WHITE if game.current_player == Color.BLACK else Color.BLACK
+        )
+        player_who_made_the_undone_move = game.current_player
+        game.move_count -= 1
+
     move_tuple: MoveTuple = last_move_details["move"]
 
-    if game.board_history:
-        game.board_history.pop()
-
-    game.current_player = (
-        Color.WHITE if game.current_player == Color.BLACK else Color.BLACK
-    )
-    player_who_made_the_undone_move: Color = game.current_player
-
+    # Common logic for reverting the move based on last_move_details
     if last_move_details["is_drop"]:
         dropped_piece_type_any = last_move_details["dropped_piece_type"]
         if not isinstance(dropped_piece_type_any, PieceType):
@@ -161,7 +175,7 @@ def revert_last_applied_move(game: "ShogiGame") -> None:
         else:
             game.set_piece(orig_r_to, orig_c_to, None)
 
-    game.move_count -= 1
-    game.game_over = False
+    # game.move_count -= 1 # Moved up for non-simulation case, set directly for simulation
+    game.game_over = False # Reset game over status regardless
     game.winner = None
     game.termination_reason = None

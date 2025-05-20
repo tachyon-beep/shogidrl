@@ -666,16 +666,18 @@ class ShogiGame:
         """
         return shogi_rules_logic.check_for_sennichite(self)
 
-    def make_move(self, move_tuple: MoveTuple, is_simulation: bool = False) -> None:
+    def make_move(self, move_tuple: MoveTuple, is_simulation: bool = False) -> Optional[Dict[str, Any]]:
         """
         Applies a move, updates history, and delegates to shogi_move_execution.
         This is the primary method for making a move.
+        Returns move details if is_simulation is True, otherwise None.
         """
         if self.game_over and not is_simulation:
             # print(\\"Game is over. No more moves allowed.\\")
-            return
+            return None
 
-        player_who_made_the_move = self.current_player # Define this early
+        player_who_made_the_move = self.current_player
+        move_count_before_move = self.move_count
 
         # Validate move_tuple structure early
         if not (
@@ -715,6 +717,8 @@ class ShogiGame:
             "original_type_before_promotion": None, # For board moves
             "dropped_piece_type": None, # For drop moves
             "original_color_of_moved_piece": None, # For board moves, to aid undo
+            "player_who_made_the_move": player_who_made_the_move, # Added
+            "move_count_before_move": move_count_before_move, # Added
         }
 
         # --- Part 1: Gather details for history & perform initial piece manipulation ---
@@ -828,14 +832,19 @@ class ShogiGame:
 
         # Call apply_move_to_board to switch player, increment move count, and check game end.
         # Pass the original move_tuple as it might be used by apply_move_to_board for its logic,
-        # though we\'ve handled direct board changes here.
+        # though we\\'ve handled direct board changes here.
         shogi_move_execution.apply_move_to_board(self, is_simulation)
 
-    def undo_move(self) -> None: # Added return type hint
+        if is_simulation:
+            return move_details_for_history
+        return None
+
+    def undo_move(self, simulation_undo_details: Optional[Dict[str, Any]] = None) -> None: # Added return type hint & param
         """
         Reverts the last move made, restoring the previous game state.
+        Can use simulation_undo_details to undo a simulated move not in history.
         """
-        shogi_move_execution.revert_last_applied_move(self)
+        shogi_move_execution.revert_last_applied_move(self, simulation_undo_details)
 
     def add_to_hand(self, captured_piece: Piece, capturing_player_color: Color) -> None:
         """
