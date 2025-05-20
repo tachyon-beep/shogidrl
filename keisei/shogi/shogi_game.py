@@ -12,12 +12,12 @@ import numpy as np
 from . import shogi_game_io, shogi_move_execution, shogi_rules_logic
 
 # Import types and fundamental classes from shogi_core_definitions
+from .shogi_core_definitions import BASE_TO_PROMOTED_TYPE  # For SFEN deserialization
+from .shogi_core_definitions import PIECE_TYPE_TO_HAND_TYPE  # Used in add_to_hand
+from .shogi_core_definitions import PROMOTED_TYPES_SET  # For SFEN serialization
+from .shogi_core_definitions import SYMBOL_TO_PIECE_TYPE  # Added for SFEN parsing
+from .shogi_core_definitions import MoveTuple  # Already imported above
 from .shogi_core_definitions import (
-    BASE_TO_PROMOTED_TYPE,  # For SFEN deserialization
-    PIECE_TYPE_TO_HAND_TYPE,  # Used in add_to_hand
-    PROMOTED_TYPES_SET,  # For SFEN serialization
-    SYMBOL_TO_PIECE_TYPE,  # Added for SFEN parsing
-    MoveTuple,  # Already imported above
     Color,
     Piece,
     PieceType,

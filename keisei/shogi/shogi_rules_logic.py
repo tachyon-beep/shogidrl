@@ -50,7 +50,7 @@ def is_in_check(game: "ShogiGame", player_color: Color, debug_recursion: bool = 
         return True  # King not found implies a lost/invalid state, effectively in check.
 
     opponent_color = Color.WHITE if player_color == Color.BLACK else Color.BLACK
-    
+
     if debug_recursion:
         print(f"DEBUG_IS_IN_CHECK: [{player_color}] King at {king_pos}. Checking if attacked by {opponent_color}. Debug on.")
         # Detailed print for attack check will come from check_if_square_is_attacked
@@ -290,7 +290,7 @@ def check_for_uchi_fu_zume(
 
     # Find the opponent\\'s king
     opp_king_pos = find_king(temp_game, opp_color) # MODIFIED: Use find_king helper
-    
+
     print(f"DEBUG_UCHI_FU_ZUME_DETAILED: Opponent color: {opp_color}, Opponent king pos: {opp_king_pos}")
 
     if not opp_king_pos:
@@ -564,7 +564,7 @@ def generate_all_legal_moves(
                         # Pass is_uchi_fu_zume_check to can_drop_specific_piece's new is_escape_check parameter
                         if is_uchi_fu_zume_check:
                             print(f"DEBUG_GALM_UCHI_CHECK: [{original_player_color}] Checking can_drop_specific_piece for {piece_type_to_drop.name} at ({r_to},{c_to}), is_escape_check={is_uchi_fu_zume_check}")
-                        
+    
                         can_drop = can_drop_specific_piece(
                             game, # Use original game state for can_drop checks
                             piece_type_to_drop,
