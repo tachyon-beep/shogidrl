@@ -218,72 +218,86 @@ OBS_PROMOTED_ORDER = [
 ]
 
 
+# --- Piece Class ---
 class Piece:
-    """
-    Represents a Shogi piece with type and color.
-    Promotion status is derived from its type.
-    """
+    """Represents a single Shogi piece on the board."""
 
     def __init__(self, piece_type: PieceType, color: Color):
+        if not isinstance(piece_type, PieceType):
+            raise TypeError("piece_type must be an instance of PieceType")
+        if not isinstance(color, Color):
+            raise TypeError("color must be an instance of Color")
+
         self.type: PieceType = piece_type
         self.color: Color = color
-
-    @property
-    def is_promoted(self) -> bool:
-        """Returns True if the piece type is a promoted type."""
-        return self.type in PROMOTED_TYPES_SET
+        self.is_promoted: bool = piece_type in PROMOTED_TYPES_SET
 
     def symbol(self) -> str:
-        """
-        Returns a character representation of the piece for display/logging.
-        Relies on self.type being the canonical representation (e.g., PROMOTED_PAWN for a tokin).
-        """
-        # Adjusted to use PieceType Enum values as keys
-        base_symbols = {
-            PieceType.PAWN: "P",
-            PieceType.LANCE: "L",
-            PieceType.KNIGHT: "N",
-            PieceType.SILVER: "S",
-            PieceType.GOLD: "G",
-            PieceType.BISHOP: "B",
-            PieceType.ROOK: "R",
-            PieceType.KING: "K",
-            PieceType.PROMOTED_PAWN: "+P",
-            PieceType.PROMOTED_LANCE: "+L",
-            PieceType.PROMOTED_KNIGHT: "+N",
-            PieceType.PROMOTED_SILVER: "+S",
-            PieceType.PROMOTED_BISHOP: "+B",
-            PieceType.PROMOTED_ROOK: "+R",
-        }
-        s = base_symbols.get(self.type, "?")
-        if self.color == Color.WHITE:
-            s = s.lower()  # Lowercase for Gote (White)
-        return s
+        """Returns a 1 or 2 character string symbol for the piece (e.g., P, +P, K)."""
+        base_symbol: str
+        if self.type == PieceType.PAWN:
+            base_symbol = "P"
+        elif self.type == PieceType.LANCE:
+            base_symbol = "L"
+        elif self.type == PieceType.KNIGHT:
+            base_symbol = "N"
+        elif self.type == PieceType.SILVER:
+            base_symbol = "S"
+        elif self.type == PieceType.GOLD:
+            base_symbol = "G"
+        elif self.type == PieceType.BISHOP:
+            base_symbol = "B"
+        elif self.type == PieceType.ROOK:
+            base_symbol = "R"
+        elif self.type == PieceType.KING:
+            base_symbol = "K"
+        elif self.type == PieceType.PROMOTED_PAWN:
+            base_symbol = "+P"
+        elif self.type == PieceType.PROMOTED_LANCE:
+            base_symbol = "+L"
+        elif self.type == PieceType.PROMOTED_KNIGHT:
+            base_symbol = "+N"
+        elif self.type == PieceType.PROMOTED_SILVER:
+            base_symbol = "+S"
+        elif self.type == PieceType.PROMOTED_BISHOP:
+            base_symbol = "+B"
+        elif self.type == PieceType.PROMOTED_ROOK:
+            base_symbol = "+R"
+        else:
+            raise ValueError(f"Unknown piece type: {self.type}")
 
-    def __repr__(self):
-        return f"Piece(type={self.type.name}, color={self.color.name})"
+        return base_symbol.lower() if self.color == Color.WHITE else base_symbol
 
-    def promote(self) -> bool:
-        """Promotes the piece if it's a promotable type and not already promoted. Returns True if promoted."""
-        if not self.is_promoted and self.type in BASE_TO_PROMOTED_TYPE:
+    def promote(self) -> None:
+        """Promotes the piece if it is promotable and not already promoted."""
+        if self.type in BASE_TO_PROMOTED_TYPE and not self.is_promoted:
             self.type = BASE_TO_PROMOTED_TYPE[self.type]
-            return True
-        return False
+            self.is_promoted = True
+        # else: No change if not promotable or already promoted
 
-    def unpromote(self) -> bool:
-        """Unpromotes the piece if it's a promoted type. Returns True if unpromoted."""
+    def unpromote(self) -> None:
+        """Unpromotes the piece if it is promoted."""
         if self.is_promoted and self.type in PROMOTED_TO_BASE_TYPE:
             self.type = PROMOTED_TO_BASE_TYPE[self.type]
-            return True
-        return False
+            self.is_promoted = False
+        # else: No change if not promoted
 
-    def set_promoted(self, promote_flag: bool) -> bool:
-        """Sets the promotion state of the piece. Returns True if state changed."""
-        if promote_flag:
-            return self.promote()
-        else:
-            return self.unpromote()
+    def __repr__(self) -> str:
+        return f"Piece({self.type.name}, {self.color.name})"
 
-    def copy(self) -> "Piece":  # Added copy method
-        """Returns a deep copy of this piece."""
-        return Piece(self.type, self.color)
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Piece):
+            return NotImplemented
+        return self.type == other.type and self.color == other.color
+
+    def __hash__(self) -> int:
+        return hash((self.type, self.color))
+
+    def __deepcopy__(self, memo: Dict[int, 'Piece']) -> 'Piece':
+        # Create a new Piece instance without calling __init__ again if not necessary,
+        # or simply create a new one.
+        # Since Piece is simple, creating a new one is fine.
+        new_piece = Piece(self.type, self.color)
+        # self.is_promoted is derived, so no need to copy explicitly
+        memo[id(self)] = new_piece
+        return new_piece

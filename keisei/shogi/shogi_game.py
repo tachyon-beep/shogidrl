@@ -714,7 +714,7 @@ class ShogiGame:
             "was_promoted_in_move": False,
             "original_type_before_promotion": None, # For board moves
             "dropped_piece_type": None, # For drop moves
-            "original_color": None, # For board moves, to aid undo
+            "original_color_of_moved_piece": None, # For board moves, to aid undo
         }
 
         # --- Part 1: Gather details for history & perform initial piece manipulation ---
@@ -748,7 +748,7 @@ class ShogiGame:
                     f"Invalid move: Piece at ({r_from},{c_from}) does not belong to current player."
                 )
             move_details_for_history["original_type_before_promotion"] = piece_to_move.type
-            move_details_for_history["original_color"] = piece_to_move.color
+            move_details_for_history["original_color_of_moved_piece"] = piece_to_move.color
             if r_to is not None and c_to is not None:
                 target_piece_on_board = self.get_piece(r_to, c_to)
             else:
@@ -828,8 +828,8 @@ class ShogiGame:
 
         # Call apply_move_to_board to switch player, increment move count, and check game end.
         # Pass the original move_tuple as it might be used by apply_move_to_board for its logic,
-        # though we've handled direct board changes here.
-        shogi_move_execution.apply_move_to_board(self, move_tuple, is_simulation)
+        # though we\'ve handled direct board changes here.
+        shogi_move_execution.apply_move_to_board(self, is_simulation)
 
     def undo_move(self) -> None: # Added return type hint
         """

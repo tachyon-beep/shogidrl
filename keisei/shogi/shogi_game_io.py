@@ -1,7 +1,7 @@
 # shogi_game_io.py
 
 import datetime  # For KIF Date header
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING, Tuple, List, Dict, Optional
 
 import numpy as np
 
@@ -49,21 +49,21 @@ def generate_neural_network_observation(game: "ShogiGame") -> np.ndarray:
     obs = np.zeros((46, 9, 9), dtype=np.float32)
 
     # Map PieceType to its index in OBS_UNPROMOTED_ORDER or OBS_PROMOTED_ORDER
-    unpromoted_map = {pt: i for i, pt in enumerate(OBS_UNPROMOTED_ORDER)}
-    promoted_map = {pt: i for i, pt in enumerate(OBS_PROMOTED_ORDER)}
+    unpromoted_map: Dict[PieceType, int] = {pt: i for i, pt in enumerate(OBS_UNPROMOTED_ORDER)}
+    promoted_map: Dict[PieceType, int] = {pt: i for i, pt in enumerate(OBS_PROMOTED_ORDER)}
 
     for r in range(9):
         for c in range(9):
-            p = game.board[r][c]
+            p: Optional[Piece] = game.board[r][c]
             if p is None:
                 continue
 
-            is_current_player_piece = p.color == game.current_player
+            is_current_player_piece: bool = p.color == game.current_player
             # player_base_channel = ( # This was defined in original but not used directly here
             # 0 if is_current_player_piece else 14
             # )
 
-            channel_offset = -1
+            channel_offset: int = -1
 
             if p.is_promoted:
                 if p.type in promoted_map:
@@ -82,26 +82,26 @@ def generate_neural_network_observation(game: "ShogiGame") -> np.ndarray:
                 obs[channel_offset, r, c] = 1.0
 
     # Pieces in hand (7 channels per player: P,L,N,S,G,B,R)
-    hand_piece_order = get_unpromoted_types()  # Use the imported function
+    hand_piece_order: List[PieceType] = get_unpromoted_types()  # Use the imported function
 
     # Current player's hand (channels 28-34)
-    current_player_hand_start_ch = 28
-    for i, piece_type_enum in enumerate(hand_piece_order):
-        count = game.hands[game.current_player.value].get(piece_type_enum, 0)
-        if count > 0:
-            ch = current_player_hand_start_ch + i
-            obs[ch, :, :] = count / 18.0  # Normalize (e.g., by max pawns)
+    current_player_hand_start_ch: int = 28
+    for i, piece_type_enum_player in enumerate(hand_piece_order):
+        player_hand_count: int = game.hands[game.current_player.value].get(piece_type_enum_player, 0)
+        if player_hand_count > 0:
+            player_ch: int = current_player_hand_start_ch + i
+            obs[player_ch, :, :] = player_hand_count / 18.0  # Normalize (e.g., by max pawns)
 
     # Opponent's hand (channels 35-41)
-    opponent_hand_start_ch = 35
-    opponent_color_val = (
+    opponent_hand_start_ch: int = 35
+    opponent_color_val: int = (
         Color.WHITE.value if game.current_player == Color.BLACK else Color.BLACK.value
     )
-    for i, piece_type_enum in enumerate(hand_piece_order):
-        count = game.hands[opponent_color_val].get(piece_type_enum, 0)
-        if count > 0:
-            ch = opponent_hand_start_ch + i
-            obs[ch, :, :] = count / 18.0
+    for i, piece_type_enum_opponent in enumerate(hand_piece_order):
+        opponent_hand_count: int = game.hands[opponent_color_val].get(piece_type_enum_opponent, 0)
+        if opponent_hand_count > 0:
+            opponent_ch: int = opponent_hand_start_ch + i
+            obs[opponent_ch, :, :] = opponent_hand_count / 18.0
 
     # Current player plane (42)
     obs[42, :, :] = 1.0 if game.current_player == Color.BLACK else 0.0
@@ -121,11 +121,11 @@ def convert_game_to_text_representation(game: "ShogiGame") -> str:
     """
     lines = []
     for r_idx, row_data in enumerate(game.board):
-        line_str = f"{9-r_idx} "  # Shogi board rank numbers (9 down to 1)
-        line_pieces = []
-        for p in row_data:
-            if p:
-                symbol = p.symbol()
+        line_str: str = f"{9-r_idx} "  # Shogi board rank numbers (9 down to 1)
+        line_pieces: List[str] = []
+        for p_cell in row_data: # Renamed p to p_cell to avoid conflict with p in outer scope if any
+            if p_cell:
+                symbol: str = p_cell.symbol()
                 if len(symbol) == 1:  # e.g., P
                     line_pieces.append(f" {symbol} ")  # Results in " P "
                 else:  # e.g., +P
@@ -138,13 +138,13 @@ def convert_game_to_text_representation(game: "ShogiGame") -> str:
         "  a  b  c  d  e  f  g  h  i"  # Adjusted spacing: 2 spaces before 'a', then 2 between letters
     )
     # Add hands
-    black_hand_dict = {
+    black_hand_dict: Dict[str, int] = {
         pt.name: count
         for pt, count in game.hands[Color.BLACK.value].items()
         if count > 0
     }
     lines.append(f"Black's hand: {black_hand_dict}")
-    white_hand_dict = {
+    white_hand_dict: Dict[str, int] = {
         pt.name: count
         for pt, count in game.hands[Color.WHITE.value].items()
         if count > 0
@@ -165,14 +165,13 @@ def game_to_kif(
     Uses standard KIF piece notation (+FU, -FU, etc.) and includes more headers.
     """
     with open(filename, "w", encoding="utf-8") as kif_file:
-        # --- KIF Headers ---
-        kif_file.write("#KIF version=2.0 encoding=UTF-8\n")
-        kif_file.write("*Event: Casual Game\n")  # Placeholder, was f-string
-        kif_file.write("*Site: Local Machine\n")  # Placeholder, was f-string
-        kif_file.write(f"*Date: {datetime.date.today().strftime('%Y/%m/%d')}\n")
-        kif_file.write(f"*Player Sente: {sente_player_name}\n")
-        kif_file.write(f"*Player Gote: {gote_player_name}\n")
-        kif_file.write("*Handicap: HIRATE\n")  # Or NONE. Was f-string
+        # --- KIF Headers ---\n        kif_file.write("#KIF version=2.0 encoding=UTF-8\\n")
+        kif_file.write("*Event: Casual Game\\n")
+        kif_file.write("*Site: Local Machine\\n")
+        kif_file.write(f"*Date: {datetime.date.today().strftime('%Y/%m/%d')}\\n")
+        kif_file.write(f"*Player Sente: {sente_player_name}\\n")
+        kif_file.write(f"*Player Gote: {gote_player_name}\\n")
+        kif_file.write("*Handicap: HIRATE\\n")
 
         # Standard HIRATE starting position
         kif_file.write("P1-KY-KE-GI-KI-OU-KI-GI-KE-KY\n")
@@ -185,11 +184,10 @@ def game_to_kif(
         kif_file.write("P8 * +KA * * * * * +HI * \n")
         kif_file.write("P9+KY+KE+GI+KI+OU+KI+GI+KE+KY\n")
 
-        # --- Initial Hands (KIF format: P+00FU00KY... for Sente, P-00FU00KY... for Gote) ---
-        # This assumes starting with empty hands for a standard game from initial board setup.
-        sente_hand_str = "P+"
-        gote_hand_str = "P-"
-        hand_order_for_kif = [
+        # --- Initial Hands (KIF format: P+00FU00KY... for Sente, P-00FU00KY... for Gote) ---\n        # This assumes starting with empty hands for a standard game from initial board setup.
+        sente_hand_str: str = "P+"
+        gote_hand_str: str = "P-"
+        hand_order_for_kif: List[PieceType] = [
             PieceType.ROOK,
             PieceType.BISHOP,
             PieceType.GOLD,
@@ -199,8 +197,8 @@ def game_to_kif(
             PieceType.PAWN,
         ]  # Common KIF hand order
 
-        initial_sente_hand = game.hands[Color.BLACK.value]
-        initial_gote_hand = game.hands[Color.WHITE.value]
+        initial_sente_hand: Dict[PieceType, int] = game.hands[Color.BLACK.value]
+        initial_gote_hand: Dict[PieceType, int] = game.hands[Color.WHITE.value]
 
         for pt in hand_order_for_kif:
             sente_hand_str += (
@@ -209,8 +207,8 @@ def game_to_kif(
             gote_hand_str += (
                 f"{initial_gote_hand.get(pt, 0):02d}{KIF_PIECE_SYMBOLS.get(pt, '??')}"
             )
-        kif_file.write(f"{sente_hand_str}\n")
-        kif_file.write(f"{gote_hand_str}\n")
+        kif_file.write(f"{sente_hand_str}\\n")
+        kif_file.write(f"{gote_hand_str}\\n")
 
         # --- Player to move first ---
         kif_file.write(
@@ -222,12 +220,12 @@ def game_to_kif(
         # --- Moves ---
         mapper = PolicyOutputMapper()
         for i, move_entry in enumerate(game.move_history):
-            move_obj = move_entry.get("move")  # Your internal move object/tuple
+            move_obj: Optional[MoveTuple] = move_entry.get("move") # Your internal move object/tuple
             if not move_obj:
                 continue
 
-            usi_move_str = mapper.shogi_move_to_usi(move_obj)
-            kif_file.write(f"{i+1} {usi_move_str}\n")
+            usi_move_str: str = mapper.shogi_move_to_usi(move_obj)
+            kif_file.write(f"{i+1} {usi_move_str}\\n")
 
         # --- Game Termination ---
         if game.game_over:
@@ -261,11 +259,11 @@ def _parse_sfen_square(sfen_sq: str) -> Tuple[int, int]:
     ):
         raise ValueError(f"Invalid SFEN square format: {sfen_sq}")
 
-    file_char = sfen_sq[0]
-    rank_char = sfen_sq[1]
+    file_char: str = sfen_sq[0]
+    rank_char: str = sfen_sq[1]
 
-    col = 9 - int(file_char)
-    row = ord(rank_char) - ord("a")
+    col: int = 9 - int(file_char)
+    row: int = ord(rank_char) - ord("a")
 
     return row, col
 
@@ -292,41 +290,38 @@ def sfen_to_move_tuple(sfen_move_str: str) -> MoveTuple:
     """
     sfen_move_str = sfen_move_str.strip()
 
-    if "*" in sfen_move_str:
-        parts = sfen_move_str.split("*")
+    if "*" in sfen_move_str: # Drop move
+        parts: List[str] = sfen_move_str.split("*")
         if len(parts) != 2 or len(parts[0]) != 1 or len(parts[1]) != 2:
             raise ValueError(f"Invalid SFEN drop move format: {sfen_move_str}")
 
-        piece_char = parts[0]
-        sfen_sq_to = parts[1]
+        piece_char: str = parts[0]
+        sfen_sq_to: str = parts[1]
 
         try:
-            piece_to_drop = _get_piece_type_from_sfen_char(piece_char)
-            to_r, to_c = _parse_sfen_square(sfen_sq_to)
-        except ValueError as e:
-            raise ValueError(
-                f"Error parsing SFEN drop move '{sfen_move_str}': {e}"
-            ) from e
+            piece_to_drop: PieceType = _get_piece_type_from_sfen_char(piece_char)
+            r_to, c_to = _parse_sfen_square(sfen_sq_to)
+            # Ensure the types match DropMoveTuple definition
+            return (None, None, r_to, c_to, piece_to_drop)
+        except ValueError as e: # Catch errors from helper functions
+            raise ValueError(f"Error parsing SFEN drop move '{sfen_move_str}': {e}") from e
 
-        return (None, None, to_r, to_c, piece_to_drop)
-    else:
-        promote = False
-        if sfen_move_str.endswith("+"):
-            promote = True
-            sfen_move_str = sfen_move_str[:-1]
 
-        if len(sfen_move_str) != 4:
-            raise ValueError(f"Invalid SFEN board move format: {sfen_move_str}")
+    # Board move (e.g., "7g7f", "2b3a+")
+    if not (4 <= len(sfen_move_str) <= 5):
+        raise ValueError(f"Invalid SFEN board move format: {sfen_move_str}")
 
-        sfen_sq_from = sfen_move_str[:2]
-        sfen_sq_to = sfen_move_str[2:]
+    sfen_sq_from_str: str = sfen_move_str[0:2]
+    sfen_sq_to_str: str = sfen_move_str[2:4] # Renamed to avoid conflict
+    promote_flag: bool = sfen_move_str.endswith("+")
 
-        try:
-            from_r, from_c = _parse_sfen_square(sfen_sq_from)
-            to_r, to_c = _parse_sfen_square(sfen_sq_to)
-        except ValueError as e:
-            raise ValueError(
-                f"Error parsing SFEN board move '{sfen_move_str}': {e}"
-            ) from e
+    try:
+        r_from, c_from = _parse_sfen_square(sfen_sq_from_str)
+        r_to, c_to = _parse_sfen_square(sfen_sq_to_str)
+        # Ensure the types match BoardMoveTuple definition
+        return (r_from, c_from, r_to, c_to, promote_flag)
+    except ValueError as e: # Catch errors from helper functions
+        raise ValueError(f"Error parsing SFEN board move '{sfen_move_str}': {e}") from e
 
-        return (from_r, from_c, to_r, to_c, promote)
+# TODO: Consider adding kif_to_game and sfen_to_game functions if needed.
+# These would involve more complex parsing of full game states or move sequences.
