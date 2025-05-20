@@ -24,6 +24,7 @@ class ExperienceBuffer:
         self.log_probs: list[float] = []
         self.values: list[float] = []
         self.dones: list[bool] = []
+        self.legal_masks: list[torch.Tensor] = []  # Added to store legal masks
         self.advantages: list[float] = []  # Populated by compute_advantages_and_returns
         self.returns: list[float] = []  # Populated by compute_advantages_and_returns
         self.ptr = 0
@@ -36,10 +37,12 @@ class ExperienceBuffer:
         log_prob: float,
         value: float,
         done: bool,
+        legal_mask: torch.Tensor,  # Added legal_mask
     ):
         """
         Add a transition to the buffer.
         'obs' is expected to be a PyTorch tensor of shape (C, H, W) on self.device.
+        'legal_mask' is expected to be a PyTorch tensor on self.device.
         """
         if self.ptr < self.buffer_size:
             # obs should already be on self.device and have shape (C,H,W) when passed from train.py
@@ -49,6 +52,7 @@ class ExperienceBuffer:
             self.log_probs.append(log_prob)
             self.values.append(value)  # Storing scalar value estimates
             self.dones.append(done)
+            self.legal_masks.append(legal_mask)  # Store legal_mask
             self.ptr += 1
         else:
             # This case should ideally be handled by the training loop,
@@ -61,6 +65,7 @@ class ExperienceBuffer:
         """
         Computes Generalized Advantage Estimation (GAE) and returns for the collected experiences.
         This should be called after the buffer is full (i.e., self.ptr == self.buffer_size).
+        Uses PyTorch tensor operations for GAE calculation.
         """
         if self.ptr == 0:
             print("Warning: compute_advantages_and_returns called on an empty buffer.")
@@ -68,30 +73,47 @@ class ExperienceBuffer:
             self.returns = []
             return
 
-        # Ensure advantages and returns lists are sized correctly for the current ptr
-        self.advantages = [0.0] * self.ptr
-        self.returns = [0.0] * self.ptr
+        # Convert lists to tensors for GAE computation
+        rewards_tensor = torch.tensor(
+            self.rewards[: self.ptr], dtype=torch.float32, device=self.device
+        )
+        values_tensor = torch.tensor(
+            self.values[: self.ptr], dtype=torch.float32, device=self.device
+        )
+        # Dones tensor: 1.0 if not done, 0.0 if done (for mask)
+        dones_tensor = torch.tensor(
+            self.dones[: self.ptr], dtype=torch.float32, device=self.device
+        )
+        masks_tensor = 1.0 - dones_tensor
+
+        advantages_list = [0.0] * self.ptr
+        returns_list = [0.0] * self.ptr
         gae = 0.0
 
-        # Values and rewards are Python floats/lists of floats. last_value is float.
-        # GAE calculation can remain largely as Python floats for now, converted to tensor in get_batch.
+        # last_value is V(S_t+1) for the last state in the buffer
+        # If the last state was terminal, next_value should be 0, handled by mask.
+        next_value_tensor = torch.tensor(
+            [last_value], dtype=torch.float32, device=self.device
+        )
+
         for t in reversed(range(self.ptr)):
             if t == self.ptr - 1:
-                next_value = (
-                    last_value  # Value of S_t+1 (state after last action in buffer)
-                )
+                current_next_value = next_value_tensor
             else:
-                next_value = self.values[t + 1]  # V(S_t+1)
+                current_next_value = values_tensor[t + 1]
 
-            # If self.dones[t] is True, it means S_t was the terminal state of an episode.
-            # So, the value of any subsequent state V(S_{t+1}) should be 0.
-            mask = 1.0 - float(self.dones[t])  # 1.0 if not done, 0.0 if done
+            delta = (
+                rewards_tensor[t]
+                + self.gamma * current_next_value * masks_tensor[t]
+                - values_tensor[t]
+            )
+            gae = delta + self.gamma * self.lambda_gae * masks_tensor[t] * gae
 
-            delta = self.rewards[t] + self.gamma * next_value * mask - self.values[t]
-            gae = delta + self.gamma * self.lambda_gae * mask * gae
+            advantages_list[t] = gae.item()  # Store as float
+            returns_list[t] = (gae + values_tensor[t]).item()  # Store as float
 
-            self.advantages[t] = gae
-            self.returns[t] = gae + self.values[t]
+        self.advantages = advantages_list
+        self.returns = returns_list
 
     def get_batch(self) -> dict:
         """
@@ -142,6 +164,14 @@ class ExperienceBuffer:
             self.dones[:num_samples], dtype=torch.bool, device=self.device
         )
 
+        # Stack legal_masks (list of tensors) into a single tensor
+        # Assuming legal_masks are already on self.device
+        try:
+            legal_masks_tensor = torch.stack(self.legal_masks[:num_samples], dim=0)
+        except RuntimeError as e:
+            print(f"Error stacking legal_mask tensors in ExperienceBuffer: {e}")
+            return {}
+
         return {
             "obs": obs_tensor,
             "actions": actions_tensor,
@@ -150,6 +180,7 @@ class ExperienceBuffer:
             "advantages": advantages_tensor,
             "returns": returns_tensor,  # These are the GAE-based returns (targets for value func)
             "dones": dones_tensor,  # For record keeping or if needed by learn()
+            "legal_masks": legal_masks_tensor,  # Added legal_masks_tensor
         }
 
     def clear(self):
@@ -160,6 +191,7 @@ class ExperienceBuffer:
         self.log_probs.clear()
         self.values.clear()
         self.dones.clear()
+        self.legal_masks.clear()  # Clear legal_masks
         self.advantages.clear()
         self.returns.clear()
         self.ptr = 0

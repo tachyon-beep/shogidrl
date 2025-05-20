@@ -48,14 +48,17 @@ def test_ppo_agent_init_and_select_action():
     if not legal_moves:  # If still no legal_moves, skip test
         pytest.skip("No legal moves could be determined for select_action test.")
 
-    selected_move, idx, log_prob, value = agent.select_action(
+    selected_move, idx, log_prob, value, legal_mask_returned = agent.select_action(
         obs, legal_shogi_moves=legal_moves
     )
     assert isinstance(idx, int)
     assert 0 <= idx < agent.num_actions_total
-    assert isinstance(selected_move, tuple)
+    assert isinstance(selected_move, tuple) or selected_move is None # select_action can return None if no legal moves (though guarded by caller)
     assert isinstance(log_prob, float)
     assert isinstance(value, float)
+    assert isinstance(legal_mask_returned, torch.Tensor) # Check type of returned legal_mask
+    assert legal_mask_returned.shape[0] == agent.num_actions_total # Check shape
+    assert legal_mask_returned.dtype == torch.bool # Check dtype
 
 
 def test_ppo_agent_learn():
@@ -82,6 +85,13 @@ def test_ppo_agent_learn():
         torch.device("cpu")
     )  # Convert to tensor on CPU
 
+    # Create a dummy legal_mask. For this test, its content might not be critical,
+    # but its shape should match num_actions_total.
+    dummy_legal_mask = torch.ones(agent.num_actions_total, dtype=torch.bool, device="cpu")
+    # Make at least one action illegal if num_actions_total > 0 to test masking, if desired
+    if agent.num_actions_total > 0:
+        dummy_legal_mask[0] = False
+
     for i in range(buffer_size):
         experience_buffer.add(
             obs=dummy_obs_tensor,  # <<< PASS THE TENSOR HERE
@@ -90,6 +100,7 @@ def test_ppo_agent_learn():
             log_prob=0.1 * i,
             value=0.5 * i,
             done=(i == buffer_size - 1),
+            legal_mask=dummy_legal_mask, # Added dummy_legal_mask
         )
 
     assert len(experience_buffer) == buffer_size

@@ -131,15 +131,12 @@ class ActorCritic(nn.Module):
         if legal_mask is not None:
             # Apply the legal mask for calculating probabilities and entropy correctly
             # Ensure legal_mask has the same shape as policy_logits or is broadcastable
-            if (
-                legal_mask.ndim == 1
-                and policy_logits.ndim == 2
-                and policy_logits.shape[0] == actions.shape[0]
-            ):
-                # If policy_logits is (batch, num_actions) and legal_mask is (batch, num_actions)
-                # or if legal_mask is (num_actions) and needs to be broadcasted.
-                # Assuming legal_mask is (batch_size, num_actions) if provided for a batch.
-                pass  # Shape should be compatible
+
+            # The shape of legal_mask should be (batch_size, num_actions)
+            # The shape of policy_logits is (batch_size, num_actions)
+            # No unsqueezing or broadcasting adjustment should be needed here if shapes are consistent.
+            # The previous check for legal_mask.ndim == 1 was more for get_action_and_value with batch_size=1.
+            # Here, we expect legal_mask to match policy_logits if provided.
 
             masked_logits = torch.where(
                 legal_mask,

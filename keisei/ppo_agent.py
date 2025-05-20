@@ -56,11 +56,11 @@ class PPOAgent:
         legal_shogi_moves: List["MoveTuple"],  # Type hint for Shogi moves, quoted
         is_training: bool = True,
     ) -> Tuple[
-        Optional["MoveTuple"], int, float, float
+        Optional["MoveTuple"], int, float, float, torch.Tensor # Added torch.Tensor for legal_mask
     ]:  # Return Shogi move (Any for now), policy index, log_prob, value # Quoted
         """
         Select an action given an observation and legal Shogi moves.
-        Returns the selected Shogi move, its policy index, log probability, and value estimate.
+        Returns the selected Shogi move, its policy index, log probability, value estimate, and the legal mask.
         """
         self.model.train(is_training)  # Set model to train or eval mode
 
@@ -85,6 +85,15 @@ class PPOAgent:
             # For now, let get_action_and_value handle it, which might lead to uniform random if all masked.
             # Or, we could return a specific indicator:
             # return None, -1, 0.0, 0.0 # Example: No move, invalid index, zero log_prob, zero value
+            # If no legal moves, the legal_mask will be all False.
+            # We should return this mask.
+            # The caller (train.py) already handles the "no legal moves" case before calling select_action,
+            # but if it were called, returning the all-False mask is correct.
+            # The current PPOAgent.select_action logic proceeds to call model.get_action_and_value.
+            # If legal_mask.any() is false, get_action_and_value might produce NaNs or uniform distribution.
+            # The primary guard is in train.py. If this path is hit, it's a fallback.
+            # We will return the all-false legal_mask.
+            pass # Let it proceed, but the mask is available.
 
         # Get action, log_prob, and value from the ActorCritic model
         # Pass deterministic based on not is_training
@@ -112,13 +121,14 @@ class PPOAgent:
             )
             # This case should be rare if legal_mask is applied correctly and policy_output_mapper is consistent.
             # Handle by returning no move or re-raising, depending on desired robustness.
-            return None, -1, 0.0, value_float  # Or raise the error
+            return None, -1, 0.0, value_float, legal_mask  # Or raise the error
 
         return (
             selected_shogi_move,
             selected_policy_index_val,
             log_prob_val,
             value_float,
+            legal_mask, # Return the computed legal_mask
         )
 
     def get_value(self, obs_np: np.ndarray) -> float:
@@ -164,6 +174,7 @@ class PPOAgent:
         old_log_probs_batch = batch_data["log_probs"].to(self.device)
         advantages_batch = batch_data["advantages"].to(self.device)
         returns_batch = batch_data["returns"].to(self.device)
+        legal_masks_batch = batch_data["legal_masks"].to(self.device)  # Added legal_masks_batch
 
         # Normalize advantages
         advantages_batch = (advantages_batch - advantages_batch.mean()) / (
@@ -191,13 +202,13 @@ class PPOAgent:
                 old_log_probs_minibatch = old_log_probs_batch[minibatch_indices]
                 advantages_minibatch = advantages_batch[minibatch_indices]
                 returns_minibatch = returns_batch[minibatch_indices]
+                legal_masks_minibatch = legal_masks_batch[minibatch_indices]  # Added legal_masks_minibatch
 
                 # Get new log_probs, entropy, and value from the model
-                # Note on entropy: legal_mask is not passed here. Entropy is calculated
-                # over all actions. For entropy over legal actions only, legal masks
-                # for the batch would need to be stored and passed.
+                # Note on entropy: legal_mask is now passed here. Entropy is calculated
+                # over legal actions only.
                 new_log_probs, entropy, new_values = self.model.evaluate_actions(
-                    obs_minibatch, actions_minibatch  # No legal_mask passed here
+                    obs_minibatch, actions_minibatch, legal_mask=legal_masks_minibatch  # Pass legal_masks_minibatch
                 )
 
                 # PPO Loss Calculation
@@ -247,14 +258,24 @@ class PPOAgent:
 
         if num_updates > 0:
             with torch.no_grad():
-                final_new_logits, _ = self.model(obs_batch)
-                final_new_probs = F.softmax(final_new_logits, dim=-1)
-                final_action_dist = torch.distributions.Categorical(
-                    probs=final_new_probs
+                # For KL divergence, we need to evaluate actions with the current policy
+                # considering the legal masks that were active when those actions were chosen.
+                # The ActorCritic.evaluate_actions method handles the legal_mask internally
+                # for calculating log_probs and entropy. For KL, we need the log_probs
+                # from the current policy for the actions taken, using the same legal_masks.
+                # The call to evaluate_actions for the full batch (if needed for KL) should also pass legal_masks_batch.
+                # However, the current KL approximation uses model(obs_batch) which doesn't take legal_mask.
+                # For a more accurate KL involving legal actions, the distribution from model()
+                # would need to be masked before calculating log_prob.
+                # For simplicity, current KL approx is kept, but note this subtlety.
+
+                # Re-evaluate log_probs for the entire batch with current policy and original legal masks
+                # to get a consistent comparison for KL divergence.
+                current_log_probs_for_kl, _, _ = self.model.evaluate_actions(
+                    obs_batch, actions_batch, legal_mask=legal_masks_batch
                 )
-                final_new_log_probs = final_action_dist.log_prob(actions_batch)
                 kl_divergence_final_approx = (
-                    (old_log_probs_batch - final_new_log_probs).mean().item()
+                    (old_log_probs_batch - current_log_probs_for_kl).mean().item()
                 )
 
         self.last_kl_div = kl_divergence_final_approx

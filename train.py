@@ -294,6 +294,12 @@ def main():
             log_prob = 0.0 # Ensure log_prob is initialized
             value = 0.0    # Ensure value is initialized
             selected_shogi_move = None # Ensure selected_shogi_move is initialized
+            # Initialize legal_mask_for_buffer with a default, e.g., all False if no legal moves.
+            # The actual legal_mask will be determined by game.get_legal_moves() and policy_mapper.
+            # If there are no legal_moves, this default might be used if we were to add to buffer in that case.
+            # However, we only add to buffer if action_idx != -1.
+            # The legal_mask returned by agent.select_action will be the one used.
+            legal_mask_for_buffer = torch.zeros(policy_mapper.get_total_actions(), dtype=torch.bool, device=agent.device)
 
             if not legal_moves:
                 # This case should ideally be handled by game termination logic
@@ -310,7 +316,7 @@ def main():
                 # will be used for the buffer.
                 # However, the current logic already sets done = False at the start of each step.
                 # So, if legal_moves exist, 'done' here reflects the current game state before this move.
-                selected_shogi_move, action_idx, log_prob, value = agent.select_action(
+                selected_shogi_move, action_idx, log_prob, value, legal_mask_for_buffer = agent.select_action(
                     obs, legal_moves, is_training=True
                 )
                 # If, after selecting an action, the agent somehow returns no move (e.g. a bug in agent or mask handling)
@@ -380,6 +386,7 @@ def main():
                     log_prob,
                     value,
                     done, # This `done` reflects the state *after* the move or if no legal moves (but action_idx would be -1)
+                    legal_mask_for_buffer, # Pass the legal_mask to the buffer
                 )
             
             obs = next_obs
@@ -408,6 +415,12 @@ def main():
                     logger.log(f"Model saved to {ckpt_path_ep}")
 
             # Perform PPO update if buffer is full
+            # The buffer collects cfg.STEPS_PER_EPOCH valid transitions before an update.
+            # Transitions are only added if action_idx != -1 (i.e., a valid action was taken).
+            # This means the number of environment interactions to fill the buffer might be
+            # slightly more than STEPS_PER_EPOCH if some steps result in no action being added
+            # (e.g., terminal state reached due to no legal moves before agent selection).
+            # However, the PPO update itself will always use STEPS_PER_EPOCH valid samples.
             if len(experience_buffer) >= cfg.STEPS_PER_EPOCH:  # Check buffer length
                 next_value_np = agent.get_value(next_obs)
                 experience_buffer.compute_advantages_and_returns(
