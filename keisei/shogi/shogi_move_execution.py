@@ -26,8 +26,6 @@ from .shogi_core_definitions import (
     get_unpromoted_types,
 )
 
-# from . import shogi_game_io # Commenting out as log_move is not found
-
 if TYPE_CHECKING:
     from .shogi_game import ShogiGame  # For type hinting
 
@@ -39,44 +37,28 @@ def apply_move_to_board(
     Applies a given move to the board, updating piece positions, hands,
     current player, and move count. Also checks for game termination.
 
+    This function assumes the move has already been validated and applied to
+    the game's board representation (e.g., piece placement, captures, promotions)
+    by the calling method (e.g., ShogiGame.make_move). Its primary roles here are:
+    1. Updating game.current_player.
+    2. Incrementing game.move_count.
+    3. Checking for game termination conditions (checkmate, stalemate, sennichite, max_moves)
+       if not a simulation.
+
     Board move: (r_from, c_from, r_to, c_to, promote_flag: bool)
     Drop move: (None, None, r_to, c_to, piece_type_to_drop: PieceType)
 
     Args:
         game: The ShogiGame instance.
-        move_tuple: The move to apply.
+        move_tuple: The move that was applied.
         is_simulation: If True, indicates the move is part of a simulation
                        and game-ending checks (checkmate, stalemate) should be skipped.
     """
     player_who_made_the_move = game.current_player  # Store before switching
 
-    # --- Execute the move ---
-    # (This section is assumed to be present and correct as per original file structure)
-    # Example of what might be here:
-    # r_from, c_from, r_to, c_to = move_tuple[0], move_tuple[1], move_tuple[2], move_tuple[3]
-    # piece_to_move = game.get_piece(r_from, c_from)
-    # captured_piece_type: Optional[PieceType] = None # Store type for adding to hand
-    # target_piece_on_board = game.get_piece(r_to, c_to)
-    # if target_piece_on_board:
-    #     captured_piece_type = target_piece_on_board.unpromote().type # Always add unpromoted type to hand
-    #     game.add_to_hand(player_who_made_the_move, captured_piece_type)
-    #     game.set_piece(r_to, c_to, None) # Clear target square before moving
-
-    # if len(move_tuple) == 5 and isinstance(move_tuple[4], PieceType): # Drop move
-    #     piece_type_to_drop: PieceType = move_tuple[4]
-    #     game.set_piece(r_to, c_to, Piece(piece_type_to_drop, player_who_made_the_move))
-    #     game.remove_from_hand(player_who_made_the_move, piece_type_to_drop)
-    # else: # Board move
-    #     if piece_to_move is None: # Should not happen if move is valid
-    #         # Handle error or raise exception
-    #         return
-    #     game.set_piece(r_to, c_to, piece_to_move)
-    #     game.set_piece(r_from, c_from, None)
-    #     if len(move_tuple) == 5 and isinstance(move_tuple[4], bool) and move_tuple[4]: # Promotion
-    #         promoted_piece = game.get_piece(r_to, c_to)
-    #         if promoted_piece: # Check if piece exists before promoting
-    #             promoted_piece.promote()
-    # --- End of example move execution ---
+    # --- Move execution (piece placement, captures, promotions, hand updates) ---
+    # This is assumed to have been handled by ShogiGame.make_move *before* calling this function.
+    # This function focuses on post-move state updates and game termination checks.
 
     # Switch current player
     game.current_player = (
@@ -85,12 +67,9 @@ def apply_move_to_board(
     game.move_count += 1
 
     if not is_simulation:
-        # The ShogiGame class should handle adding to move_history and board_history internally
-        # when its make_move method calls this apply_move_to_board function.
-        # For sennichite, the game object itself should manage its history correctly.
-        # We assume game.add_to_move_history() or similar is called by game.make_move()
-        # and that game.is_sennichite() uses that history.
-        pass  # History management is part of ShogiGame.make_move
+        # History management (move_history, board_history) is handled by ShogiGame.make_move.
+        # Sennichite checks rely on this history.
+        pass
 
     # Check for game termination conditions
     if not is_simulation:
@@ -103,9 +82,6 @@ def apply_move_to_board(
                 game, game.current_player
             )
         )
-        # Pass a temporary game state if generate_all_legal_moves modifies the game,
-        # or ensure it's safe to call on the actual game state.
-        # Assuming shogi_rules_logic.generate_all_legal_moves is safe to call on current game state.
         legal_moves_for_current_player = shogi_rules_logic.generate_all_legal_moves(
             game
         )
@@ -135,9 +111,7 @@ def apply_move_to_board(
             game.termination_reason = "Max moves reached"
 
     # Logging the move (if not simulation and if logging is re-enabled)
-    # if not is_simulation:
-    # move_details = { ... }
-    # shogi_game_io.log_move(game, move_details)
+    # This would be handled elsewhere if needed, e.g., in ShogiGame.make_move or a dedicated logging module.
     # pass
 
 
