@@ -1,6 +1,7 @@
 # shogi_game_io.py
 
 import datetime  # For KIF Date header
+import re # Import the re module
 from typing import TYPE_CHECKING, Tuple, List, Dict, Optional
 
 import numpy as np
@@ -286,42 +287,47 @@ def _get_piece_type_from_sfen_char(char: str) -> PieceType:
 def sfen_to_move_tuple(sfen_move_str: str) -> MoveTuple:
     """
     Parses an SFEN move string (e.g., "7g7f", "P*5e", "2b3a+")
-    and converts it into an internal MoveTuple.
+    and converts it into an internal MoveTuple using regular expressions.
     """
     sfen_move_str = sfen_move_str.strip()
 
-    if "*" in sfen_move_str: # Drop move
-        parts: List[str] = sfen_move_str.split("*")
-        if len(parts) != 2 or len(parts[0]) != 1 or len(parts[1]) != 2:
-            raise ValueError(f"Invalid SFEN drop move format: {sfen_move_str}")
+    # Regex for drop moves: e.g., "P*5e"
+    # Group 1: Piece character (P, L, N, S, G, B, R)
+    # Group 2: Square (e.g., 5e)
+    drop_move_pattern = re.compile(r"^([PLNSGBR])\\*([1-9][a-i])$")
 
-        piece_char: str = parts[0]
-        sfen_sq_to: str = parts[1]
+    # Regex for board moves: e.g., "7g7f", "2b3a+"
+    # Group 1: From square (e.g., 7g)
+    # Group 2: To square (e.g., 7f)
+    # Group 3: Optional promotion character (+)
+    board_move_pattern = re.compile(r"^([1-9][a-i])([1-9][a-i])(\\+)?$")
+
+    drop_match = drop_move_pattern.match(sfen_move_str)
+    if drop_match:
+        piece_char: str = drop_match.group(1)
+        sfen_sq_to: str = drop_match.group(2)
 
         try:
             piece_to_drop: PieceType = _get_piece_type_from_sfen_char(piece_char)
             r_to, c_to = _parse_sfen_square(sfen_sq_to)
-            # Ensure the types match DropMoveTuple definition
             return (None, None, r_to, c_to, piece_to_drop)
-        except ValueError as e: # Catch errors from helper functions
+        except ValueError as e:
             raise ValueError(f"Error parsing SFEN drop move '{sfen_move_str}': {e}") from e
 
+    board_match = board_move_pattern.match(sfen_move_str)
+    if board_match:
+        sfen_sq_from_str: str = board_match.group(1)
+        sfen_sq_to_str: str = board_match.group(2)
+        promote_flag: bool = board_match.group(3) is not None
 
-    # Board move (e.g., "7g7f", "2b3a+")
-    if not (4 <= len(sfen_move_str) <= 5):
-        raise ValueError(f"Invalid SFEN board move format: {sfen_move_str}")
+        try:
+            r_from, c_from = _parse_sfen_square(sfen_sq_from_str)
+            r_to, c_to = _parse_sfen_square(sfen_sq_to_str)
+            return (r_from, c_from, r_to, c_to, promote_flag)
+        except ValueError as e:
+            raise ValueError(f"Error parsing SFEN board move '{sfen_move_str}': {e}") from e
 
-    sfen_sq_from_str: str = sfen_move_str[0:2]
-    sfen_sq_to_str: str = sfen_move_str[2:4] # Renamed to avoid conflict
-    promote_flag: bool = sfen_move_str.endswith("+")
-
-    try:
-        r_from, c_from = _parse_sfen_square(sfen_sq_from_str)
-        r_to, c_to = _parse_sfen_square(sfen_sq_to_str)
-        # Ensure the types match BoardMoveTuple definition
-        return (r_from, c_from, r_to, c_to, promote_flag)
-    except ValueError as e: # Catch errors from helper functions
-        raise ValueError(f"Error parsing SFEN board move '{sfen_move_str}': {e}") from e
+    raise ValueError(f"Invalid SFEN move format: {sfen_move_str}")
 
 # TODO: Consider adding kif_to_game and sfen_to_game functions if needed.
 # These would involve more complex parsing of full game states or move sequences.
