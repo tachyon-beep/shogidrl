@@ -39,11 +39,11 @@ def generate_neural_network_observation(game: "ShogiGame") -> np.ndarray:
      28-34: Current player's hand (P, L, N, S, G, B, R) - 7 types
      35-41: Opponent's hand (P, L, N, S, G, B, R) - 7 types
     Meta planes:
-     42: Current player (all 1.0 if Black, all 0.0 if White playing as Black's opponent view)
+     42: Current player (all 1.0 if Black, all 0.0 if White playing as Black\'\'\'s opponent view)
      43: Move count (normalized)
-     44, 45: Reserved (all zeros)
-    Total: 14 (player) + 14 (opponent) + 7 (player hand) + 7 (opp hand) + 2 (meta) = 44 channels.
-    Original code specifies 46 channels, so 44 and 45 are explicitly kept.
+     44, 45: Reserved (all zeros) - Kept for potential future features like repetition counts or specific game phase indicators.
+    Total: 14 (player) + 14 (opponent) + 7 (player hand) + 7 (opp hand) + 2 (meta) + 2 (reserved) = 46 channels.
+    The original code specifies 46 channels, and these two are explicitly reserved.
     """
     obs = np.zeros((46, 9, 9), dtype=np.float32)
 
@@ -110,7 +110,8 @@ def generate_neural_network_observation(game: "ShogiGame") -> np.ndarray:
     max_moves = float(game.max_moves_per_game)
     obs[43, :, :] = game.move_count / max_moves if max_moves > 0 else 0.0
 
-    # Planes 44, 45 are reserved and remain zeros.
+    # Planes 44, 45 are reserved for potential future features (e.g., repetition count, game phase indicators)
+    # and remain zeros by default.
     return obs
 
 
