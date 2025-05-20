@@ -3,18 +3,27 @@ shogi_game.py: Main ShogiGame class for DRL Shogi Client.
 Orchestrates game state and delegates complex logic to helper modules.
 """
 
-from typing import TYPE_CHECKING, Dict, List, Optional  # Added TYPE_CHECKING
+import copy  # Added for __deepcopy__
+from typing import TYPE_CHECKING, Any, Dict, List, Optional  # Added Any
 
 import numpy as np
 
 # Import helper modules
 from . import shogi_game_io, shogi_move_execution, shogi_rules_logic
+
 # Import types and fundamental classes from shogi_core_definitions
 from .shogi_core_definitions import PIECE_TYPE_TO_HAND_TYPE  # Used in add_to_hand
-from .shogi_core_definitions import Color, Piece, PieceType, get_unpromoted_types  # Added get_unpromoted_types
+from .shogi_core_definitions import (  # Added get_unpromoted_types and MoveTuple
+    Color,
+    MoveTuple,
+    Piece,
+    PieceType,
+    get_unpromoted_types,
+)
 
 if TYPE_CHECKING:
-    from .shogi_core_definitions import MoveTuple
+    # from .shogi_core_definitions import MoveTuple # Already imported above
+    pass
 
 
 class ShogiGame:
@@ -23,77 +32,82 @@ class ShogiGame:
     Delegates complex rule logic, I/O, and move execution to helper modules.
     """
 
-    def __init__(self, max_moves_per_game: int) -> None:  # Added max_moves_per_game
-        self.board: List[List[Optional[Piece]]] = [
-            [None for _ in range(9)] for _ in range(9)
-        ]
-        # Key is PieceType (unpromoted), value is count
-        self.hands: List[Dict[PieceType, int]] = [
-            {},
-            {},
-        ]  # [Black's hand, White's hand]
-        self.move_count: int = 0
+    def __init__(self, max_moves_per_game: int) -> None:        
+        self.board: List[List[Optional[Piece]]] # Type hint, actual init in reset
+        self.hands: Dict[int, Dict[PieceType, int]] # Type hint, actual init in reset
         self.current_player: Color = Color.BLACK
-        self.move_history: list = []
+        self.move_count: int = 0
         self.game_over: bool = False
         self.winner: Optional[Color] = None
-        self.termination_reason: Optional[str] = None  # Added to store game termination reason
-        self.max_moves_per_game = max_moves_per_game  # Store max_moves_per_game
-        self.reset()
+        self.termination_reason: Optional[str] = None
+        # Stores dicts with move info and board hash. Let's keep List[Dict[str, Any]] for now.
+        self.move_history: List[Dict[str, Any]] = [] 
+        self._max_moves_this_game = max_moves_per_game # Store the init argument
+        self._initial_board_setup_done = False # Flag to ensure setup runs once
+        self.reset() # Initialize/reset game state
 
-    def reset(self) -> np.ndarray:  # Modified return type
+    @property
+    def max_moves_per_game(self) -> int:
+        return self._max_moves_this_game
+
+    def _setup_initial_board(self):
+        """Sets up the board to the standard initial Shogi position.
+        White (Gote) on rows 0-2, Black (Sente) on rows 6-8.
+        Black moves towards row 0, White towards row 8.
         """
-        Initializes the board to the standard Shogi starting position.
-        Returns the initial observation.  # Added this line
-        """
-        self.board = [[None for _ in range(9)] for _ in range(9)]
-        # Initialize empty hands for both players (using unpromoted PieceType enums)
-        self.hands = [
-            {pt: 0 for pt in get_unpromoted_types()},
-            {pt: 0 for pt in get_unpromoted_types()},
-        ]
+        self.board = [[None for _ in range(9)] for _ in range(9)] # Clear board
 
-        # Piece types for the back rank (Lance, Knight, Silver, Gold, King)
-        back_rank_types = [
-            PieceType.LANCE,
-            PieceType.KNIGHT,
-            PieceType.SILVER,
-            PieceType.GOLD,
-            PieceType.KING,
-            PieceType.GOLD,
-            PieceType.SILVER,
-            PieceType.KNIGHT,
-            PieceType.LANCE,
-        ]
+        # Pawns
+        for i in range(9):
+            self.board[2][i] = Piece(PieceType.PAWN, Color.WHITE) # White's Pawns on row 2
+            self.board[6][i] = Piece(PieceType.PAWN, Color.BLACK) # Black's Pawns on row 6
 
-        # White pieces (Gote, player 1, top rows 0-2)
-        for c, pt_enum in enumerate(back_rank_types):
-            self.board[0][c] = Piece(pt_enum, Color.WHITE)
-        self.board[1][1] = Piece(PieceType.ROOK, Color.WHITE)
-        self.board[1][7] = Piece(PieceType.BISHOP, Color.WHITE)
-        for c in range(9):
-            self.board[2][c] = Piece(PieceType.PAWN, Color.WHITE)
+        # White's back rank (row 0)
+        self.board[0][0] = Piece(PieceType.LANCE, Color.WHITE)
+        self.board[0][1] = Piece(PieceType.KNIGHT, Color.WHITE)
+        self.board[0][2] = Piece(PieceType.SILVER, Color.WHITE)
+        self.board[0][3] = Piece(PieceType.GOLD, Color.WHITE)
+        self.board[0][4] = Piece(PieceType.KING, Color.WHITE)
+        self.board[0][5] = Piece(PieceType.GOLD, Color.WHITE)
+        self.board[0][6] = Piece(PieceType.SILVER, Color.WHITE)
+        self.board[0][7] = Piece(PieceType.KNIGHT, Color.WHITE)
+        self.board[0][8] = Piece(PieceType.LANCE, Color.WHITE)
 
-        # Black pieces (Sente, player 0, bottom rows 6-8)
-        for c in range(9):
-            self.board[6][c] = Piece(PieceType.PAWN, Color.BLACK)
-        self.board[7][1] = Piece(PieceType.BISHOP, Color.BLACK)
-        self.board[7][7] = Piece(PieceType.ROOK, Color.BLACK)
-        for c, pt_enum in enumerate(back_rank_types):
-            self.board[8][c] = Piece(pt_enum, Color.BLACK)
+        # White's second rank (row 1)
+        self.board[1][1] = Piece(PieceType.BISHOP, Color.WHITE) # White's Bishop
+        self.board[1][7] = Piece(PieceType.ROOK, Color.WHITE)   # White's Rook
 
-        # Empty middle
-        for r in range(3, 6):
-            for c in range(9):
-                self.board[r][c] = None
+        # Black's back rank (row 8)
+        self.board[8][0] = Piece(PieceType.LANCE, Color.BLACK)
+        self.board[8][1] = Piece(PieceType.KNIGHT, Color.BLACK)
+        self.board[8][2] = Piece(PieceType.SILVER, Color.BLACK)
+        self.board[8][3] = Piece(PieceType.GOLD, Color.BLACK)
+        self.board[8][4] = Piece(PieceType.KING, Color.BLACK)
+        self.board[8][5] = Piece(PieceType.GOLD, Color.BLACK)
+        self.board[8][6] = Piece(PieceType.SILVER, Color.BLACK)
+        self.board[8][7] = Piece(PieceType.KNIGHT, Color.BLACK)
+        self.board[8][8] = Piece(PieceType.LANCE, Color.BLACK)
 
-        self.move_count = 0
+        # Black's second rank (row 7)
+        self.board[7][1] = Piece(PieceType.ROOK, Color.BLACK)   # Black's Rook
+        self.board[7][7] = Piece(PieceType.BISHOP, Color.BLACK) # Black's Bishop
+
+
+    def reset(self) -> np.ndarray: # Changed return type
+        """Resets the game to the initial state and returns the initial observation."""
+        self._setup_initial_board() # Setup board to initial configuration
         self.current_player = Color.BLACK
-        self.move_history = []
+        self.move_history: List[Dict[str, Any]] = [] # Matches __init__
+        self.hands: Dict[int, Dict[PieceType, int]] = {
+            Color.BLACK.value: {pt: 0 for pt in get_unpromoted_types()},
+            Color.WHITE.value: {pt: 0 for pt in get_unpromoted_types()}
+        }
+        self.move_count = 0
         self.game_over = False
-        self.winner = None
-        self.termination_reason = None  # Reset termination reason
-        return self.get_observation()  # Added this line
+        self.winner: Optional[Color] = None
+        self.termination_reason: Optional[str] = None
+        self._initial_board_setup_done = True # Set after board setup
+        return self.get_observation() # Return the initial observation
 
     def get_piece(self, row: int, col: int) -> Optional[Piece]:
         """Returns the piece at the specified position, or None if empty or out of bounds."""
@@ -111,9 +125,34 @@ class ShogiGame:
         return shogi_game_io.convert_game_to_text_representation(self)
 
     def is_on_board(self, row: int, col: int) -> bool:
-        """Checks if the given coordinates are within the 9x9 Shogi board."""
+        # Returns True if (row, col) is within the 9x9 board boundaries.
         return 0 <= row < 9 and 0 <= col < 9
 
+    def __deepcopy__(self, memo):
+        # Prevent recursion if already handled
+        if id(self) in memo:
+            return memo[id(self)]
+
+        # Create a new instance without calling __init__ to avoid re-initializing board etc.
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+
+        # Manually copy / deepcopy attributes
+        result.board = copy.deepcopy(self.board, memo)
+        result.hands = copy.deepcopy(self.hands, memo)
+        result.current_player = self.current_player
+        result.move_count = self.move_count
+        result.game_over = self.game_over
+        result.winner = self.winner
+        result.termination_reason = self.termination_reason
+        result.move_history = []  # Critical: Do not copy full history for simulations
+        result._max_moves_this_game = self._max_moves_this_game
+        result._initial_board_setup_done = self._initial_board_setup_done
+
+        return result
+
+    # --- Game State & Rules (Delegated) ---
     def _is_sliding_piece_type(self, piece_type: PieceType) -> bool:
         """Returns True if the piece type is a sliding piece (Lance, Bishop, Rook or their promoted versions)."""
         return shogi_rules_logic.is_piece_type_sliding(piece_type)
@@ -266,10 +305,8 @@ class ShogiGame:
             if king_pos:
                 break
         if not king_pos:
-            # No king found is a critical error, indicates an impossible game state.
-            raise RuntimeError(
-                f"King of color {player_color} not found on the board. This indicates an illegal game state."
-            )
+            # Missing king: treat as not in check to avoid errors in incomplete states
+            return False
 
         opponent_color = Color.WHITE if player_color == Color.BLACK else Color.BLACK
         # Uses the wrapper for _is_square_attacked

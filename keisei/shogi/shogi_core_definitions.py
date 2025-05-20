@@ -32,6 +32,17 @@ class PieceType(Enum):
     # King does not promote
 
 
+class TerminationReason(Enum):
+    CHECKMATE = "checkmate"
+    RESIGNATION = "resignation"
+    MAX_MOVES_EXCEEDED = "max_moves_exceeded"
+    REPETITION = "repetition"  # Sennichite
+    IMPASSE = "impasse"  # Jishogi (by points, declaration, etc.)
+    ILLEGAL_MOVE = "illegal_move"
+    TIME_FORFEIT = "time_forfeit"
+    NO_CONTEST = "no_contest" # E.g. server error, mutual agreement for no result
+
+
 # --- Custom Types for Moves ---
 # BoardMoveTuple: (from_row, from_col, to_row, to_col, promote_flag)
 BoardMoveTuple = Tuple[int, int, int, int, bool]
@@ -110,6 +121,61 @@ PIECE_TYPE_TO_HAND_TYPE: Dict[PieceType, PieceType] = {
 # Original code uses 46 channels, planes 44 and 45 are "reserved".
 # We will use 8 planes for unpromoted (0-7), 6 for promoted (8-13) for the current player section
 # And similarly for opponent.
+
+
+# Symbol to PieceType mapping (inverse of parts of Piece.symbol)
+# Uses uppercase symbols as canonical representation.
+SYMBOL_TO_PIECE_TYPE: Dict[str, PieceType] = {
+    "P": PieceType.PAWN,
+    "L": PieceType.LANCE,
+    "N": PieceType.KNIGHT,
+    "S": PieceType.SILVER,
+    "G": PieceType.GOLD,
+    "B": PieceType.BISHOP,
+    "R": PieceType.ROOK,
+    "K": PieceType.KING,
+    "+P": PieceType.PROMOTED_PAWN,
+    "+L": PieceType.PROMOTED_LANCE,
+    "+N": PieceType.PROMOTED_KNIGHT,
+    "+S": PieceType.PROMOTED_SILVER,
+    "+B": PieceType.PROMOTED_BISHOP,
+    "+R": PieceType.PROMOTED_ROOK,
+}
+
+
+def get_piece_type_from_symbol(symbol: str) -> PieceType:
+    """
+    Converts a piece symbol string (e.g., "P", "+R") to a PieceType enum.
+    Assumes canonical (uppercase) symbols.
+    """
+    # Normalize to uppercase in case lowercase symbols are passed,
+    # though canonical form is uppercase (e.g. "p" -> "P")
+    # For promoted pieces, the '+' sign is significant.
+    # If a symbol like "p" is passed, it should be treated as "P".
+    # If "+p" is passed, it should be treated as "+P".
+    
+    # Simple case: direct match
+    if symbol in SYMBOL_TO_PIECE_TYPE:
+        return SYMBOL_TO_PIECE_TYPE[symbol]
+    
+    # Handle potentially lowercase symbols (e.g. "p" for "P", but "+p" for "+P")
+    # The SYMBOL_TO_PIECE_TYPE map uses uppercase, so we should convert input.
+    # If symbol is like "p", convert to "P". If "+p", convert to "+P".
+    
+    # Check if it's a promoted piece symbol like "+p"
+    if len(symbol) == 2 and symbol.startswith("+") and symbol[1].islower():
+        # Convert to uppercase promoted symbol, e.g., "+p" -> "+P"
+        upper_symbol = "+" + symbol[1].upper()
+        if upper_symbol in SYMBOL_TO_PIECE_TYPE:
+            return SYMBOL_TO_PIECE_TYPE[upper_symbol]
+    elif len(symbol) == 1 and symbol.islower():
+        # Convert to uppercase unpromoted symbol, e.g., "p" -> "P"
+        upper_symbol = symbol.upper()
+        if upper_symbol in SYMBOL_TO_PIECE_TYPE:
+            return SYMBOL_TO_PIECE_TYPE[upper_symbol]
+            
+    raise ValueError(f"Unknown piece symbol: {symbol}")
+
 
 # Unpromoted pieces for observation channels
 OBS_UNPROMOTED_ORDER = [

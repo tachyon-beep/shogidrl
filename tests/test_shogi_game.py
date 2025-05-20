@@ -228,25 +228,49 @@ def test_get_observation_board_pieces_consistency_after_reset(new_game: ShogiGam
         obs[black_pawn_plane, 6, 0] == 1.0
     ), "Black pawn at (6,0) not found in observation"
 
-    # Black's Rook at (7,7)
+    # Black's Rook at (7,1)
     black_rook_plane = OBS_UNPROMOTED_ORDER.index(PieceType.ROOK)
     assert (
-        obs[black_rook_plane, 7, 7] == 1.0
-    ), "Black rook at (7,7) not found in observation"
+        obs[black_rook_plane, 7, 1] == 1.0
+    ), "Black rook at (7,1) not found in observation"
+
+    # Black's Bishop at (7,7)
+    black_bishop_plane = OBS_UNPROMOTED_ORDER.index(PieceType.BISHOP)
+    assert (
+        obs[black_bishop_plane, 7, 7] == 1.0
+    ), "Black bishop at (7,7) not found in observation"
 
     # Check a few key pieces for White (opponent perspective)
-    # White's Pawn at (2,0)
-    # Opponent planes start after current player's 14 planes (i.e., at index 14)
-    white_pawn_plane = 14 + OBS_UNPROMOTED_ORDER.index(PieceType.PAWN)
+    # Opponent planes start after all current player planes (unpromoted + promoted)
+    num_piece_types_unpromoted = len(OBS_UNPROMOTED_ORDER)
+    num_piece_types_promoted = len(OBS_PROMOTED_ORDER) # Added for clarity
+
+    # Determine the correct plane index for opponent pieces based on shogi_game_io.py logic
+    # Current player unpromoted: 0 to N_unprom - 1
+    # Current player promoted: N_unprom to N_unprom + N_prom - 1
+    # Opponent player unpromoted: N_unprom + N_prom to N_unprom + N_prom + N_unprom - 1
+    # Opponent player promoted: N_unprom + N_prom + N_unprom to N_unprom + N_prom + N_unprom + N_prom - 1
+    # N_unprom = len(OBS_UNPROMOTED_ORDER)
+    # N_prom = len(OBS_PROMOTED_ORDER)
+
+    start_opponent_unpromoted_planes = num_piece_types_unpromoted + num_piece_types_promoted
+
+    white_pawn_plane = start_opponent_unpromoted_planes + OBS_UNPROMOTED_ORDER.index(PieceType.PAWN)
     assert (
         obs[white_pawn_plane, 2, 0] == 1.0
-    ), "White pawn at (2,0) not found in observation"
+    ), f"White pawn at (2,0) not found in observation plane {white_pawn_plane}"
 
-    # White's King at (0,4)
-    white_king_plane = 14 + OBS_UNPROMOTED_ORDER.index(PieceType.KING)
+    # White's Rook at (1,7)
+    white_rook_plane = start_opponent_unpromoted_planes + OBS_UNPROMOTED_ORDER.index(PieceType.ROOK)
     assert (
-        obs[white_king_plane, 0, 4] == 1.0
-    ), "White king at (0,4) not found in observation"
+        obs[white_rook_plane, 1, 7] == 1.0
+    ), f"White rook at (1,7) not found in observation plane {white_rook_plane}"
+
+    # White's Bishop at (1,1)
+    white_bishop_plane = start_opponent_unpromoted_planes + OBS_UNPROMOTED_ORDER.index(PieceType.BISHOP)
+    assert (
+        obs[white_bishop_plane, 1, 1] == 1.0
+    ), f"White bishop at (1,1) not found in observation plane {white_bishop_plane}"
 
     # Ensure a square that should be empty for a piece type is 0
     assert (

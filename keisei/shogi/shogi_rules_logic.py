@@ -3,14 +3,21 @@ Core Shogi game rules, move generation, and validation logic.
 Functions in this module operate on a ShogiGame instance.
 """
 
+from copy import deepcopy  # ensure deep copy is available
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
 # Ensure all necessary types are imported:
 from .shogi_core_definitions import (  # Corrected: MoveTuple is defined and used, not Move; Add any other constants from core_definitions that might be used directly here
-    BASE_TO_PROMOTED_TYPE, Color, MoveTuple, Piece, PieceType)
+    BASE_TO_PROMOTED_TYPE,
+    Color,
+    DropMoveTuple,
+    MoveTuple,
+    Piece,
+    PieceType,
+)
 
 if TYPE_CHECKING:
-    from .shogi_core_definitions import BoardMoveTuple, DropMoveTuple  # Added for type hinting
+    from .shogi_core_definitions import BoardMoveTuple  # Added for type hinting
     from .shogi_game import ShogiGame  # For type hinting the 'game' parameter
 
 
@@ -195,139 +202,64 @@ def check_for_uchi_fu_zume(
     results in immediate checkmate (Uchi Fu Zume).
     (Formerly ShogiGame.is_uchi_fu_zume)
     """
-    if game.get_piece(drop_row, drop_col) is not None:
-        return False  # Square occupied
-
     opp_color = Color.WHITE if color == Color.BLACK else Color.BLACK
-    king_pos: Optional[Tuple[int, int]] = None
+    
+    # Create a deep copy to simulate the pawn drop
+    temp_game = deepcopy(game)
+
+    # Check if the square is empty for a valid drop
+    if temp_game.get_piece(drop_row, drop_col) is not None:
+        return False # Cannot drop on an occupied square
+
+    # Simulate the pawn drop
+    # Ensure the piece type is PAWN for uchi_fu_zume check
+    temp_game.set_piece(drop_row, drop_col, Piece(PieceType.PAWN, color))
+    if PieceType.PAWN in temp_game.hands[color.value] and temp_game.hands[color.value][PieceType.PAWN] > 0:
+        temp_game.hands[color.value][PieceType.PAWN] -= 1 # Decrement pawn from hand
+    else:
+        # This case should ideally not happen if called from a context where player has a pawn.
+        # For robustness in testing or direct calls, we might log or handle this.
+        # For now, assume hand management is correct outside this specific check.
+        print(f"[UCHI_FU_ZUME_DEBUG] Warning: Pawn was not in hand for {color} to drop, but proceeding with simulation.")
+
+
+    # The player making the drop is \'color\'. Their king should not be in check.
+    own_king_in_check = is_king_in_check_after_simulated_move(temp_game, color)
+    if own_king_in_check:
+        return False # Drop is illegal if it leaves own king in check
+
+    # Find the opponent\'s king
+    opp_king_pos = None
     for r_k in range(9):
         for c_k in range(9):
-            p_k = game.get_piece(r_k, c_k)
-            if p_k and p_k.type == PieceType.KING and p_k.color == opp_color:
-                king_pos = (r_k, c_k)
+            p = temp_game.get_piece(r_k, c_k)
+            if p and p.type == PieceType.KING and p.color == opp_color:
+                opp_king_pos = (r_k, c_k)
                 break
-        if king_pos:
+        if opp_king_pos:
             break
-    if not king_pos:
-        # This should ideally not happen in a valid game state.
-        # If opponent's king is not on board, it's already a game-ending condition.
-        # For uchi-fu-zume context, this means no king to checkmate.
+    
+    if not opp_king_pos:
+        return False # Opponent\'s king not found, cannot be uchi_fu_zume
+
+    # 1. Check if the drop delivers check to the opponent\'s king
+    drop_delivers_check = check_if_square_is_attacked(temp_game, opp_king_pos[0], opp_king_pos[1], color)
+
+    if not drop_delivers_check:
+        return False # Not uchi_fu_zume if the drop itself doesn\'t give check
+
+    # 2. Check if the opponent\'s king has any legal moves to escape the check
+    # Temporarily switch current player to opponent to generate their legal moves
+    temp_game.current_player = opp_color
+    opponent_legal_moves = generate_all_legal_moves(temp_game) 
+
+    # If there are any legal moves for the opponent, it\'s not checkmate, so not uchi_fu_zume.
+    if opponent_legal_moves:
         return False
 
-    king_r, king_c = king_pos
-
-    # Check if dropped pawn delivers check
-    pawn_attack_row = drop_row + (-1 if color == Color.BLACK else 1)
-    if not (king_r == pawn_attack_row and king_c == drop_col):
-        return False  # Pawn drop doesn't check the king
-
-    # Temporarily place the pawn
-    # The `Piece` class used here should be the one from shogi_core_definitions
-    dropped_pawn = Piece(PieceType.PAWN, color)
-    game.set_piece(drop_row, drop_col, dropped_pawn)
-
-    # Temporarily switch player to simulate opponent's turn for legal move check
-    original_player = game.current_player
-    game.current_player = opp_color  # Temporarily set for the check
-
-    # Check if opponent has any legal moves to escape checkmate
-    opponent_has_legal_move = False
-
-    # Generate all legal moves for the opponent.
-    # This requires a lightweight version or careful use of the full get_legal_moves
-    # to avoid infinite recursion if get_legal_moves itself calls is_uchi_fu_zume.
-    # For uchi_fu_zume, the key is that the *king* has no escape,
-    # and the checking pawn cannot be captured, or if it can, king is still mated.
-
-    # Simplified check: can the king move to a safe square, or can the pawn be captured?
-    # More robust: generate opponent's legal moves.
-    # We need a temporary ShogiGame state or a way for generate_all_legal_moves
-    # to work with the current (modified) board state of 'game'.
-
-    # If we call generate_all_legal_moves(game), it will use game.current_player (which is now opp_color).
-    # It will also use the current board state (with the dropped pawn).
-    # The generate_all_legal_moves function will internally handle checks to ensure
-    # the opponent does not move into check.
-
-    # Critical: Ensure generate_all_legal_moves does not recursively call check_for_uchi_fu_zume
-    # if it's part of pawn drop validation within generate_all_legal_moves.
-    # Assuming check_for_uchi_fu_zume is called *before* adding a pawn drop to legal moves.
-
-    # Option A: A simplified check focused on king escape / pawn capture
-    # (as in the original provided code for ShogiGame.is_uchi_fu_zume)
-
-    # 1. Can the king escape?
-    king_piece_at_kr_kc = game.get_piece(king_r, king_c)
-    if king_piece_at_kr_kc:  # Should be the king
-        king_potential_moves = generate_piece_potential_moves(
-            game, king_piece_at_kr_kc, king_r, king_c
-        )
-        for kr_new, kc_new in king_potential_moves:
-            # Simulate king move
-            original_piece_at_escape_sq = game.get_piece(kr_new, kc_new)
-            game.set_piece(king_r, king_c, None)
-            game.set_piece(kr_new, kc_new, king_piece_at_kr_kc)
-
-            if not check_if_square_is_attacked(
-                game, kr_new, kc_new, color
-            ):  # Is king safe after move?
-                opponent_has_legal_move = True
-
-            # Undo simulated king move
-            game.set_piece(king_r, king_c, king_piece_at_kr_kc)
-            game.set_piece(kr_new, kc_new, original_piece_at_escape_sq)
-            if opponent_has_legal_move:
-                break
-
-    if opponent_has_legal_move:
-        game.set_piece(drop_row, drop_col, None)  # Remove test pawn
-        game.current_player = original_player  # Restore player
-        return False  # Not uchi_fu_zume, king can escape
-
-    # 2. Can the pawn be captured by any opponent piece (resulting in king not being in check)?
-    # Or can any piece block? (Original focused on capture of the pawn)
-    for r_att in range(9):
-        if opponent_has_legal_move:
-            break
-        for c_att in range(9):
-            if opponent_has_legal_move:
-                break
-            attacker_piece = game.get_piece(r_att, c_att)
-            if attacker_piece and attacker_piece.color == opp_color:
-                possible_attacker_moves = generate_piece_potential_moves(
-                    game, attacker_piece, r_att, c_att
-                )
-                if (
-                    drop_row,
-                    drop_col,
-                ) in possible_attacker_moves:  # Can this piece capture the pawn?
-                    # Simulate capture
-                    original_attacker_on_board = attacker_piece
-                    game.set_piece(
-                        drop_row, drop_col, original_attacker_on_board
-                    )  # Pawn is captured
-                    game.set_piece(r_att, c_att, None)
-
-                    if not check_if_square_is_attacked(
-                        game, king_r, king_c, color
-                    ):  # Is king safe?
-                        opponent_has_legal_move = True
-
-                    # Undo simulated capture
-                    game.set_piece(r_att, c_att, original_attacker_on_board)
-                    game.set_piece(
-                        drop_row, drop_col, dropped_pawn
-                    )  # Put test pawn back
-                    if opponent_has_legal_move:
-                        break
-
-    # Restore board and current player fully
-    game.set_piece(drop_row, drop_col, None)
-    game.current_player = original_player
-
-    return (
-        not opponent_has_legal_move
-    )  # If no legal move for opponent, it's Uchi Fu Zume
+    # If no legal moves for the opponent, it\'s checkmate.
+    # Since it\'s a pawn drop delivering checkmate, it\'s uchi_fu_zume.
+    return True
 
 
 def is_king_in_check_after_simulated_move(
@@ -459,6 +391,17 @@ def generate_all_legal_moves(game: "ShogiGame") -> List[MoveTuple]:
     3. It does not leave the current player's king in check.
     (Formerly ShogiGame.get_legal_moves)
     """
+    # Guard: require both players' kings on board, otherwise no legal moves
+    has_black_king = any(
+        (p := game.get_piece(r, c)) and p.type == PieceType.KING and p.color == Color.BLACK
+        for r in range(9) for c in range(9)
+    )
+    has_white_king = any(
+        (p := game.get_piece(r, c)) and p.type == PieceType.KING and p.color == Color.WHITE
+        for r in range(9) for c in range(9)
+    )
+    if not (has_black_king and has_white_king):
+        return []
     legal_moves: List[MoveTuple] = []
     original_player_color = game.current_player
     # opponent_color = Color.WHITE if original_player_color == Color.BLACK else Color.BLACK
@@ -499,16 +442,12 @@ def generate_all_legal_moves(game: "ShogiGame") -> List[MoveTuple]:
                         ]
 
                     for board_move_tuple in current_move_tuples_to_check:
-                        # Simulate the move
-                        game.make_move(
-                            board_move_tuple, is_simulation=True
-                        )  # Pass is_simulation=True
+                        # Simulate the move on a game copy via deepcopy
+                        temp_game = deepcopy(game)
+                        temp_game.make_move(board_move_tuple, is_simulation=True)
                         # Check if the current player's king is NOT in check after this move
-                        if not is_king_in_check_after_simulated_move(
-                            game, original_player_color
-                        ):
+                        if not temp_game.is_in_check(original_player_color):
                             legal_moves.append(board_move_tuple)
-                        game.undo_move()  # Revert the simulated move
 
     # II. Generate Drop Moves
     for piece_type_to_drop in game.hands[original_player_color.value]:
@@ -520,23 +459,20 @@ def generate_all_legal_moves(game: "ShogiGame") -> List[MoveTuple]:
                         if can_drop_specific_piece(
                             game, piece_type_to_drop, r_to, c_to, original_player_color
                         ):
-                            drop_move_tuple: 'DropMoveTuple' = (
+                            # Create the drop move tuple
+                            drop_move_tuple: DropMoveTuple = (
                                 None,
                                 None,
                                 r_to,
                                 c_to,
                                 piece_type_to_drop,
                             )
-                            # Simulate the drop
-                            game.make_move(
-                                drop_move_tuple, is_simulation=True
-                            )  # Pass is_simulation=True
+                            # Simulate the drop on a game copy
+                            temp_game = deepcopy(game)
+                            temp_game.make_move(drop_move_tuple, is_simulation=True)
                             # Check if the current player's king is NOT in check after this drop
-                            if not is_king_in_check_after_simulated_move(
-                                game, original_player_color
-                            ):
+                            if not temp_game.is_in_check(original_player_color):
                                 legal_moves.append(drop_move_tuple)
-                            game.undo_move()  # Revert the simulated drop
     return legal_moves
 
 

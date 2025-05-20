@@ -1,11 +1,20 @@
 # shogi_game_io.py
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
-from .shogi_core_definitions import get_unpromoted_types  # Import the standalone function
-from .shogi_core_definitions import OBS_PROMOTED_ORDER, OBS_UNPROMOTED_ORDER, Color
+from ..utils import PolicyOutputMapper
+from .shogi_core_definitions import (
+    OBS_PROMOTED_ORDER,
+    OBS_UNPROMOTED_ORDER,
+    Color,
+    Piece,
+    PieceType,
+    TerminationReason,
+    get_piece_type_from_symbol,
+    get_unpromoted_types,
+)
 
 if TYPE_CHECKING:
     from .shogi_game import ShogiGame  # For type hinting the 'game' parameter
@@ -92,7 +101,7 @@ def generate_neural_network_observation(game: "ShogiGame") -> np.ndarray:
     obs[42, :, :] = 1.0 if game.current_player == Color.BLACK else 0.0
 
     # Move count plane (43)
-    # Use game.max_moves_per_game for consistency
+    # Use game._max_moves_this_game for consistency
     max_moves = float(game.max_moves_per_game)
     obs[43, :, :] = game.move_count / max_moves if max_moves > 0 else 0.0
 
@@ -129,3 +138,98 @@ def convert_game_to_text_representation(game: "ShogiGame") -> str:
     lines.append(f"White's hand: {white_hand_dict}")
     lines.append(f"Current player: {game.current_player.name}")
     return "\n".join(lines)
+
+
+def game_to_kif(game: 'ShogiGame', filename: str) -> None:
+    """Converts a game to a KIF file."""
+    # Use game.max_moves_per_game property
+    max_moves = float(game.max_moves_per_game)
+    with open(filename, "w", encoding="utf-8") as kif_file:
+        # Basic KIF headers (example, adapt as needed)
+        # These might come from game.config or other game properties if available
+        # For now, using placeholders or omitting if not directly on game object
+        # kif_file.write(f"*Player Sente: {game.player_names[0]}\\n")
+        # kif_file.write(f"*Player Gote: {game.player_names[1]}\\n")
+        # kif_file.write(f"*Initial setup: {game.initial_setup}\\n") # Or a representation
+        # kif_file.write(f"*Handicap: {game.handicap}\\n")
+
+        kif_file.write("*KIF version: 2.0\\n")
+        kif_file.write("*Game type: Shogi\\n")
+        # if hasattr(game, 'start_time') and game.start_time:
+        #     kif_file.write(f"*Start time: {game.start_time.isoformat()}\\n")
+
+        # Board state
+        kif_file.write("P1" + "".join([str(i) for i in range(9, 0, -1)]) + "\\n")
+        for r_idx, row in enumerate(game.board):
+            line = f"P{r_idx+1}"
+            for c_idx, p in enumerate(row): # c_idx is used by some KIF variants, keep for now
+                if p is None:
+                    line += " . " # KIF uses spaces for empty squares, not '+'
+                else:
+                    # KIF piece representation: Color (P for Black, p for White) + Piece Type (e.g., FU, KY)
+                    # This needs a mapping from PieceType to KIF piece strings.
+                    # For now, using the existing symbol() method which might not be KIF standard.
+                    # Standard KIF is like: P+FU, P-GI, etc. or just FU, GI with player context.
+                    # The current Piece.symbol() returns things like "P", "p", "+P", "+p".
+                    # We need to ensure it aligns with KIF expectations or adapt.
+                    # A common KIF style is just the piece type (e.g., FU, KY, HI, KA, OU, KI, GI, KE, TO, NY, NK, NG, UM, RY)
+                    # and the player is implicit from whose turn it is or explicit in headers.
+                    # Another style uses e.g. " FU" for black pawn, " fu" for white pawn.
+                    # Let's assume for now that Piece.symbol() gives a suitable representation
+                    # and that KIF readers can interpret it or it's a simplified KIF.
+                    # A more robust solution would map PieceType to standard KIF piece names.
+                    piece_char = p.symbol() # e.g. P, p, +P, +p
+                    # KIF usually expects two characters for a piece, e.g., "FU", "KY".
+                    # If symbol() returns one char (e.g. "P"), pad with space. If two (e.g. "+P"), use as is.
+                    # This is a simplification.
+                    if len(piece_char) == 1:
+                        line += f" {piece_char} " # e.g. " P "
+                    elif len(piece_char) == 2: # e.g. "+P" or "p " if symbol() was adapted
+                        if piece_char.startswith("+") or piece_char.startswith("-"):
+                            line += f"{piece_char} " # e.g. "+P "
+                        else: # Should not happen with current symbol()
+                            line += f"{piece_char}" # e.g. "FU"
+                    else: # Should not happen
+                        line += " ??"
+
+            kif_file.write(line + "\\n")
+
+        kif_file.write("moves\\n")
+
+        # Instantiate PolicyOutputMapper to use its shogi_move_to_usi method
+        mapper = PolicyOutputMapper()
+
+        for i, move_entry in enumerate(game.move_history):
+            move_obj = move_entry.get("move")
+            if not move_obj:
+                continue
+
+            kif_file.write(f"{i+1} {mapper.shogi_move_to_usi(move_obj)}\\n") # Use mapper instance
+
+        # Game termination
+        if game.game_over:
+            if game.termination_reason == TerminationReason.CHECKMATE.value:
+                kif_file.write(
+                    "Tsumi\\n" # Checkmate
+                )
+            elif game.termination_reason == TerminationReason.RESIGNATION.value:
+                kif_file.write(
+                    "Toryo\\n" # Resignation
+                )
+            elif game.termination_reason == TerminationReason.MAX_MOVES_EXCEEDED.value:
+                kif_file.write(
+                    "Jishogi\\n" # Draw by max moves (can be more specific)
+                )
+            elif game.termination_reason == TerminationReason.REPETITION.value: # Sennichite
+                kif_file.write(
+                    "Sennichite\\n"
+                )
+            # Add other termination reasons as needed
+
+        # if hasattr(game, 'end_time') and game.end_time:
+        #     kif_file.write(f"*End time: {game.end_time.isoformat()}\\n")
+        # if hasattr(game, 'result') and game.result:
+        #     kif_file.write(f"*Result: {game.result}\\n")
+        # if hasattr(game, 'comment') and game.comment:
+        #     kif_file.write(f"*Comment: {game.comment}\\n")
+        kif_file.write("*EOF\\n")

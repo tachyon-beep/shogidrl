@@ -6,8 +6,14 @@ These functions operate on a ShogiGame instance.
 
 from typing import TYPE_CHECKING, Any, Dict, cast
 
-from .shogi_core_definitions import (BASE_TO_PROMOTED_TYPE, PIECE_TYPE_TO_HAND_TYPE, Color, Piece, PieceType,
-                                     get_unpromoted_types)
+from .shogi_core_definitions import (
+    BASE_TO_PROMOTED_TYPE,
+    PIECE_TYPE_TO_HAND_TYPE,
+    Color,
+    Piece,
+    PieceType,
+    get_unpromoted_types,
+)
 
 if TYPE_CHECKING:
     from .shogi_core_definitions import MoveTuple  # Added for type hinting
@@ -142,7 +148,7 @@ def apply_move_to_board(
             game.game_over = True
             game.winner = None  # Draw by stalemate
             game.termination_reason = "stalemate"
-        elif game.move_count >= game.max_moves_per_game:  # Use game.max_moves_per_game
+        elif game.move_count >= game._max_moves_this_game:  # Use game._max_moves_this_game
             game.game_over = True
             game.winner = None  # Draw
             game.termination_reason = "max_moves_reached"

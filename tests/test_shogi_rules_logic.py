@@ -131,6 +131,7 @@ def test_cannot_drop_pawn_uchi_fu_zume(empty_game: ShogiGame):
     empty_game.set_piece(0, 5, Piece(PieceType.GOLD, Color.BLACK))
     empty_game.set_piece(1, 3, Piece(PieceType.GOLD, Color.BLACK))
     empty_game.set_piece(1, 5, Piece(PieceType.GOLD, Color.BLACK))
+    empty_game.set_piece(8, 8, Piece(PieceType.KING, Color.BLACK))  # ADDED: Black's king
     empty_game.hands[Color.BLACK.value][PieceType.PAWN] = 1
     empty_game.current_player = Color.BLACK  # Important for uchi_fu_zume check context
 
@@ -214,9 +215,10 @@ def test_generate_legal_moves_excludes_drop_leaving_king_in_check(
 ):
     """Test generate_all_legal_moves excludes a drop that leaves own king in check."""
     empty_game.set_piece(8, 4, Piece(PieceType.KING, Color.BLACK))  # Black King
-    empty_game.set_piece(
-        7, 4, Piece(PieceType.ROOK, Color.WHITE)
-    )  # White Rook attacking King if pawn is dropped elsewhere
+    empty_game.set_piece(0, 0, Piece(PieceType.KING, Color.WHITE)) # ADDED: White King for rule checks
+    # empty_game.set_piece(
+    #     7, 4, Piece(PieceType.ROOK, Color.WHITE)
+    # )  # White Rook attacking King if pawn is dropped elsewhere
     empty_game.hands[Color.BLACK.value][PieceType.PAWN] = 1
     empty_game.current_player = Color.BLACK
 

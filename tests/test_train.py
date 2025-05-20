@@ -1,5 +1,5 @@
 """
-Unit tests for train2.py CLI and checkpoint logic (smoke test).
+Unit tests for train.py CLI and checkpoint logic (smoke test).
 """
 
 
@@ -12,19 +12,19 @@ from keisei.ppo_agent import PPOAgent
 from keisei.utils import PolicyOutputMapper
 import config
 
-TRAIN2_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'train2.py'))
+TRAIN_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'train.py'))
 
 
-def test_train2_cli_help():
-    """Test that train2.py --help runs and prints usage."""
-    result = subprocess.run([sys.executable, TRAIN2_PATH, '--help'], capture_output=True, text=True, check=True)
+def test_train_cli_help():
+    """Test that train.py --help runs and prints usage."""
+    result = subprocess.run([sys.executable, TRAIN_PATH, '--help'], capture_output=True, text=True, check=True)
     assert result.returncode == 0
     assert "usage" in result.stdout.lower()
     assert "--device" in result.stdout
 
 
-def test_train2_resume_autodetect(tmp_path):
-    """Test that train2.py can auto-detect a checkpoint (mocked)."""
+def test_train_resume_autodetect(tmp_path):
+    """Test that train.py can auto-detect a checkpoint (mocked)."""
     # Create a run directory and place checkpoint there
     run_dir = tmp_path / "run"
     run_dir.mkdir()
@@ -38,7 +38,7 @@ def test_train2_resume_autodetect(tmp_path):
     )
     agent.save_model(str(fake_ckpt))
     result = subprocess.run([
-        sys.executable, TRAIN2_PATH,
+        sys.executable, TRAIN_PATH,
         '--savedir', str(tmp_path),
         '--run_name', 'run',
         '--total-timesteps', '1',
@@ -47,8 +47,8 @@ def test_train2_resume_autodetect(tmp_path):
     assert "Resuming from checkpoint" in result.stdout or "Resuming from checkpoint" in result.stderr
 
 
-def test_train2_runs_minimal(tmp_path):
-    """Test that train2.py runs for 1 step and creates log/model files."""
+def test_train_runs_minimal(tmp_path):
+    """Test that train.py runs for 1 step and creates log/model files."""
     savedir = tmp_path / "run"
     # Set SAVE_FREQ_EPISODES=1 so a checkpoint is always saved
     config_override = {"SAVE_FREQ_EPISODES": 1}
@@ -56,7 +56,7 @@ def test_train2_runs_minimal(tmp_path):
     with open(config_path, 'w', encoding='utf-8') as f:
         pyjson.dump(config_override, f)
     result = subprocess.run([
-        sys.executable, TRAIN2_PATH,
+        sys.executable, TRAIN_PATH,
         '--savedir', str(savedir),
         '--config', str(config_path),
         '--total-timesteps', '1',
@@ -71,7 +71,7 @@ def test_train2_runs_minimal(tmp_path):
     assert ckpt_files, "No checkpoint file found in run directory"
 
 
-def test_train2_config_override(tmp_path):
+def test_train_config_override(tmp_path):
     """Test that --config JSON override works and is saved in effective_config.json."""
     config_override = {"TOTAL_TIMESTEPS": 2, "LEARNING_RATE": 0.12345}
     config_path = tmp_path / "override.json"
@@ -79,7 +79,7 @@ def test_train2_config_override(tmp_path):
         pyjson.dump(config_override, f)
     run_dir = tmp_path / "run"
     result = subprocess.run([
-        sys.executable, TRAIN2_PATH,
+        sys.executable, TRAIN_PATH,
         '--savedir', str(tmp_path),
         '--run_name', 'run',
         '--config', str(config_path),
@@ -94,11 +94,11 @@ def test_train2_config_override(tmp_path):
     assert abs(eff["LEARNING_RATE"] - 0.12345) < 1e-6
 
 
-def test_train2_run_name_and_savedir(tmp_path):
+def test_train_run_name_and_savedir(tmp_path):
     """Test that --run_name and --savedir create the correct directory structure."""
     run_name = "mytestrun"
     result = subprocess.run([
-        sys.executable, TRAIN2_PATH,
+        sys.executable, TRAIN_PATH,
         '--savedir', str(tmp_path),
         '--run_name', run_name,
         '--total-timesteps', '1',
@@ -110,7 +110,7 @@ def test_train2_run_name_and_savedir(tmp_path):
     assert (run_dir / "effective_config.json").exists()
 
 
-def test_train2_explicit_resume(tmp_path):
+def test_train_explicit_resume(tmp_path):
     """Test that --resume overrides auto-detection and resumes from the specified checkpoint."""
     run_dir = tmp_path / "run"
     run_dir.mkdir()
@@ -125,7 +125,7 @@ def test_train2_explicit_resume(tmp_path):
     )
     agent.save_model(str(ckpt_path), global_timestep=100, total_episodes_completed=10)
     result = subprocess.run([
-        sys.executable, TRAIN2_PATH,
+        sys.executable, TRAIN_PATH,
         '--savedir', str(tmp_path),
         '--run_name', 'run',
         '--resume', str(ckpt_path),
