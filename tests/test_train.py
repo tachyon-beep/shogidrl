@@ -2,14 +2,14 @@
 Unit tests for train.py CLI and checkpoint logic (smoke test).
 """
 
-import os
-import sys
-import subprocess
 import json as pyjson
+import os
+import subprocess
+import sys
 
+import config
 from keisei.ppo_agent import PPOAgent
 from keisei.utils import PolicyOutputMapper
-import config
 
 TRAIN_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "train.py"))
 

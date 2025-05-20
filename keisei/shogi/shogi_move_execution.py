@@ -4,27 +4,27 @@ Contains functions for applying and reverting moves in the Shogi game.
 These functions operate on a ShogiGame instance.
 """
 
-from typing import (
+from typing import (  # Added Optional
     TYPE_CHECKING,
     Any,
     Dict,
-    cast,
     List,
-    Tuple,
     Optional,
-)  # Added Optional
+    Tuple,
+    cast,
+)
 
+from . import shogi_rules_logic  # Ensure shogi_rules_logic is imported
+from .shogi_core_definitions import PROMOTED_TO_BASE_TYPE  # Added import
 from .shogi_core_definitions import (
     BASE_TO_PROMOTED_TYPE,
     PIECE_TYPE_TO_HAND_TYPE,
     Color,
+    MoveTuple,
     Piece,
     PieceType,
     get_unpromoted_types,
-    PROMOTED_TO_BASE_TYPE,  # Added import
 )
-from .shogi_core_definitions import MoveTuple
-from . import shogi_rules_logic  # Ensure shogi_rules_logic is imported
 
 # from . import shogi_game_io # Commenting out as log_move is not found
 

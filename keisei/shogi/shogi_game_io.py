@@ -1,24 +1,25 @@
 # shogi_game_io.py
 
-from typing import TYPE_CHECKING, Tuple
-import numpy as np
 import datetime  # For KIF Date header
+from typing import TYPE_CHECKING, Tuple
+
+import numpy as np
 
 from ..utils import PolicyOutputMapper  # Assuming this path is correct
 from .shogi_core_definitions import (
+    KIF_PIECE_SYMBOLS,
     OBS_PROMOTED_ORDER,
     OBS_UNPROMOTED_ORDER,
+    SYMBOL_TO_PIECE_TYPE,
+    BoardMoveTuple,
     Color,
+    DropMoveTuple,
+    MoveTuple,
     Piece,
     PieceType,
     TerminationReason,
     get_piece_type_from_symbol,
     get_unpromoted_types,
-    KIF_PIECE_SYMBOLS,
-    MoveTuple,
-    BoardMoveTuple,
-    DropMoveTuple,
-    SYMBOL_TO_PIECE_TYPE,
 )
 
 if TYPE_CHECKING:

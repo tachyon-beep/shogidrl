@@ -88,7 +88,7 @@ class ExperienceBuffer:
 
         advantages_list = [0.0] * self.ptr
         returns_list = [0.0] * self.ptr
-        gae = 0.0
+        gae = torch.tensor(0.0, device=self.device)  # Ensure gae is always a tensor
 
         # last_value is V(S_t+1) for the last state in the buffer
         # If the last state was terminal, next_value should be 0, handled by mask.

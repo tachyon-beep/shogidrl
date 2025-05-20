@@ -1,6 +1,7 @@
 import pytest
+
+from keisei.shogi.shogi_core_definitions import BoardMoveTuple, Color, Piece, PieceType
 from keisei.shogi.shogi_game import ShogiGame
-from keisei.shogi.shogi_core_definitions import Color, PieceType, BoardMoveTuple, Piece
 
 # Helper to serialize critical parts of the game state
 

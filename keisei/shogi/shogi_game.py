@@ -13,18 +13,15 @@ from . import shogi_game_io, shogi_move_execution, shogi_rules_logic
 
 # Import types and fundamental classes from shogi_core_definitions
 from .shogi_core_definitions import (
-    Color,
-    PieceType,
-    MoveTuple,  # Already imported above
-    BoardMoveTuple,  # Added for clarity if used directly, though MoveTuple covers it
-    DropMoveTuple,  # Added for clarity
-    Piece,
-    get_unpromoted_types,
-    PROMOTED_TYPES_SET,  # For SFEN serialization
-    PIECE_TYPE_TO_HAND_TYPE,  # Used in add_to_hand
     BASE_TO_PROMOTED_TYPE,  # For SFEN deserialization
+    PIECE_TYPE_TO_HAND_TYPE,  # Used in add_to_hand
+    PROMOTED_TYPES_SET,  # For SFEN serialization
     SYMBOL_TO_PIECE_TYPE,  # Added for SFEN parsing
-    PROMOTED_TO_BASE_TYPE,  # Potentially useful for SFEN parsing/validation
+    MoveTuple,  # Already imported above
+    Color,
+    Piece,
+    PieceType,
+    get_unpromoted_types,
 )
 
 if TYPE_CHECKING:
@@ -727,12 +724,22 @@ class ShogiGame:
 
         if r_from is None:  # Drop move
             move_details_for_history["is_drop"] = True
-            piece_type_to_drop: PieceType = move_tuple[4] # Already validated as PieceType
-            move_details_for_history["dropped_piece_type"] = piece_type_to_drop
-            # Actual board/hand update will be in apply_move_to_board or directly here if preferred
-            # For now, let\\'s assume apply_move_to_board handles the set_piece and remove_from_hand for drops
-        else:  # Board move
-            piece_to_move = self.get_piece(r_from, c_from)
+            # Only assign if move_tuple[4] is a PieceType
+            if isinstance(move_tuple[4], PieceType):
+                drop_piece_type_for_move = move_tuple[4]
+                move_details_for_history["dropped_piece_type"] = drop_piece_type_for_move  # <-- Fix for undo
+                if r_to is not None and c_to is not None:
+                    self.set_piece(r_to, c_to, Piece(drop_piece_type_for_move, player_who_made_the_move))
+                self.remove_from_hand(drop_piece_type_for_move, player_who_made_the_move)
+            else:
+                raise ValueError(f"Invalid drop move: move_tuple[4] is not a PieceType: {move_tuple[4]}")
+        else:
+            # Board move
+            # Only call get_piece if r_from and c_from are not None
+            if r_from is not None and c_from is not None:
+                piece_to_move = self.get_piece(r_from, c_from)
+            else:
+                piece_to_move = None
             if piece_to_move is None:
                 raise ValueError(
                     f"Invalid move: No piece at source ({r_from},{c_from})"
@@ -741,19 +748,18 @@ class ShogiGame:
                 raise ValueError(
                     f"Invalid move: Piece at ({r_from},{c_from}) does not belong to current player."
                 )
-
             move_details_for_history["original_type_before_promotion"] = piece_to_move.type
             move_details_for_history["original_color"] = piece_to_move.color
-
-            target_piece_on_board = self.get_piece(r_to, c_to)
+            if r_to is not None and c_to is not None:
+                target_piece_on_board = self.get_piece(r_to, c_to)
+            else:
+                target_piece_on_board = None
             if target_piece_on_board:
                 if target_piece_on_board.color == player_who_made_the_move:
                     raise ValueError(
                         f"Invalid move: Cannot capture own piece at ({r_to},{c_to})"
                     )
-                # Store a deepcopy of the captured piece for history
                 move_details_for_history["captured"] = copy.deepcopy(target_piece_on_board)
-
             promote_flag = move_tuple[4]  # This is a bool for board moves
             if promote_flag:
                 if not shogi_rules_logic.can_promote_specific_piece(
@@ -761,7 +767,7 @@ class ShogiGame:
                 ):
                     raise ValueError("Invalid promotion.")
                 move_details_for_history["was_promoted_in_move"] = True
-        
+
         # --- Part 2: Execute the move on the board (directly or via shogi_move_execution) ---
         # For simplicity and to ensure consistency with how apply_move_to_board was designed,
         # let\\'s perform the direct board manipulations here for the forward move,
@@ -769,25 +775,39 @@ class ShogiGame:
         # move count, and game termination checks.
 
         if move_details_for_history["is_drop"]:
-            ptd = move_details_for_history["dropped_piece_type"]
-            self.set_piece(r_to, c_to, Piece(ptd, player_who_made_the_move))
-            self.remove_from_hand(ptd, player_who_made_the_move) # Corrected arguments
-        else: # Board move
-            # piece_to_move is already fetched and validated
-            piece_to_move_on_board = self.get_piece(r_from, c_from) # Should be same as piece_to_move
-            if piece_to_move_on_board is None: # Should not happen due to prior checks
-                raise RuntimeError("Consistency check failed: piece_to_move_on_board is None")
+            # Only assign if move_tuple[4] is a PieceType
+            if isinstance(move_tuple[4], PieceType):
+                drop_piece_type_for_move = move_tuple[4]
+                if r_to is not None and c_to is not None:
+                    self.set_piece(r_to, c_to, Piece(drop_piece_type_for_move, player_who_made_the_move))
+                self.remove_from_hand(drop_piece_type_for_move, player_who_made_the_move)
+            else:
+                raise ValueError(f"Invalid drop move: move_tuple[4] is not a PieceType: {move_tuple[4]}")
+        else:
+            # Board move
+            # Only call get_piece if r_from and c_from are not None
+            if r_from is not None and c_from is not None:
+                piece_to_move = self.get_piece(r_from, c_from)
+            else:
+                piece_to_move = None
+            if piece_to_move is None: # Should not happen due to prior checks
+                raise RuntimeError("Consistency check failed: piece_to_move is None")
 
             # Handle capture by adding to hand
             if move_details_for_history["captured"]:
                 captured_p: Piece = move_details_for_history["captured"]
                 self.add_to_hand(captured_p, player_who_made_the_move) # Corrected call
-            
-            self.set_piece(r_to, c_to, piece_to_move_on_board) # Move the piece
-            self.set_piece(r_from, c_from, None) # Clear original square
+
+            if r_to is not None and c_to is not None:
+                self.set_piece(r_to, c_to, piece_to_move) # Move the piece
+            if r_from is not None and c_from is not None:
+                self.set_piece(r_from, c_from, None) # Clear original square
 
             if move_details_for_history["was_promoted_in_move"]:
-                piece_at_dest = self.get_piece(r_to, c_to)
+                if r_to is not None and c_to is not None:
+                    piece_at_dest = self.get_piece(r_to, c_to)
+                else:
+                    piece_at_dest = None
                 if piece_at_dest: # Should exist
                     piece_at_dest.promote()
                 else: # Should not happen

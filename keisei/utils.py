@@ -10,10 +10,12 @@ from typing import TYPE_CHECKING, Dict, List, TextIO
 import torch
 
 # Ensure these imports are correct based on your project structure
-from keisei.shogi.shogi_core_definitions import (
+from keisei.shogi.shogi_core_definitions import (  # Import the standalone function
+    BoardMoveTuple,
+    DropMoveTuple,
+    PieceType,
     get_unpromoted_types,
-)  # Import the standalone function
-from keisei.shogi.shogi_core_definitions import BoardMoveTuple, DropMoveTuple, PieceType
+)
 
 if TYPE_CHECKING:
     from keisei.shogi.shogi_core_definitions import MoveTuple

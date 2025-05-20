@@ -3,12 +3,13 @@ Unit tests for PPOAgent model saving and loading.
 """
 
 import os
+
 import torch
 
+import config
 from keisei.ppo_agent import PPOAgent
 from keisei.shogi.shogi_game import ShogiGame
 from keisei.utils import PolicyOutputMapper
-import config
 
 
 def test_model_save_and_load(tmp_path):
