@@ -123,8 +123,8 @@ def revert_last_applied_move(game: "ShogiGame") -> None:
     if not game.move_history:
         raise RuntimeError("No move to undo")
 
-    last_move_details = game.move_history.pop()
-    move_tuple: "MoveTuple" = last_move_details["move"]
+    last_move_details: Dict[str, Any] = game.move_history.pop()
+    move_tuple: MoveTuple = last_move_details["move"]
 
     # Remove the state hash of the move being undone from board_history
     if game.board_history:
@@ -135,13 +135,26 @@ def revert_last_applied_move(game: "ShogiGame") -> None:
     game.current_player = (
         Color.WHITE if game.current_player == Color.BLACK else Color.BLACK
     )
-    player_who_made_the_undone_move = game.current_player
+    player_who_made_the_undone_move: Color = game.current_player
 
     if last_move_details["is_drop"]:
-        dropped_piece_type: PieceType = last_move_details["dropped_piece_type"]
+        # Ensure dropped_piece_type is correctly typed before use
+        dropped_piece_type_any = last_move_details["dropped_piece_type"]
+        if not isinstance(dropped_piece_type_any, PieceType):
+            raise TypeError(f"Expected PieceType for dropped_piece_type, got {type(dropped_piece_type_any)}")
+        dropped_piece_type: PieceType = dropped_piece_type_any
+        
         # r_to_drop, c_to_drop are where the piece was dropped
-        r_to_drop = move_tuple[2]
-        c_to_drop = move_tuple[3]
+        # Ensure move_tuple elements are correctly typed before use
+        r_to_drop_any = move_tuple[2]
+        c_to_drop_any = move_tuple[3]
+
+        if not isinstance(r_to_drop_any, int) or not isinstance(c_to_drop_any, int):
+            raise TypeError(
+                f"Expected int for r_to_drop and c_to_drop, got {type(r_to_drop_any)} and {type(c_to_drop_any)} respectively."
+            )
+        r_to_drop: int = r_to_drop_any
+        c_to_drop: int = c_to_drop_any
 
         # Remove the dropped piece from the board
         game.set_piece(r_to_drop, c_to_drop, None)
@@ -159,8 +172,19 @@ def revert_last_applied_move(game: "ShogiGame") -> None:
         orig_c_to: int = cast(int, move_tuple[3])  # Square piece moved to
 
         # Details of the piece that was moved, from history
-        original_type_before_promotion = last_move_details["original_type_before_promotion"]
-        original_color_of_moved_piece = last_move_details.get("original_color", player_who_made_the_undone_move)
+        original_type_before_promotion_any = last_move_details["original_type_before_promotion"]
+        if not isinstance(original_type_before_promotion_any, PieceType):
+            raise TypeError(f"Expected PieceType for original_type_before_promotion, got {type(original_type_before_promotion_any)}")
+        original_type_before_promotion: PieceType = original_type_before_promotion_any
+        
+        original_color_of_moved_piece_any = last_move_details.get("original_color", player_who_made_the_undone_move)
+        if not isinstance(original_color_of_moved_piece_any, Color):
+            # Fallback to player_who_made_the_undone_move if key missing or type wrong, assuming it is Color
+            if not isinstance(player_who_made_the_undone_move, Color):
+                raise TypeError(f"Expected Color for original_color_of_moved_piece or fallback, got {type(original_color_of_moved_piece_any)} and {type(player_who_made_the_undone_move)}")
+            original_color_of_moved_piece: Color = player_who_made_the_undone_move
+        else:
+            original_color_of_moved_piece: Color = original_color_of_moved_piece_any
 
         # Create the piece as it was *before* the move (i.e., at its original type)
         piece_to_restore_at_from = Piece(original_type_before_promotion, original_color_of_moved_piece)
