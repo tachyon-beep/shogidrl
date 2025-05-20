@@ -288,41 +288,41 @@ class PolicyOutputMapper:
 
 
 class TrainingLogger:
-    """Logs training progress to a file and optionally to stdout."""
+    """Logs messages to a file and optionally to stdout."""
 
-    def __init__(self, log_file_path: str, also_stdout: bool = True) -> None:
-        """
-        Initialize the logger.
+    def __init__(self, log_file_path: str, also_stdout: bool = True):
+        """Initialize the logger.
+
         Args:
             log_file_path: Path to the log file.
             also_stdout: If True, also print log messages to stdout.
         """
         self.log_file_path = log_file_path
         self.also_stdout = also_stdout
-        self._log_file_io: TextIO | None = open(
-            self.log_file_path, "a", encoding="utf-8"
-        )
+        self.file_handle: TextIO | None = None
 
-    def log(self, message: str) -> None:
-        """Logs a message with a timestamp."""
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        line = f"[{timestamp}] {message}\\n"
-        if self._log_file_io:
-            self._log_file_io.write(line)
-            self._log_file_io.flush()
-        if self.also_stdout:
-            print(line.strip())
-
-    def close(self) -> None:
-        """Close the log file."""
-        if self._log_file_io:
-            self._log_file_io.close()
-            self._log_file_io = None
-
-    def __enter__(self):
-        """Enter the runtime context related to this object."""
+    def __enter__(self) -> "TrainingLogger":
+        self.file_handle = open(self.log_file_path, "a", encoding="utf-8")
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Exit the runtime context related to this object."""
-        self.close()
+        if self.file_handle:
+            self.file_handle.close()
+            self.file_handle = None
+
+    def log(self, message: str) -> None:
+        """Log a message to the file and optionally to stdout."""
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_entry = f"[{timestamp}] {message}"
+        if self.file_handle:
+            self.file_handle.write(log_entry + "\n")
+            self.file_handle.flush()  # Ensure it's written immediately
+
+        if self.also_stdout:
+            print(log_entry, file=sys.stdout)  # Explicitly use sys.stdout
+
+    def close(self) -> None:
+        """Close the log file."""
+        if self.file_handle:
+            self.file_handle.close()
+            self.file_handle = None

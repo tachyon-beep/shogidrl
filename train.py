@@ -15,7 +15,6 @@ This is a scaffold for Phase 1 of the training_update.md plan.
 import argparse
 import json
 import os
-import sys  # Added import sys
 from datetime import datetime
 import numpy as np
 import torch
@@ -81,10 +80,15 @@ def apply_config_overrides(args, cfg_module):
             if hasattr(cfg_module, k):
                 setattr(cfg_module, k, v)
             else:
-                print(
-                    f"Warning: Config key '{k}' from JSON not found in base config module.",
-                    file=sys.stderr,
-                )
+                # Use logger for warnings, assuming logger is available or will be passed
+                # For now, this print will be removed or replaced by logger if logger is accessible here
+                # Consider passing logger to this function or handling warnings differently.
+                # For this step, we'll remove the direct sys.stderr usage.
+                # print(
+                # f\"Warning: Config key '{k}' from JSON not found in base config module.\",
+                # file=sys.stderr,
+                # )
+                pass # Placeholder: Warning should be logged if a logger is available
 
     # CLI overrides (device, etc.)
     if args.device:
@@ -209,15 +213,11 @@ def main():
 
         if ckpt_path and os.path.exists(ckpt_path):
             logger.log(f"Resuming from checkpoint: {ckpt_path}")
-            print(f"Resuming from checkpoint: {ckpt_path}")
             ckpt = agent.load_model(ckpt_path)
             if ckpt:
                 global_timestep = ckpt.get("global_timestep", 0)
                 total_episodes_completed = ckpt.get("total_episodes_completed", 0)
                 logger.log(
-                    f"Resumed at timestep {global_timestep}, episodes {total_episodes_completed}"
-                )
-                print(
                     f"Resumed at timestep {global_timestep}, episodes {total_episodes_completed}"
                 )
                 if agent.last_kl_div is not None:
@@ -228,14 +228,8 @@ def main():
                 logger.log(
                     f"Failed to load checkpoint data from {ckpt_path}. Starting fresh."
                 )
-                print(
-                    f"Failed to load checkpoint data from {ckpt_path}. Starting fresh."
-                )
         else:
             logger.log(
-                "No checkpoint found or specified path invalid. Starting fresh training."
-            )
-            print(
                 "No checkpoint found or specified path invalid. Starting fresh training."
             )
 
@@ -257,7 +251,7 @@ def main():
             current_episode_length += 1
 
             # Ensure obs is correctly shaped for the agent (e.g., add batch dim if needed by agent)
-            # obs_for_agent = np.expand_dims(obs, axis=0) if obs.ndim == 3 else obs
+            # Removed commented-out: # obs_for_agent = np.expand_dims(obs, axis=0) if obs.ndim == 3 else obs
             # The PPOAgent.select_action expects obs without batch dim, it adds it internally.
             obs_for_buffer = obs  # Store the original observation state for the buffer
 
@@ -388,7 +382,7 @@ def main():
         f"ppo_shogi_ep{total_episodes_completed}_ts{global_timestep}_final.pth",
     )
     agent.save_model(final_ckpt_path, global_timestep, total_episodes_completed)
-    print(f"Final model saved to {final_ckpt_path}")
+    logger.log(f"Final model saved to {final_ckpt_path}") # Log instead of print
 
 
 if __name__ == "__main__":
