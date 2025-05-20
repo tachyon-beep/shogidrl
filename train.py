@@ -290,26 +290,39 @@ def main():
             obs_for_buffer = obs  # Store the original observation state for the buffer
 
             legal_moves = game.get_legal_moves()
+            action_idx = -1 # Ensure action_idx is initialized before the conditional block
+            log_prob = 0.0 # Ensure log_prob is initialized
+            value = 0.0    # Ensure value is initialized
+            selected_shogi_move = None # Ensure selected_shogi_move is initialized
+
             if not legal_moves:
                 # This case should ideally be handled by game termination logic
                 logger.log(
-                    f"Episode {total_episodes_completed + 1}: No legal moves available at timestep {current_episode_length}. Game might have ended unexpectedly."
+                    f"Episode {total_episodes_completed + 1}: No legal moves available at timestep {current_episode_length}. Game is considered done."
                 )
                 done = True  # Treat as done
-
-            if not done:
+                # No action is selected, agent.select_action is bypassed.
+                # selected_shogi_move remains None, action_idx remains -1.
+            else: # Only call agent if there are legal moves and game is not already done
+                # The 'done' flag might have been set by game logic in the previous step,
+                # but if there are legal moves, the agent should still select an action
+                # for the current state. The 'done' status from the *previous* step
+                # will be used for the buffer.
+                # However, the current logic already sets done = False at the start of each step.
+                # So, if legal_moves exist, 'done' here reflects the current game state before this move.
                 selected_shogi_move, action_idx, log_prob, value = agent.select_action(
                     obs, legal_moves, is_training=True
                 )
-            else:  # If done (either from game or no legal moves)
-                selected_shogi_move, action_idx, log_prob, value = (
-                    None,
-                    -1,
-                    0.0,
-                    0.0,
-                )  # Dummy values
+                # If, after selecting an action, the agent somehow returns no move (e.g. a bug in agent or mask handling)
+                if selected_shogi_move is None:
+                    logger.log(
+                        f"Warning: Agent selected action_idx {action_idx} but returned no Shogi move. Treating as if no legal moves."
+                    )
+                    done = True # Treat as done, similar to no legal moves initially.
+                    action_idx = -1 # Ensure this is set to prevent adding to buffer.
 
-            if selected_shogi_move is not None:
+
+            if selected_shogi_move is not None and action_idx != -1: # Check action_idx as well
                 game.make_move(selected_shogi_move)  # Call make_move, returns None
                 next_obs = game.get_observation()  # Get observation after move
                 done = game.game_over  # Update done status
