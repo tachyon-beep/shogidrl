@@ -180,6 +180,16 @@ class ShogiGame:
         )
 
     def get_observation(self) -> np.ndarray:
+        """
+        Generates the neural network observation for the current game state.
+
+        The observation is a multi-channel NumPy array representing the board,
+        hands, and other game metadata from the current player's perspective.
+        For detailed structure, see `shogi_game_io.generate_neural_network_observation`.
+
+        Returns:
+            np.ndarray: The observation array.
+        """
         return shogi_game_io.generate_neural_network_observation(self)
 
     def is_nifu(self, color: Color, col: int) -> bool:
@@ -666,6 +676,7 @@ class ShogiGame:
         This is the primary method for making a move.
         """
         if self.game_over and not is_simulation:
+            # print(\\"Game is over. No more moves allowed.\\")
             return
 
         player_who_made_the_move = self.current_player # Define this early
@@ -823,16 +834,18 @@ class ShogiGame:
         )
 
     def remove_from_hand(self, piece_type: PieceType, color: Color) -> bool: # Corrected signature
-        """Removes one piece of piece_type from the specified color\'\'\'s hand."""
+        """Removes one piece of piece_type from the specified color's hand."""
         if piece_type not in get_unpromoted_types():
             # Attempting to remove a promoted type from hand, which is invalid.
             # Or, piece_type is KING, which cannot be in hand.
+            # print(f\"Warning: Attempted to remove invalid piece type '{piece_type}' from hand.\")
             return False # Or raise error
 
         hand_to_modify = self.hands[color.value]
         if hand_to_modify.get(piece_type, 0) > 0:
             hand_to_modify[piece_type] -= 1
             return True
+        # print(f\"Warning: Attempted to remove {piece_type} from {color}\'s hand, but not available.\")
         return False
 
     def get_pieces_in_hand(self, color: Color) -> Dict[PieceType, int]:

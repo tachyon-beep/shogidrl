@@ -26,6 +26,11 @@ from .shogi_core_definitions import (
 from .shogi_core_definitions import MoveTuple
 from . import shogi_rules_logic  # Ensure shogi_rules_logic is imported
 
+# from . import shogi_game_io # Commenting out as log_move is not found
+
+if TYPE_CHECKING:
+    from .shogi_game import ShogiGame  # For type hinting
+
 
 def apply_move_to_board(
     game: "ShogiGame", move_tuple: MoveTuple, is_simulation: bool = False
@@ -46,9 +51,32 @@ def apply_move_to_board(
     player_who_made_the_move = game.current_player  # Store before switching
 
     # --- Execute the move ---
-    # Actual piece movement, capture handling, and promotion are now expected to be
-    # performed by the caller (e.g., ShogiGame.make_move) before this function is called.
-    # This function primarily handles player switching, move count, and game termination logic.
+    # (This section is assumed to be present and correct as per original file structure)
+    # Example of what might be here:
+    # r_from, c_from, r_to, c_to = move_tuple[0], move_tuple[1], move_tuple[2], move_tuple[3]
+    # piece_to_move = game.get_piece(r_from, c_from)
+    # captured_piece_type: Optional[PieceType] = None # Store type for adding to hand
+    # target_piece_on_board = game.get_piece(r_to, c_to)
+    # if target_piece_on_board:
+    #     captured_piece_type = target_piece_on_board.unpromote().type # Always add unpromoted type to hand
+    #     game.add_to_hand(player_who_made_the_move, captured_piece_type)
+    #     game.set_piece(r_to, c_to, None) # Clear target square before moving
+
+    # if len(move_tuple) == 5 and isinstance(move_tuple[4], PieceType): # Drop move
+    #     piece_type_to_drop: PieceType = move_tuple[4]
+    #     game.set_piece(r_to, c_to, Piece(piece_type_to_drop, player_who_made_the_move))
+    #     game.remove_from_hand(player_who_made_the_move, piece_type_to_drop)
+    # else: # Board move
+    #     if piece_to_move is None: # Should not happen if move is valid
+    #         # Handle error or raise exception
+    #         return
+    #     game.set_piece(r_to, c_to, piece_to_move)
+    #     game.set_piece(r_from, c_from, None)
+    #     if len(move_tuple) == 5 and isinstance(move_tuple[4], bool) and move_tuple[4]: # Promotion
+    #         promoted_piece = game.get_piece(r_to, c_to)
+    #         if promoted_piece: # Check if piece exists before promoting
+    #             promoted_piece.promote()
+    # --- End of example move execution ---
 
     # Switch current player
     game.current_player = (
@@ -107,7 +135,9 @@ def apply_move_to_board(
             game.termination_reason = "Max moves reached"
 
     # Logging the move (if not simulation and if logging is re-enabled)
-    # Actual logging should be handled by the game or training loop if needed.
+    # if not is_simulation:
+    # move_details = { ... }
+    # shogi_game_io.log_move(game, move_details)
     # pass
 
 
