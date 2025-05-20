@@ -32,6 +32,25 @@ class PieceType(Enum):
     # King does not promote
 
 
+# KIF Piece Symbol Mapping (Standard two-letter KIF symbols)
+KIF_PIECE_SYMBOLS: Dict[PieceType, str] = {
+    PieceType.PAWN: "FU",
+    PieceType.LANCE: "KY",
+    PieceType.KNIGHT: "KE",
+    PieceType.SILVER: "GI",
+    PieceType.GOLD: "KI",
+    PieceType.BISHOP: "KA",
+    PieceType.ROOK: "HI",
+    PieceType.KING: "OU",  # Or "GY" for Gyoku, "OU" is common for King
+    PieceType.PROMOTED_PAWN: "TO",  # Tokin
+    PieceType.PROMOTED_LANCE: "NY",  # Promoted Lance (Nari-Kyo)
+    PieceType.PROMOTED_KNIGHT: "NK",  # Promoted Knight (Nari-Kei)
+    PieceType.PROMOTED_SILVER: "NG",  # Promoted Silver (Nari-Gin)
+    PieceType.PROMOTED_BISHOP: "UM",  # Horse (Uma)
+    PieceType.PROMOTED_ROOK: "RY",  # Dragon (Ryu)
+}
+
+
 class TerminationReason(Enum):
     CHECKMATE = "checkmate"
     RESIGNATION = "resignation"
@@ -40,7 +59,7 @@ class TerminationReason(Enum):
     IMPASSE = "impasse"  # Jishogi (by points, declaration, etc.)
     ILLEGAL_MOVE = "illegal_move"
     TIME_FORFEIT = "time_forfeit"
-    NO_CONTEST = "no_contest" # E.g. server error, mutual agreement for no result
+    NO_CONTEST = "no_contest"  # E.g. server error, mutual agreement for no result
 
 
 # --- Custom Types for Moves ---
@@ -153,15 +172,15 @@ def get_piece_type_from_symbol(symbol: str) -> PieceType:
     # For promoted pieces, the '+' sign is significant.
     # If a symbol like "p" is passed, it should be treated as "P".
     # If "+p" is passed, it should be treated as "+P".
-    
+
     # Simple case: direct match
     if symbol in SYMBOL_TO_PIECE_TYPE:
         return SYMBOL_TO_PIECE_TYPE[symbol]
-    
+
     # Handle potentially lowercase symbols (e.g. "p" for "P", but "+p" for "+P")
     # The SYMBOL_TO_PIECE_TYPE map uses uppercase, so we should convert input.
     # If symbol is like "p", convert to "P". If "+p", convert to "+P".
-    
+
     # Check if it's a promoted piece symbol like "+p"
     if len(symbol) == 2 and symbol.startswith("+") and symbol[1].islower():
         # Convert to uppercase promoted symbol, e.g., "+p" -> "+P"
@@ -173,7 +192,7 @@ def get_piece_type_from_symbol(symbol: str) -> PieceType:
         upper_symbol = symbol.upper()
         if upper_symbol in SYMBOL_TO_PIECE_TYPE:
             return SYMBOL_TO_PIECE_TYPE[upper_symbol]
-            
+
     raise ValueError(f"Unknown piece symbol: {symbol}")
 
 
@@ -243,3 +262,28 @@ class Piece:
 
     def __repr__(self):
         return f"Piece(type={self.type.name}, color={self.color.name})"
+
+    def promote(self) -> bool:
+        """Promotes the piece if it's a promotable type and not already promoted. Returns True if promoted."""
+        if not self.is_promoted and self.type in BASE_TO_PROMOTED_TYPE:
+            self.type = BASE_TO_PROMOTED_TYPE[self.type]
+            return True
+        return False
+
+    def unpromote(self) -> bool:
+        """Unpromotes the piece if it's a promoted type. Returns True if unpromoted."""
+        if self.is_promoted and self.type in PROMOTED_TO_BASE_TYPE:
+            self.type = PROMOTED_TO_BASE_TYPE[self.type]
+            return True
+        return False
+
+    def set_promoted(self, promote_flag: bool) -> bool:
+        """Sets the promotion state of the piece. Returns True if state changed."""
+        if promote_flag:
+            return self.promote()
+        else:
+            return self.unpromote()
+
+    def copy(self) -> "Piece":  # Added copy method
+        """Returns a deep copy of this piece."""
+        return Piece(self.type, self.color)

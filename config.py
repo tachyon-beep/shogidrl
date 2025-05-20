@@ -34,9 +34,11 @@ MODEL_DIR = "models/"
 LOG_FILE = "logs/training_log.txt"
 
 # --- Evaluation parameters ---
-EVAL_FREQ_EPISODES = 100 # Evaluate every N episodes
+EVAL_FREQ_EPISODES = 100  # Evaluate every N episodes
 EVAL_NUM_GAMES = 10  # Number of games to play during evaluation
-MAX_MOVES_PER_GAME_EVAL = 256 # Max moves for evaluation games, can be different from training
+MAX_MOVES_PER_GAME_EVAL = (
+    256  # Max moves for evaluation games, can be different from training
+)
 
 # --- Real-time Game Printing Configuration ---
 # Set to True to print game states and moves to the console during training/evaluation.

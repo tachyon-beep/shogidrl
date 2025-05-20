@@ -243,7 +243,7 @@ def test_get_observation_board_pieces_consistency_after_reset(new_game: ShogiGam
     # Check a few key pieces for White (opponent perspective)
     # Opponent planes start after all current player planes (unpromoted + promoted)
     num_piece_types_unpromoted = len(OBS_UNPROMOTED_ORDER)
-    num_piece_types_promoted = len(OBS_PROMOTED_ORDER) # Added for clarity
+    num_piece_types_promoted = len(OBS_PROMOTED_ORDER)  # Added for clarity
 
     # Determine the correct plane index for opponent pieces based on shogi_game_io.py logic
     # Current player unpromoted: 0 to N_unprom - 1
@@ -253,21 +253,29 @@ def test_get_observation_board_pieces_consistency_after_reset(new_game: ShogiGam
     # N_unprom = len(OBS_UNPROMOTED_ORDER)
     # N_prom = len(OBS_PROMOTED_ORDER)
 
-    start_opponent_unpromoted_planes = num_piece_types_unpromoted + num_piece_types_promoted
+    start_opponent_unpromoted_planes = (
+        num_piece_types_unpromoted + num_piece_types_promoted
+    )
 
-    white_pawn_plane = start_opponent_unpromoted_planes + OBS_UNPROMOTED_ORDER.index(PieceType.PAWN)
+    white_pawn_plane = start_opponent_unpromoted_planes + OBS_UNPROMOTED_ORDER.index(
+        PieceType.PAWN
+    )
     assert (
         obs[white_pawn_plane, 2, 0] == 1.0
     ), f"White pawn at (2,0) not found in observation plane {white_pawn_plane}"
 
     # White's Rook at (1,7)
-    white_rook_plane = start_opponent_unpromoted_planes + OBS_UNPROMOTED_ORDER.index(PieceType.ROOK)
+    white_rook_plane = start_opponent_unpromoted_planes + OBS_UNPROMOTED_ORDER.index(
+        PieceType.ROOK
+    )
     assert (
         obs[white_rook_plane, 1, 7] == 1.0
     ), f"White rook at (1,7) not found in observation plane {white_rook_plane}"
 
     # White's Bishop at (1,1)
-    white_bishop_plane = start_opponent_unpromoted_planes + OBS_UNPROMOTED_ORDER.index(PieceType.BISHOP)
+    white_bishop_plane = start_opponent_unpromoted_planes + OBS_UNPROMOTED_ORDER.index(
+        PieceType.BISHOP
+    )
     assert (
         obs[white_bishop_plane, 1, 1] == 1.0
     ), f"White bishop at (1,1) not found in observation plane {white_bishop_plane}"
@@ -603,16 +611,21 @@ def test_undo_move_multiple_moves(
     game.set_piece(5, 1, Piece(PieceType.PAWN, Color.WHITE))  # Manually placed piece
     state_before_move3 = GameState.from_game(game)
 
-    move3: tuple = (6, 1, 5, 1, True)
+    move3: tuple = (6, 1, 5, 1, False)  # Changed promotion to False
     game.make_move(move3)
 
     # Check state after 3 moves
-    promoted_pawn_at_5_1 = game.get_piece(5, 1)
+    pawn_at_5_1 = game.get_piece(5, 1)  # Should be the black pawn that moved
     assert (
-        promoted_pawn_at_5_1
-        and promoted_pawn_at_5_1.type == PieceType.PROMOTED_PAWN
-        and promoted_pawn_at_5_1.color == Color.BLACK
+        pawn_at_5_1
+        and pawn_at_5_1.type == PieceType.PAWN  # Not promoted
+        and pawn_at_5_1.color == Color.BLACK
     )
+    # The white pawn at (5,1) was captured.
+    # So Black's hand should have one more pawn.
+    # Initial black pawns in hand for new_game is 0.
+    # state_before_move3 captures hands *after* white pawn is placed but *before* black moves.
+    # So, black_hand in state_before_move3 should be the same as initial_state.
     assert (
         game.hands[Color.BLACK.value].get(PieceType.PAWN, 0)
         == state_before_move3.black_hand.get(PieceType.PAWN, 0) + 1

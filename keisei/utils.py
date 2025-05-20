@@ -10,7 +10,9 @@ from typing import TYPE_CHECKING, Dict, List, TextIO
 import torch
 
 # Ensure these imports are correct based on your project structure
-from keisei.shogi.shogi_core_definitions import get_unpromoted_types  # Import the standalone function
+from keisei.shogi.shogi_core_definitions import (
+    get_unpromoted_types,
+)  # Import the standalone function
 from keisei.shogi.shogi_core_definitions import BoardMoveTuple, DropMoveTuple, PieceType
 
 if TYPE_CHECKING:
@@ -22,8 +24,8 @@ class PolicyOutputMapper:
 
     def __init__(self) -> None:
         """Initializes the PolicyOutputMapper by generating all possible move representations."""
-        self.idx_to_move: List['MoveTuple'] = []
-        self.move_to_idx: Dict['MoveTuple', int] = {}
+        self.idx_to_move: List["MoveTuple"] = []
+        self.move_to_idx: Dict["MoveTuple", int] = {}
         current_idx = 0
 
         # Generate Board Moves: (from_r, from_c, to_r, to_c, promote_flag: bool)
@@ -35,7 +37,13 @@ class PolicyOutputMapper:
                             continue  # Skip null moves
 
                         # Move without promotion
-                        move_no_promo: BoardMoveTuple = (r_from, c_from, r_to, c_to, False)
+                        move_no_promo: BoardMoveTuple = (
+                            r_from,
+                            c_from,
+                            r_to,
+                            c_to,
+                            False,
+                        )
                         self.idx_to_move.append(move_no_promo)
                         self.move_to_idx[move_no_promo] = current_idx
                         current_idx += 1
@@ -47,7 +55,9 @@ class PolicyOutputMapper:
                         current_idx += 1
 
         # Define droppable piece types (standard 7, excluding King)
-        droppable_piece_types: List[PieceType] = get_unpromoted_types() # Use the imported function
+        droppable_piece_types: List[PieceType] = (
+            get_unpromoted_types()
+        )  # Use the imported function
 
         # Generate Drop Moves: (None, None, to_r, to_c, piece_type_to_drop: PieceType)
         for r_to in range(9):
@@ -64,29 +74,33 @@ class PolicyOutputMapper:
         """Return the total number of possible actions."""
         return self.total_actions
 
-    def shogi_move_to_policy_index(self, move: 'MoveTuple') -> int:
+    def shogi_move_to_policy_index(self, move: "MoveTuple") -> int:
         """Convert a Shogi MoveTuple to its policy index."""
         idx = self.move_to_idx.get(move)
         if idx is None:
             # Attempt to handle cases where the exact tuple might not match due to PieceType enum identity
             # This is a fallback, ideally the move objects should match directly.
-            if len(move) == 5 and move[0] is None: # Potential DropMoveTuple
+            if len(move) == 5 and move[0] is None:  # Potential DropMoveTuple
                 # Reconstruct DropMoveTuple with PieceType from self.idx_to_move if a similar one exists
                 # This is a bit of a heuristic and might need refinement
                 for stored_move in self.move_to_idx.keys():
-                    if (len(stored_move) == 5 and stored_move[0] is None and
-                        stored_move[2] == move[2] and stored_move[3] == move[3] and
-                        stored_move[4].value == move[4].value): # Compare PieceType by value
+                    if (
+                        len(stored_move) == 5
+                        and stored_move[0] is None
+                        and stored_move[2] == move[2]
+                        and stored_move[3] == move[3]
+                        and stored_move[4].value == move[4].value
+                    ):  # Compare PieceType by value
                         idx = self.move_to_idx.get(stored_move)
                         break
-            if idx is None: # If still not found after heuristic
+            if idx is None:  # If still not found after heuristic
                 raise ValueError(
                     f"Move {move} (type: {type(move)}, element types: {[type(el) for el in move]}) "
                     f"not found in PolicyOutputMapper's known moves. Known keys example: {list(self.move_to_idx.keys())[0]}"
                 )
         return idx
 
-    def policy_index_to_shogi_move(self, idx: int) -> 'MoveTuple':
+    def policy_index_to_shogi_move(self, idx: int) -> "MoveTuple":
         """Convert a policy index back to its Shogi MoveTuple."""
         if 0 <= idx < self.total_actions:
             return self.idx_to_move[idx]
@@ -95,7 +109,7 @@ class PolicyOutputMapper:
         )
 
     def get_legal_mask(
-        self, legal_shogi_moves: List['MoveTuple'], device: torch.device
+        self, legal_shogi_moves: List["MoveTuple"], device: torch.device
     ) -> torch.Tensor:
         """Converts a list of legal Shogi moves to a boolean mask tensor."""
         mask = torch.zeros(self.total_actions, dtype=torch.bool, device=device)
@@ -127,24 +141,33 @@ class PolicyOutputMapper:
         if not (0 <= r <= 8 and 0 <= c <= 8):
             raise ValueError(f"Invalid Shogi coordinate for USI: row {r}, col {c}")
         file = str(9 - c)  # Column 0 is file 9, column 8 is file 1
-        rank = chr(ord('a') + r)  # Row 0 is rank 'a', row 8 is rank 'i'
+        rank = chr(ord("a") + r)  # Row 0 is rank 'a', row 8 is rank 'i'
         return file + rank
 
     def _get_usi_char_for_drop(self, piece_type: PieceType) -> str:
         """Helper to get the uppercase USI character for a droppable piece type."""
         # Standard USI drop piece characters (uppercase)
-        if piece_type == PieceType.PAWN: return "P"
-        if piece_type == PieceType.LANCE: return "L"
-        if piece_type == PieceType.KNIGHT: return "N"
-        if piece_type == PieceType.SILVER: return "S"
-        if piece_type == PieceType.GOLD: return "G"
-        if piece_type == PieceType.BISHOP: return "B"
-        if piece_type == PieceType.ROOK: return "R"
+        if piece_type == PieceType.PAWN:
+            return "P"
+        if piece_type == PieceType.LANCE:
+            return "L"
+        if piece_type == PieceType.KNIGHT:
+            return "N"
+        if piece_type == PieceType.SILVER:
+            return "S"
+        if piece_type == PieceType.GOLD:
+            return "G"
+        if piece_type == PieceType.BISHOP:
+            return "B"
+        if piece_type == PieceType.ROOK:
+            return "R"
 
-        raise ValueError(f"PieceType {piece_type.name if hasattr(piece_type, 'name') else piece_type} "
-                         f"is not a standard droppable piece for USI notation or is invalid.")
+        raise ValueError(
+            f"PieceType {piece_type.name if hasattr(piece_type, 'name') else piece_type} "
+            f"is not a standard droppable piece for USI notation or is invalid."
+        )
 
-    def shogi_move_to_usi(self, move_tuple: 'MoveTuple') -> str:
+    def shogi_move_to_usi(self, move_tuple: "MoveTuple") -> str:
         """
         Converts an internal MoveTuple representation to a USI string.
         Board move: (from_r, from_c, to_r, to_c, promote_bool) -> e.g., "7g7f" or "2b3a+"
@@ -152,13 +175,15 @@ class PolicyOutputMapper:
         """
         # Check for BoardMoveTuple structure: (int, int, int, int, bool)
         if (
-            len(move_tuple) == 5 and
-            isinstance(move_tuple[0], int) and isinstance(move_tuple[1], int) and # These ensure they are not None
-            isinstance(move_tuple[2], int) and isinstance(move_tuple[3], int) and
-            isinstance(move_tuple[4], bool)
+            len(move_tuple) == 5
+            and isinstance(move_tuple[0], int)
+            and isinstance(move_tuple[1], int)  # These ensure they are not None
+            and isinstance(move_tuple[2], int)
+            and isinstance(move_tuple[3], int)
+            and isinstance(move_tuple[4], bool)
         ):
             # Type assertion for mypy after checks
-            board_move: BoardMoveTuple = move_tuple # type: ignore 
+            board_move: BoardMoveTuple = move_tuple  # type: ignore
             from_r, from_c, to_r, to_c, promote = board_move
             from_sq_str = self._usi_sq(from_r, from_c)
             to_sq_str = self._usi_sq(to_r, to_c)
@@ -166,12 +191,14 @@ class PolicyOutputMapper:
             return f"{from_sq_str}{to_sq_str}{promo_char}"
         # Check for DropMoveTuple structure: (None, None, int, int, PieceType)
         elif (
-            len(move_tuple) == 5 and
-            move_tuple[0] is None and move_tuple[1] is None and
-            isinstance(move_tuple[2], int) and isinstance(move_tuple[3], int) and
-            isinstance(move_tuple[4], PieceType)
+            len(move_tuple) == 5
+            and move_tuple[0] is None
+            and move_tuple[1] is None
+            and isinstance(move_tuple[2], int)
+            and isinstance(move_tuple[3], int)
+            and isinstance(move_tuple[4], PieceType)
         ):
-            drop_move: DropMoveTuple = move_tuple # type: ignore
+            drop_move: DropMoveTuple = move_tuple  # type: ignore
             _, _, to_r, to_c, piece_to_drop = drop_move
             piece_char = self._get_usi_char_for_drop(piece_to_drop)
             to_sq_str = self._usi_sq(to_r, to_c)
@@ -179,10 +206,12 @@ class PolicyOutputMapper:
         else:
             # For debugging, print the type of each element if it doesn't match
             # This can help if a move_tuple has an unexpected structure
-            # e.g. print([type(x) for x in move_tuple]) 
-            raise ValueError(f"Invalid MoveTuple format for USI conversion: {move_tuple}")
+            # e.g. print([type(x) for x in move_tuple])
+            raise ValueError(
+                f"Invalid MoveTuple format for USI conversion: {move_tuple}"
+            )
 
-    def usi_to_shogi_move(self, usi_move: str) -> 'MoveTuple':
+    def usi_to_shogi_move(self, usi_move: str) -> "MoveTuple":
         """
         Converts a USI string to an internal MoveTuple.
         e.g., "7g7f" -> (2,2,3,2,False) [assuming 7g=(2,2), 7f=(3,2)]
@@ -192,8 +221,8 @@ class PolicyOutputMapper:
         if not isinstance(usi_move, str):
             raise TypeError(f"USI move must be a string, got {type(usi_move)}")
 
-        if '*' in usi_move:  # Drop move
-            parts = usi_move.split('*')
+        if "*" in usi_move:  # Drop move
+            parts = usi_move.split("*")
             if len(parts) != 2 or len(parts[0]) != 1 or len(parts[1]) != 2:
                 raise ValueError(f"Invalid USI drop move format: {usi_move}")
 
@@ -201,41 +230,60 @@ class PolicyOutputMapper:
             to_sq_str = parts[1]
 
             piece_type: PieceType
-            if piece_char == 'P': piece_type = PieceType.PAWN
-            elif piece_char == 'L': piece_type = PieceType.LANCE
-            elif piece_char == 'N': piece_type = PieceType.KNIGHT
-            elif piece_char == 'S': piece_type = PieceType.SILVER
-            elif piece_char == 'G': piece_type = PieceType.GOLD
-            elif piece_char == 'B': piece_type = PieceType.BISHOP
-            elif piece_char == 'R': piece_type = PieceType.ROOK
+            if piece_char == "P":
+                piece_type = PieceType.PAWN
+            elif piece_char == "L":
+                piece_type = PieceType.LANCE
+            elif piece_char == "N":
+                piece_type = PieceType.KNIGHT
+            elif piece_char == "S":
+                piece_type = PieceType.SILVER
+            elif piece_char == "G":
+                piece_type = PieceType.GOLD
+            elif piece_char == "B":
+                piece_type = PieceType.BISHOP
+            elif piece_char == "R":
+                piece_type = PieceType.ROOK
             else:
                 raise ValueError(f"Invalid piece character for USI drop: {piece_char}")
 
-            if not (len(to_sq_str) == 2 and '1' <= to_sq_str[0] <= '9' and 'a' <= to_sq_str[1] <= 'i'):
-                 raise ValueError(f"Invalid USI square format for drop: {to_sq_str}")
+            if not (
+                len(to_sq_str) == 2
+                and "1" <= to_sq_str[0] <= "9"
+                and "a" <= to_sq_str[1] <= "i"
+            ):
+                raise ValueError(f"Invalid USI square format for drop: {to_sq_str}")
 
             to_c = 9 - int(to_sq_str[0])
-            to_r = ord(to_sq_str[1]) - ord('a')
+            to_r = ord(to_sq_str[1]) - ord("a")
             return (None, None, to_r, to_c, piece_type)
 
         else:  # Board move
             if not (4 <= len(usi_move) <= 5):
-                 raise ValueError(f"Invalid USI board move format: {usi_move}")
+                raise ValueError(f"Invalid USI board move format: {usi_move}")
 
             from_sq_str = usi_move[0:2]
             to_sq_str = usi_move[2:4]
-            promote = (len(usi_move) == 5 and usi_move[4] == '+')
+            promote = len(usi_move) == 5 and usi_move[4] == "+"
 
-            if not (len(from_sq_str) == 2 and '1' <= from_sq_str[0] <= '9' and 'a' <= from_sq_str[1] <= 'i'):
+            if not (
+                len(from_sq_str) == 2
+                and "1" <= from_sq_str[0] <= "9"
+                and "a" <= from_sq_str[1] <= "i"
+            ):
                 raise ValueError(f"Invalid USI source square: {from_sq_str}")
-            if not (len(to_sq_str) == 2 and '1' <= to_sq_str[0] <= '9' and 'a' <= to_sq_str[1] <= 'i'):
+            if not (
+                len(to_sq_str) == 2
+                and "1" <= to_sq_str[0] <= "9"
+                and "a" <= to_sq_str[1] <= "i"
+            ):
                 raise ValueError(f"Invalid USI destination square: {to_sq_str}")
 
             from_c = 9 - int(from_sq_str[0])
-            from_r = ord(from_sq_str[1]) - ord('a')
+            from_r = ord(from_sq_str[1]) - ord("a")
             to_c = 9 - int(to_sq_str[0])
-            to_r = ord(to_sq_str[1]) - ord('a')
-            
+            to_r = ord(to_sq_str[1]) - ord("a")
+
             return (from_r, from_c, to_r, to_c, promote)
 
 
@@ -251,14 +299,15 @@ class TrainingLogger:
         """
         self.log_file_path = log_file_path
         self.also_stdout = also_stdout
-        self._log_file_io: TextIO | None = open(self.log_file_path, "a", encoding="utf-8")
-
+        self._log_file_io: TextIO | None = open(
+            self.log_file_path, "a", encoding="utf-8"
+        )
 
     def log(self, message: str) -> None:
         """Logs a message with a timestamp."""
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         line = f"[{timestamp}] {message}\\n"
-        if self._log_file_io: 
+        if self._log_file_io:
             self._log_file_io.write(line)
             self._log_file_io.flush()
         if self.also_stdout:

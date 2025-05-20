@@ -53,14 +53,16 @@ class PPOAgent:
     def select_action(
         self,
         obs: np.ndarray,
-        legal_shogi_moves: List['MoveTuple'], # Type hint for Shogi moves, quoted
+        legal_shogi_moves: List["MoveTuple"],  # Type hint for Shogi moves, quoted
         is_training: bool = True,
-    ) -> Tuple[Optional['MoveTuple'], int, float, float]: # Return Shogi move (Any for now), policy index, log_prob, value # Quoted
+    ) -> Tuple[
+        Optional["MoveTuple"], int, float, float
+    ]:  # Return Shogi move (Any for now), policy index, log_prob, value # Quoted
         """
         Select an action given an observation and legal Shogi moves.
         Returns the selected Shogi move, its policy index, log probability, and value estimate.
         """
-        self.model.train(is_training) # Set model to train or eval mode
+        self.model.train(is_training)  # Set model to train or eval mode
 
         obs_tensor = torch.tensor(
             obs, dtype=torch.float32, device=self.device
@@ -75,7 +77,10 @@ class PPOAgent:
         # The game engine should ideally handle terminal states before calling select_action.
         # If it must be handled here, returning a dummy action or raising an error are options.
         if not legal_mask.any():
-            print("Warning: PPOAgent.select_action called with no legal moves. This might indicate an issue.", file=sys.stderr)
+            print(
+                "Warning: PPOAgent.select_action called with no legal moves. This might indicate an issue.",
+                file=sys.stderr,
+            )
             # Fallback: return a dummy action or handle as appropriate for the game.
             # For now, let get_action_and_value handle it, which might lead to uniform random if all masked.
             # Or, we could return a specific indicator:
@@ -83,24 +88,31 @@ class PPOAgent:
 
         # Get action, log_prob, and value from the ActorCritic model
         # Pass deterministic based on not is_training
-        selected_policy_index_tensor, log_prob_tensor, value_tensor = self.model.get_action_and_value(
-            obs_tensor, legal_mask=legal_mask, deterministic=not is_training
+        selected_policy_index_tensor, log_prob_tensor, value_tensor = (
+            self.model.get_action_and_value(
+                obs_tensor, legal_mask=legal_mask, deterministic=not is_training
+            )
         )
 
         selected_policy_index_val = int(selected_policy_index_tensor.item())
         log_prob_val = float(log_prob_tensor.item())
-        value_float = float(value_tensor.item()) # Value is already squeezed in get_action_and_value
+        value_float = float(
+            value_tensor.item()
+        )  # Value is already squeezed in get_action_and_value
 
-        selected_shogi_move: Optional['MoveTuple'] = None # Quoted
+        selected_shogi_move: Optional["MoveTuple"] = None  # Quoted
         try:
             selected_shogi_move = self.policy_output_mapper.policy_index_to_shogi_move(
                 selected_policy_index_val
             )
         except IndexError as e:
-            print(f"Error in PPOAgent.select_action: Policy index {selected_policy_index_val} out of bounds. {e}", file=sys.stderr)
+            print(
+                f"Error in PPOAgent.select_action: Policy index {selected_policy_index_val} out of bounds. {e}",
+                file=sys.stderr,
+            )
             # This case should be rare if legal_mask is applied correctly and policy_output_mapper is consistent.
             # Handle by returning no move or re-raising, depending on desired robustness.
-            return None, -1, 0.0, value_float # Or raise the error
+            return None, -1, 0.0, value_float  # Or raise the error
 
         return (
             selected_shogi_move,
@@ -111,12 +123,14 @@ class PPOAgent:
 
     def get_value(self, obs_np: np.ndarray) -> float:
         """Get the value prediction from the critic for a given NumPy observation."""
-        self.model.eval() # Set model to evaluation mode
+        self.model.eval()  # Set model to evaluation mode
         obs_tensor = torch.tensor(
             obs_np, dtype=torch.float32, device=self.device
         ).unsqueeze(0)
         with torch.no_grad():
-            _, _, value_estimate = self.model.get_action_and_value(obs_tensor, deterministic=True) # Get value deterministically
+            _, _, value_estimate = self.model.get_action_and_value(
+                obs_tensor, deterministic=True
+            )  # Get value deterministically
         return float(value_estimate.item())
 
     def learn(self, experience_buffer: ExperienceBuffer) -> Dict[str, float]:
@@ -134,7 +148,9 @@ class PPOAgent:
         current_lr = self.optimizer.param_groups[0]["lr"]
 
         if not batch_data or batch_data["obs"].shape[0] == 0:
-            print("Warning: PPOAgent.learn called with empty batch_data.", file=sys.stderr)
+            print(
+                "Warning: PPOAgent.learn called with empty batch_data.", file=sys.stderr
+            )
             return {
                 "ppo/policy_loss": 0.0,
                 "ppo/value_loss": 0.0,
@@ -157,7 +173,11 @@ class PPOAgent:
         num_samples = obs_batch.shape[0]
         indices = np.arange(num_samples)
 
-        total_policy_loss_epoch, total_value_loss_epoch, total_entropy_epoch = 0.0, 0.0, 0.0
+        total_policy_loss_epoch, total_value_loss_epoch, total_entropy_epoch = (
+            0.0,
+            0.0,
+            0.0,
+        )
         num_updates = 0
 
         for _ in range(self.ppo_epochs):
@@ -177,7 +197,7 @@ class PPOAgent:
                 # over all actions. For entropy over legal actions only, legal masks
                 # for the batch would need to be stored and passed.
                 new_log_probs, entropy, new_values = self.model.evaluate_actions(
-                    obs_minibatch, actions_minibatch # No legal_mask passed here
+                    obs_minibatch, actions_minibatch  # No legal_mask passed here
                 )
 
                 # PPO Loss Calculation
@@ -185,7 +205,10 @@ class PPOAgent:
 
                 # Clipped surrogate objective
                 surr1 = ratio * advantages_minibatch
-                surr2 = torch.clamp(ratio, 1.0 - self.clip_epsilon, 1.0 + self.clip_epsilon) * advantages_minibatch
+                surr2 = (
+                    torch.clamp(ratio, 1.0 - self.clip_epsilon, 1.0 + self.clip_epsilon)
+                    * advantages_minibatch
+                )
                 policy_loss = -torch.min(surr1, surr2).mean()
 
                 # Value loss (MSE)
@@ -203,7 +226,9 @@ class PPOAgent:
 
                 self.optimizer.zero_grad()
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5) # Optional: gradient clipping
+                torch.nn.utils.clip_grad_norm_(
+                    self.model.parameters(), max_norm=0.5
+                )  # Optional: gradient clipping
                 self.optimizer.step()
 
                 total_policy_loss_epoch += policy_loss.item()
@@ -211,8 +236,12 @@ class PPOAgent:
                 total_entropy_epoch += entropy_loss.item()
                 num_updates += 1
 
-        avg_policy_loss = total_policy_loss_epoch / num_updates if num_updates > 0 else 0.0
-        avg_value_loss = total_value_loss_epoch / num_updates if num_updates > 0 else 0.0
+        avg_policy_loss = (
+            total_policy_loss_epoch / num_updates if num_updates > 0 else 0.0
+        )
+        avg_value_loss = (
+            total_value_loss_epoch / num_updates if num_updates > 0 else 0.0
+        )
         avg_entropy = total_entropy_epoch / num_updates if num_updates > 0 else 0.0
         kl_divergence_final_approx = 0.0
 
@@ -220,9 +249,13 @@ class PPOAgent:
             with torch.no_grad():
                 final_new_logits, _ = self.model(obs_batch)
                 final_new_probs = F.softmax(final_new_logits, dim=-1)
-                final_action_dist = torch.distributions.Categorical(probs=final_new_probs)
+                final_action_dist = torch.distributions.Categorical(
+                    probs=final_new_probs
+                )
                 final_new_log_probs = final_action_dist.log_prob(actions_batch)
-                kl_divergence_final_approx = (old_log_probs_batch - final_new_log_probs).mean().item()
+                kl_divergence_final_approx = (
+                    (old_log_probs_batch - final_new_log_probs).mean().item()
+                )
 
         self.last_kl_div = kl_divergence_final_approx
 
@@ -235,32 +268,45 @@ class PPOAgent:
         }
         return metrics
 
-    def save_model(self, file_path: str, global_timestep: int = 0, total_episodes_completed: int = 0) -> None:
+    def save_model(
+        self,
+        file_path: str,
+        global_timestep: int = 0,
+        total_episodes_completed: int = 0,
+    ) -> None:
         """Saves the model, optimizer, and training state to a file."""
-        torch.save({
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'global_timestep': global_timestep,
-            'total_episodes_completed': total_episodes_completed,
-        }, file_path)
+        torch.save(
+            {
+                "model_state_dict": self.model.state_dict(),
+                "optimizer_state_dict": self.optimizer.state_dict(),
+                "global_timestep": global_timestep,
+                "total_episodes_completed": total_episodes_completed,
+            },
+            file_path,
+        )
         print(f"PPOAgent model, optimizer, and state saved to {file_path}")
 
     def load_model(self, file_path: str) -> dict:
         """Loads the model, optimizer, and training state from a file. Returns the checkpoint dict."""
         if not os.path.exists(file_path):
-            print(f"Warning: Model checkpoint not found at {file_path}. Agent not loaded.")
+            print(
+                f"Warning: Model checkpoint not found at {file_path}. Agent not loaded."
+            )
             return {}
         checkpoint = torch.load(file_path, map_location=self.device)
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        if 'optimizer_state_dict' in checkpoint:
-            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.model.load_state_dict(checkpoint["model_state_dict"])
+        if "optimizer_state_dict" in checkpoint:
+            self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
             # Ensure optimizer state is also moved to the correct device if necessary
             # This is often handled by PyTorch if model parameters are on the device already
             # or by explicitly iterating through optimizer state and moving tensors.
             # For Adam, this might involve: for state in self.optimizer.state.values():
             # for k, v in state.items(): if isinstance(v, torch.Tensor): state[k] = v.to(self.device)
         else:
-            print("Warning: Optimizer state not found in checkpoint. Initializing optimizer from scratch.", file=sys.stderr)
+            print(
+                "Warning: Optimizer state not found in checkpoint. Initializing optimizer from scratch.",
+                file=sys.stderr,
+            )
         self.model.to(self.device)
         print(f"PPOAgent model, optimizer, and state loaded from {file_path}")
-        return checkpoint # Return the loaded checkpoint dictionary
+        return checkpoint  # Return the loaded checkpoint dictionary

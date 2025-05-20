@@ -4,7 +4,13 @@ Unit tests for Shogi game logic functions in shogi_rules_logic.py
 
 import pytest
 
-from keisei.shogi.shogi_core_definitions import Color, MoveTuple, Piece, PieceType, get_unpromoted_types
+from keisei.shogi.shogi_core_definitions import (
+    Color,
+    MoveTuple,
+    Piece,
+    PieceType,
+    get_unpromoted_types,
+)
 from keisei.shogi.shogi_game import ShogiGame
 from keisei.shogi.shogi_rules_logic import (
     can_drop_specific_piece,
@@ -131,7 +137,9 @@ def test_cannot_drop_pawn_uchi_fu_zume(empty_game: ShogiGame):
     empty_game.set_piece(0, 5, Piece(PieceType.GOLD, Color.BLACK))
     empty_game.set_piece(1, 3, Piece(PieceType.GOLD, Color.BLACK))
     empty_game.set_piece(1, 5, Piece(PieceType.GOLD, Color.BLACK))
-    empty_game.set_piece(8, 8, Piece(PieceType.KING, Color.BLACK))  # ADDED: Black's king
+    empty_game.set_piece(
+        8, 8, Piece(PieceType.KING, Color.BLACK)
+    )  # ADDED: Black's king
     empty_game.hands[Color.BLACK.value][PieceType.PAWN] = 1
     empty_game.current_player = Color.BLACK  # Important for uchi_fu_zume check context
 
@@ -215,7 +223,9 @@ def test_generate_legal_moves_excludes_drop_leaving_king_in_check(
 ):
     """Test generate_all_legal_moves excludes a drop that leaves own king in check."""
     empty_game.set_piece(8, 4, Piece(PieceType.KING, Color.BLACK))  # Black King
-    empty_game.set_piece(0, 0, Piece(PieceType.KING, Color.WHITE)) # ADDED: White King for rule checks
+    empty_game.set_piece(
+        0, 0, Piece(PieceType.KING, Color.WHITE)
+    )  # ADDED: White King for rule checks
     # empty_game.set_piece(
     #     7, 4, Piece(PieceType.ROOK, Color.WHITE)
     # )  # White Rook attacking King if pawn is dropped elsewhere
@@ -268,9 +278,7 @@ def test_generate_legal_moves_no_drops_if_hand_empty(empty_game: ShogiGame):
     empty_game.set_piece(0, 4, Piece(PieceType.KING, Color.WHITE))
     empty_game.current_player = Color.BLACK
     # Ensure hands are empty (fixture does this, but double check for clarity)
-    empty_game.hands[Color.BLACK.value] = {
-        pt: 0 for pt in get_unpromoted_types()
-    }
+    empty_game.hands[Color.BLACK.value] = {pt: 0 for pt in get_unpromoted_types()}
 
     legal_moves = generate_all_legal_moves(empty_game)
     for move in legal_moves:
@@ -733,12 +741,8 @@ def test_gamelm_king_cannot_move_into_check(empty_game: ShogiGame):
     for r_idx in range(9):
         for c_idx in range(9):
             empty_game.set_piece(r_idx, c_idx, None)
-    empty_game.hands[Color.BLACK.value] = {
-        pt: 0 for pt in get_unpromoted_types()
-    }
-    empty_game.hands[Color.WHITE.value] = {
-        pt: 0 for pt in get_unpromoted_types()
-    }
+    empty_game.hands[Color.BLACK.value] = {pt: 0 for pt in get_unpromoted_types()}
+    empty_game.hands[Color.WHITE.value] = {pt: 0 for pt in get_unpromoted_types()}
 
     # Scenario 2: King is on edge, only one escape square, but it's attacked.
     empty_game.current_player = Color.BLACK

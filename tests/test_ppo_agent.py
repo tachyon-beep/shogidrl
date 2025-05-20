@@ -78,7 +78,9 @@ def test_ppo_agent_learn():
 
     # Populate buffer with some dummy data
     dummy_obs_np = np.random.rand(46, 9, 9).astype(np.float32)
-    dummy_obs_tensor = torch.from_numpy(dummy_obs_np).to(torch.device("cpu")) # Convert to tensor on CPU
+    dummy_obs_tensor = torch.from_numpy(dummy_obs_np).to(
+        torch.device("cpu")
+    )  # Convert to tensor on CPU
 
     for i in range(buffer_size):
         experience_buffer.add(
@@ -99,7 +101,9 @@ def test_ppo_agent_learn():
     # Call the learn method
     try:
         metrics = agent.learn(experience_buffer)
-        assert metrics is not None, "learn() should return a metrics dictionary, not None"
+        assert (
+            metrics is not None
+        ), "learn() should return a metrics dictionary, not None"
         # Check if losses are returned and are floats (or can be zero)
         assert isinstance(metrics["ppo/policy_loss"], float)
         assert isinstance(metrics["ppo/value_loss"], float)

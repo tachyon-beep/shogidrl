@@ -4,18 +4,24 @@ from keisei.shogi.shogi_core_definitions import Color, PieceType, BoardMoveTuple
 
 # Helper to serialize critical parts of the game state
 
+
 def serialize_state(game):
     board_state = tuple(
-        tuple(
-            None if p is None else (p.type, p.color, p.is_promoted)
-            for p in row
-        )
+        tuple(None if p is None else (p.type, p.color, p.is_promoted) for p in row)
         for row in game.board
     )
     hands_state = (
         # Sort by PieceType.value for consistent ordering
-        tuple(sorted(game.hands[Color.BLACK.value].items(), key=lambda item: item[0].value)),
-        tuple(sorted(game.hands[Color.WHITE.value].items(), key=lambda item: item[0].value)),
+        tuple(
+            sorted(
+                game.hands[Color.BLACK.value].items(), key=lambda item: item[0].value
+            )
+        ),
+        tuple(
+            sorted(
+                game.hands[Color.WHITE.value].items(), key=lambda item: item[0].value
+            )
+        ),
     )
     return {
         "board": board_state,
@@ -26,6 +32,7 @@ def serialize_state(game):
         "winner": game.winner,
         "termination_reason": game.termination_reason,
     }
+
 
 @pytest.fixture
 def fresh_game():

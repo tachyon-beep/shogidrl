@@ -1,10 +1,10 @@
 # shogi_game_io.py
 
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
-
+from typing import TYPE_CHECKING, Tuple
 import numpy as np
+import datetime  # For KIF Date header
 
-from ..utils import PolicyOutputMapper
+from ..utils import PolicyOutputMapper  # Assuming this path is correct
 from .shogi_core_definitions import (
     OBS_PROMOTED_ORDER,
     OBS_UNPROMOTED_ORDER,
@@ -14,6 +14,11 @@ from .shogi_core_definitions import (
     TerminationReason,
     get_piece_type_from_symbol,
     get_unpromoted_types,
+    KIF_PIECE_SYMBOLS,
+    MoveTuple,
+    BoardMoveTuple,
+    DropMoveTuple,
+    SYMBOL_TO_PIECE_TYPE,
 )
 
 if TYPE_CHECKING:
@@ -121,115 +126,206 @@ def convert_game_to_text_representation(game: "ShogiGame") -> str:
             if p:
                 symbol = p.symbol()
                 if len(symbol) == 1:  # e.g., P
-                    line_pieces.append(f" {symbol} ") # Results in " P "
+                    line_pieces.append(f" {symbol} ")  # Results in " P "
                 else:  # e.g., +P
                     line_pieces.append(f"{symbol} ")  # Results in "+P "
             else:
-                line_pieces.append(" . ") # Consistent 3-char width
+                line_pieces.append(" . ")  # Consistent 3-char width
         lines.append(line_str + "".join(line_pieces))
     # Add file numbers at the bottom, ensuring 3-char spacing
     lines.append(
-        "  a  b  c  d  e  f  g  h  i" # Adjusted spacing: 2 spaces before 'a', then 2 between letters
+        "  a  b  c  d  e  f  g  h  i"  # Adjusted spacing: 2 spaces before 'a', then 2 between letters
     )
     # Add hands
-    black_hand_dict = {pt.name: count for pt, count in game.hands[Color.BLACK.value].items() if count > 0}
+    black_hand_dict = {
+        pt.name: count
+        for pt, count in game.hands[Color.BLACK.value].items()
+        if count > 0
+    }
     lines.append(f"Black's hand: {black_hand_dict}")
-    white_hand_dict = {pt.name: count for pt, count in game.hands[Color.WHITE.value].items() if count > 0}
+    white_hand_dict = {
+        pt.name: count
+        for pt, count in game.hands[Color.WHITE.value].items()
+        if count > 0
+    }
     lines.append(f"White's hand: {white_hand_dict}")
     lines.append(f"Current player: {game.current_player.name}")
     return "\n".join(lines)
 
 
-def game_to_kif(game: 'ShogiGame', filename: str) -> None:
-    """Converts a game to a KIF file."""
-    # Use game.max_moves_per_game property
-    max_moves = float(game.max_moves_per_game)
+def game_to_kif(
+    game: "ShogiGame",
+    filename: str,
+    sente_player_name: str = "Sente",
+    gote_player_name: str = "Gote",
+) -> None:
+    """
+    Converts a game to a KIF file.
+    Uses standard KIF piece notation (+FU, -FU, etc.) and includes more headers.
+    """
     with open(filename, "w", encoding="utf-8") as kif_file:
-        # Basic KIF headers (example, adapt as needed)
-        # These might come from game.config or other game properties if available
-        # For now, using placeholders or omitting if not directly on game object
-        # kif_file.write(f"*Player Sente: {game.player_names[0]}\\n")
-        # kif_file.write(f"*Player Gote: {game.player_names[1]}\\n")
-        # kif_file.write(f"*Initial setup: {game.initial_setup}\\n") # Or a representation
-        # kif_file.write(f"*Handicap: {game.handicap}\\n")
+        # --- KIF Headers ---
+        kif_file.write("#KIF version=2.0 encoding=UTF-8\n")
+        kif_file.write("*Event: Casual Game\n")  # Placeholder, was f-string
+        kif_file.write("*Site: Local Machine\n")  # Placeholder, was f-string
+        kif_file.write(f"*Date: {datetime.date.today().strftime('%Y/%m/%d')}\n")
+        kif_file.write(f"*Player Sente: {sente_player_name}\n")
+        kif_file.write(f"*Player Gote: {gote_player_name}\n")
+        kif_file.write("*Handicap: HIRATE\n")  # Or NONE. Was f-string
 
-        kif_file.write("*KIF version: 2.0\\n")
-        kif_file.write("*Game type: Shogi\\n")
-        # if hasattr(game, 'start_time') and game.start_time:
-        #     kif_file.write(f"*Start time: {game.start_time.isoformat()}\\n")
+        # Standard HIRATE starting position
+        kif_file.write("P1-KY-KE-GI-KI-OU-KI-GI-KE-KY\n")
+        kif_file.write("P2 * -HI * * * * * -KA * \n")
+        kif_file.write("P3-FU-FU-FU-FU-FU-FU-FU-FU-FU\n")
+        kif_file.write("P4 * * * * * * * * * \n")
+        kif_file.write("P5 * * * * * * * * * \n")
+        kif_file.write("P6 * * * * * * * * * \n")
+        kif_file.write("P7+FU+FU+FU+FU+FU+FU+FU+FU+FU\n")
+        kif_file.write("P8 * +KA * * * * * +HI * \n")
+        kif_file.write("P9+KY+KE+GI+KI+OU+KI+GI+KE+KY\n")
 
-        # Board state
-        kif_file.write("P1" + "".join([str(i) for i in range(9, 0, -1)]) + "\\n")
-        for r_idx, row in enumerate(game.board):
-            line = f"P{r_idx+1}"
-            for c_idx, p in enumerate(row): # c_idx is used by some KIF variants, keep for now
-                if p is None:
-                    line += " . " # KIF uses spaces for empty squares, not '+'
-                else:
-                    # KIF piece representation: Color (P for Black, p for White) + Piece Type (e.g., FU, KY)
-                    # This needs a mapping from PieceType to KIF piece strings.
-                    # For now, using the existing symbol() method which might not be KIF standard.
-                    # Standard KIF is like: P+FU, P-GI, etc. or just FU, GI with player context.
-                    # The current Piece.symbol() returns things like "P", "p", "+P", "+p".
-                    # We need to ensure it aligns with KIF expectations or adapt.
-                    # A common KIF style is just the piece type (e.g., FU, KY, HI, KA, OU, KI, GI, KE, TO, NY, NK, NG, UM, RY)
-                    # and the player is implicit from whose turn it is or explicit in headers.
-                    # Another style uses e.g. " FU" for black pawn, " fu" for white pawn.
-                    # Let's assume for now that Piece.symbol() gives a suitable representation
-                    # and that KIF readers can interpret it or it's a simplified KIF.
-                    # A more robust solution would map PieceType to standard KIF piece names.
-                    piece_char = p.symbol() # e.g. P, p, +P, +p
-                    # KIF usually expects two characters for a piece, e.g., "FU", "KY".
-                    # If symbol() returns one char (e.g. "P"), pad with space. If two (e.g. "+P"), use as is.
-                    # This is a simplification.
-                    if len(piece_char) == 1:
-                        line += f" {piece_char} " # e.g. " P "
-                    elif len(piece_char) == 2: # e.g. "+P" or "p " if symbol() was adapted
-                        if piece_char.startswith("+") or piece_char.startswith("-"):
-                            line += f"{piece_char} " # e.g. "+P "
-                        else: # Should not happen with current symbol()
-                            line += f"{piece_char}" # e.g. "FU"
-                    else: # Should not happen
-                        line += " ??"
+        # --- Initial Hands (KIF format: P+00FU00KY... for Sente, P-00FU00KY... for Gote) ---
+        # This assumes starting with empty hands for a standard game from initial board setup.
+        sente_hand_str = "P+"
+        gote_hand_str = "P-"
+        hand_order_for_kif = [
+            PieceType.ROOK,
+            PieceType.BISHOP,
+            PieceType.GOLD,
+            PieceType.SILVER,
+            PieceType.KNIGHT,
+            PieceType.LANCE,
+            PieceType.PAWN,
+        ]  # Common KIF hand order
 
-            kif_file.write(line + "\\n")
+        initial_sente_hand = game.hands[Color.BLACK.value]
+        initial_gote_hand = game.hands[Color.WHITE.value]
 
-        kif_file.write("moves\\n")
+        for pt in hand_order_for_kif:
+            sente_hand_str += (
+                f"{initial_sente_hand.get(pt, 0):02d}{KIF_PIECE_SYMBOLS.get(pt, '??')}"
+            )
+            gote_hand_str += (
+                f"{initial_gote_hand.get(pt, 0):02d}{KIF_PIECE_SYMBOLS.get(pt, '??')}"
+            )
+        kif_file.write(f"{sente_hand_str}\n")
+        kif_file.write(f"{gote_hand_str}\n")
 
-        # Instantiate PolicyOutputMapper to use its shogi_move_to_usi method
+        # --- Player to move first ---
+        kif_file.write(
+            f"{'+' if game.current_player == Color.BLACK else '-'}\n"
+        )  # + for Sente, - for Gote
+
+        kif_file.write("moves\n")  # Start of the moves section
+
+        # --- Moves ---
         mapper = PolicyOutputMapper()
-
         for i, move_entry in enumerate(game.move_history):
-            move_obj = move_entry.get("move")
+            move_obj = move_entry.get("move")  # Your internal move object/tuple
             if not move_obj:
                 continue
 
-            kif_file.write(f"{i+1} {mapper.shogi_move_to_usi(move_obj)}\\n") # Use mapper instance
+            usi_move_str = mapper.shogi_move_to_usi(move_obj)
+            kif_file.write(f"{i+1} {usi_move_str}\n")
 
-        # Game termination
+        # --- Game Termination ---
         if game.game_over:
             if game.termination_reason == TerminationReason.CHECKMATE.value:
-                kif_file.write(
-                    "Tsumi\\n" # Checkmate
-                )
+                kif_file.write("Tsumi\n")
             elif game.termination_reason == TerminationReason.RESIGNATION.value:
-                kif_file.write(
-                    "Toryo\\n" # Resignation
-                )
+                kif_file.write("Toryo\n")
             elif game.termination_reason == TerminationReason.MAX_MOVES_EXCEEDED.value:
-                kif_file.write(
-                    "Jishogi\\n" # Draw by max moves (can be more specific)
-                )
-            elif game.termination_reason == TerminationReason.REPETITION.value: # Sennichite
-                kif_file.write(
-                    "Sennichite\\n"
-                )
-            # Add other termination reasons as needed
+                kif_file.write("Jishogi\n")
+            elif game.termination_reason == TerminationReason.REPETITION.value:
+                kif_file.write("Sennichite\n")
+            elif game.termination_reason == TerminationReason.ILLEGAL_MOVE.value:
+                kif_file.write("Illegal move\n")
+            elif game.termination_reason == TerminationReason.TIME_FORFEIT.value:
+                kif_file.write("Time_up\n")
 
-        # if hasattr(game, 'end_time') and game.end_time:
-        #     kif_file.write(f"*End time: {game.end_time.isoformat()}\\n")
-        # if hasattr(game, 'result') and game.result:
-        #     kif_file.write(f"*Result: {game.result}\\n")
-        # if hasattr(game, 'comment') and game.comment:
-        #     kif_file.write(f"*Comment: {game.comment}\\n")
-        kif_file.write("*EOF\\n")
+        kif_file.write("*EOF\n")  # Standard KIF end marker
+
+
+# --- SFEN Move Parsing ---
+
+
+def _parse_sfen_square(sfen_sq: str) -> Tuple[int, int]:
+    """
+    Converts an SFEN square string (e.g., "7g", "5e") to 0-indexed (row, col).
+    File (1-9) maps to column (8-0). Rank (a-i) maps to row (0-8).
+    Example: "9a" -> (0,0), "1i" -> (8,8)
+    """
+    if not (
+        len(sfen_sq) == 2 and "1" <= sfen_sq[0] <= "9" and "a" <= sfen_sq[1] <= "i"
+    ):
+        raise ValueError(f"Invalid SFEN square format: {sfen_sq}")
+
+    file_char = sfen_sq[0]
+    rank_char = sfen_sq[1]
+
+    col = 9 - int(file_char)
+    row = ord(rank_char) - ord("a")
+
+    return row, col
+
+
+def _get_piece_type_from_sfen_char(char: str) -> PieceType:
+    """
+    Converts an SFEN piece character (e.g., 'P', 'L', 'B') to a PieceType enum.
+    SFEN uses uppercase single letters for standard pieces.
+    """
+    if char in SYMBOL_TO_PIECE_TYPE:
+        pt = SYMBOL_TO_PIECE_TYPE[char]
+        # Ensure it's a basic piece type that can be dropped
+        if (
+            pt in get_unpromoted_types() and pt != PieceType.KING
+        ):  # King cannot be dropped
+            return pt
+    raise ValueError(f"Invalid SFEN piece character for drop: {char}")
+
+
+def sfen_to_move_tuple(sfen_move_str: str) -> MoveTuple:
+    """
+    Parses an SFEN move string (e.g., "7g7f", "P*5e", "2b3a+")
+    and converts it into an internal MoveTuple.
+    """
+    sfen_move_str = sfen_move_str.strip()
+
+    if "*" in sfen_move_str:
+        parts = sfen_move_str.split("*")
+        if len(parts) != 2 or len(parts[0]) != 1 or len(parts[1]) != 2:
+            raise ValueError(f"Invalid SFEN drop move format: {sfen_move_str}")
+
+        piece_char = parts[0]
+        sfen_sq_to = parts[1]
+
+        try:
+            piece_to_drop = _get_piece_type_from_sfen_char(piece_char)
+            to_r, to_c = _parse_sfen_square(sfen_sq_to)
+        except ValueError as e:
+            raise ValueError(
+                f"Error parsing SFEN drop move '{sfen_move_str}': {e}"
+            ) from e
+
+        return (None, None, to_r, to_c, piece_to_drop)
+    else:
+        promote = False
+        if sfen_move_str.endswith("+"):
+            promote = True
+            sfen_move_str = sfen_move_str[:-1]
+
+        if len(sfen_move_str) != 4:
+            raise ValueError(f"Invalid SFEN board move format: {sfen_move_str}")
+
+        sfen_sq_from = sfen_move_str[:2]
+        sfen_sq_to = sfen_move_str[2:]
+
+        try:
+            from_r, from_c = _parse_sfen_square(sfen_sq_from)
+            to_r, to_c = _parse_sfen_square(sfen_sq_to)
+        except ValueError as e:
+            raise ValueError(
+                f"Error parsing SFEN board move '{sfen_move_str}': {e}"
+            ) from e
+
+        return (from_r, from_c, to_r, to_c, promote)
