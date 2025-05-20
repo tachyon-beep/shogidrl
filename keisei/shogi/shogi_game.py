@@ -778,6 +778,8 @@ class ShogiGame:
             # Only assign if move_tuple[4] is a PieceType
             if isinstance(move_tuple[4], PieceType):
                 drop_piece_type_for_move = move_tuple[4]
+                # Ensure dropped_piece_type is set for undo logic (redundant but safe)
+                move_details_for_history["dropped_piece_type"] = drop_piece_type_for_move
                 if r_to is not None and c_to is not None:
                     self.set_piece(r_to, c_to, Piece(drop_piece_type_for_move, player_who_made_the_move))
                 self.remove_from_hand(drop_piece_type_for_move, player_who_made_the_move)
