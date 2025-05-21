@@ -10,28 +10,16 @@ that causes the error: `RuntimeError: function '_has_torch_function' already has
 """
 
 import contextlib  # Ensure contextlib is imported
-import importlib
-import sys
 import types
 from typing import (  # MODIFIED: Added ContextManager, Iterator
     Any,
-    Callable,
     ContextManager,
-    Dict,
     Iterator,
     List,
-    Optional,
-    Tuple,
-    Union,
 )
 from unittest.mock import patch
 
 import numpy as np
-
-# [ önceki MockTensor, MockModule, MockPolicyValueNetwork, MockPolicyOutputMapper sınıfları buraya olduğu gibi gelir ]
-# ... (Previous MockTensor, MockModule, MockPolicyValueNetwork, MockPolicyOutputMapper classes go here as they were) ...
-# Assume the mock classes (MockTensor, MockModule, etc.) are here and unchanged from your previous version.
-# I'll include them for completeness if they were part of the original file for this specific fix.
 
 
 class MockTensor:
@@ -92,8 +80,9 @@ class MockModule:
         self.training = mode
         return self
 
-    def to(self, device):
+    def to(self, _device):  # MODIFIED: _device to indicate unused argument
         """Mock device transfer."""
+        # self.device = _device # Optionally, make MockModule track device too
         return self
 
 
@@ -139,12 +128,17 @@ class MockPolicyOutputMapper:
                 mask[idx] = 1.0
         return MockTensor(mask)
 
-    def get_move_from_policy_index(self, index: int):
+    def get_move_from_policy_index(
+        self, _index: int
+    ):  # MODIFIED: _index to indicate unused argument
         """Convert policy index to a move tuple."""
+        # Consider making this mock more flexible if tests need varied outputs based on index.
         return (4, 4, 3, 3, False)
 
 
-def patched_add_docstr(obj, docstr, warn_on_existing=True):
+def patched_add_docstr(
+    obj, docstr, _warn_on_existing=True
+):  # MODIFIED: _warn_on_existing
     """A patched version of torch.overrides._add_docstr that doesn't error on repeated calls."""
     if hasattr(obj, "__doc__") and obj.__doc__ is not None:
         return obj
@@ -172,6 +166,7 @@ def setup_pytorch_mock_environment() -> (
     mock_torch.nn = mock_torch_nn  # type: ignore[attr-defined]
 
     mock_torch_overrides = types.ModuleType("torch.overrides")
+    # pylint: disable=protected-access # MODIFIED: Disabled warning for this intentional access
     mock_torch_overrides._add_docstr = patched_add_docstr  # type: ignore[attr-defined]
     mock_torch.overrides = mock_torch_overrides  # type: ignore[attr-defined]
 
@@ -187,7 +182,9 @@ def setup_pytorch_mock_environment() -> (
         "torch.nn.functional": mock_torch.nn.functional,  # pylint: disable=no-member
     }
 
-    sys_modules_patch = patch.dict("sys.modules", patches)
+    sys_modules_patch = patch.dict(
+        "sys.modules", patches
+    )  # Intentionally using "sys.modules" directly
     policy_mapper_patch = patch(
         "keisei.utils.PolicyOutputMapper", MockPolicyOutputMapper
     )

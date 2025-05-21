@@ -1,50 +1,39 @@
-# Test Remediation Plan for Keisei Shogi Implementation
+# Updated Test Remediation Plan for Keisei Shogi Implementation
 
 ## Executive Summary
 
-This remediation plan addresses the significant test coverage gaps and issues identified during the comprehensive review of the Shogi module tests. The overall test coverage is currently at 10%, with most of the code in `shogi_game.py` (1% coverage) and `shogi_game_io.py` (3% coverage) not being properly tested. This document outlines a prioritized approach to increasing test coverage, resolving test errors, consolidating duplicated tests, and implementing missing tests for recent enhancements.
+This updated remediation plan tracks progress on addressing the significant test coverage gaps and issues in the Shogi module tests. We've successfully completed Phase 1 by implementing a mocking solution for PyTorch dependencies that allows tests to run without initialization errors. The overall test coverage is still at 10%, with most of the code in `shogi_game.py` (1% coverage) and `shogi_game_io.py` (3% coverage) not being properly tested, but we now have a reliable foundation for expanding test coverage.
 
-## Current Issues
+## Current Status
 
-### 1. Low Test Coverage
+### 1. Completed Tasks (Phase 1)
+- ✅ Created a mock utilities module (`tests/mock_utilities.py`) that provides mock implementations of PyTorch-dependent classes
+- ✅ Implemented a patch for the `_add_docstr` function to resolve the PyTorch initialization error: `RuntimeError: function '_has_torch_function' already has a docstring`
+- ✅ Created a context manager function `setup_pytorch_mock_environment()` that allows tests to run without PyTorch initialization errors
+- ✅ Demonstrated the mock approach with two working test files:
+  - `test_shogi_with_mocks_example.py`: Shows the pattern for mocking PyTorch dependencies
+  - `test_shogi_game_mocked.py`: Uses the same pattern to test actual game functionality
+
+### 2. Current Issues Remaining
 - Overall test coverage: 10%
 - `shogi_core_definitions.py`: 49% coverage
 - `shogi_game.py`: 1% coverage (423 out of 423 statements untested)
 - `shogi_game_io.py`: 3% coverage (149 out of 154 statements untested)
+- Test quality issues (e.g., faulty test in `test_undo_move_multiple_moves`)
+- Duplicated tests across multiple files
 
-### 2. PyTorch Import Errors
-- All tests currently fail to run properly with the error: `RuntimeError: function '_has_torch_function' already has a docstring`
-- This appears to be related to conflicts in the PyTorch initialization
+## Updated Remediation Plan
 
-### 3. Test Quality Issues
-- **Faulty Test**: `test_undo_move_multiple_moves` in `test_shogi_game.py` contains a manual workaround for game state restoration
-- **Incomplete Tests**: Missing tests for several features including board formatting and observation plane constants
-- **Duplicated Tests**: Undo move functionality is tested in both `test_make_undo_move.py` and `test_shogi_game.py`
-
-## Remediation Plan
-
-### Phase 1: Fix PyTorch Import Issues (High Priority)
+### Phase 2: Core Game Logic Coverage (High Priority, In Progress)
 
 **Tasks:**
-1. Create a test environment that isolates PyTorch initialization issues
-   - Create a utility module for testing that provides mock implementations of PyTorch-dependent classes
-   - Use dependency injection in testing to avoid direct imports of problematic modules
-
-2. Resolve the PyTorch docstring conflict
-   - Investigate specific PyTorch version conflicts
-   - Add a patch for the `torch.overrides._add_docstr` function to handle re-initialization gracefully
-
-**Expected Outcome:** All tests run without throwing initialization errors, allowing accurate coverage measurement.
-
-### Phase 2: Core Game Logic Coverage (High Priority)
-
-**Tasks:**
-1. Implement tests for `shogi_game.py` core functionality:
-   - Game initialization (different SFEN strings, board setups)
-   - Move execution (all move types including promotions and drops)
-   - Game state transitions (player turns, move counting)
-   - Win conditions (checkmate, resignation)
-   - Draw conditions (repetition)
+1. Use the mock utility pattern to create comprehensive tests for `shogi_game.py`:
+   - Convert existing `test_shogi_game.py` tests to use the mock pattern
+   - Implement tests for game initialization with different SFEN strings
+   - Add tests for move execution (all move types including promotions and drops)
+   - Cover game state transitions (player turns, move counting)
+   - Test win conditions (checkmate, resignation)
+   - Verify draw conditions (repetition)
 
 2. Create parametrized tests for different game scenarios:
    - Middle game positions
@@ -56,10 +45,10 @@ This remediation plan addresses the significant test coverage gaps and issues id
 ### Phase 3: Game I/O Coverage (Medium Priority)
 
 **Tasks:**
-1. Implement tests for `shogi_game_io.py`:
-   - Test all aspects of the text representation (board, pieces, player info)
+1. Apply the mock pattern to test `shogi_game_io.py`:
+   - Create tests for text representation (board, pieces, player info)
    - Test SFEN string generation with different board states
-   - Test neural network observation generation for various game states
+   - Verify neural network observation generation for various game states
    - Test KIF file generation
 
 2. Add specific tests for the text formatting changes made during the recent enhancement phases:
@@ -105,30 +94,31 @@ This remediation plan addresses the significant test coverage gaps and issues id
 
 **Expected Outcome:** Clean, non-redundant test suite with clear separation of concerns.
 
-## Implementation Timeline
+## Implementation Timeline (Updated)
 
-### Week 1: Environment Setup and PyTorch Issue Resolution
-- Create test utilities and mocks
-- Fix PyTorch import errors
-- Initial tests for shogi_game.py core functionality
+### Week 1: Environment Setup and PyTorch Issue Resolution (Completed)
+- ✅ Created test utilities and mocks
+- ✅ Fixed PyTorch import errors
+- ✅ Created example tests demonstrating the mock pattern
 
-### Week 2: Core Game Logic Coverage
+### Week 1-2: Core Game Logic Coverage (Current Phase)
+- Convert existing tests to use the mock pattern
 - Complete tests for all game state transitions
 - Implement parametrized tests for different game scenarios
 - Begin work on I/O tests
 
-### Week 3: I/O and Neural Network Testing
+### Week 2-3: I/O and Neural Network Testing
 - Complete tests for shogi_game_io.py
 - Implement expanded observation plane tests
 - Add tests for policy/value outputs
 
-### Week 4: Consolidation and Final Review
+### Week 3-4: Consolidation and Final Review
 - Consolidate duplicated tests
 - Clean up commented-out code
 - Documentation update
 - Final coverage verification
 
-## Test Coverage Targets
+## Test Coverage Targets (Unchanged)
 
 | Module                      | Current | Target |
 |-----------------------------|---------|--------|
@@ -138,21 +128,39 @@ This remediation plan addresses the significant test coverage gaps and issues id
 | shogi_game_io.py            | 3%      | 70%    |
 | OVERALL                     | 10%     | 75%    |
 
-## Additional Recommendations
+## Best Practices for Using the Mock Pattern
 
-1. **Continuous Integration:**
-   - Set up a CI pipeline that runs tests on every commit
-   - Add coverage reporting to the CI pipeline
-   - Establish minimum coverage thresholds to prevent regression
+When implementing new tests using the mock pattern:
 
-2. **Documentation Enhancement:**
-   - Update documentation to include examples of how to mock PyTorch dependencies
-   - Add more detailed docstrings to test functions explaining the test scenarios
+1. **Import Pattern**: 
+   ```python
+   from tests.mock_utilities import setup_pytorch_mock_environment
+   ```
 
-3. **Training Test Split:**
-   - Consider separating tests that require PyTorch (training/neural network) from pure game logic tests
-   - This would allow running core game tests without PyTorch dependencies
+2. **Context Manager Usage**:
+   - Use the context manager for imports and test code:
+   ```python
+   def test_something():
+       with setup_pytorch_mock_environment():
+           # Import modules that depend on PyTorch
+           from keisei.shogi.shogi_game import ShogiGame
+           from keisei.shogi.shogi_game_io import generate_neural_network_observation
+           
+           # Test code here
+   ```
+   
+3. **Running Tests Directly**:
+   - Add path handling for direct execution:
+   ```python
+   if __name__ == "__main__":
+       REPO_ROOT = Path(__file__).parent.parent.absolute()
+       sys.path.insert(0, str(REPO_ROOT))
+   ```
+
+4. **Dealing with Pylint**:
+   - Disable the `wrong-import-position` and `import-outside-toplevel` warnings
+   - Format files with Black to handle spacing issues
 
 ## Conclusion
 
-Implementing this remediation plan will significantly improve the robustness of the Keisei Shogi implementation by ensuring comprehensive test coverage across all components. The phased approach prioritizes fixing critical issues first and ensures that recent enhancements are properly tested. By addressing the PyTorch import issues, we'll also enable more reliable measurement of test coverage moving forward.
+Phase 1 of the remediation plan is now complete with a working solution for testing modules that depend on PyTorch. With this foundation in place, we can now move forward with expanding test coverage across the codebase. The next steps focus on implementing comprehensive tests for core game logic and game I/O capabilities using our established mock pattern.

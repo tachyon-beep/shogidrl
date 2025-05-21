@@ -5,16 +5,15 @@ Unit tests for ShogiGame class in shogi_game.py, using mocks for PyTorch depende
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import (
+from typing import (  # Removed TYPE_CHECKING for simplicity if direct import works
     Dict,
     Optional,
-)  # Removed TYPE_CHECKING for simplicity if direct import works
+)
 
 import numpy as np
 
 from keisei.shogi.shogi_core_definitions import Color, PieceType
 from tests.mock_utilities import setup_pytorch_mock_environment
-
 
 # Add proper import path handling
 # This block is mainly for running the script directly.
@@ -23,6 +22,7 @@ if __name__ == "__main__":
     REPO_ROOT = Path(__file__).parent.parent.absolute()
     if str(REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(REPO_ROOT))
+
 
 @dataclass
 class GameState:

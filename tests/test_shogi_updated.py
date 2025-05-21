@@ -5,7 +5,7 @@ Unit tests for ShogiGame class in shogi_game.py
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 
 import numpy as np
 import pytest
@@ -24,12 +24,8 @@ from tests.mock_utilities import setup_pytorch_mock_environment
 # This allows importing modules that depend on PyTorch
 with setup_pytorch_mock_environment():
     from keisei.shogi.shogi_core_definitions import (
-        OBS_PROMOTED_ORDER,
-        OBS_UNPROMOTED_ORDER,
         Color,
-        Piece,
         PieceType,
-        get_unpromoted_types,
     )
     from keisei.shogi.shogi_game import ShogiGame
 
