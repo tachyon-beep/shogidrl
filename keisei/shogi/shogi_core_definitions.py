@@ -129,17 +129,33 @@ PIECE_TYPE_TO_HAND_TYPE: Dict[PieceType, PieceType] = {
     # King is handled separately in add_to_hand. Gold is already its base type.
 }
 
-# For observation channels (II.2)
-# Unpromoted: P, L, N, S, G, B, R, K (8 types)
-# Promoted: +P, +L, +N, +S, +B, +R (6 types)
-# Total board piece planes per player = 8 (unpromoted) + 6 (promoted) = 14
-# Total board piece planes = 14 * 2 = 28
-# Hands: 7 piece types * 2 players = 14 planes
-# Other: current player, move count = 2 planes
-# Total expected channels for current obs structure: 28 (board) + 14 (hands) + 2 (meta) = 44
-# Original code uses 46 channels, planes 44 and 45 are "reserved".
-# We will use 8 planes for unpromoted (0-7), 6 for promoted (8-13) for the current player section
-# And similarly for opponent.
+# Observation Plane Constants
+# ----------------------
+# Network observation planes grouping and indexing
+# Channel map for the (46, 9, 9) observation tensor:
+
+# Board Piece Channels (28 total)
+OBS_CURR_PLAYER_UNPROMOTED_START = 0  # Channels 0-7: Current player's unpromoted pieces
+OBS_CURR_PLAYER_PROMOTED_START = 8  # Channels 8-13: Current player's promoted pieces
+OBS_OPP_PLAYER_UNPROMOTED_START = 14  # Channels 14-21: Opponent's unpromoted pieces
+OBS_OPP_PLAYER_PROMOTED_START = 22  # Channels 22-27: Opponent's promoted pieces
+
+# Hand Piece Channels (14 total)
+OBS_CURR_PLAYER_HAND_START = 28  # Channels 28-34: Current player's hand
+OBS_OPP_PLAYER_HAND_START = 35  # Channels 35-41: Opponent's hand
+
+# Meta Information Channels (4 total)
+OBS_CURR_PLAYER_INDICATOR = 42  # Channel 42: Current player indicator (1.0 if Black)
+OBS_MOVE_COUNT = 43  # Channel 43: Move count (normalized)
+OBS_RESERVED_1 = 44  # Channel 44: Reserved for future use
+OBS_RESERVED_2 = 45  # Channel 45: Reserved for future use
+
+# Total observation planes: 46 channels
+#   - 14 current player board pieces
+#   - 14 opponent board pieces
+#   - 7 current player hand pieces
+#   - 7 opponent hand pieces
+#   - 4 meta information planes
 
 
 # Symbol to PieceType mapping (inverse of parts of Piece.symbol)

@@ -21,6 +21,17 @@ from .shogi_core_definitions import (
     TerminationReason,
     get_piece_type_from_symbol,
     get_unpromoted_types,
+    # Observation plane constants
+    OBS_CURR_PLAYER_UNPROMOTED_START,
+    OBS_CURR_PLAYER_PROMOTED_START,
+    OBS_OPP_PLAYER_UNPROMOTED_START,
+    OBS_OPP_PLAYER_PROMOTED_START,
+    OBS_CURR_PLAYER_HAND_START,
+    OBS_OPP_PLAYER_HAND_START,
+    OBS_CURR_PLAYER_INDICATOR,
+    OBS_MOVE_COUNT,
+    OBS_RESERVED_1,
+    OBS_RESERVED_2,
 )
 
 if TYPE_CHECKING:
@@ -64,23 +75,25 @@ def generate_neural_network_observation(game: "ShogiGame") -> np.ndarray:
                 continue
 
             is_current_player_piece: bool = p.color == game.current_player
-            # player_base_channel = ( # This was defined in original but not used directly here
-            # 0 if is_current_player_piece else 14
-            # )
-
             channel_offset: int = -1
 
             if p.is_promoted:
                 if p.type in promoted_map:
-                    # Offset for promoted planes (e.g., 8 for current player, 22 for opponent)
+                    # Offset for promoted planes
                     promoted_block_offset = (
-                        8 if is_current_player_piece else (14 + 8)
-                    )  # 14 is base for opponent, 8 for promoted group
+                        OBS_CURR_PLAYER_PROMOTED_START
+                        if is_current_player_piece
+                        else OBS_OPP_PLAYER_PROMOTED_START
+                    )
                     channel_offset = promoted_block_offset + promoted_map[p.type]
             else:  # Unpromoted or non-promotable (King, Gold)
                 if p.type in unpromoted_map:
-                    # Offset for unpromoted planes (e.g., 0 for current player, 14 for opponent)
-                    unpromoted_block_offset = 0 if is_current_player_piece else 14
+                    # Offset for unpromoted planes
+                    unpromoted_block_offset = (
+                        OBS_CURR_PLAYER_UNPROMOTED_START
+                        if is_current_player_piece
+                        else OBS_OPP_PLAYER_UNPROMOTED_START
+                    )
                     channel_offset = unpromoted_block_offset + unpromoted_map[p.type]
 
             if channel_offset != -1:
@@ -91,20 +104,18 @@ def generate_neural_network_observation(game: "ShogiGame") -> np.ndarray:
         get_unpromoted_types()
     )  # Use the imported function
 
-    # Current player's hand (channels 28-34)
-    current_player_hand_start_ch: int = 28
+    # Current player's hand
     for i, piece_type_enum_player in enumerate(hand_piece_order):
         player_hand_count: int = game.hands[game.current_player.value].get(
             piece_type_enum_player, 0
         )
         if player_hand_count > 0:
-            player_ch: int = current_player_hand_start_ch + i
+            player_ch: int = OBS_CURR_PLAYER_HAND_START + i
             obs[player_ch, :, :] = (
                 player_hand_count / 18.0
             )  # Normalize (e.g., by max pawns)
 
-    # Opponent's hand (channels 35-41)
-    opponent_hand_start_ch: int = 35
+    # Opponent's hand
     opponent_color_val: int = (
         Color.WHITE.value if game.current_player == Color.BLACK else Color.BLACK.value
     )
@@ -113,18 +124,19 @@ def generate_neural_network_observation(game: "ShogiGame") -> np.ndarray:
             piece_type_enum_opponent, 0
         )
         if opponent_hand_count > 0:
-            opponent_ch: int = opponent_hand_start_ch + i
+            opponent_ch: int = OBS_OPP_PLAYER_HAND_START + i
             obs[opponent_ch, :, :] = opponent_hand_count / 18.0
 
-    # Current player plane (42)
-    obs[42, :, :] = 1.0 if game.current_player == Color.BLACK else 0.0
+    # Current player indicator plane
+    obs[OBS_CURR_PLAYER_INDICATOR, :, :] = (
+        1.0 if game.current_player == Color.BLACK else 0.0
+    )
 
-    # Move count plane (43)
-    # Use game._max_moves_this_game for consistency
+    # Move count plane (normalized)
     max_moves = float(game.max_moves_per_game)
-    obs[43, :, :] = game.move_count / max_moves if max_moves > 0 else 0.0
+    obs[OBS_MOVE_COUNT, :, :] = game.move_count / max_moves if max_moves > 0 else 0.0
 
-    # Planes 44, 45 are reserved and remain zeros.
+    # Planes for OBS_RESERVED_1 and OBS_RESERVED_2 remain zeros.
     return obs
 
 
@@ -164,7 +176,7 @@ def convert_game_to_text_representation(game: "ShogiGame") -> str:
         if count > 0
     }
     lines.append(f"Black's hand: {black_hand_dict}")
-    
+
     white_hand_dict: Dict[str, int] = {
         pt.name: count
         for pt, count in game.hands[Color.WHITE.value].items()

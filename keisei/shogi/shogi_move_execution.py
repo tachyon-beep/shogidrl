@@ -81,9 +81,18 @@ def revert_last_applied_move(
     game: "ShogiGame", simulation_undo_details: Optional[Dict[str, Any]] = None
 ) -> None:
     """
-    Reverts the last move made in the game.
+    Reverts the last move made in the game, completely restoring the previous state.
     Operates on the 'game' (ShogiGame instance).
-    If simulation_undo_details is provided, it uses that to undo a simulated move.
+    
+    State restoration includes:
+    1. Restoring the board position
+    2. Restoring hand pieces
+    3. Switching back to previous player
+    4. Reversing move count
+    5. Clearing termination status
+    
+    If simulation_undo_details is provided, it uses that to undo a simulated move
+    that wasn't added to the game's history.
     """
     last_move_details: Dict[str, Any]
     player_who_made_the_undone_move: Color

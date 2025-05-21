@@ -280,6 +280,12 @@ def check_for_uchi_fu_zume(
     Returns True if dropping a pawn at (drop_row, drop_col) by 'color'
     results in immediate, unescapable checkmate for the opponent.
     This is an illegal move by Shogi rules.
+
+    RECURSION PREVENTION: This function calls generate_all_legal_moves() with
+    is_uchi_fu_zume_check=True. This flag prevents infinite recursion by:
+    1. Being passed to can_drop_specific_piece() as is_escape_check
+    2. When is_escape_check=True, pawn drops skip their own uchi_fu_zume check
+
     This function does NOT check if the drop itself leaves 'color's king in check;
     that is handled by the main move generation logic.
     """
@@ -490,6 +496,20 @@ def generate_all_legal_moves(
 ) -> List[MoveTuple]:
     """
     Generates all legal moves for the current player.
+
+    RECURSION HANDLING: The is_uchi_fu_zume_check parameter is used to prevent infinite
+    recursion when checking for Uchi-Fu-Zume (illegal pawn drop checkmate). When True:
+
+    1. This function is being called from check_for_uchi_fu_zume() to find opponent escapes
+    2. The flag is passed to can_drop_specific_piece() as is_escape_check
+    3. When is_escape_check=True, pawn drops skip the uchi_fu_zume check
+
+    This breaks potential infinite recursion where:
+    - check_for_uchi_fu_zume calls generate_all_legal_moves for opponent
+    - generate_all_legal_moves processes pawn drops and calls can_drop_specific_piece
+    - can_drop_specific_piece calls check_for_uchi_fu_zume
+    - And the cycle would repeat
+
     A move is legal if:
     1. It follows the piece's movement rules.
     2. For drops: it follows drop rules (Nifu, Uchi Fu Zume, no-move squares).
