@@ -29,7 +29,7 @@ NUM_ACTIONS_TOTAL = 3159  # As per DESIGN.md - determined by PolicyOutputMapper
 SAVE_FREQ_EPISODES = 200  # Save model every N episodes
 
 # --- Environment & Paths ---
-DEVICE = "cuda"  # or 'cpu' - will be dynamically set to cuda if available, else cpu in train.py typically
+DEVICE = "cpu"  # or 'cuda' - will be dynamically set to cuda if available, else cpu in train.py typically
 MODEL_DIR = "models/"
 LOG_FILE = "logs/training_log.txt"
 

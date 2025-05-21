@@ -3,7 +3,7 @@ Unit tests for ShogiGame class in shogi_game.py
 """
 
 from dataclasses import dataclass, field
-from typing import Dict
+from typing import Dict, Optional
 
 import numpy as np
 import pytest
@@ -228,30 +228,22 @@ def test_get_observation_board_pieces_consistency_after_reset(new_game: ShogiGam
         obs[black_pawn_plane, 6, 0] == 1.0
     ), "Black pawn at (6,0) not found in observation"
 
-    # Black's Rook at (7,1)
-    black_rook_plane = OBS_UNPROMOTED_ORDER.index(PieceType.ROOK)
-    assert (
-        obs[black_rook_plane, 7, 1] == 1.0
-    ), "Black rook at (7,1) not found in observation"
-
-    # Black's Bishop at (7,7)
+    # Black's Bishop at (7,1) (corrected from Rook)
     black_bishop_plane = OBS_UNPROMOTED_ORDER.index(PieceType.BISHOP)
     assert (
-        obs[black_bishop_plane, 7, 7] == 1.0
-    ), "Black bishop at (7,7) not found in observation"
+        obs[black_bishop_plane, 7, 1] == 1.0
+    ), "Black bishop at (7,1) not found in observation"
+
+    # Black's Rook at (7,7) (corrected from Bishop)
+    black_rook_plane = OBS_UNPROMOTED_ORDER.index(PieceType.ROOK)
+    assert (
+        obs[black_rook_plane, 7, 7] == 1.0
+    ), "Black rook at (7,7) not found in observation"
 
     # Check a few key pieces for White (opponent perspective)
     # Opponent planes start after all current player planes (unpromoted + promoted)
     num_piece_types_unpromoted = len(OBS_UNPROMOTED_ORDER)
     num_piece_types_promoted = len(OBS_PROMOTED_ORDER)  # Added for clarity
-
-    # Determine the correct plane index for opponent pieces based on shogi_game_io.py logic
-    # Current player unpromoted: 0 to N_unprom - 1
-    # Current player promoted: N_unprom to N_unprom + N_prom - 1
-    # Opponent player unpromoted: N_unprom + N_prom to N_unprom + N_prom + N_unprom - 1
-    # Opponent player promoted: N_unprom + N_prom + N_unprom to N_unprom + N_prom + N_unprom + N_prom - 1
-    # N_unprom = len(OBS_UNPROMOTED_ORDER)
-    # N_prom = len(OBS_PROMOTED_ORDER)
 
     start_opponent_unpromoted_planes = (
         num_piece_types_unpromoted + num_piece_types_promoted
@@ -264,21 +256,21 @@ def test_get_observation_board_pieces_consistency_after_reset(new_game: ShogiGam
         obs[white_pawn_plane, 2, 0] == 1.0
     ), f"White pawn at (2,0) not found in observation plane {white_pawn_plane}"
 
-    # White's Rook at (1,7)
-    white_rook_plane = start_opponent_unpromoted_planes + OBS_UNPROMOTED_ORDER.index(
-        PieceType.ROOK
-    )
-    assert (
-        obs[white_rook_plane, 1, 7] == 1.0
-    ), f"White rook at (1,7) not found in observation plane {white_rook_plane}"
-
-    # White's Bishop at (1,1)
+    # White's Bishop at (1,7) (corrected from Rook)
     white_bishop_plane = start_opponent_unpromoted_planes + OBS_UNPROMOTED_ORDER.index(
         PieceType.BISHOP
     )
     assert (
-        obs[white_bishop_plane, 1, 1] == 1.0
-    ), f"White bishop at (1,1) not found in observation plane {white_bishop_plane}"
+        obs[white_bishop_plane, 1, 7] == 1.0
+    ), f"White bishop at (1,7) not found in observation plane {white_bishop_plane}"
+
+    # White's Rook at (1,1) (corrected from Bishop)
+    white_rook_plane = start_opponent_unpromoted_planes + OBS_UNPROMOTED_ORDER.index(
+        PieceType.ROOK
+    )
+    assert (
+        obs[white_rook_plane, 1, 1] == 1.0
+    ), f"White rook at (1,1) not found in observation plane {white_rook_plane}"
 
     # Ensure a square that should be empty for a piece type is 0
     assert (
@@ -687,3 +679,178 @@ def _assert_game_state(game: ShogiGame, expected_state: GameState):
     assert game.move_count == expected_state.move_count
     assert game.hands[Color.BLACK.value] == expected_state.black_hand
     assert game.hands[Color.WHITE.value] == expected_state.white_hand
+
+
+# --- Tests for SFEN Serialization/Deserialization ---
+
+
+# Helper to create a game from SFEN and check its string representation
+def _sfen_cycle_check(sfen_str: str, expected_sfen_str: Optional[str] = None):
+    """Creates a game from SFEN, then serializes it back and compares."""
+    if expected_sfen_str is None:
+        expected_sfen_str = sfen_str  # Assume input SFEN is canonical if not specified
+    game = ShogiGame.from_sfen(sfen_str)
+    sfen_out = game.to_sfen_string()
+    assert (
+        sfen_out == expected_sfen_str
+    ), f"SFEN mismatch. In: '{sfen_str}'. Out: '{sfen_out}'. Expected: '{expected_sfen_str}'"
+
+
+def test_sfen_initial_position():
+    """Test SFEN for the initial game position."""
+    sfen_initial = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1"
+    _sfen_cycle_check(sfen_initial)
+    game = ShogiGame()
+    assert (
+        game.to_sfen_string() == sfen_initial
+    ), "ShogiGame().to_sfen_string() did not match standard initial SFEN."
+
+
+def test_sfen_custom_position_no_hands():
+    """Test a custom board position with no pieces in hand."""
+    sfen = "9/4k4/9/9/9/9/4K4/9/9 b - 1"
+    _sfen_cycle_check(sfen)
+    game = ShogiGame.from_sfen(sfen)
+    assert game.get_piece(1, 4) == Piece(PieceType.KING, Color.WHITE)
+    assert game.get_piece(6, 4) == Piece(PieceType.KING, Color.BLACK)
+    assert game.current_player == Color.BLACK
+    assert game.move_count == 0  # SFEN move number 1 means move_count 0
+
+
+def test_sfen_with_hands():
+    """Test SFEN with pieces in hand."""
+    sfen = "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL w P2p 10"
+    _sfen_cycle_check(sfen)
+    game = ShogiGame.from_sfen(sfen)
+    assert game.current_player == Color.WHITE
+    assert game.move_count == 9
+    assert game.hands[Color.BLACK.value][PieceType.PAWN] == 1
+    assert game.hands[Color.WHITE.value][PieceType.PAWN] == 2
+    assert game.hands[Color.BLACK.value][PieceType.ROOK] == 0
+    assert game.hands[Color.WHITE.value][PieceType.GOLD] == 0
+
+
+def test_sfen_promoted_pieces_on_board():
+    """Test SFEN with promoted pieces on the board."""
+    sfen = "9/1+R5b1/9/9/9/9/9/1B5+r1/9 b Gg 5"
+    _sfen_cycle_check(sfen)
+    game = ShogiGame.from_sfen(sfen)
+    assert game.get_piece(1, 1) == Piece(PieceType.PROMOTED_ROOK, Color.BLACK)
+    assert game.get_piece(1, 7) == Piece(PieceType.BISHOP, Color.WHITE)
+    assert game.get_piece(7, 7) == Piece(PieceType.PROMOTED_ROOK, Color.WHITE)
+    assert game.hands[Color.BLACK.value][PieceType.GOLD] == 1
+    assert game.hands[Color.WHITE.value][PieceType.GOLD] == 1
+
+
+def test_sfen_empty_board_no_hands():
+    """Test SFEN for an empty board and no hands."""
+    sfen = "9/9/9/9/9/9/9/9/9 b - 1"
+    _sfen_cycle_check(sfen)
+    game = ShogiGame.from_sfen(sfen)
+    for r in range(9):
+        for c in range(9):
+            assert game.get_piece(r, c) is None
+    assert not any(game.hands[Color.BLACK.value].values())
+    assert not any(game.hands[Color.WHITE.value].values())
+
+
+def test_sfen_complex_hands_and_promotions():
+    """Test a more complex SFEN string with various pieces in hand and promotions."""
+    sfen = "l+N1gkgsnl/1r1+B3b1/p1pppp1pp/7P1/1p5P1/P1P1P1P1P/PP1PPPP1P/1B5R1/LNSGKGSNL w 2L2Pgsn 32"  # Corrected hand order to match canonical output
+    _sfen_cycle_check(sfen)
+    game = ShogiGame.from_sfen(sfen)
+    assert game.get_piece(0, 1) == Piece(PieceType.PROMOTED_KNIGHT, Color.BLACK)
+    assert game.get_piece(1, 3) == Piece(PieceType.PROMOTED_BISHOP, Color.BLACK)
+    assert game.current_player == Color.WHITE
+    assert game.move_count == 31
+    assert game.hands[Color.BLACK.value][PieceType.PAWN] == 2
+    assert game.hands[Color.BLACK.value][PieceType.LANCE] == 2
+    assert game.hands[Color.WHITE.value][PieceType.GOLD] == 1
+    assert game.hands[Color.WHITE.value][PieceType.SILVER] == 1
+    assert game.hands[Color.WHITE.value][PieceType.KNIGHT] == 1
+
+
+def test_sfen_hand_piece_order_canonicalization():
+    """Test that to_sfen_string canonicalizes hand piece order."""
+    # Input SFEN has non-standard hand order (e.g., pP instead of Pp)
+    sfen_non_canonical_hand = (
+        "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b pP 1"
+    )
+    # Expected output has canonical hand order (uppercase Black, then lowercase White, standard piece order within each)
+    sfen_canonical_hand = (
+        "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b Pp 1"
+    )
+    _sfen_cycle_check(sfen_non_canonical_hand, sfen_canonical_hand)
+
+    sfen_non_canonical_hand_2 = "8k/9/9/9/9/9/9/9/8K b rPbBGgSsnNlLp 1"
+    sfen_canonical_hand_2 = "8k/9/9/9/9/9/9/9/8K b BGSNLPrbgsnlp 1"  # Corrected based on actual parsing of non_canonical and canonicalization logic
+    _sfen_cycle_check(sfen_non_canonical_hand_2, sfen_canonical_hand_2)
+
+
+@pytest.mark.parametrize(
+    "invalid_sfen, error_message_part",
+    [
+        (
+            "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL x - 1",
+            "Invalid SFEN string structure",
+        ),  # Invalid turn
+        (
+            "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 0",
+            "SFEN move number must be positive",
+        ),  # Invalid move number
+        (
+            "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1 b - 1",
+            "Expected 9 ranks",
+        ),  # Missing rank
+        (
+            "lnsgkgsnl/1r5b1/ppppppppp/10/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1",
+            "Invalid SFEN piece character for board: 0",
+        ),  # Rank '10' -> '1' empty, '0' is invalid piece
+        (
+            "lnsgkgsnl/1r5b1/ppppppppp/8/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1",
+            "describes 8 columns, expected 9",
+        ),  # Rank too short
+        (
+            "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b X 1",
+            "Invalid character sequence in SFEN hands",
+        ),  # Invalid hand char
+        (
+            "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b K 1",
+            "Invalid piece character 'K' or non-droppable piece type in SFEN hands",
+        ),  # King in hand
+        (
+            "1k1+K1P+L1/9/9/9/9/9/9/9/9 b - 1",
+            "Invalid promotion: SFEN token '+' applied to non-promotable piece type KING",
+        ),  # Promote King
+        (
+            "1k1P+G1/9/9/9/9/9/9/9/9 b - 1",
+            "Invalid promotion: SFEN token '+' applied to non-promotable piece type GOLD",
+        ),  # Promote Gold
+        # Test for rank string containing unprocessed characters
+        (
+            "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - abc 1",
+            "Invalid SFEN string structure",
+        ),  # Invalid chars after move number
+        (
+            "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1 abc",
+            "Invalid SFEN string structure",
+        ),  # Invalid chars after move number
+        (
+            "lnsgkgsnl/1r5b1/ppppppppp/5X3/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1",
+            "Invalid SFEN piece character for board: X",
+        ),  # Invalid char in rank # Updated error message
+        (
+            "lnsgkgsnl/1r5b1/p+ppp+ppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1",
+            "describes 7 columns, expected 9",
+        ),  # Rank 'p+ppp+ppp' is 7 pieces long
+        (
+            "lnsgkgsnl/1r5b1/p++Pppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1",
+            "Invalid piece character sequence starting with '+'",
+        ),  # '++' before piece # Updated error message
+    ],
+)
+def test_sfen_invalid_strings(invalid_sfen: str, error_message_part: str):
+    """Test that from_sfen raises ValueError for invalid SFEN strings."""
+    with pytest.raises(ValueError) as excinfo:
+        ShogiGame.from_sfen(invalid_sfen)
+    assert error_message_part in str(excinfo.value).strip()

@@ -293,7 +293,7 @@ class Piece:
     def __hash__(self) -> int:
         return hash((self.type, self.color))
 
-    def __deepcopy__(self, memo: Dict[int, 'Piece']) -> 'Piece':
+    def __deepcopy__(self, memo: Dict[int, "Piece"]) -> "Piece":
         # Create a new Piece instance without calling __init__ again if not necessary,
         # or simply create a new one.
         # Since Piece is simple, creating a new one is fine.

@@ -25,8 +25,12 @@ class ExperienceBuffer:
         self.values: list[float] = []
         self.dones: list[bool] = []
         self.legal_masks: list[torch.Tensor] = []  # Added to store legal masks
-        self.advantages: list[torch.Tensor] = []  # Populated by compute_advantages_and_returns
-        self.returns: list[torch.Tensor] = []  # Populated by compute_advantages_and_returns
+        self.advantages: list[torch.Tensor] = (
+            []
+        )  # Populated by compute_advantages_and_returns
+        self.returns: list[torch.Tensor] = (
+            []
+        )  # Populated by compute_advantages_and_returns
         self.ptr = 0
 
     def add(
@@ -86,8 +90,12 @@ class ExperienceBuffer:
         )
         masks_tensor = 1.0 - dones_tensor
 
-        advantages_list: list[torch.Tensor] = [torch.tensor(0.0, device=self.device)] * self.ptr
-        returns_list: list[torch.Tensor] = [torch.tensor(0.0, device=self.device)] * self.ptr
+        advantages_list: list[torch.Tensor] = [
+            torch.tensor(0.0, device=self.device)
+        ] * self.ptr
+        returns_list: list[torch.Tensor] = [
+            torch.tensor(0.0, device=self.device)
+        ] * self.ptr
         gae = torch.tensor(0.0, device=self.device)  # Ensure gae is always a tensor
 
         # last_value is V(S_t+1) for the last state in the buffer

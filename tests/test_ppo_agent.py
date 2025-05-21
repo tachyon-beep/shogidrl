@@ -54,12 +54,16 @@ def test_ppo_agent_init_and_select_action():
     )
     assert isinstance(idx, int)
     assert 0 <= idx < agent.num_actions_total
-    assert isinstance(selected_move, tuple) or selected_move is None # select_action can return None if no legal moves (though guarded by caller)
+    assert (
+        isinstance(selected_move, tuple) or selected_move is None
+    )  # select_action can return None if no legal moves (though guarded by caller)
     assert isinstance(log_prob, float)
     assert isinstance(value, float)
-    assert isinstance(legal_mask_returned, torch.Tensor) # Check type of returned legal_mask
-    assert legal_mask_returned.shape[0] == agent.num_actions_total # Check shape
-    assert legal_mask_returned.dtype == torch.bool # Check dtype
+    assert isinstance(
+        legal_mask_returned, torch.Tensor
+    )  # Check type of returned legal_mask
+    assert legal_mask_returned.shape[0] == agent.num_actions_total  # Check shape
+    assert legal_mask_returned.dtype == torch.bool  # Check dtype
 
 
 def test_ppo_agent_learn():
@@ -88,7 +92,9 @@ def test_ppo_agent_learn():
 
     # Create a dummy legal_mask. For this test, its content might not be critical,
     # but its shape should match num_actions_total.
-    dummy_legal_mask = torch.ones(agent.num_actions_total, dtype=torch.bool, device="cpu")
+    dummy_legal_mask = torch.ones(
+        agent.num_actions_total, dtype=torch.bool, device="cpu"
+    )
     # Make at least one action illegal if num_actions_total > 0 to test masking, if desired
     if agent.num_actions_total > 0:
         dummy_legal_mask[0] = False
@@ -101,7 +107,7 @@ def test_ppo_agent_learn():
             log_prob=0.1 * i,
             value=0.5 * i,
             done=(i == buffer_size - 1),
-            legal_mask=dummy_legal_mask, # Added dummy_legal_mask
+            legal_mask=dummy_legal_mask,  # Added dummy_legal_mask
         )
 
     assert len(experience_buffer) == buffer_size

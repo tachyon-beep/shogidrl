@@ -1,7 +1,7 @@
 # shogi_game_io.py
 
 import datetime  # For KIF Date header
-import re # Import the re module
+import re  # Import the re module
 from typing import TYPE_CHECKING, Tuple, List, Dict, Optional
 
 import numpy as np
@@ -50,8 +50,12 @@ def generate_neural_network_observation(game: "ShogiGame") -> np.ndarray:
     obs = np.zeros((46, 9, 9), dtype=np.float32)
 
     # Map PieceType to its index in OBS_UNPROMOTED_ORDER or OBS_PROMOTED_ORDER
-    unpromoted_map: Dict[PieceType, int] = {pt: i for i, pt in enumerate(OBS_UNPROMOTED_ORDER)}
-    promoted_map: Dict[PieceType, int] = {pt: i for i, pt in enumerate(OBS_PROMOTED_ORDER)}
+    unpromoted_map: Dict[PieceType, int] = {
+        pt: i for i, pt in enumerate(OBS_UNPROMOTED_ORDER)
+    }
+    promoted_map: Dict[PieceType, int] = {
+        pt: i for i, pt in enumerate(OBS_PROMOTED_ORDER)
+    }
 
     for r in range(9):
         for c in range(9):
@@ -83,15 +87,21 @@ def generate_neural_network_observation(game: "ShogiGame") -> np.ndarray:
                 obs[channel_offset, r, c] = 1.0
 
     # Pieces in hand (7 channels per player: P,L,N,S,G,B,R)
-    hand_piece_order: List[PieceType] = get_unpromoted_types()  # Use the imported function
+    hand_piece_order: List[PieceType] = (
+        get_unpromoted_types()
+    )  # Use the imported function
 
     # Current player's hand (channels 28-34)
     current_player_hand_start_ch: int = 28
     for i, piece_type_enum_player in enumerate(hand_piece_order):
-        player_hand_count: int = game.hands[game.current_player.value].get(piece_type_enum_player, 0)
+        player_hand_count: int = game.hands[game.current_player.value].get(
+            piece_type_enum_player, 0
+        )
         if player_hand_count > 0:
             player_ch: int = current_player_hand_start_ch + i
-            obs[player_ch, :, :] = player_hand_count / 18.0  # Normalize (e.g., by max pawns)
+            obs[player_ch, :, :] = (
+                player_hand_count / 18.0
+            )  # Normalize (e.g., by max pawns)
 
     # Opponent's hand (channels 35-41)
     opponent_hand_start_ch: int = 35
@@ -99,7 +109,9 @@ def generate_neural_network_observation(game: "ShogiGame") -> np.ndarray:
         Color.WHITE.value if game.current_player == Color.BLACK else Color.BLACK.value
     )
     for i, piece_type_enum_opponent in enumerate(hand_piece_order):
-        opponent_hand_count: int = game.hands[opponent_color_val].get(piece_type_enum_opponent, 0)
+        opponent_hand_count: int = game.hands[opponent_color_val].get(
+            piece_type_enum_opponent, 0
+        )
         if opponent_hand_count > 0:
             opponent_ch: int = opponent_hand_start_ch + i
             obs[opponent_ch, :, :] = opponent_hand_count / 18.0
@@ -124,7 +136,11 @@ def convert_game_to_text_representation(game: "ShogiGame") -> str:
     for r_idx, row_data in enumerate(game.board):
         line_str: str = f"{9-r_idx} "  # Shogi board rank numbers (9 down to 1)
         line_pieces: List[str] = []
-        for p_cell in row_data: # Renamed p to p_cell to avoid conflict with p in outer scope if any
+        for (
+            p_cell
+        ) in (
+            row_data
+        ):  # Renamed p to p_cell to avoid conflict with p in outer scope if any
             if p_cell:
                 symbol: str = p_cell.symbol()
                 if len(symbol) == 1:  # e.g., P
@@ -221,7 +237,9 @@ def game_to_kif(
         # --- Moves ---
         mapper = PolicyOutputMapper()
         for i, move_entry in enumerate(game.move_history):
-            move_obj: Optional[MoveTuple] = move_entry.get("move") # Your internal move object/tuple
+            move_obj: Optional[MoveTuple] = move_entry.get(
+                "move"
+            )  # Your internal move object/tuple
             if not move_obj:
                 continue
 
@@ -312,7 +330,9 @@ def sfen_to_move_tuple(sfen_move_str: str) -> MoveTuple:
             r_to, c_to = _parse_sfen_square(sfen_sq_to)
             return (None, None, r_to, c_to, piece_to_drop)
         except ValueError as e:
-            raise ValueError(f"Error parsing SFEN drop move '{sfen_move_str}': {e}") from e
+            raise ValueError(
+                f"Error parsing SFEN drop move '{sfen_move_str}': {e}"
+            ) from e
 
     board_match = board_move_pattern.match(sfen_move_str)
     if board_match:
@@ -325,9 +345,12 @@ def sfen_to_move_tuple(sfen_move_str: str) -> MoveTuple:
             r_to, c_to = _parse_sfen_square(sfen_sq_to_str)
             return (r_from, c_from, r_to, c_to, promote_flag)
         except ValueError as e:
-            raise ValueError(f"Error parsing SFEN board move '{sfen_move_str}': {e}") from e
+            raise ValueError(
+                f"Error parsing SFEN board move '{sfen_move_str}': {e}"
+            ) from e
 
     raise ValueError(f"Invalid SFEN move format: {sfen_move_str}")
+
 
 # TODO: Consider adding kif_to_game and sfen_to_game functions if needed.
 # These would involve more complex parsing of full game states or move sequences.

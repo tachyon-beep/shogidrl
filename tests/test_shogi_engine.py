@@ -102,18 +102,18 @@ def test_shogigame_init_and_reset(
         assert p is not None, f"Piece missing at (0, {c})"
         assert p.type == t
         assert p.color == Color.WHITE
-    p_b_w = game.get_piece(1, 1)  # White Bishop is at (1,1)
+    p_b_w = game.get_piece(1, 1)  # White Rook is at (1,1)
     assert (
         p_b_w is not None
-        and p_b_w.type == PieceType.BISHOP
+        and p_b_w.type == PieceType.ROOK
         and p_b_w.color == Color.WHITE
-    ), "White Bishop should be at (1,1)"
-    p_r_w = game.get_piece(1, 7)  # White Rook is at (1,7)
+    ), "White Rook should be at (1,1)"
+    p_r_w = game.get_piece(1, 7)  # White Bishop is at (1,7)
     assert (
         p_r_w is not None
-        and p_r_w.type == PieceType.ROOK
+        and p_r_w.type == PieceType.BISHOP
         and p_r_w.color == Color.WHITE
-    ), "White Rook should be at (1,7)"
+    ), "White Bishop should be at (1,7)"
     for c in range(9):  # White Pawns (row 2)
         p = game.get_piece(2, c)
         assert p is not None, f"White Pawn missing at (2, {c})"
@@ -126,18 +126,18 @@ def test_shogigame_init_and_reset(
         assert p is not None, f"Black Pawn missing at (6, {c})"
         assert p.type == PieceType.PAWN
         assert p.color == Color.BLACK
-    p_r_b = game.get_piece(7, 1)  # Black Rook is at (7,1)
+    p_r_b = game.get_piece(7, 1)  # Black Bishop is at (7,1)
     assert (
         p_r_b is not None
-        and p_r_b.type == PieceType.ROOK
+        and p_r_b.type == PieceType.BISHOP
         and p_r_b.color == Color.BLACK
-    ), "Black Rook should be at (7,1)"  # Corrected based on standard setup (h file for black)
-    p_b_b = game.get_piece(7, 7)  # Black Bishop is at (7,7)
+    ), "Black Bishop should be at (7,1)"  # Corrected based on standard setup (h file for black)
+    p_b_b = game.get_piece(7, 7)  # Black Rook is at (7,7)
     assert (
         p_b_b is not None
-        and p_b_b.type == PieceType.BISHOP
+        and p_b_b.type == PieceType.ROOK
         and p_b_b.color == Color.BLACK
-    ), "Black Bishop should be at (7,7)"  # Corrected based on standard setup (b file for black)
+    ), "Black Rook should be at (7,7)"  # Corrected based on standard setup (b file for black)
     for c, t in enumerate(expected_types):  # Black's back rank (row 8)
         p = game.get_piece(8, c)
         assert p is not None, f"Piece missing at (8, {c})"
@@ -163,34 +163,76 @@ def test_shogigame_to_string(
     def get_pieces_from_line(line_str):
         parts = line_str.split()
         if len(parts) > 1 and parts[0].isdigit():
-            # Join all parts after the first (rank number) and remove spaces
-            return "".join("".join(parts[1:]).split())
-        return "".join(
-            "".join(parts).split()
-        )  # Fallback if no rank number, remove spaces
+            piece_str = "".join("".join(parts[1:]).split())
+            if piece_str == ".........":
+                return ""
+            return piece_str
+        processed_fallback = "".join("".join(parts).split())
+        if processed_fallback == ".........":
+            return ""
+        return processed_fallback
 
     # Expected board representation based on _setup_initial_board:
     # White (lowercase) on rows 0-2, Black (uppercase) on rows 6-8.
     # Row 0 (White's back rank): lnsgkgsnl
-    # Row 1 (White's R/B): .b.....r.
+    # Row 1 (White's R/B): .r.....b.  <-- Corrected
     # Row 2 (White's pawns): ppppppppp
     # Row 6 (Black's pawns): PPPPPPPPP
-    # Row 7 (Black's R/B): .R.....B.
+    # Row 7 (Black's R/B): .B.....R.  <-- Corrected
     # Row 8 (Black's back rank): LNSGKGSNL
 
     assert (
         get_pieces_from_line(lines[0]) == "lnsgkgsnl"
-    )  # White's back rank (Rank 9 in display)
+    )  # White\'s back rank (Rank 9 in display)
     assert (
-        get_pieces_from_line(lines[1]) == ".b.....r."
-    )  # White's Bishop and Rook (Rank 8)
-    assert get_pieces_from_line(lines[2]) == "ppppppppp"  # White's Pawns (Rank 7)
+        get_pieces_from_line(lines[1]) == ".r.....b."
+    )  # White\'s Rook and Bishop (Rank 8) <-- Corrected
+    assert get_pieces_from_line(lines[2]) == "ppppppppp"  # White\'s Pawns (Rank 7)
     # lines[3], lines[4], lines[5] are empty middle ranks
-    assert get_pieces_from_line(lines[6]) == "PPPPPPPPP"  # Black's Pawns (Rank 3)
+    assert get_pieces_from_line(lines[6]) == "PPPPPPPPP"  # Black\'s Pawns (Rank 3)
     assert (
-        get_pieces_from_line(lines[7]) == ".R.....B."
-    )  # Black's Rook and Bishop (Rank 2)
-    assert get_pieces_from_line(lines[8]) == "LNSGKGSNL"  # Black's back rank (Rank 1)
+        get_pieces_from_line(lines[7]) == ".B.....R."
+    )  # Black\'s Bishop and Rook (Rank 2) <-- Corrected
+    assert get_pieces_from_line(lines[8]) == "LNSGKGSNL"  # Black\'s back rank (Rank 1)
+    # Check empty ranks (lines[3], lines[4], lines[5] which correspond to board rows 3,4,5)
+    # These lines in the string output might just be the rank number, or empty if get_pieces_from_line handles it.
+    # Assuming they should be empty piece strings if the function is called on them.
+    assert get_pieces_from_line(lines[3]) == ""  # Empty rank (Rank 6)
+    assert get_pieces_from_line(lines[4]) == ""  # Empty rank (Rank 5)
+    assert get_pieces_from_line(lines[5]) == ""  # Empty rank (Rank 4)
+
+    # Validate the full line format for ranks with pieces, including rank numbers
+    assert lines[0].strip().startswith("9")
+    assert lines[1].strip().startswith("8")
+    assert lines[2].strip().startswith("7")
+    assert lines[6].strip().startswith("3")
+    assert lines[7].strip().startswith("2")
+    assert lines[8].strip().startswith("1")
+
+    # Validate player info and move number line (usually last or second to last)
+    # Example: "Turn: Black, Move: 1" or similar, depending on ShogiGame.to_string() formatting
+    # For now, let's assume the test covers the piece layout primarily.
+    # The last few lines are usually player info, move number, and potentially hands.
+    # The current test has 13 lines. 9 for board, 1 for header, 1 for footer, 2 for player/move info.
+    # This seems consistent with the provided `to_string` output structure.
+    # Example: Player BLACK to move
+    # Example: Move: 1
+    # Example: Hands: Black [], White []
+    # The exact format of these lines (10, 11, 12) depends on the `to_string` implementation details
+    # not fully visible here. The original test checked for 13 lines.
+
+    # Check that the header and footer are present (assuming they are simple lines)
+    assert "a b c d e f g h i" in lines[9]  # Column labels
+
+    # The last three lines are typically game state information.
+    # Based on typical shogi board string representations:
+    # Line 10: Player to move
+    # Line 11: Move number
+    # Line 12: Hands
+    # Let's check for keywords if the exact format is flexible
+    assert "Turn:" in lines[10] or "Player" in lines[10]
+    assert "Move:" in lines[11]
+    assert "Hands:" in lines[12]
 
 
 def test_shogigame_is_on_board():  # No fixture needed as it's a static-like check

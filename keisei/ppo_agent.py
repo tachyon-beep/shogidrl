@@ -56,7 +56,11 @@ class PPOAgent:
         legal_shogi_moves: List["MoveTuple"],  # Type hint for Shogi moves, quoted
         is_training: bool = True,
     ) -> Tuple[
-        Optional["MoveTuple"], int, float, float, torch.Tensor # Added torch.Tensor for legal_mask
+        Optional["MoveTuple"],
+        int,
+        float,
+        float,
+        torch.Tensor,  # Added torch.Tensor for legal_mask
     ]:  # Return Shogi move (Any for now), policy index, log_prob, value # Quoted
         """
         Select an action given an observation and legal Shogi moves.
@@ -93,7 +97,7 @@ class PPOAgent:
             # If legal_mask.any() is false, get_action_and_value might produce NaNs or uniform distribution.
             # The primary guard is in train.py. If this path is hit, it's a fallback.
             # We will return the all-false legal_mask.
-            pass # Let it proceed, but the mask is available.
+            pass  # Let it proceed, but the mask is available.
 
         # Get action, log_prob, and value from the ActorCritic model
         # Pass deterministic based on not is_training
@@ -128,7 +132,7 @@ class PPOAgent:
             selected_policy_index_val,
             log_prob_val,
             value_float,
-            legal_mask, # Return the computed legal_mask
+            legal_mask,  # Return the computed legal_mask
         )
 
     def get_value(self, obs_np: np.ndarray) -> float:
@@ -174,7 +178,9 @@ class PPOAgent:
         old_log_probs_batch = batch_data["log_probs"].to(self.device)
         advantages_batch = batch_data["advantages"].to(self.device)
         returns_batch = batch_data["returns"].to(self.device)
-        legal_masks_batch = batch_data["legal_masks"].to(self.device)  # Added legal_masks_batch
+        legal_masks_batch = batch_data["legal_masks"].to(
+            self.device
+        )  # Added legal_masks_batch
 
         # Normalize advantages
         advantages_batch = (advantages_batch - advantages_batch.mean()) / (
@@ -202,13 +208,17 @@ class PPOAgent:
                 old_log_probs_minibatch = old_log_probs_batch[minibatch_indices]
                 advantages_minibatch = advantages_batch[minibatch_indices]
                 returns_minibatch = returns_batch[minibatch_indices]
-                legal_masks_minibatch = legal_masks_batch[minibatch_indices]  # Added legal_masks_minibatch
+                legal_masks_minibatch = legal_masks_batch[
+                    minibatch_indices
+                ]  # Added legal_masks_minibatch
 
                 # Get new log_probs, entropy, and value from the model
                 # Note on entropy: legal_mask is now passed here. Entropy is calculated
                 # over legal actions only.
                 new_log_probs, entropy, new_values = self.model.evaluate_actions(
-                    obs_minibatch, actions_minibatch, legal_mask=legal_masks_minibatch  # Pass legal_masks_minibatch
+                    obs_minibatch,
+                    actions_minibatch,
+                    legal_mask=legal_masks_minibatch,  # Pass legal_masks_minibatch
                 )
 
                 # PPO Loss Calculation
@@ -223,7 +233,9 @@ class PPOAgent:
                 policy_loss = -torch.min(surr1, surr2).mean()
 
                 # Value loss (MSE)
-                value_loss = F.mse_loss(new_values.squeeze(), returns_minibatch.squeeze())
+                value_loss = F.mse_loss(
+                    new_values.squeeze(), returns_minibatch.squeeze()
+                )
 
                 # Entropy bonus
                 entropy_loss = -entropy.mean()

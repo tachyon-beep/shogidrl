@@ -101,23 +101,23 @@ This document outlines the plan to address the feedback received on May 21, 2025
 *   **Files**: `keisei/shogi/shogi_move_execution.py`, `keisei/shogi/shogi_game.py`, `keisei/shogi/shogi_game_io.py`.
 *   **Priority**: Medium.
 
-### 3.2. `is_uchi_fu_zume` & `can_drop_specific_piece` Performance - WIP
+### 3.2. `is_uchi_fu_zume` & `can_drop_specific_piece` Performance - DONE
 
-*   **Issue**: Expensive deep copies for pawn-drop-mate checks.
+*   **Issue**: Expensive `deepcopy` operations for pawn-drop-mate checks and general move validation.
 *   **Actions**:
     1.  **DONE** Profile `generate_all_legal_moves`.
-    2.  **WIP** Investigate less computationally intensive checks.
+    2.  **DONE** Investigated and implemented less computationally intensive checks by removing `deepcopy`.
         *   **DONE** Refactored `check_for_uchi_fu_zume` to remove `deepcopy` by simulating pawn drops and manually reverting.
         *   **DONE** Refactored `generate_all_legal_moves` to use a make/undo approach for board moves and drop moves, eliminating `deepcopy` for move validation.
         *   **DONE** Successfully ran profiling script after refactoring, confirming significant reduction in `deepcopy` calls and overall performance improvement for `generate_all_legal_moves`.
 *   **Files**: `keisei/shogi/shogi_rules_logic.py`, `keisei/shogi/shogi_game.py`, `keisei/shogi/shogi_move_execution.py`.
 *   **Priority**: High.
 
-### 3.3. SFEN Serialization / Deserialization - TODO
+### 3.3. SFEN Serialization / Deserialization - WIP
 
 *   **Issue**: Brittle SFEN parsing.
 *   **Actions**:
-    1.  **TODO** Evaluate replacing current parsing with regex or library.
+    1.  **WIP** Evaluate replacing current parsing with regex or library.
 *   **Files**: `keisei/shogi/shogi_game_io.py`.
 *   **Priority**: Medium.
 
@@ -166,14 +166,14 @@ This document outlines the plan to address the feedback received on May 21, 2025
     *   **DONE** 1.1 (Dead Code)
     *   **DONE** 1.2 (`done` Logic & Buffer)
     *   **DONE** 2.1 (Agent `select_action` Guard)
-    *   **WIP** 3.2 (Profile `uchi-fu-zume` - initial investigation, refactoring complete, performance confirmed)
+    *   **DONE** 3.2 (Profile `uchi-fu-zume` - initial investigation, refactoring to remove `deepcopy` complete, performance confirmed)
 2.  **Phase 2 (Medium Priority - Robustness & Refinements):**
     *   **DONE** 1.3 (Reward Handling Clarification)
     *   **DONE** 1.4 (Checkpoint Robustness)
     *   **DONE** 2.2 (Buffer Trigger Logic)
     *   **DONE** 2.3 (PPO GAE & Entropy)
     *   **DONE** 3.1 (Shogi Dead Code & NN Obs)
-    *   **TODO** 3.3 (SFEN Parsing)
+    *   **WIP** 3.3 (SFEN Parsing)
     *   **TODO** 4.1 (SRP - `train.py` Refactor)
     *   **TODO** 4.2 (Error Handling)
     *   **WIP** 4.3 (Type Hints)

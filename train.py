@@ -19,7 +19,7 @@ from datetime import datetime
 import numpy as np
 import torch
 from tqdm import tqdm
-import re # Add import for regular expressions
+import re  # Add import for regular expressions
 
 import config as app_config  # Import the config module directly
 from keisei.experience_buffer import ExperienceBuffer
@@ -89,7 +89,7 @@ def apply_config_overrides(args, cfg_module):
                 # f\"Warning: Config key '{k}' from JSON not found in base config module.\",
                 # file=sys.stderr,
                 # )
-                pass # Placeholder: Warning should be logged if a logger is available
+                pass  # Placeholder: Warning should be logged if a logger is available
 
     # CLI overrides (device, etc.)
     if args.device:
@@ -136,7 +136,7 @@ def find_latest_checkpoint(model_dir):
                     print(
                         f"Warning: Checkpoint file {filename} matched pattern but had non-integer episode/timestep."
                     )
-                    return (0, 0) # Treat as lowest priority
+                    return (0, 0)  # Treat as lowest priority
             elif match.group(3) is not None and match.group(4) is not None:
                 try:
                     ep = int(match.group(3))
@@ -146,7 +146,7 @@ def find_latest_checkpoint(model_dir):
                     print(
                         f"Warning: Checkpoint file {filename} matched pattern but had non-integer episode/timestep."
                     )
-                    return (0, 0) # Treat as lowest priority
+                    return (0, 0)  # Treat as lowest priority
         else:
             print(
                 f"Warning: Ignoring file in checkpoint dir that doesn't match expected pattern: {filename}"
@@ -157,9 +157,9 @@ def find_latest_checkpoint(model_dir):
     valid_ckpts = []
     for f in ckpts:
         ep_ts = extract_ts(f)
-        if ep_ts != (0,0): # Only consider if successfully parsed
+        if ep_ts != (0, 0):  # Only consider if successfully parsed
             valid_ckpts.append((f, ep_ts))
-    
+
     if not valid_ckpts:
         return None
 
@@ -271,7 +271,7 @@ def main():
             total=cfg.TOTAL_TIMESTEPS, initial=global_timestep, desc="Training Progress"
         )
         obs = game.reset()  # game.reset() now returns obs directly (np.ndarray)
-        current_episode_reward = 0.0 # Initialize as float
+        current_episode_reward = 0.0  # Initialize as float
         current_episode_length = 0
         # Initialize reward and next_obs for the first iteration of the loop
         reward = 0.0
@@ -279,7 +279,7 @@ def main():
         # done = False # done is initialized before each episode, so this line is not strictly needed here
 
         for _ in range(global_timestep, cfg.TOTAL_TIMESTEPS):  # Changed t_step to _
-            done = False # Reset done at the beginning of each step
+            done = False  # Reset done at the beginning of each step
             pbar.update(1)
             global_timestep += 1
             current_episode_length += 1
@@ -290,16 +290,20 @@ def main():
             obs_for_buffer = obs  # Store the original observation state for the buffer
 
             legal_moves = game.get_legal_moves()
-            action_idx = -1 # Ensure action_idx is initialized before the conditional block
-            log_prob = 0.0 # Ensure log_prob is initialized
-            value = 0.0    # Ensure value is initialized
-            selected_shogi_move = None # Ensure selected_shogi_move is initialized
+            action_idx = (
+                -1
+            )  # Ensure action_idx is initialized before the conditional block
+            log_prob = 0.0  # Ensure log_prob is initialized
+            value = 0.0  # Ensure value is initialized
+            selected_shogi_move = None  # Ensure selected_shogi_move is initialized
             # Initialize legal_mask_for_buffer with a default, e.g., all False if no legal moves.
             # The actual legal_mask will be determined by game.get_legal_moves() and policy_mapper.
             # If there are no legal_moves, this default might be used if we were to add to buffer in that case.
             # However, we only add to buffer if action_idx != -1.
             # The legal_mask returned by agent.select_action will be the one used.
-            legal_mask_for_buffer = torch.zeros(policy_mapper.get_total_actions(), dtype=torch.bool, device=agent.device)
+            legal_mask_for_buffer = torch.zeros(
+                policy_mapper.get_total_actions(), dtype=torch.bool, device=agent.device
+            )
 
             if not legal_moves:
                 # This case should ideally be handled by game termination logic
@@ -309,26 +313,31 @@ def main():
                 done = True  # Treat as done
                 # No action is selected, agent.select_action is bypassed.
                 # selected_shogi_move remains None, action_idx remains -1.
-            else: # Only call agent if there are legal moves and game is not already done
+            else:  # Only call agent if there are legal moves and game is not already done
                 # The 'done' flag might have been set by game logic in the previous step,
                 # but if there are legal moves, the agent should still select an action
                 # for the current state. The 'done' status from the *previous* step
                 # will be used for the buffer.
                 # However, the current logic already sets done = False at the start of each step.
                 # So, if legal_moves exist, 'done' here reflects the current game state before this move.
-                selected_shogi_move, action_idx, log_prob, value, legal_mask_for_buffer = agent.select_action(
-                    obs, legal_moves, is_training=True
-                )
+                (
+                    selected_shogi_move,
+                    action_idx,
+                    log_prob,
+                    value,
+                    legal_mask_for_buffer,
+                ) = agent.select_action(obs, legal_moves, is_training=True)
                 # If, after selecting an action, the agent somehow returns no move (e.g. a bug in agent or mask handling)
                 if selected_shogi_move is None:
                     logger.log(
                         f"Warning: Agent selected action_idx {action_idx} but returned no Shogi move. Treating as if no legal moves."
                     )
-                    done = True # Treat as done, similar to no legal moves initially.
-                    action_idx = -1 # Ensure this is set to prevent adding to buffer.
+                    done = True  # Treat as done, similar to no legal moves initially.
+                    action_idx = -1  # Ensure this is set to prevent adding to buffer.
 
-
-            if selected_shogi_move is not None and action_idx != -1: # Check action_idx as well
+            if (
+                selected_shogi_move is not None and action_idx != -1
+            ):  # Check action_idx as well
                 game.make_move(selected_shogi_move)  # Call make_move, returns None
                 next_obs = game.get_observation()  # Get observation after move
                 done = game.game_over  # Update done status
@@ -337,7 +346,9 @@ def main():
                 if game.game_over:
                     # Sparse rewards: Reward is only given at the end of the game.
                     # This is a common approach in games with clear win/loss/draw outcomes.
-                    if game.winner == game.current_player:  # Current player is the one who just moved
+                    if (
+                        game.winner == game.current_player
+                    ):  # Current player is the one who just moved
                         reward = 1.0
                     elif game.winner is None:  # Draw
                         # Currently, a draw is treated the same as a loss for the player who didn't win.
@@ -355,7 +366,9 @@ def main():
                     "termination_reason": game.termination_reason,
                     "winner": game.winner,
                 }
-                current_player_name = "Sente" if game.current_player == 0 else "Gote"  # Note: current_player is now the *next* player
+                current_player_name = (
+                    "Sente" if game.current_player == 0 else "Gote"
+                )  # Note: current_player is now the *next* player
                 # For logging the player who *made* the move, we might need to track previous player or adjust logic
                 # For now, this logs the player whose turn it is *after* the move.
                 usi_move = policy_mapper.shogi_move_to_usi(selected_shogi_move)
@@ -385,10 +398,10 @@ def main():
                     reward,
                     log_prob,
                     value,
-                    done, # This `done` reflects the state *after* the move or if no legal moves (but action_idx would be -1)
-                    legal_mask_for_buffer, # Pass the legal_mask to the buffer
+                    done,  # This `done` reflects the state *after* the move or if no legal moves (but action_idx would be -1)
+                    legal_mask_for_buffer,  # Pass the legal_mask to the buffer
                 )
-            
+
             obs = next_obs
             current_episode_reward += reward
 
@@ -453,7 +466,7 @@ def main():
         f"ppo_shogi_ep{total_episodes_completed}_ts{global_timestep}_final.pth",
     )
     agent.save_model(final_ckpt_path, global_timestep, total_episodes_completed)
-    logger.log(f"Final model saved to {final_ckpt_path}") # Log instead of print
+    logger.log(f"Final model saved to {final_ckpt_path}")  # Log instead of print
 
 
 if __name__ == "__main__":

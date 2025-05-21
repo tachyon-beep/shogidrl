@@ -32,7 +32,9 @@ def test_train_resume_autodetect(tmp_path):
     # Create a run directory and place checkpoint there
     run_dir = tmp_path / "run"
     run_dir.mkdir()
-    fake_ckpt = run_dir / "ppo_shogi_agent_episode_1_ts_1.pth"  # Corrected filename pattern
+    fake_ckpt = (
+        run_dir / "ppo_shogi_agent_episode_1_ts_1.pth"
+    )  # Corrected filename pattern
     policy_mapper = PolicyOutputMapper()
     agent = PPOAgent(
         input_channels=config.INPUT_CHANNELS,
@@ -164,7 +166,9 @@ def test_train_explicit_resume(tmp_path):
     """Test that --resume overrides auto-detection and resumes from the specified checkpoint."""
     run_dir = tmp_path / "run"
     run_dir.mkdir()
-    ckpt_path = run_dir / "ppo_shogi_agent_episode_10_ts_100.pth"  # Corrected filename pattern
+    ckpt_path = (
+        run_dir / "ppo_shogi_agent_episode_10_ts_100.pth"
+    )  # Corrected filename pattern
     # Create a minimal valid PPOAgent and save its checkpoint
     policy_mapper = PolicyOutputMapper()
     agent = PPOAgent(
