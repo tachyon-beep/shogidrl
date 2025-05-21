@@ -670,8 +670,8 @@ class ShogiGame:
                     and isinstance(move_tuple[4], bool)
                 )
                 or (  # Drop move
-                    move_tuple[0] is None
-                    and move_tuple[1] is None
+                    move_tuple[0] is None  # Allow None for drop move
+                    and move_tuple[1] is None  # Allow None for drop move
                     and isinstance(move_tuple[2], int)
                     and isinstance(move_tuple[3], int)
                     and isinstance(move_tuple[4], PieceType)
