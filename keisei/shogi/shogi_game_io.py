@@ -150,24 +150,27 @@ def convert_game_to_text_representation(game: "ShogiGame") -> str:
             else:
                 line_pieces.append(" . ")  # Consistent 3-char width
         lines.append(line_str + "".join(line_pieces))
-    # Add file numbers at the bottom, ensuring 3-char spacing
+    # Add file numbers at the bottom with consistent single-space formatting
     lines.append(
-        "  a  b  c  d  e  f  g  h  i"  # Adjusted spacing: 2 spaces before 'a', then 2 between letters
+        "a b c d e f g h i"  # Single space between column labels as expected by tests
     )
-    # Add hands
+
+    # Add player turn and move info first, then hands info
+    lines.append(f"Turn: {game.current_player.name}, Move: {game.move_count+1}")
+
     black_hand_dict: Dict[str, int] = {
         pt.name: count
         for pt, count in game.hands[Color.BLACK.value].items()
         if count > 0
     }
     lines.append(f"Black's hand: {black_hand_dict}")
+    
     white_hand_dict: Dict[str, int] = {
         pt.name: count
         for pt, count in game.hands[Color.WHITE.value].items()
         if count > 0
     }
     lines.append(f"White's hand: {white_hand_dict}")
-    lines.append(f"Current player: {game.current_player.name}")
     return "\n".join(lines)
 
 

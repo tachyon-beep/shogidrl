@@ -479,6 +479,8 @@ class ShogiGame:
             if move_number < 1:
                 raise ValueError("SFEN move number must be positive")
         except ValueError as e:
+            if "SFEN move number must be positive" in str(e):
+                raise
             raise ValueError(
                 f"Invalid move number in SFEN: '{move_number_sfen}'"
             ) from e
