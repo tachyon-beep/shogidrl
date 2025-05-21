@@ -4,10 +4,17 @@ Mock utilities for testing Shogi modules without PyTorch dependencies.
 This module provides mock implementations of the PyTorch-dependent classes
 used in the Shogi implementation, allowing for testing the game logic
 without requiring the full PyTorch library.
+
+It also provides a patching mechanism to handle the PyTorch docstring conflict
+that causes the error: `RuntimeError: function '_has_torch_function' already has a docstring`
 """
 
+import sys
+import types
+import importlib
+from unittest.mock import patch
 import numpy as np
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union, Any, Callable
 
 
 class MockTensor:
@@ -125,29 +132,87 @@ class MockPolicyOutputMapper:
             mask[idx] = 1.0
         return MockTensor(mask)
     
-    def get_move_from_policy_index(self, idx):
+    def get_move_from_policy_index(self, index):
         """Convert policy index to a move tuple."""
         # Mock implementation returns a generic move
         return (4, 4, 3, 3, False)
 
 
-# Usage example in tests:
+# Create a patched version of _add_docstr that handles re-initialization gracefully
+def patched_add_docstr(obj, docstr, warn_on_existing=True):
+    """A patched version of torch.overrides._add_docstr that doesn't error on repeated calls."""
+    if hasattr(obj, "__doc__") and obj.__doc__ is not None:
+        # Already has a docstring, just return without changing anything
+        return obj
+    obj.__doc__ = docstr
+    return obj
+
+
+def setup_pytorch_mock_environment():
+    """
+    Sets up a mocked PyTorch environment to prevent import errors.
+    
+    This function:
+    1. Creates a mock torch module
+    2. Sets up all necessary submodules and classes
+    3. Adds patches for problematic functions like _add_docstr
+    4. Installs the mock into sys.modules
+    
+    Returns:
+        A context manager that can be used in a with statement
+    """
+    # Create mock torch module and submodules
+    mock_torch = types.ModuleType('torch')
+    mock_torch.Tensor = MockTensor
+    mock_torch.nn = types.ModuleType('torch.nn')
+    mock_torch.nn.Module = MockModule
+    
+    # Create overrides submodule with patched _add_docstr
+    mock_torch.overrides = types.ModuleType('torch.overrides')
+    mock_torch.overrides._add_docstr = patched_add_docstr
+    
+    # Create other necessary submodules
+    mock_torch.functional = types.ModuleType('torch.functional')
+    mock_torch.nn.functional = types.ModuleType('torch.nn.functional')
+    
+    # Create patches dictionary for all relevant modules
+    patches = {
+        'torch': mock_torch,
+        'torch.nn': mock_torch.nn,
+        'torch.overrides': mock_torch.overrides,
+        'torch.functional': mock_torch.functional,
+        'torch.nn.functional': mock_torch.nn.functional,
+    }
+    
+    # Create a context manager for the patches
+    sys_modules_patch = patch.dict('sys.modules', patches)
+    
+    # Add additional patch for PolicyOutputMapper
+    policy_mapper_patch = patch('keisei.utils.PolicyOutputMapper', MockPolicyOutputMapper)
+    
+    # Import contextlib for nested context managers
+    import contextlib
+    
+    # Return a nested context manager to handle both patches
+    @contextlib.contextmanager
+    def combined_context():
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(sys_modules_patch)
+            stack.enter_context(policy_mapper_patch)
+            yield
+    
+    return combined_context()
+
+
+# Example usage:
 """
-# Import the real functions but mock their dependencies
-import sys
-from unittest.mock import patch
-import importlib
-
-# First, mock the torch module
-mock_torch = types.ModuleType('torch')
-mock_torch.Tensor = MockTensor
-mock_torch.nn = types.ModuleType('torch.nn')
-mock_torch.nn.Module = MockModule
-sys.modules['torch'] = mock_torch
-
-# Then, patch the PolicyOutputMapper
-with patch('keisei.utils.PolicyOutputMapper', MockPolicyOutputMapper):
-    # Now import the modules that depend on torch
+# Use the setup function to create a patched environment
+with setup_pytorch_mock_environment():
+    # Now you can safely import modules that depend on PyTorch
     from keisei.shogi.shogi_game_io import generate_neural_network_observation
-    # And run tests as normal
+    from keisei.shogi.shogi_game import ShogiGame
+    
+    # And use them normally in your tests
+    game = ShogiGame()
+    obs = generate_neural_network_observation(game)
 """
