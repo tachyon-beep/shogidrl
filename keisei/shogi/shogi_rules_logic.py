@@ -4,7 +4,7 @@ Functions in this module operate on a ShogiGame instance.
 """
 
 from copy import deepcopy  # ensure deep copy is available
-from typing import TYPE_CHECKING, List, Optional, Tuple, Set  # Added Set
+from typing import TYPE_CHECKING, List, Optional, Set, Tuple  # Added Set
 
 # Ensure all necessary types are imported:
 from .shogi_core_definitions import (

@@ -2,14 +2,24 @@
 
 import datetime  # For KIF Date header
 import re  # Import the re module
-from typing import TYPE_CHECKING, Tuple, List, Dict, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 import numpy as np
 
 from ..utils import PolicyOutputMapper  # Assuming this path is correct
-from .shogi_core_definitions import (
+from .shogi_core_definitions import (  # Observation plane constants
     KIF_PIECE_SYMBOLS,
+    OBS_CURR_PLAYER_HAND_START,
+    OBS_CURR_PLAYER_INDICATOR,
+    OBS_CURR_PLAYER_PROMOTED_START,
+    OBS_CURR_PLAYER_UNPROMOTED_START,
+    OBS_MOVE_COUNT,
+    OBS_OPP_PLAYER_HAND_START,
+    OBS_OPP_PLAYER_PROMOTED_START,
+    OBS_OPP_PLAYER_UNPROMOTED_START,
     OBS_PROMOTED_ORDER,
+    OBS_RESERVED_1,
+    OBS_RESERVED_2,
     OBS_UNPROMOTED_ORDER,
     SYMBOL_TO_PIECE_TYPE,
     BoardMoveTuple,
@@ -21,17 +31,6 @@ from .shogi_core_definitions import (
     TerminationReason,
     get_piece_type_from_symbol,
     get_unpromoted_types,
-    # Observation plane constants
-    OBS_CURR_PLAYER_UNPROMOTED_START,
-    OBS_CURR_PLAYER_PROMOTED_START,
-    OBS_OPP_PLAYER_UNPROMOTED_START,
-    OBS_OPP_PLAYER_PROMOTED_START,
-    OBS_CURR_PLAYER_HAND_START,
-    OBS_OPP_PLAYER_HAND_START,
-    OBS_CURR_PLAYER_INDICATOR,
-    OBS_MOVE_COUNT,
-    OBS_RESERVED_1,
-    OBS_RESERVED_2,
 )
 
 if TYPE_CHECKING:

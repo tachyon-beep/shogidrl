@@ -5,13 +5,14 @@ to test Shogi modules without PyTorch dependencies.
 
 import sys
 from pathlib import Path
+
 import numpy as np
 
 # Add proper import path handling
 if __name__ == "__main__":
     # Make the repo root directory available for imports
     REPO_ROOT = Path(__file__).parent.parent.absolute()
-    if str(REPO_ROOT) not in sys.path: # Avoid adding duplicates if run multiple times
+    if str(REPO_ROOT) not in sys.path:  # Avoid adding duplicates if run multiple times
         sys.path.insert(0, str(REPO_ROOT))
 
 # pylint: disable=wrong-import-position
@@ -46,11 +47,13 @@ def test_shogi_with_mocks():
 
         # Test a basic game operation
         black_pawn_pos = (6, 4)  # Position of a black pawn in initial setup
-        target_pos = (5, 4)      # Move one square forward
+        target_pos = (5, 4)  # Move one square forward
 
         # MODIFIED: Check piece exists before accessing .type
         piece_at_start = game.get_piece(*black_pawn_pos)
-        assert piece_at_start is not None, f"Expected piece at {black_pawn_pos}, got None."
+        assert (
+            piece_at_start is not None
+        ), f"Expected piece at {black_pawn_pos}, got None."
         assert piece_at_start.type == PieceType.PAWN
 
         # Make the move
@@ -63,7 +66,9 @@ def test_shogi_with_mocks():
 
         # MODIFIED: Check piece exists before accessing .type
         piece_at_target = game.get_piece(*target_pos)
-        assert piece_at_target is not None, f"Expected piece at {target_pos} after move, got None."
+        assert (
+            piece_at_target is not None
+        ), f"Expected piece at {target_pos} after move, got None."
         assert piece_at_target.type == PieceType.PAWN
         assert game.current_player == Color.WHITE
 

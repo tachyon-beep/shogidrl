@@ -12,15 +12,15 @@ from typing import (
     cast,
 )
 
+from . import shogi_rules_logic
+from .shogi_core_definitions import PROMOTED_TO_BASE_TYPE  # Added PROMOTED_TO_BASE_TYPE
 from .shogi_core_definitions import (
     Color,
     MoveTuple,
     Piece,
     PieceType,
     get_unpromoted_types,
-    PROMOTED_TO_BASE_TYPE,  # Added PROMOTED_TO_BASE_TYPE
 )
-from . import shogi_rules_logic
 
 if TYPE_CHECKING:
     from .shogi_game import ShogiGame
@@ -83,14 +83,14 @@ def revert_last_applied_move(
     """
     Reverts the last move made in the game, completely restoring the previous state.
     Operates on the 'game' (ShogiGame instance).
-    
+
     State restoration includes:
     1. Restoring the board position
     2. Restoring hand pieces
     3. Switching back to previous player
     4. Reversing move count
     5. Clearing termination status
-    
+
     If simulation_undo_details is provided, it uses that to undo a simulated move
     that wasn't added to the game's history.
     """

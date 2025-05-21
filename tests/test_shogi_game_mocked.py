@@ -2,11 +2,19 @@
 Unit tests for ShogiGame class in shogi_game.py, using mocks for PyTorch dependencies.
 """
 
-from dataclasses import dataclass, field
-from typing import Dict, Optional # Removed TYPE_CHECKING for simplicity if direct import works
 import sys
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import (
+    Dict,
+    Optional,
+)  # Removed TYPE_CHECKING for simplicity if direct import works
+
 import numpy as np
+
+from keisei.shogi.shogi_core_definitions import Color, PieceType
+from tests.mock_utilities import setup_pytorch_mock_environment
+
 
 # Add proper import path handling
 # This block is mainly for running the script directly.
@@ -16,12 +24,6 @@ if __name__ == "__main__":
     if str(REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(REPO_ROOT))
 
-# pylint: disable=wrong-import-position
-from tests.mock_utilities import setup_pytorch_mock_environment
-# MODIFIED: Import Color and PieceType at the module level for type hints
-from keisei.shogi.shogi_core_definitions import Color, PieceType
-
-
 @dataclass
 class GameState:
     """Helper class to store a snapshot of the game state."""
@@ -29,11 +31,15 @@ class GameState:
     board_str: str
     current_player: Optional[Color] = None  # "Color" should now be resolved
     move_count: int = 0
-    black_hand: Dict[PieceType, int] = field(default_factory=dict)  # "PieceType" should now be resolved
-    white_hand: Dict[PieceType, int] = field(default_factory=dict) # "PieceType" should now be resolved
+    black_hand: Dict[PieceType, int] = field(
+        default_factory=dict
+    )  # "PieceType" should now be resolved
+    white_hand: Dict[PieceType, int] = field(
+        default_factory=dict
+    )  # "PieceType" should now be resolved
 
     @classmethod
-    def from_game(cls, game): # 'game' will be an instance of ShogiGame
+    def from_game(cls, game):  # 'game' will be an instance of ShogiGame
         """Creates a GameState snapshot from a ShogiGame instance."""
         # Ensure 'game.current_player' is an instance of your Color enum for these to work:
         # game.current_player.BLACK and game.current_player.WHITE
@@ -57,7 +63,7 @@ class GameState:
 # Individual test cases start here
 def test_get_observation_initial_state_dimensions():
     """Test the dimensions of the observation from the initial state."""
-    with setup_pytorch_mock_environment(): # This should now work without type errors
+    with setup_pytorch_mock_environment():  # This should now work without type errors
         # pylint: disable=import-outside-toplevel
         # Color and PieceType are already imported globally, but ShogiGame and io are specific to this test
         from keisei.shogi.shogi_game import ShogiGame

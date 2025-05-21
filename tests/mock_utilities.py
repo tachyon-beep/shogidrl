@@ -9,18 +9,30 @@ It also provides a patching mechanism to handle the PyTorch docstring conflict
 that causes the error: `RuntimeError: function '_has_torch_function' already has a docstring`
 """
 
+import contextlib  # Ensure contextlib is imported
+import importlib
 import sys
 import types
-import importlib 
+from typing import (  # MODIFIED: Added ContextManager, Iterator
+    Any,
+    Callable,
+    ContextManager,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Tuple,
+    Union,
+)
 from unittest.mock import patch
+
 import numpy as np
-from typing import Dict, List, Optional, Tuple, Union, Any, Callable, ContextManager, Iterator # MODIFIED: Added ContextManager, Iterator
-import contextlib # Ensure contextlib is imported
 
 # [ önceki MockTensor, MockModule, MockPolicyValueNetwork, MockPolicyOutputMapper sınıfları buraya olduğu gibi gelir ]
 # ... (Previous MockTensor, MockModule, MockPolicyValueNetwork, MockPolicyOutputMapper classes go here as they were) ...
 # Assume the mock classes (MockTensor, MockModule, etc.) are here and unchanged from your previous version.
 # I'll include them for completeness if they were part of the original file for this specific fix.
+
 
 class MockTensor:
     """Mock implementation of torch.Tensor for testing."""
@@ -140,47 +152,53 @@ def patched_add_docstr(obj, docstr, warn_on_existing=True):
     return obj
 
 
-def setup_pytorch_mock_environment() -> ContextManager[None]: # MODIFIED: Added return type hint
+def setup_pytorch_mock_environment() -> (
+    ContextManager[None]
+):  # MODIFIED: Added return type hint
     """
     Sets up a mocked PyTorch environment to prevent import errors.
     ...
     """
-    mock_torch = types.ModuleType('torch')
+    mock_torch = types.ModuleType("torch")
     mock_torch.Tensor = MockTensor  # type: ignore[attr-defined]
 
-    mock_torch_nn = types.ModuleType('torch.nn')
+    mock_torch_nn = types.ModuleType("torch.nn")
     mock_torch_nn.Module = MockModule  # type: ignore[attr-defined]
 
-    mock_torch_nn_functional = types.ModuleType('torch.nn.functional')
+    mock_torch_nn_functional = types.ModuleType("torch.nn.functional")
     # Add mock functions to mock_torch_nn_functional if used (e.g., relu, softmax)
     mock_torch_nn.functional = mock_torch_nn_functional  # type: ignore[attr-defined]
-    
+
     mock_torch.nn = mock_torch_nn  # type: ignore[attr-defined]
 
-    mock_torch_overrides = types.ModuleType('torch.overrides')
+    mock_torch_overrides = types.ModuleType("torch.overrides")
     mock_torch_overrides._add_docstr = patched_add_docstr  # type: ignore[attr-defined]
     mock_torch.overrides = mock_torch_overrides  # type: ignore[attr-defined]
 
-    mock_torch_functional = types.ModuleType('torch.functional')
+    mock_torch_functional = types.ModuleType("torch.functional")
     # Add mock functions to mock_torch_functional if used
     mock_torch.functional = mock_torch_functional  # type: ignore[attr-defined]
 
     patches = {
-        'torch': mock_torch,
-        'torch.nn': mock_torch.nn,                            # pylint: disable=no-member
-        'torch.overrides': mock_torch.overrides,              # pylint: disable=no-member
-        'torch.functional': mock_torch.functional,            # pylint: disable=no-member
-        'torch.nn.functional': mock_torch.nn.functional,      # pylint: disable=no-member
+        "torch": mock_torch,
+        "torch.nn": mock_torch.nn,  # pylint: disable=no-member
+        "torch.overrides": mock_torch.overrides,  # pylint: disable=no-member
+        "torch.functional": mock_torch.functional,  # pylint: disable=no-member
+        "torch.nn.functional": mock_torch.nn.functional,  # pylint: disable=no-member
     }
 
-    sys_modules_patch = patch.dict('sys.modules', patches)
-    policy_mapper_patch = patch('keisei.utils.PolicyOutputMapper', MockPolicyOutputMapper)
+    sys_modules_patch = patch.dict("sys.modules", patches)
+    policy_mapper_patch = patch(
+        "keisei.utils.PolicyOutputMapper", MockPolicyOutputMapper
+    )
 
     @contextlib.contextmanager
-    def combined_context() -> Iterator[None]: # MODIFIED: Added return type hint for clarity
+    def combined_context() -> (
+        Iterator[None]
+    ):  # MODIFIED: Added return type hint for clarity
         with contextlib.ExitStack() as stack:
             stack.enter_context(sys_modules_patch)
             stack.enter_context(policy_mapper_patch)
             yield
-    
+
     return combined_context()

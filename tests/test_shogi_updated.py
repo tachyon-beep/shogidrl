@@ -2,10 +2,10 @@
 Unit tests for ShogiGame class in shogi_game.py
 """
 
-from dataclasses import dataclass, field
-from typing import Dict, Optional
 import sys
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Dict, Optional
 
 import numpy as np
 import pytest
@@ -66,13 +66,14 @@ def test_get_observation_initial_state_dimensions(new_game: ShogiGame):
     """Test the dimensions of the observation from the initial state."""
     # Import inside test to avoid PyTorch import issues
     with setup_pytorch_mock_environment():
+        # pylint: disable=import-outside-toplevel
         from keisei.shogi.shogi_game_io import generate_neural_network_observation
-    
+
     obs = generate_neural_network_observation(new_game)
-    
+
     # Check observation dimensions
     assert obs.shape == (46, 9, 9)
-    
+
     # Check some expected values in the observation
     # Black's pieces are represented in planes 0-14 (unpromoted pieces)
     assert np.sum(obs[0:15]) > 0  # Black unpromoted pieces
