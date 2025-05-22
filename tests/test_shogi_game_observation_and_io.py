@@ -342,9 +342,11 @@ def test_game_to_kif_checkmate_and_hands():
 def test_generate_neural_network_observation_max_hands_and_promoted_board():
     """Test observation with max pieces in hand and many promoted pieces."""
     game = ShogiGame.from_sfen(
-        "4k4/9/9/9/9/9/9/9/4K4 b 7P7pR2Br2b2G2g2S2s2N2n2L2l 1"  # Corrected hand string
+        "4k4/9/9/9/9/9/9/9/4K4 b 7PR2B2G2S2N2L7pr2b2g2s2n2l 1"  # Corrected hand string
     )
-    # Hands: Black: 7P, R, B, 2G, 2S, 2N, 2L. White: 7p, r, b, 2g, 2s, 2n, 2l.
+    # Current player is Black.
+    # Black's hand: 7P, 1R, 2B, 2G, 2S, 2N, 2L
+    # White's hand: 7p, 1r, 2b, 2g, 2s, 2n, 2l
     # Board: Only kings
     # Modify game to have max pieces in hand for specific types
     game.hands[Color.BLACK.value] = {

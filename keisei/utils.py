@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import datetime
 import sys
-from typing import TYPE_CHECKING, Dict, List, TextIO
+from typing import TYPE_CHECKING, Dict, List, Set, TextIO
 
 import torch
 
@@ -30,6 +30,9 @@ class PolicyOutputMapper:
         self.idx_to_move: List["MoveTuple"] = []
         self.move_to_idx: Dict["MoveTuple", int] = {}
         current_idx = 0
+        self._unrecognized_moves_log_cache: Set[str] = set()  # Cache for logging distinct unrecognized moves
+        self._unrecognized_moves_logged_count = 0  # Counter for logged distinct unrecognized moves
+        self._max_distinct_unrecognized_to_log = 5  # Max distinct unrecognized moves to log in detail
 
         # Generate Board Moves: (from_r, from_c, to_r, to_c, promote_flag: bool)
         for r_from in range(9):
@@ -121,21 +124,40 @@ class PolicyOutputMapper:
             # This is important because PPOAgent.select_action checks if legal_mask.any() is false.
             return mask
 
+        unrecognized_count_this_call = 0
         for move in legal_shogi_moves:
             try:
                 idx = self.shogi_move_to_policy_index(move)
                 mask[idx] = True
             except ValueError as e:
-                # Log a prominent warning if a move from ShogiGame is not in the mapper
-                # This indicates a potential desync between game logic and policy mapping.
-                warning_msg = (
-                    f"[PolicyOutputMapper Warning] Encountered a Shogi move not recognized by the policy mapper: "
-                    f"{move}. Error: {e}. This move will be treated as illegal by the agent. "
-                    f"This could indicate an issue with move generation in ShogiGame or an incomplete PolicyOutputMapper."
-                )
-                print(warning_msg, file=sys.stderr)  # Print to stderr for visibility
-                # Optionally, could use logging module if a logger is available here.
-                # The `pass` behavior is effectively maintained as the mask for this move remains False.
+                unrecognized_count_this_call += 1
+                move_repr = repr(move)
+                if move_repr not in self._unrecognized_moves_log_cache and \
+                   self._unrecognized_moves_logged_count < self._max_distinct_unrecognized_to_log:
+                    self._unrecognized_moves_log_cache.add(move_repr)
+                    self._unrecognized_moves_logged_count += 1
+                    warning_msg = (
+                        f"[PolicyOutputMapper Warning #{self._unrecognized_moves_logged_count}] "
+                        f"Encountered a Shogi move not recognized by the policy mapper: "
+                        f"{move} (raw: {move_repr}, types: {[type(el) for el in move]}). Error: {e}. "
+                        f"This move will be treated as illegal by the agent. "
+                        f"This could indicate an issue with move generation in ShogiGame or an incomplete PolicyOutputMapper. "
+                        f"Example of a known move key: {repr(next(iter(self.move_to_idx.keys())))}"
+                    )
+                    print(warning_msg, file=sys.stderr)  # Print to stderr for visibility
+                elif move_repr not in self._unrecognized_moves_log_cache and \
+                     self._unrecognized_moves_logged_count == self._max_distinct_unrecognized_to_log:
+                    # Log once that we've stopped detailed logging for new distinct moves
+                    print(f"[PolicyOutputMapper Warning] Max distinct unrecognized moves ({self._max_distinct_unrecognized_to_log}) logged. Further distinct errors will not be detailed.", file=sys.stderr)
+                    self._unrecognized_moves_logged_count += 1 # Increment to prevent this message from repeating
+
+        if unrecognized_count_this_call > 0 and self._unrecognized_moves_logged_count <= self._max_distinct_unrecognized_to_log : # Avoid logging summary if we already hit max detailed logs
+            summary_warning = (
+                f"[PolicyOutputMapper Summary] In this call to get_legal_mask, "
+                f"{unrecognized_count_this_call} out of {len(legal_shogi_moves)} legal moves "
+                f"were not recognized by the policy mapper."
+            )
+            print(summary_warning, file=sys.stderr)
         return mask
 
     # --- NEW METHODS FOR USI CONVERSION ---

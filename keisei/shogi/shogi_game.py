@@ -91,8 +91,9 @@ class ShogiGame:
         self.board[0][7] = Piece(PieceType.KNIGHT, Color.WHITE)
         self.board[0][8] = Piece(PieceType.LANCE, Color.WHITE)
 
-        self.board[1][1] = Piece(PieceType.ROOK, Color.WHITE)  # Corrected: Was BISHOP
-        self.board[1][7] = Piece(PieceType.BISHOP, Color.WHITE)  # Corrected: Was ROOK
+
+        self.board[1][1] = Piece(PieceType.ROOK, Color.WHITE)
+        self.board[1][7] = Piece(PieceType.BISHOP, Color.WHITE)
 
         self.board[8][0] = Piece(PieceType.LANCE, Color.BLACK)
         self.board[8][1] = Piece(PieceType.KNIGHT, Color.BLACK)
@@ -104,8 +105,9 @@ class ShogiGame:
         self.board[8][7] = Piece(PieceType.KNIGHT, Color.BLACK)
         self.board[8][8] = Piece(PieceType.LANCE, Color.BLACK)
 
-        self.board[7][1] = Piece(PieceType.BISHOP, Color.BLACK)  # Corrected: Was ROOK
-        self.board[7][7] = Piece(PieceType.ROOK, Color.BLACK)  # Corrected: Was BISHOP
+
+        self.board[7][1] = Piece(PieceType.BISHOP, Color.BLACK)
+        self.board[7][7] = Piece(PieceType.ROOK, Color.BLACK)
 
     def reset(self) -> np.ndarray:  # MODIFIED: Return np.ndarray
         """Resets the game to the initial state and returns the observation."""  # MODIFIED: Docstring
@@ -518,7 +520,9 @@ class ShogiGame:
                     continue
                 elif char_sfen.isdigit():
                     if promoted_flag_active:
-                        raise ValueError("Invalid SFEN piece character for board: 0")
+                        raise ValueError(
+                            f"Invalid SFEN: Digit ('{char_sfen}') cannot immediately follow a promotion token ('+')."
+                        )
                     if char_sfen == "0":
                         raise ValueError("Invalid SFEN piece character for board: 0")
                     empty_squares = int(char_sfen)
@@ -557,10 +561,8 @@ class ShogiGame:
                             f"Invalid SFEN piece character for board: {char_sfen}"
                         )
                     game.board[r][c] = Piece(final_piece_type, piece_color)
-                    if is_actually_promoted:
-                        piece_on_board = game.board[r][c]
-                        if piece_on_board is not None:
-                            piece_on_board.is_promoted = True
+                    # is_promoted is automatically handled by the Piece constructor
+                    # based on final_piece_type. No explicit setting needed here.
                     c += 1
                     promoted_flag_active = False
             if c != 9:
@@ -572,6 +574,7 @@ class ShogiGame:
         if hands_sfen != "-":
             hand_segment_pattern = re.compile(r"(\d*)([PLNSGBRplnsgbr])")
             pos = 0
+            parsing_white_hand_pieces = False
             while pos < len(hands_sfen):
                 match_hand = hand_segment_pattern.match(hands_sfen, pos)
                 if not match_hand:
@@ -584,9 +587,20 @@ class ShogiGame:
                     raise ValueError("Invalid character sequence in SFEN hands")
                 count_str, piece_char = match_hand.groups()
                 count = int(count_str) if count_str else 1
+
+                is_current_piece_white = piece_char.islower()
+                is_current_piece_black = piece_char.isupper()
+
+                if is_current_piece_white:
+                    parsing_white_hand_pieces = True
+                elif is_current_piece_black and parsing_white_hand_pieces:
+                    raise ValueError(
+                        "Invalid SFEN hands: Black's pieces must precede White's pieces."
+                    )
+
                 try:
                     piece_type_in_hand = SYMBOL_TO_PIECE_TYPE[piece_char.upper()]
-                    hand_color = Color.BLACK if piece_char.isupper() else Color.WHITE
+                    hand_color = Color.BLACK if is_current_piece_black else Color.WHITE
                 except KeyError as e:
                     raise ValueError("Invalid character sequence in SFEN hands") from e
                 if piece_type_in_hand == PieceType.KING:
@@ -626,24 +640,8 @@ class ShogiGame:
             game.winner = None
             game.termination_reason = "Sennichite"
 
-        # Handle special cases for test positions
-        if (
-            sfen_str == "4k4/9/9/9/3gR4/9/9/9/4K4 b - 1"
-            or sfen_str == "4k4/4R4/9/9/9/9/9/9/4K4 b - 1"
-        ):
-            # These test cases expect these positions to be a checkmate if no move is made
-            # We need to fix these specific positions for the tests to pass
-            game.game_over = True
-            game.winner = Color.BLACK  # Black wins
-            game.termination_reason = "Tsumi"
-        elif (
-            sfen_str == "k8/P8/1P7/9/9/9/9/9/K8 b - 1"
-            or sfen_str == "8k/p8/1p7/9/9/9/9/9/K8 w - 1"
-        ):
-            # These test cases expect stalemate
-            game.game_over = True
-            game.winner = None
-            game.termination_reason = "Stalemate"
+        # Removed hardcoded SFEN string checks for termination.
+        # The general logic above should handle game termination.
 
         return game
 
@@ -1008,25 +1006,27 @@ class ShogiGame:
     def __repr__(self):
         return f"<ShogiGame move_count={self.move_count} current_player={self.current_player}>"
 
+    # --- Reward Function ---
     def get_reward(self, player_color: Optional[Color] = None) -> float:
-        """
-        Returns the reward for the specified player or the current player if not specified.
-
-        Returns:
-            +1.0 for winning
-            -1.0 for losing
-            0.0 for draw or ongoing game
-        """
-        # If no player specified, use the current player
-        player_color = player_color if player_color is not None else self.current_player
-
-        # If game isn't over, reward is 0
+        """Calculates the reward for the player_color based on the game outcome."""
         if not self.game_over:
             return 0.0
 
-        # Draw conditions: stalemate, sennichite, max moves
-        if self.winner is None:
-            return 0.0
+        perspective_player = player_color
+        if perspective_player is None:
+            # If no specific player perspective, use the player whose turn it would have been
+            # if the game hadn't ended, or the winner if clear.
+            # This logic might need refinement based on how rewards are assigned post-game.
+            # For now, let's assume if a winner exists, it's from their perspective.
+            # If stalemate, it's neutral.
+            if self.winner is not None:
+                perspective_player = self.winner # Win is +1 for winner
+            else: # Stalemate or other draw
+                return 0.0
 
-        # Win/loss: player_color matches the winner (+1) or doesn't (-1)
-        return 1.0 if self.winner == player_color else -1.0
+
+        if self.winner == perspective_player:
+            return 1.0  # Win
+        if self.winner is not None and self.winner != perspective_player:
+            return -1.0  # Loss
+        return 0.0  # Draw or game not over from this perspective
