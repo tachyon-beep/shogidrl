@@ -5,24 +5,14 @@ This test file aims to significantly increase the test coverage of the ShogiGame
 by testing its functionality in various scenarios.
 """
 
-import sys
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Dict, Optional
 
 import numpy as np
 import pytest
 
-# Add proper import path handling
-if __name__ == "__main__":
-    REPO_ROOT = Path(__file__).parent.parent.absolute()
-    if str(REPO_ROOT) not in sys.path:
-        sys.path.insert(0, str(REPO_ROOT))
-
 from keisei.shogi import Color, PieceType, ShogiGame
 from keisei.shogi.shogi_core_definitions import Piece
-
-# pylint: disable=wrong-import-position
 from tests.mock_utilities import setup_pytorch_mock_environment
 
 
@@ -515,12 +505,3 @@ def test_move_limit():
     # After 3 moves, the move limit should be reached
     assert game.move_count == 3
     assert game.game_over, "Game should be over after reaching move limit"
-
-
-# DEPRECATED: This file is superseded by 'test_shogi_game_mock_comprehensive.py' and 'test_shogi_game_updated_with_mocks.py'.
-# All core ShogiGame, undo move, and observation tests should be added to those files.
-
-
-if __name__ == "__main__":
-    # Running pytest this way ensures that fixtures are discovered and used correctly.
-    pytest.main(["-xvs", __file__])

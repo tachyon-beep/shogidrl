@@ -86,7 +86,7 @@ class PolicyOutputMapper:
             if len(move) == 5 and move[0] is None:  # Potential DropMoveTuple
                 # Reconstruct DropMoveTuple with PieceType from self.idx_to_move if a similar one exists
                 # This is a bit of a heuristic and might need refinement
-                for stored_move in self.move_to_idx.keys():
+                for stored_move in self.move_to_idx:
                     if (
                         len(stored_move) == 5
                         and stored_move[0] is None
@@ -261,33 +261,33 @@ class PolicyOutputMapper:
             to_r = ord(to_sq_str[1]) - ord("a")
             return (None, None, to_r, to_c, piece_type)
 
-        else:  # Board move
-            if not (4 <= len(usi_move) <= 5):
-                raise ValueError(f"Invalid USI board move format: {usi_move}")
+        # Board move
+        if not 4 <= len(usi_move) <= 5:
+            raise ValueError(f"Invalid USI board move format: {usi_move}")
 
-            from_sq_str = usi_move[0:2]
-            to_sq_str = usi_move[2:4]
-            promote = len(usi_move) == 5 and usi_move[4] == "+"
+        from_sq_str = usi_move[0:2]
+        to_sq_str = usi_move[2:4]
+        promote = len(usi_move) == 5 and usi_move[4] == "+"
 
-            if not (
-                len(from_sq_str) == 2
-                and "1" <= from_sq_str[0] <= "9"
-                and "a" <= from_sq_str[1] <= "i"
-            ):
-                raise ValueError(f"Invalid USI source square: {from_sq_str}")
-            if not (
-                len(to_sq_str) == 2
-                and "1" <= to_sq_str[0] <= "9"
-                and "a" <= to_sq_str[1] <= "i"
-            ):
-                raise ValueError(f"Invalid USI destination square: {to_sq_str}")
+        if not (
+            len(from_sq_str) == 2
+            and "1" <= from_sq_str[0] <= "9"
+            and "a" <= from_sq_str[1] <= "i"
+        ):
+            raise ValueError(f"Invalid USI source square: {from_sq_str}")
+        if not (
+            len(to_sq_str) == 2
+            and "1" <= to_sq_str[0] <= "9"
+            and "a" <= to_sq_str[1] <= "i"
+        ):
+            raise ValueError(f"Invalid USI destination square: {to_sq_str}")
 
-            from_c = 9 - int(from_sq_str[0])
-            from_r = ord(from_sq_str[1]) - ord("a")
-            to_c = 9 - int(to_sq_str[0])
-            to_r = ord(to_sq_str[1]) - ord("a")
+        from_c = 9 - int(from_sq_str[0])
+        from_r = ord(from_sq_str[1]) - ord("a")
+        to_c = 9 - int(to_sq_str[0])
+        to_r = ord(to_sq_str[1]) - ord("a")
 
-            return (from_r, from_c, to_r, to_c, promote)
+        return (from_r, from_c, to_r, to_c, promote)
 
 
 class TrainingLogger:

@@ -319,7 +319,7 @@ def main():
                         )
                         # The 5th item (value_tensor) was removed from select_action's direct return
                         # It was originally `move_tuple` then `selected_shogi_move, action_idx, log_prob, value, _ = move_tuple`
-                    except Exception as e:
+                    except (IndexError, ValueError, RuntimeError) as e: # MODIFIED_LINE
                         logger.log(
                             f"Error in agent.select_action: {e}. Treating as no move."
                         )
@@ -490,7 +490,7 @@ def main():
                 else:
                     try:
                         next_value_for_gae = agent.get_value(value_for_gae_calc_obs)
-                    except Exception as e:
+                    except (RuntimeError, ValueError) as e: # MODIFIED_LINE
                         logger.log(
                             f"Error in agent.get_value for GAE calc: {e}. Using 0.0 for next value."
                         )
