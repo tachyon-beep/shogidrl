@@ -2,7 +2,8 @@
 Tests for reward functionality in ShogiGame, especially in terminal states.
 """
 
-import pytest
+from unittest.mock import patch # Moved import to top level
+import pytest # Fixed import order
 
 from keisei.shogi.shogi_core_definitions import Color, MoveTuple, Piece, PieceType
 from keisei.shogi.shogi_game import ShogiGame
@@ -21,7 +22,7 @@ def test_reward_ongoing_game(new_game: ShogiGame):
     new_game.make_move((2, 3, 3, 3, False))  # White pawn
 
     # Check reward before game over
-    assert new_game.game_over == False
+    assert new_game.game_over is False # Changed == to is
     assert new_game.get_reward() == 0.0
     assert new_game.get_reward(Color.BLACK) == 0.0
     assert new_game.get_reward(Color.WHITE) == 0.0
@@ -87,7 +88,7 @@ def test_reward_checkmate_loser(new_game: ShogiGame):
     assert new_game.get_reward(Color.WHITE) == -1.0
 
 
-def test_reward_stalemate_draw(new_game: ShogiGame):
+def test_reward_stalemate_draw(new_game: ShogiGame): # pylint: disable=unused-argument
     """Test that rewards are 0 for both players in a stalemate."""
     # Use a simple game instance
     game = ShogiGame()
@@ -102,7 +103,7 @@ def test_reward_stalemate_draw(new_game: ShogiGame):
     assert game.get_reward(Color.WHITE) == 0.0
 
 
-def test_reward_max_moves_draw(new_game: ShogiGame):
+def test_reward_max_moves_draw(new_game: ShogiGame): # pylint: disable=unused-argument
     """Test that rewards are 0 for both players in a draw by max moves."""
     # Create a custom game with small max moves
     game = ShogiGame(max_moves_per_game=4)
@@ -114,7 +115,7 @@ def test_reward_max_moves_draw(new_game: ShogiGame):
     game.make_move((3, 0, 4, 0, False))  # White pawn captures
 
     # Check game state
-    assert game.game_over == True
+    assert game.game_over is True # Changed == to is
     assert game.winner is None
     assert game.termination_reason == "Max moves reached"
 
@@ -122,8 +123,7 @@ def test_reward_max_moves_draw(new_game: ShogiGame):
     assert game.get_reward(Color.BLACK) == 0.0
     assert game.get_reward(Color.WHITE) == 0.0
 
-
-def test_reward_sennichite_draw(new_game: ShogiGame):
+def test_reward_sennichite_draw(new_game: ShogiGame): # pylint: disable=unused-argument
     """Test that rewards are 0 for both players in a draw by repetition (sennichite)."""
     # Setup for sennichite test with just kings
     game = ShogiGame.from_sfen("4k4/9/9/9/9/9/9/9/4K4 b - 1")
@@ -151,50 +151,43 @@ def test_make_move_returns_reward_in_tuple():
 
     # Mid-game move should have reward 0
     assert reward == 0.0
-    assert done == False
+    assert done is False # Changed == to is
     assert isinstance(info, dict)
 
 
 def test_make_move_returns_correct_reward_at_terminal_state():
     """Test that make_move returns correct reward in terminal states."""
-    # Create a custom implementation to test the return value format
-    from unittest.mock import patch
-
     game = ShogiGame()
 
-    # Mock the get_reward method to return a specific value
-    with patch.object(ShogiGame, "get_reward", return_value=1.0):
-        # Artificially set up the game to end after making a move
-        # by patching apply_move_to_board to set game_over
+    def mock_make_move_inner(*_args, **_kwargs): # Prefixed unused arguments
+        # After the move, set the game to be over with a winner
+        game.game_over = True
+        game.winner = Color.BLACK
+        game.termination_reason = "Tsumi"
+        # Return the 4-tuple with our reward
+        return (
+            game.get_observation(),
+            game.get_reward(), # This will use the mocked get_reward
+            game.game_over,
+            {"termination_reason": game.termination_reason},
+        )
 
-        orig_apply_move = game.make_move
-
-        def mock_make_move(*args, **kwargs):
-            # After the move, set the game to be over with a winner
-            game.game_over = True
-            game.winner = Color.BLACK
-            game.termination_reason = "Tsumi"
-            # Return the 4-tuple with our reward
-            return (
-                game.get_observation(),
-                game.get_reward(),
-                game.game_over,
-                {"termination_reason": game.termination_reason},
-            )
-
-        # Apply the monkey patch
-        game.make_move = mock_make_move
+    # Mock the get_reward method to return a specific value for this test's scope
+    # And mock make_move to simulate game end and return specific tuple
+    with patch.object(ShogiGame, "get_reward", return_value=1.0), \
+         patch.object(game, "make_move", new=mock_make_move_inner):
 
         # Now make a move that will trigger our mocked behavior
-        move_outcome = game.make_move((6, 6, 5, 6, False))  # Any valid move will do
+        # The actual move details don't matter as make_move is mocked
+        _move_outcome = game.make_move((6, 6, 5, 6, False))
 
         # Check the return value
-        assert isinstance(move_outcome, tuple)
-        assert len(move_outcome) == 4
-        _, reward, done, info = move_outcome
+        assert isinstance(_move_outcome, tuple)
+        assert len(_move_outcome) == 4
+        _, reward, done, info = _move_outcome
 
         # Should be a win based on our mock
-        assert reward == 1.0
+        assert reward == 1.0  # get_reward is mocked to 1.0
         assert done is True
         assert info.get("termination_reason") == "Tsumi"
 
@@ -217,7 +210,7 @@ def test_make_move_returns_perspective_specific_reward():
     game.current_player = Color.WHITE
 
     # White makes a checkmate move
-    move_outcome = game.make_move((2, 4, 1, 4, False))
+    _move_outcome = game.make_move((2, 4, 1, 4, False)) # Prefixed unused variable
 
     # After the move is made, we need to manually set the game state to simulate checkmate
     # since our test setup is simplified and doesn't fully represent a legal position
@@ -252,7 +245,7 @@ def test_make_move_returns_perspective_specific_reward():
     game.current_player = Color.BLACK
 
     # Black makes their move
-    move_outcome = game.make_move((6, 0, 5, 0, False))
+    _move_outcome = game.make_move((6, 0, 5, 0, False)) # Prefixed unused variable
 
     # Now White can checkmate
     game.make_move((0, 5, 0, 4, False))

@@ -3,6 +3,8 @@ shogi_game.py: Main ShogiGame class for DRL Shogi Client.
 Orchestrates game state and delegates complex logic to helper modules.
 """
 
+# pylint: disable=too-many-lines
+
 import copy  # Added for __deepcopy__
 import re  # Added for SFEN parsing
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union

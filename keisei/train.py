@@ -8,8 +8,9 @@ import glob
 import json
 import os
 import re
-import sys  # Added import sys
+import sys
 from datetime import datetime
+import multiprocessing as mp
 
 import numpy as np
 import torch
@@ -22,7 +23,6 @@ from keisei.shogi.shogi_engine import ShogiGame, Color
 from keisei.utils import PolicyOutputMapper, TrainingLogger
 
 # Expose main at the module level for import by the root-level shim
-
 
 def parse_args():
     parser = argparse.ArgumentParser(description="DRL Shogi Client Training (train.py)")
@@ -152,6 +152,14 @@ def serialize_config(cfg_module):
 
 # --- MAIN TRAINING LOOP (SCAFFOLD) ---
 def main():
+    # Set multiprocessing start method
+    if __name__ == "keisei.train":  # Check if running as the main module of the package
+        try:
+            mp.set_start_method("spawn", force=True)  # Added force=True
+            print("Successfully set multiprocessing start method to 'spawn'")
+        except RuntimeError as e:
+            print(f"Could not set multiprocessing start method: {e}", file=sys.stderr)
+
     args = parse_args()
     cfg = app_config  # Use the module directly
     cfg = apply_config_overrides(args, cfg)  # Pass the module to be modified
@@ -557,4 +565,13 @@ def main():
 __all__ = ["main"]
 
 if __name__ == "__main__":
+    # This block is for when keisei/train.py is run directly as a script
+    try:
+        mp.set_start_method("spawn", force=True)  # Added force=True
+        print("Successfully set multiprocessing start method to 'spawn' (direct run)")
+    except RuntimeError as e:
+        print(
+            f"Could not set multiprocessing start method (direct run): {e}",
+            file=sys.stderr,
+        )
     main()

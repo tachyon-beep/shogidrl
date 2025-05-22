@@ -190,7 +190,7 @@ class TestLegalMaskGeneration: # pylint: disable=too-many-public-methods
             f"Nifu scenario: Expected mask sum {expected_nifu_moves}, got {nifu_mask.sum().item()}"
 
 
-    def test_promotion_mask(self): # pylint: disable=too-many-statements
+    def test_promotion_mask(self): # pylint: disable=too-many-statements, too-many-locals
         """Test that promotion and non-promotion are correctly represented in the mask."""
         # Position where a pawn can promote
         # Black pawn at (4,2) (e7), can move to (3,2) (e6) and promote or not.

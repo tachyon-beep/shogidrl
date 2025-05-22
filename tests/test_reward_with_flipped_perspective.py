@@ -50,7 +50,7 @@ def test_reward_with_flipped_perspective():
 
     # The returned observation should be from Black's perspective (next player)
     # But the reward should be from White's perspective (player who made the move)
-    next_obs, reward, done, info = move_outcome
+    _next_obs, reward, _done, _info = move_outcome # pylint: disable=unused-variable
 
     # After the move is made, we need to manually set the game state to simulate checkmate
     # since our test setup is simplified and doesn't fully represent a legal position
