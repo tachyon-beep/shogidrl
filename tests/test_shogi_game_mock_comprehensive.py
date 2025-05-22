@@ -19,10 +19,11 @@ if __name__ == "__main__":
     if str(REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(REPO_ROOT))
 
+from keisei.shogi import Color, PieceType, ShogiGame
+from keisei.shogi.shogi_core_definitions import Piece
+
 # pylint: disable=wrong-import-position
 from tests.mock_utilities import setup_pytorch_mock_environment
-from keisei.shogi import ShogiGame, Color, PieceType
-from keisei.shogi.shogi_core_definitions import Piece
 
 
 @dataclass

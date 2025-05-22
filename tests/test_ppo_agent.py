@@ -49,8 +49,13 @@ def test_ppo_agent_init_and_select_action():
     if not legal_moves:  # If still no legal_moves, skip test
         pytest.skip("No legal moves could be determined for select_action test.")
 
-    selected_move, idx, log_prob, value, legal_mask_returned = agent.select_action(
-        obs, legal_shogi_moves=legal_moves
+    # Create legal_mask based on legal_moves
+    legal_mask = mapper.get_legal_mask(legal_moves, device=agent.device)
+
+    selected_move, idx, log_prob, value = (
+        agent.select_action(  # Removed legal_mask_returned
+            obs, legal_shogi_moves=legal_moves, legal_mask=legal_mask
+        )
     )
     assert isinstance(idx, int)
     assert 0 <= idx < agent.num_actions_total
@@ -59,11 +64,12 @@ def test_ppo_agent_init_and_select_action():
     )  # select_action can return None if no legal moves (though guarded by caller)
     assert isinstance(log_prob, float)
     assert isinstance(value, float)
-    assert isinstance(
-        legal_mask_returned, torch.Tensor
-    )  # Check type of returned legal_mask
-    assert legal_mask_returned.shape[0] == agent.num_actions_total  # Check shape
-    assert legal_mask_returned.dtype == torch.bool  # Check dtype
+    # The legal_mask is an input to select_action, not an output.
+    # We can assert properties of the input legal_mask if needed, or the one used by the model.
+    # For example, check the one created above:
+    assert isinstance(legal_mask, torch.Tensor)
+    assert legal_mask.shape[0] == agent.num_actions_total
+    assert legal_mask.dtype == torch.bool
 
 
 def test_ppo_agent_learn():

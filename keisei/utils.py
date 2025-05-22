@@ -1,8 +1,9 @@
-from __future__ import annotations
-
 """
 utils.py: Contains PolicyOutputMapper and TrainingLogger.
 """
+
+from __future__ import annotations
+
 import datetime
 import sys
 from typing import TYPE_CHECKING, Dict, List, TextIO

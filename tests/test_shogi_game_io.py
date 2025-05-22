@@ -8,30 +8,30 @@ import tempfile
 import numpy as np
 import pytest
 
-from tests.mock_utilities import setup_pytorch_mock_environment
 from keisei.shogi.shogi_core_definitions import (
-    Color,
-    PieceType,
-    Piece,
-    OBS_OPP_PLAYER_HAND_START,
-    OBS_UNPROMOTED_ORDER,
     OBS_CURR_PLAYER_INDICATOR,
-    OBS_CURR_PLAYER_UNPROMOTED_START,
-    OBS_OPP_PLAYER_UNPROMOTED_START,
-    OBS_MOVE_COUNT,
     OBS_CURR_PLAYER_PROMOTED_START,
+    OBS_CURR_PLAYER_UNPROMOTED_START,
+    OBS_MOVE_COUNT,
+    OBS_OPP_PLAYER_HAND_START,
     OBS_OPP_PLAYER_PROMOTED_START,
+    OBS_OPP_PLAYER_UNPROMOTED_START,
     OBS_PROMOTED_ORDER,
+    OBS_UNPROMOTED_ORDER,
+    Color,
+    Piece,
+    PieceType,
 )
 from keisei.shogi.shogi_game import ShogiGame
 from keisei.shogi.shogi_game_io import (
-    generate_neural_network_observation,
+    _get_piece_type_from_sfen_char,
+    _parse_sfen_square,
     convert_game_to_text_representation,
     game_to_kif,
-    _parse_sfen_square,
+    generate_neural_network_observation,
     sfen_to_move_tuple,
-    _get_piece_type_from_sfen_char,
 )
+from tests.mock_utilities import setup_pytorch_mock_environment
 
 
 @pytest.fixture

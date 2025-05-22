@@ -137,16 +137,21 @@ def test_policy_output_mapper_total_actions(mapper: PolicyOutputMapper):
 
 
 @pytest.mark.parametrize(
-    "r_from, c_from, r_to, c_to, promote, expected_idx_offset",
+    "r_from, c_from, r_to, c_to, promote",  # Removed expected_idx_offset
     [
-        (0, 0, 0, 1, False, 0),  # First possible board move (no promotion)
-        (0, 0, 0, 1, True, 1),  # First possible board move (with promotion)
-        (8, 8, 8, 7, False, 12958),  # Last possible board move (no promotion)
-        (8, 8, 8, 7, True, 12959),  # Last possible board move (with promotion)
+        (0, 0, 0, 1, False),  # Removed 0
+        (0, 0, 0, 1, True),  # Removed 1
+        (8, 8, 8, 7, False),  # Removed 12958
+        (8, 8, 8, 7, True),  # Removed 12959
     ],
 )
-def test_board_move_to_policy_index_edges(
-    mapper: PolicyOutputMapper, r_from, c_from, r_to, c_to, promote, expected_idx_offset
+def test_board_move_to_policy_index_edges(  # pylint: disable=too-many-positional-arguments
+    mapper: PolicyOutputMapper,
+    r_from,
+    c_from,
+    r_to,
+    c_to,
+    promote,  # Removed expected_idx_offset
 ):
     move: MoveTuple = (r_from, c_from, r_to, c_to, promote)
     # This test is a bit fragile as it assumes specific ordering. The existing test_policy_output_mapper_mappings is better for general validation.
@@ -166,7 +171,11 @@ def test_board_move_to_policy_index_edges(
     ],
 )
 def test_drop_move_to_policy_index_edges(
-    mapper: PolicyOutputMapper, r_to, c_to, piece_type, expected_idx_start_offset
+    mapper: PolicyOutputMapper,
+    r_to,
+    c_to,
+    piece_type,
+    expected_idx_start_offset,  # pylint: disable=unused-argument, too-many-positional-arguments
 ):
     move: MoveTuple = (None, None, r_to, c_to, piece_type)
     idx = mapper.shogi_move_to_policy_index(move)
@@ -203,13 +212,13 @@ def test_get_legal_mask_all_legal(mapper: PolicyOutputMapper):
     ],
 )
 def test_usi_sq(mapper: PolicyOutputMapper, r, c, expected_usi):
-    assert mapper._usi_sq(r, c) == expected_usi
+    assert mapper._usi_sq(r, c) == expected_usi  # pylint: disable=protected-access
 
 
 @pytest.mark.parametrize("r, c", [(-1, 0), (0, -1), (9, 0), (0, 9)])
 def test_usi_sq_invalid(mapper: PolicyOutputMapper, r, c):
     with pytest.raises(ValueError):
-        mapper._usi_sq(r, c)
+        mapper._usi_sq(r, c)  # pylint: disable=protected-access
 
 
 @pytest.mark.parametrize(
@@ -224,7 +233,7 @@ def test_usi_sq_invalid(mapper: PolicyOutputMapper, r, c):
         (PieceType.ROOK, "R"),
     ],
 )
-def test_get_usi_char_for_drop_valid(
+def test_get_usi_char_for_drop_valid(  # pylint: disable=protected-access
     mapper: PolicyOutputMapper, piece_type, expected_char
 ):
     assert mapper._get_usi_char_for_drop(piece_type) == expected_char
@@ -236,7 +245,7 @@ def test_get_usi_char_for_drop_valid(
 )
 def test_get_usi_char_for_drop_invalid(mapper: PolicyOutputMapper, invalid_piece_type):
     with pytest.raises(ValueError):
-        mapper._get_usi_char_for_drop(invalid_piece_type)
+        mapper._get_usi_char_for_drop(invalid_piece_type)  # pylint: disable=protected-access
 
 
 @pytest.mark.parametrize(
@@ -325,14 +334,6 @@ def test_shogi_move_to_policy_index_enum_identity_fallback(mapper: PolicyOutputM
     # by creating a PieceType that's equivalent but not identical if that were possible.
     # The current fallback handles `move[0] is None` and `isinstance(move[4], PieceType)`.
     # Let's test a drop move that should be found by the fallback.
-    raw_move_tuple = (
-        None,
-        None,
-        3,
-        3,
-        PieceType.SILVER.value,
-    )  # Using .value to potentially bypass direct enum instance check
-    # Reconstruct with the actual enum member to ensure it's a valid key for the main dict lookup
     # The goal is to test the *fallback* path, which is tricky.
     # The fallback specifically iterates through self.move_to_idx.items() if the initial get() fails.
     # This test might be more conceptual unless we can force a cache miss for the primary key.

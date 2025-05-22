@@ -53,18 +53,21 @@ class PPOAgent:
     def select_action(
         self,
         obs: np.ndarray,
-        legal_shogi_moves: List["MoveTuple"],  # Type hint for Shogi moves, quoted
+        legal_shogi_moves: List[
+            "MoveTuple"
+        ],  # Still useful for policy_index_to_shogi_move
+        legal_mask: torch.Tensor,  # INPUT PARAMETER
         is_training: bool = True,
     ) -> Tuple[
         Optional["MoveTuple"],
         int,
         float,
         float,
-        torch.Tensor,  # Added torch.Tensor for legal_mask
-    ]:  # Return Shogi move (Any for now), policy index, log_prob, value # Quoted
+        # No longer returns legal_mask
+    ]:  # Return Shogi move (Any for now), policy index, log_prob, value
         """
-        Select an action given an observation and legal Shogi moves.
-        Returns the selected Shogi move, its policy index, log probability, value estimate, and the legal mask.
+        Select an action given an observation, legal Shogi moves, and a precomputed legal_mask.
+        Returns the selected Shogi move, its policy index, log probability, and value estimate.
         """
         self.model.train(is_training)  # Set model to train or eval mode
 
@@ -72,37 +75,28 @@ class PPOAgent:
             obs, dtype=torch.float32, device=self.device
         ).unsqueeze(0)
 
-        # Construct the legal mask tensor
-        legal_mask = self.policy_output_mapper.get_legal_mask(
-            legal_shogi_moves, self.device
-        )
+        # legal_mask is now passed as an argument.
+        # The internal creation of legal_mask is removed.
+        # Example:
+        # legal_mask = self.policy_output_mapper.get_legal_mask(
+        # legal_shogi_moves, self.device
+        # ) # REMOVED
 
-        # If no legal moves are available, this is a terminal state or an error.
-        # The game engine should ideally handle terminal states before calling select_action.
-        # If it must be handled here, returning a dummy action or raising an error are options.
         if not legal_mask.any():
             print(
-                "Warning: PPOAgent.select_action called with no legal moves. This might indicate an issue.",
+                "Warning: PPOAgent.select_action called with no legal moves (based on input legal_mask).",
                 file=sys.stderr,
             )
-            # Fallback: return a dummy action or handle as appropriate for the game.
-            # For now, let get_action_and_value handle it, which might lead to uniform random if all masked.
-            # Or, we could return a specific indicator:
-            # return None, -1, 0.0, 0.0 # Example: No move, invalid index, zero log_prob, zero value
-            # If no legal moves, the legal_mask will be all False.
-            # We should return this mask.
-            # The caller (train.py) already handles the "no legal moves" case before calling select_action,
-            # but if it were called, returning the all-False mask is correct.
-            # The current PPOAgent.select_action logic proceeds to call model.get_action_and_value.
-            # If legal_mask.any() is false, get_action_and_value might produce NaNs or uniform distribution.
-            # The primary guard is in train.py. If this path is hit, it's a fallback.
-            # We will return the all-false legal_mask.
-            pass  # Let it proceed, but the mask is available.
+            # Fallback behavior might be needed if model.get_action_and_value can't handle all-False mask.
+            # neural_network.py's get_action_and_value attempts to handle this.
+            # If this path is hit, it implies the caller might not have checked for no legal moves.
+            # The train.py logic should ideally prevent calling select_action if no legal_moves.
+            pass  # Let it proceed, model.get_action_and_value will use the all-false mask.
 
         # Get action, log_prob, and value from the ActorCritic model
         # Pass deterministic based on not is_training
         selected_policy_index_tensor, log_prob_tensor, value_tensor = (
-            self.model.get_action_and_value(
+            self.model.get_action_and_value(  # Pass the provided legal_mask
                 obs_tensor, legal_mask=legal_mask, deterministic=not is_training
             )
         )
@@ -123,16 +117,16 @@ class PPOAgent:
                 f"Error in PPOAgent.select_action: Policy index {selected_policy_index_val} out of bounds. {e}",
                 file=sys.stderr,
             )
-            # This case should be rare if legal_mask is applied correctly and policy_output_mapper is consistent.
             # Handle by returning no move or re-raising, depending on desired robustness.
-            return None, -1, 0.0, value_float, legal_mask  # Or raise the error
+            return None, -1, 0.0, value_float  # Return 4 items
+            # Or raise the error
 
         return (
             selected_shogi_move,
             selected_policy_index_val,
             log_prob_val,
             value_float,
-            legal_mask,  # Return the computed legal_mask
+            # legal_mask, # REMOVED from return
         )
 
     def get_value(self, obs_np: np.ndarray) -> float:

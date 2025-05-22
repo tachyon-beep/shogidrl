@@ -4,33 +4,34 @@ Unit tests for Shogi game I/O functions in shogi_game_io.py
 
 import os
 import tempfile
+
 import numpy as np
 import pytest
 
-from tests.mock_utilities import setup_pytorch_mock_environment
 from keisei.shogi.shogi_core_definitions import (
-    Color,
-    PieceType,
-    Piece,
-    OBS_OPP_PLAYER_HAND_START,
-    OBS_UNPROMOTED_ORDER,
     OBS_CURR_PLAYER_INDICATOR,
-    OBS_CURR_PLAYER_UNPROMOTED_START,
-    OBS_OPP_PLAYER_UNPROMOTED_START,
-    OBS_MOVE_COUNT,
     OBS_CURR_PLAYER_PROMOTED_START,
+    OBS_CURR_PLAYER_UNPROMOTED_START,
+    OBS_MOVE_COUNT,
+    OBS_OPP_PLAYER_HAND_START,
     OBS_OPP_PLAYER_PROMOTED_START,
+    OBS_OPP_PLAYER_UNPROMOTED_START,
     OBS_PROMOTED_ORDER,
+    OBS_UNPROMOTED_ORDER,
+    Color,
+    Piece,
+    PieceType,
 )
 from keisei.shogi.shogi_game import ShogiGame
 from keisei.shogi.shogi_game_io import (
-    generate_neural_network_observation,
+    _get_piece_type_from_sfen_char,
+    _parse_sfen_square,
     convert_game_to_text_representation,
     game_to_kif,
-    _parse_sfen_square,
+    generate_neural_network_observation,
     sfen_to_move_tuple,
-    _get_piece_type_from_sfen_char,
 )
+from tests.mock_utilities import setup_pytorch_mock_environment
 
 
 @pytest.fixture
@@ -208,7 +209,7 @@ def test_convert_game_to_text_representation_after_pawn_capture(game_with_captur
         ), "Captured pawn should appear in hand"
 
 
-def test_convert_game_to_text_representation_complex_state(basic_game: ShogiGame):
+def test_convert_game_to_text_representation_complex_state():
     """Text dump of a complex mid–game SFEN should match piece layout and hands."""
 
     game = ShogiGame.from_sfen(
@@ -270,7 +271,7 @@ def test_game_to_kif_writes_valid_kif_file_after_moves():
     os.remove(filename)
 
 
-def test_game_to_kif_checkmate_and_hands(basic_game: ShogiGame):
+def test_game_to_kif_checkmate_and_hands():
     """Test KIF export for a game ending in checkmate and with pieces in hand."""
     # Setup a checkmate position where Black wins
     # White King 'k' at (0,0) (SFEN: 9a)
@@ -338,9 +339,7 @@ def test_game_to_kif_checkmate_and_hands(basic_game: ShogiGame):
     os.remove(filename)
 
 
-def test_generate_neural_network_observation_max_hands_and_promoted_board(
-    basic_game: ShogiGame,
-):
+def test_generate_neural_network_observation_max_hands_and_promoted_board():
     """Test observation with max pieces in hand and many promoted pieces."""
     game = ShogiGame.from_sfen(
         "4k4/9/9/9/9/9/9/9/4K4 b 7P7pR2Br2b2G2g2S2s2N2n2L2l 1"  # Corrected hand string
@@ -405,11 +404,11 @@ def test_generate_neural_network_observation_move_count_normalization(
     game = basic_game
     game.move_count = 50
 
-    game._max_moves_this_game = 100
+    game._max_moves_this_game = 100  # pylint: disable=protected-access
     obs100 = generate_neural_network_observation(game)
     assert np.allclose(obs100[OBS_MOVE_COUNT], 50 / 100.0)
 
-    game._max_moves_this_game = 500  # Default
+    game._max_moves_this_game = 500  # Default # pylint: disable=protected-access
     obs500 = generate_neural_network_observation(game)
     assert np.allclose(obs500[OBS_MOVE_COUNT], 50 / 500.0)
 

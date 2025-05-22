@@ -4,13 +4,16 @@ This file contains the actual training logic and exposes a main() function.
 """
 
 import argparse
+import glob
 import json
 import os
+import re
+import sys  # Added import sys
 from datetime import datetime
+
 import numpy as np
 import torch
 from tqdm import tqdm
-import re
 
 import config as app_config
 from keisei.experience_buffer import ExperienceBuffer
@@ -68,6 +71,12 @@ def apply_config_overrides(args, cfg_module):
         for k, v in config_json.items():
             if hasattr(cfg_module, k):
                 setattr(cfg_module, k, v)
+            else:
+                # Added warning for unknown keys
+                print(
+                    f"Warning: Config key '{k}' from JSON not found in base config module.",
+                    file=sys.stderr,
+                )
     if args.device:
         cfg_module.DEVICE = args.device
     if args.total_timesteps is not None:
@@ -87,9 +96,11 @@ def find_latest_checkpoint(model_dir):
     ckpts = [f for f in os.listdir(model_dir) if f.endswith(".pth")]
     if not ckpts:
         return None
-    import re
+    # import re # Removed redundant import re
 
-    checkpoint_pattern = re.compile(r"episode_(\d+).*ts_(\d+)|ep(\d+).*ts(\d+)")
+    checkpoint_pattern = re.compile(
+        r"episode_(\d+).*ts_(\d+)|ep(\d+).*ts(\d+)|agent_episode_(\d+)_ts_(\d+)"
+    )
 
     def extract_ts(filename):
         match = checkpoint_pattern.search(filename)
@@ -105,6 +116,15 @@ def find_latest_checkpoint(model_dir):
                 try:
                     ep = int(match.group(3))
                     ts = int(match.group(4))
+                    return (ep, ts)
+                except ValueError:
+                    return (0, 0)
+            elif (
+                match.group(5) is not None and match.group(6) is not None
+            ):  # Check for the new pattern
+                try:
+                    ep = int(match.group(5))
+                    ts = int(match.group(6))
                     return (ep, ts)
                 except ValueError:
                     return (0, 0)
@@ -221,9 +241,289 @@ def main():
                 "No checkpoint found or specified path invalid. Starting fresh training."
             )
 
-        # --- MAIN TRAINING LOOP ---
-        # Note: The actual training loop code is not included in the original snippet
-        # It should be here, using the agent, experience_buffer, and game instances
+        # --- MAIN TRAINING LOOP (Ported and adapted from train2.py) ---
+        pbar = tqdm(
+            total=cfg.TOTAL_TIMESTEPS, initial=global_timestep, desc="Training Progress"
+        )
+
+        obs_reset_val = game.reset()
+        if (
+            isinstance(obs_reset_val, tuple)
+            and len(obs_reset_val) > 0
+            and isinstance(obs_reset_val[0], np.ndarray)
+        ):
+            obs = obs_reset_val[0]
+        elif isinstance(obs_reset_val, np.ndarray):
+            obs = obs_reset_val
+        else:
+            logger.log(
+                f"CRITICAL: Initial game.reset() did not return a valid observation. Type: {type(obs_reset_val)}. Aborting."
+            )
+            pbar.close()
+            return
+
+        current_episode_reward = 0.0
+        current_episode_length = 0
+        done = False
+
+        # Initialize variables that might not be set in all paths before buffer.add
+        selected_shogi_move = None
+        action_idx = -1
+        log_prob = 0.0
+        value = 0.0
+        obs_for_buffer = obs  # Initialize with current obs
+        legal_mask_for_buffer = torch.zeros(
+            policy_mapper.get_total_actions(), dtype=torch.bool, device=agent.device
+        )  # Dummy mask
+
+        for _ in range(global_timestep, cfg.TOTAL_TIMESTEPS):
+            pbar.update(1)
+            global_timestep += 1
+            current_episode_length += 1
+
+            if not isinstance(obs, np.ndarray):
+                logger.log(
+                    f"Error: obs is not a numpy array at timestep {global_timestep}. Type: {type(obs)}. Ending episode."
+                )
+                done = True
+                selected_shogi_move, action_idx, log_prob, value = None, -1, 0.0, 0.0
+                obs_for_buffer = obs  # Keep last valid obs or handle appropriately
+                legal_mask_for_buffer = torch.zeros(
+                    policy_mapper.get_total_actions(),
+                    dtype=torch.bool,
+                    device=agent.device,
+                )  # Dummy mask
+            else:
+                obs_for_buffer = obs  # This is s_t
+                legal_moves = game.get_legal_moves()
+                legal_mask_for_buffer = policy_mapper.get_legal_mask(
+                    legal_moves, agent.device
+                )
+
+                if not legal_moves:  # Equivalent to not legal_mask_for_buffer.any()
+                    logger.log(
+                        f"Episode {total_episodes_completed + 1}: No legal moves. Game might have ended."
+                    )
+                    done = True
+
+                if not done:
+                    try:
+                        # PPOAgent.select_action now expects legal_mask and returns 4 items
+                        selected_shogi_move, action_idx, log_prob, value = (
+                            agent.select_action(
+                                obs,
+                                legal_moves,
+                                legal_mask_for_buffer,
+                                is_training=True,  # Pass legal_mask
+                            )
+                        )
+                        # The 5th item (value_tensor) was removed from select_action's direct return
+                        # It was originally `move_tuple` then `selected_shogi_move, action_idx, log_prob, value, _ = move_tuple`
+                    except Exception as e:
+                        logger.log(
+                            f"Error in agent.select_action: {e}. Treating as no move."
+                        )
+                        selected_shogi_move, action_idx, log_prob, value = (
+                            None,
+                            -1,
+                            0.0,
+                            0.0,
+                        )
+                        done = True  # End episode if agent fails
+
+                if done:  # If already done by no legal moves or agent error
+                    selected_shogi_move, action_idx, log_prob, value = (
+                        None,
+                        -1,
+                        0.0,
+                        0.0,
+                    )
+
+            reward = 0.0  # Default reward, will be updated by make_move
+            next_obs = (
+                obs  # Default next_obs (s_t+1), will be updated. If done, this is fine.
+            )
+            game_info = {}  # Default game_info
+
+            if selected_shogi_move is not None:
+                move_outcome = game.make_move(selected_shogi_move)
+                if not (isinstance(move_outcome, tuple) and len(move_outcome) == 4):
+                    logger.log(
+                        f"Error: game.make_move did not return a valid 4-tuple. Got: {move_outcome}. Ending episode."
+                    )
+                    # s_t+1 is current obs, reward 0, done True
+                    next_obs, reward, done, game_info = (
+                        obs,
+                        0.0,
+                        True,
+                        {"termination_reason": "make_move_bad_return"},
+                    )
+                else:
+                    next_obs_full, reward_raw, done_raw, game_info_raw = move_outcome
+
+                    next_obs = (
+                        next_obs_full if isinstance(next_obs_full, np.ndarray) else obs
+                    )
+                    if not isinstance(next_obs_full, np.ndarray):
+                        logger.log(
+                            f"Warning: next_obs_full from make_move is {type(next_obs_full)}. Using current obs as fallback for s_t+1."
+                        )
+                        done = True  # If next state is invalid, consider episode done.
+
+                    reward = (
+                        float(reward_raw)
+                        if isinstance(reward_raw, (int, float))
+                        else 0.0
+                    )
+                    if not isinstance(reward_raw, (int, float)):
+                        logger.log(
+                            f"Warning: reward_raw from make_move is {type(reward_raw)} ('{reward_raw}'). Using 0.0."
+                        )
+
+                    done = bool(done_raw)  # Update done state from game
+                    game_info = game_info_raw if isinstance(game_info_raw, dict) else {}
+
+                current_player_name = "Sente" if game.current_player == 0 else "Gote"
+                usi_move = policy_mapper.shogi_move_to_usi(selected_shogi_move)
+                log_msg = f"Time: {global_timestep}, Ep: {total_episodes_completed + 1}, Step: {current_episode_length}, Player: {current_player_name}, Move (USI): {usi_move}, Reward: {reward:.2f}, Done: {done}"
+                if game_info.get("termination_reason"):
+                    log_msg += f", Termination: {game_info['termination_reason']}"
+                elif isinstance(
+                    game_info, str
+                ):  # Should not happen if game_info_raw is dict
+                    log_msg += f", Info: {game_info}"
+                logger.log(log_msg)
+            # else: No move was made (e.g. if done or no legal moves initially)
+            # obs_for_buffer (s_t) is already set
+            # next_obs (s_t+1) remains current obs (obs_for_buffer)
+            # reward is 0.0, done is as determined earlier
+
+            # Add to experience buffer: (s_t, a_t, r_t, log_prob_t, value_t, done_t+1, legal_mask_t)
+            # Note: `done` here is the done signal *after* taking the action, so it corresponds to the next state.
+            if isinstance(obs_for_buffer, np.ndarray):
+                experience_buffer.add(
+                    torch.tensor(
+                        obs_for_buffer, dtype=torch.float32, device=agent.device
+                    ),
+                    action_idx,
+                    reward,
+                    log_prob,
+                    value,
+                    done,
+                    legal_mask_for_buffer,  # Pass legal_mask_for_buffer
+                )
+            else:
+                # This case should ideally be prevented by the check at the start of the loop
+                logger.log(
+                    f"Error: obs_for_buffer was not ndarray (type: {type(obs_for_buffer)}). Skipping add to buffer."
+                )
+
+            obs = next_obs  # obs becomes s_t+1 for the next iteration
+            current_episode_reward += reward
+
+            if done:
+                total_episodes_completed += 1
+                logger.log(
+                    f"Episode {total_episodes_completed} finished. Length: {current_episode_length}, Reward: {current_episode_reward:.2f}"
+                )
+                pbar.set_description(
+                    f"Training Progress | Last Ep Reward: {current_episode_reward:.2f}"
+                )
+
+                obs_reset_val = game.reset()
+                if (
+                    isinstance(obs_reset_val, tuple)
+                    and len(obs_reset_val) > 0
+                    and isinstance(obs_reset_val[0], np.ndarray)
+                ):
+                    obs = obs_reset_val[0]
+                elif isinstance(obs_reset_val, np.ndarray):
+                    obs = obs_reset_val
+                else:
+                    logger.log(
+                        f"CRITICAL: game.reset() after episode did not return valid observation. Type: {type(obs_reset_val)}. Aborting training."
+                    )
+                    pbar.close()
+                    break  # Exit training loop
+
+                # Reset for new episode
+                current_episode_reward = 0.0
+                current_episode_length = 0
+                done = False  # Important: reset done flag for the new episode
+                # Re-initialize for the new episode start, obs is now the new s_0
+                selected_shogi_move = None
+                action_idx = -1
+                log_prob = 0.0
+                value = 0.0
+                obs_for_buffer = obs
+                legal_mask_for_buffer = torch.zeros(
+                    policy_mapper.get_total_actions(),
+                    dtype=torch.bool,
+                    device=agent.device,
+                )  # Dummy mask
+
+                if total_episodes_completed % cfg.SAVE_FREQ_EPISODES == 0:
+                    ckpt_path_ep = os.path.join(
+                        model_dir,
+                        f"ppo_shogi_ep{total_episodes_completed}_ts{global_timestep}.pth",
+                    )
+                    agent.save_model(
+                        ckpt_path_ep, global_timestep, total_episodes_completed
+                    )
+                    logger.log(f"Model saved to {ckpt_path_ep}")
+
+            if len(experience_buffer) >= cfg.STEPS_PER_EPOCH:
+                # `obs` here is s_t+N (the state *after* the last transition collected in the buffer)
+                # This is the state for which we need to estimate the value for GAE calculation.
+                value_for_gae_calc_obs = obs
+                next_value_for_gae = 0.0  # Default if episode ended or error
+
+                if (
+                    done
+                ):  # If the episode ended with the last transition added to the buffer.
+                    next_value_for_gae = 0.0
+                elif not isinstance(value_for_gae_calc_obs, np.ndarray):
+                    logger.log(
+                        f"Warning: obs for get_value (GAE) is not ndarray: {type(value_for_gae_calc_obs)}. Using 0.0 for next value."
+                    )
+                    next_value_for_gae = 0.0
+                else:
+                    try:
+                        next_value_for_gae = agent.get_value(value_for_gae_calc_obs)
+                    except Exception as e:
+                        logger.log(
+                            f"Error in agent.get_value for GAE calc: {e}. Using 0.0 for next value."
+                        )
+                        next_value_for_gae = 0.0
+
+                experience_buffer.compute_advantages_and_returns(next_value_for_gae)
+                learn_metrics = agent.learn(experience_buffer)
+                experience_buffer.clear()
+
+                kl_div = learn_metrics.get("ppo/kl_divergence_approx", 0.0)
+                policy_loss = learn_metrics.get("ppo/policy_loss", 0.0)
+                value_loss = learn_metrics.get("ppo/value_loss", 0.0)
+                entropy = learn_metrics.get("ppo/entropy", 0.0)
+                lr = learn_metrics.get("ppo/learning_rate", 0.0)
+
+                logger.log(
+                    f"PPO Update at Timestep {global_timestep}. Metrics: {json.dumps(learn_metrics)}"
+                )
+                pbar_postfix = {
+                    "kl_div": f"{kl_div:.3f}",
+                    "policy_loss": f"{policy_loss:.3f}",
+                    "value_loss": f"{value_loss:.3f}",
+                    "entropy": f"{entropy:.3f}",
+                    "lr": f"{lr:.1e}",
+                }
+                pbar.set_postfix(pbar_postfix)
+
+        pbar.close()
+        if global_timestep >= cfg.TOTAL_TIMESTEPS:  # Check if loop completed normally
+            logger.log("Training finished.")
+        else:  # Loop may have been broken due to critical error
+            logger.log("Training interrupted.")
+        # End of ported training loop
 
         # --- Ensure checkpoint is saved at end of training ---
         final_ckpt_path = os.path.join(
@@ -236,7 +536,6 @@ def main():
         # For minimal runs, also save a checkpoint with the standard pattern if none exists
         # This ensures test_train_runs_minimal passes even if no episode boundary was hit
         std_ckpt_pattern = os.path.join(model_dir, "ppo_shogi_ep*_ts*.pth")
-        import glob
 
         if not glob.glob(std_ckpt_pattern):
             std_ckpt_path = os.path.join(

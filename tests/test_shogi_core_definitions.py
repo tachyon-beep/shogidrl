@@ -3,20 +3,22 @@ Unit tests for shogi_core_definitions.py
 """
 
 import copy
+
 import pytest
+
 from keisei.shogi.shogi_core_definitions import (
+    BASE_TO_PROMOTED_TYPE,
+    KIF_PIECE_SYMBOLS,
+    OBS_PROMOTED_ORDER,
+    OBS_UNPROMOTED_ORDER,
+    PIECE_TYPE_TO_HAND_TYPE,
+    PROMOTED_TO_BASE_TYPE,
+    PROMOTED_TYPES_SET,
+    SYMBOL_TO_PIECE_TYPE,
+    Color,
     Piece,
     PieceType,
-    Color,
-    KIF_PIECE_SYMBOLS,
-    SYMBOL_TO_PIECE_TYPE,
-    BASE_TO_PROMOTED_TYPE,
-    PROMOTED_TO_BASE_TYPE,
-    PIECE_TYPE_TO_HAND_TYPE,
     get_piece_type_from_symbol,
-    PROMOTED_TYPES_SET,
-    OBS_UNPROMOTED_ORDER,
-    OBS_PROMOTED_ORDER,
 )
 
 # Tests for Piece class

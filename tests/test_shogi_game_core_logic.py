@@ -1,4 +1,5 @@
 # File renamed from test_shogi_game.py to test_shogi_game_core_logic.py for clarity.
+# pylint: disable=too-many-lines
 
 """
 Unit tests for ShogiGame class in shogi_game.py
@@ -14,10 +15,10 @@ from keisei.shogi.shogi_core_definitions import (
     OBS_PROMOTED_ORDER,
     OBS_UNPROMOTED_ORDER,
     Color,
+    MoveTuple,
     Piece,
     PieceType,
     get_unpromoted_types,
-    MoveTuple,
 )
 from keisei.shogi.shogi_game import ShogiGame
 
@@ -911,7 +912,7 @@ def test_game_termination_checkmate_stalemate(
     game = ShogiGame.from_sfen(sfen_setup)
     # Ensure the game object from SFEN has the correct max_moves_per_game for consistency
     # This is important because make_move checks game.move_count >= game.max_moves_per_game
-    game._max_moves_this_game = (
+    game._max_moves_this_game = (  # pylint: disable=protected-access
         new_game.max_moves_per_game
     )  # pylint: disable=protected-access
 
@@ -1028,7 +1029,7 @@ def test_game_termination_max_moves(new_game: ShogiGame):
     game._max_moves_this_game = 10  # pylint: disable=protected-access
 
     # Make a series of simple, non-terminating moves
-    # For simplicity, let\'s use a minimal setup where kings just move back and forth.
+    # For simplicity, let's use a minimal setup where kings just move back and forth.
     game = ShogiGame.from_sfen("4k4/9/9/9/9/9/9/9/4K4 b - 1")  # Only kings
     game._max_moves_this_game = 10  # Set max moves for this specific test game instance # pylint: disable=protected-access
 
@@ -1089,9 +1090,7 @@ def test_game_termination_sennichite(
     # Black King at e9 (0,4), White King at e1 (8,4), Black Rook at a3 (5,0).
     # Note: In the engine's internal representation, Black is at the top (row 0) and White is at the bottom (row 8)
     game = ShogiGame.from_sfen("4k4/9/9/9/9/R8/9/9/4K4 b - 1")
-    game._max_moves_this_game = (
-        50  # Ensure max_moves doesn\'t interfere # pylint: disable=protected-access
-    )
+    game._max_moves_this_game = 50  # pylint: disable=protected-access
 
     # Define the repeating sequence of 4 moves (2 pairs) using engine coordinates
     move_sequence = [
@@ -1267,7 +1266,7 @@ def test_game_termination_sennichite(
     ],
 )
 # @pytest.mark.skip(reason="Investigating bug in shogi_rules_logic.py/generate_all_legal_moves for pinned pieces when king is checked by pinner.")
-def test_move_legality_pinned_piece(  # pylint: disable=too-many-arguments
+def test_move_legality_pinned_piece(  # pylint: disable=too-many-arguments, too-many-positional-arguments
     new_game: ShogiGame,  # pylint: disable=unused-argument
     sfen_setup: str,
     player_to_move: Color,
@@ -1291,16 +1290,7 @@ def test_move_legality_pinned_piece(  # pylint: disable=too-many-arguments
     )
 
     for move_tuple, reason in expected_allowed_moves:
-        # If this specific move_tuple is expected to cause a ValueError due to illegal pattern
-        # if expect_value_error_for_moves and move_tuple in expect_value_error_for_moves: # Removed
-        #     with pytest.raises(ValueError, match="Illegal movement pattern"): # Removed
-        #         # We need a game instance to call make_move on, but get_legal_moves already ran. # Removed
-        #         # For this specific check, we'll create a fresh game instance and try to make the move. # Removed
-        #         temp_game = ShogiGame.from_sfen(sfen_setup) # Removed
-        #         temp_game.make_move(move_tuple) # This should raise ValueError # Removed
-        #     print(f"DEBUG_TEST: Confirmed ValueError for illegal pattern move: {move_tuple} ({reason})") # Removed
-        # else: # Removed
-        # Standard assertion: move should be in legal_moves
+
         assert (
             move_tuple in legal_moves
         ), f"Pinned piece {pinned_piece_pos} should be able to make move {move_tuple} ({reason}). Not in {legal_moves}"
