@@ -53,6 +53,7 @@ def generate_neural_network_observation(game: "ShogiGame") -> np.ndarray:
     Total: 46 channels (14 player board + 14 opponent board + 7 player hand + 7 opponent hand + 4 meta).
     """
     obs = np.zeros((46, 9, 9), dtype=np.float32)
+    is_black_perspective = game.current_player == Color.BLACK
 
     # Map PieceType to its index in OBS_UNPROMOTED_ORDER or OBS_PROMOTED_ORDER
     unpromoted_map: Dict[PieceType, int] = {
@@ -64,6 +65,10 @@ def generate_neural_network_observation(game: "ShogiGame") -> np.ndarray:
 
     for r in range(9):
         for c in range(9):
+            # For white's perspective, we need to mirror the board coordinates
+            flipped_r = r if is_black_perspective else 8 - r
+            flipped_c = c if is_black_perspective else 8 - c
+
             p: Optional[Piece] = game.board[r][c]
             if p is None:
                 continue
@@ -91,7 +96,8 @@ def generate_neural_network_observation(game: "ShogiGame") -> np.ndarray:
                     channel_offset = unpromoted_block_offset + unpromoted_map[p.type]
 
             if channel_offset != -1:
-                obs[channel_offset, r, c] = 1.0
+                # Use the flipped coordinates for setting the observation plane
+                obs[channel_offset, flipped_r, flipped_c] = 1.0
 
     # Pieces in hand (7 channels per player: P,L,N,S,G,B,R)
     hand_piece_order: List[PieceType] = (

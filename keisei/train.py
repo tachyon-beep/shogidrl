@@ -18,7 +18,7 @@ from tqdm import tqdm
 import config as app_config
 from keisei.experience_buffer import ExperienceBuffer
 from keisei.ppo_agent import PPOAgent
-from keisei.shogi.shogi_engine import ShogiGame
+from keisei.shogi.shogi_engine import ShogiGame, Color
 from keisei.utils import PolicyOutputMapper, TrainingLogger
 
 # Expose main at the module level for import by the root-level shim
@@ -319,7 +319,7 @@ def main():
                         )
                         # The 5th item (value_tensor) was removed from select_action's direct return
                         # It was originally `move_tuple` then `selected_shogi_move, action_idx, log_prob, value, _ = move_tuple`
-                    except (IndexError, ValueError, RuntimeError) as e: # MODIFIED_LINE
+                    except (IndexError, ValueError, RuntimeError) as e:  # MODIFIED_LINE
                         logger.log(
                             f"Error in agent.select_action: {e}. Treating as no move."
                         )
@@ -346,7 +346,14 @@ def main():
             game_info = {}  # Default game_info
 
             if selected_shogi_move is not None:
+                # Store the turn before the move for validation
+                last_turn = game.current_player
                 move_outcome = game.make_move(selected_shogi_move)
+                # Assert that the turn has alternated after the move
+                assert (
+                    game.current_player != last_turn
+                ), f"Turn did not alternate at move #{game.move_count}. Last turn: {last_turn}, Current turn: {game.current_player}"
+
                 if not (isinstance(move_outcome, tuple) and len(move_outcome) == 4):
                     logger.log(
                         f"Error: game.make_move did not return a valid 4-tuple. Got: {move_outcome}. Ending episode."
@@ -383,9 +390,10 @@ def main():
                     done = bool(done_raw)  # Update done state from game
                     game_info = game_info_raw if isinstance(game_info_raw, dict) else {}
 
-                current_player_name = "Sente" if game.current_player == 0 else "Gote"
+                # Use the player who MADE the move (last_turn), not the next player to move (game.current_player)
+                player_name = "Sente" if last_turn == Color.BLACK else "Gote"
                 usi_move = policy_mapper.shogi_move_to_usi(selected_shogi_move)
-                log_msg = f"Time: {global_timestep}, Ep: {total_episodes_completed + 1}, Step: {current_episode_length}, Player: {current_player_name}, Move (USI): {usi_move}, Reward: {reward:.2f}, Done: {done}"
+                log_msg = f"Time: {global_timestep}, Ep: {total_episodes_completed + 1}, Step: {current_episode_length}, Player: {player_name}, Move (USI): {usi_move}, Reward: {reward:.2f}, Done: {done}"
                 if game_info.get("termination_reason"):
                     log_msg += f", Termination: {game_info['termination_reason']}"
                 elif isinstance(
@@ -490,7 +498,7 @@ def main():
                 else:
                     try:
                         next_value_for_gae = agent.get_value(value_for_gae_calc_obs)
-                    except (RuntimeError, ValueError) as e: # MODIFIED_LINE
+                    except (RuntimeError, ValueError) as e:  # MODIFIED_LINE
                         logger.log(
                             f"Error in agent.get_value for GAE calc: {e}. Using 0.0 for next value."
                         )

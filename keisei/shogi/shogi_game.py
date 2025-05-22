@@ -5,7 +5,7 @@ Orchestrates game state and delegates complex logic to helper modules.
 
 import copy  # Added for __deepcopy__
 import re  # Added for SFEN parsing
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -688,15 +688,32 @@ class ShogiGame:
 
     def make_move(
         self, move_tuple: MoveTuple, is_simulation: bool = False
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Union[Dict[str, Any], Tuple[np.ndarray, float, bool, Dict[str, Any]]]:
         """
         Applies a move, updates history, and delegates to shogi_move_execution.
         This is the primary method for making a move.
-        Returns move details if is_simulation is True, otherwise None.
+
+        Args:
+            move_tuple: The move to apply
+            is_simulation: If True, this is a simulation move for legal move checking
+
+        Returns:
+            If is_simulation is True: move details dictionary
+            Otherwise: A 4-tuple (observation, reward, done, info) for RL training
         """
         if self.game_over and not is_simulation:
-            # print("Game is over. No more moves allowed.")
-            return None
+            # Game is over, return the current state, reward 0, done True, and termination info
+            next_obs = self.get_observation()
+            reward = 0.0  # No reward for trying to move in a completed game
+            done = True
+            info = {
+                "termination_reason": (
+                    self.termination_reason
+                    if self.termination_reason
+                    else "Game already over"
+                )
+            }
+            return next_obs, reward, done, info
 
         player_who_made_the_move = self.current_player
         move_count_before_move = self.move_count
@@ -896,14 +913,29 @@ class ShogiGame:
             # *after* the move, associated with the player who made it.
             self.board_history.append(current_state_hash)
 
+        # Store who made the move before we switch players
+        player_who_made_the_move = self.current_player
+
         # Call apply_move_to_board to switch player, increment move count, and check game end.
-        # Pass the original move_tuple as it might be used by apply_move_to_board for its logic,
-        # though we\\'ve handled direct board changes here.
+        # Pass the original move_tuple as it might be used by apply_move_to_board for its logic.
         shogi_move_execution.apply_move_to_board(self, is_simulation)
 
         if is_simulation:
             return move_details_for_history
-        return None
+
+        # For training, return a 4-tuple (observation, reward, done, info)
+        next_obs = self.get_observation()
+        reward = self.get_reward(
+            player_who_made_the_move
+        )  # Get reward from perspective of the player who moved
+        done = self.game_over
+        info = (
+            {"termination_reason": self.termination_reason}
+            if self.termination_reason
+            else {}
+        )
+
+        return next_obs, reward, done, info
 
     def undo_move(
         self, simulation_undo_details: Optional[Dict[str, Any]] = None
@@ -975,3 +1007,26 @@ class ShogiGame:
 
     def __repr__(self):
         return f"<ShogiGame move_count={self.move_count} current_player={self.current_player}>"
+
+    def get_reward(self, player_color: Optional[Color] = None) -> float:
+        """
+        Returns the reward for the specified player or the current player if not specified.
+
+        Returns:
+            +1.0 for winning
+            -1.0 for losing
+            0.0 for draw or ongoing game
+        """
+        # If no player specified, use the current player
+        player_color = player_color if player_color is not None else self.current_player
+
+        # If game isn't over, reward is 0
+        if not self.game_over:
+            return 0.0
+
+        # Draw conditions: stalemate, sennichite, max moves
+        if self.winner is None:
+            return 0.0
+
+        # Win/loss: player_color matches the winner (+1) or doesn't (-1)
+        return 1.0 if self.winner == player_color else -1.0

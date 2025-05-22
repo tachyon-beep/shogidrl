@@ -50,6 +50,7 @@ class Color(Enum):
     Represents the player color.
     In Shogi, Black (Sente) typically moves first.
     """
+
     BLACK = 0  # Sente (先手), typically moves first
     WHITE = 1  # Gote (後手)
 
@@ -58,6 +59,7 @@ class PieceType(Enum):
     """
     Represents the type of a Shogi piece, including promoted states.
     """
+
     PAWN = 0
     LANCE = 1
     KNIGHT = 2
@@ -66,13 +68,13 @@ class PieceType(Enum):
     BISHOP = 5
     ROOK = 6
     KING = 7
-    PROMOTED_PAWN = 8     # Tokin (と)
-    PROMOTED_LANCE = 9    # Promoted Lance (成香 - Narikyō)
+    PROMOTED_PAWN = 8  # Tokin (と)
+    PROMOTED_LANCE = 9  # Promoted Lance (成香 - Narikyō)
     PROMOTED_KNIGHT = 10  # Promoted Knight (成桂 - Narikei)
     PROMOTED_SILVER = 11  # Promoted Silver (成銀 - Narigin)
     # Gold does not promote
     PROMOTED_BISHOP = 12  # Horse (竜馬 - Ryūma)
-    PROMOTED_ROOK = 13    # Dragon (竜王 - Ryūō)
+    PROMOTED_ROOK = 13  # Dragon (竜王 - Ryūō)
     # King does not promote
 
 
@@ -86,12 +88,12 @@ KIF_PIECE_SYMBOLS: Dict[PieceType, str] = {
     PieceType.BISHOP: "KA",
     PieceType.ROOK: "HI",
     PieceType.KING: "OU",  # Or "GY" for Gyoku (玉), "OU" (王) is common for King
-    PieceType.PROMOTED_PAWN: "TO",    # Tokin
-    PieceType.PROMOTED_LANCE: "NY",   # Nari-Kyo (Promoted Lance)
+    PieceType.PROMOTED_PAWN: "TO",  # Tokin
+    PieceType.PROMOTED_LANCE: "NY",  # Nari-Kyo (Promoted Lance)
     PieceType.PROMOTED_KNIGHT: "NK",  # Nari-Kei (Promoted Knight)
     PieceType.PROMOTED_SILVER: "NG",  # Nari-Gin (Promoted Silver)
-    PieceType.PROMOTED_BISHOP: "UM",   # Uma (Horse)
-    PieceType.PROMOTED_ROOK: "RY",    # Ryu (Dragon)
+    PieceType.PROMOTED_BISHOP: "UM",  # Uma (Horse)
+    PieceType.PROMOTED_ROOK: "RY",  # Ryu (Dragon)
 }
 
 
@@ -99,11 +101,12 @@ class TerminationReason(Enum):
     """
     Enumerates reasons why a Shogi game might terminate.
     """
+
     CHECKMATE = "checkmate"
     RESIGNATION = "resignation"
     MAX_MOVES_EXCEEDED = "max_moves_exceeded"
     REPETITION = "repetition"  # Sennichite (千日手)
-    IMPASSE = "impasse"        # Jishogi (持将棋) (by points, declaration, etc.)
+    IMPASSE = "impasse"  # Jishogi (持将棋) (by points, declaration, etc.)
     ILLEGAL_MOVE = "illegal_move"
     TIME_FORFEIT = "time_forfeit"
     NO_CONTEST = "no_contest"  # E.g. server error, mutual agreement for no result
@@ -434,7 +437,7 @@ class Piece:
         """
         return hash((self.type, self.color))
 
-    def __deepcopy__(self, memo: Dict[int, 'Piece']) -> 'Piece':
+    def __deepcopy__(self, memo: Dict[int, "Piece"]) -> "Piece":
         """
         Creates a deep copy of this Piece instance.
         Since Piece instances are relatively simple and their core attributes

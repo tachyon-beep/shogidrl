@@ -245,7 +245,9 @@ def test_get_usi_char_for_drop_valid(  # pylint: disable=protected-access
 )
 def test_get_usi_char_for_drop_invalid(mapper: PolicyOutputMapper, invalid_piece_type):
     with pytest.raises(ValueError):
-        mapper._get_usi_char_for_drop(invalid_piece_type)  # pylint: disable=protected-access
+        mapper._get_usi_char_for_drop(
+            invalid_piece_type
+        )  # pylint: disable=protected-access
 
 
 @pytest.mark.parametrize(
