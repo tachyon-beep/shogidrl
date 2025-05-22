@@ -187,35 +187,50 @@ def convert_game_to_text_representation(game: "ShogiGame") -> str:
 
 def game_to_kif(
     game: "ShogiGame",
-    filename: str,
+    filename: Optional[str] = None,
     sente_player_name: str = "Sente",
     gote_player_name: str = "Gote",
-) -> None:
+) -> Optional[str]:
     """
-    Converts a game to a KIF file.
+    Converts a game to a KIF file or string representation.
     Uses standard KIF piece notation (+FU, -FU, etc.) and includes more headers.
+
+    Args:
+        game: The ShogiGame to convert
+        filename: If provided, the KIF will be written to this file
+        sente_player_name: Name of the black/sente player
+        gote_player_name: Name of the white/gote player
+
+    Returns:
+        If filename is None, returns a string representation of the KIF.
+        Otherwise returns None after writing to the file.
     """
-    with open(filename, "w", encoding="utf-8") as kif_file:
-        # --- KIF Headers ---\n        kif_file.write("#KIF version=2.0 encoding=UTF-8\\n")
-        kif_file.write("*Event: Casual Game\\n")
-        kif_file.write("*Site: Local Machine\\n")
-        kif_file.write(f"*Date: {datetime.date.today().strftime('%Y/%m/%d')}\\n")
-        kif_file.write(f"*Player Sente: {sente_player_name}\\n")
-        kif_file.write(f"*Player Gote: {gote_player_name}\\n")
-        kif_file.write("*Handicap: HIRATE\\n")
+
+    # Helper function to create KIF content
+    def create_kif_content():
+        lines = []
+        # --- KIF Headers ---
+        lines.append("#KIF version=2.0 encoding=UTF-8")
+        lines.append("*Event: Casual Game")
+        lines.append("*Site: Local Machine")
+        lines.append(f"*Date: {datetime.date.today().strftime('%Y/%m/%d')}")
+        lines.append(f"*Player Sente: {sente_player_name}")
+        lines.append(f"*Player Gote: {gote_player_name}")
+        lines.append("*Handicap: HIRATE")
 
         # Standard HIRATE starting position
-        kif_file.write("P1-KY-KE-GI-KI-OU-KI-GI-KE-KY\n")
-        kif_file.write("P2 * -HI * * * * * -KA * \n")
-        kif_file.write("P3-FU-FU-FU-FU-FU-FU-FU-FU-FU\n")
-        kif_file.write("P4 * * * * * * * * * \n")
-        kif_file.write("P5 * * * * * * * * * \n")
-        kif_file.write("P6 * * * * * * * * * \n")
-        kif_file.write("P7+FU+FU+FU+FU+FU+FU+FU+FU+FU\n")
-        kif_file.write("P8 * +KA * * * * * +HI * \n")
-        kif_file.write("P9+KY+KE+GI+KI+OU+KI+GI+KE+KY\n")
+        lines.append("P1-KY-KE-GI-KI-OU-KI-GI-KE-KY")
+        lines.append("P2 * -HI * * * * * -KA * ")
+        lines.append("P3-FU-FU-FU-FU-FU-FU-FU-FU-FU")
+        lines.append("P4 * * * * * * * * * ")
+        lines.append("P5 * * * * * * * * * ")
+        lines.append("P6 * * * * * * * * * ")
+        lines.append("P7+FU+FU+FU+FU+FU+FU+FU+FU+FU")
+        lines.append("P8 * +KA * * * * * +HI * ")
+        lines.append("P9+KY+KE+GI+KI+OU+KI+GI+KE+KY")
 
-        # --- Initial Hands (KIF format: P+00FU00KY... for Sente, P-00FU00KY... for Gote) ---\n        # This assumes starting with empty hands for a standard game from initial board setup.
+        # --- Initial Hands (KIF format: P+00FU00KY... for Sente, P-00FU00KY... for Gote) ---
+        # This assumes starting with empty hands for a standard game from initial board setup.
         sente_hand_str: str = "P+"
         gote_hand_str: str = "P-"
         hand_order_for_kif: List[PieceType] = [
@@ -238,15 +253,15 @@ def game_to_kif(
             gote_hand_str += (
                 f"{initial_gote_hand.get(pt, 0):02d}{KIF_PIECE_SYMBOLS.get(pt, '??')}"
             )
-        kif_file.write(f"{sente_hand_str}\\n")
-        kif_file.write(f"{gote_hand_str}\\n")
+        lines.append(f"{sente_hand_str}")
+        lines.append(f"{gote_hand_str}")
 
         # --- Player to move first ---
-        kif_file.write(
-            f"{'+' if game.current_player == Color.BLACK else '-'}\n"
+        lines.append(
+            f"{'+' if game.current_player == Color.BLACK else '-'}"
         )  # + for Sente, - for Gote
 
-        kif_file.write("moves\n")  # Start of the moves section
+        lines.append("moves")  # Start of the moves section
 
         # --- Moves ---
         mapper = PolicyOutputMapper()
@@ -258,24 +273,36 @@ def game_to_kif(
                 continue
 
             usi_move_str: str = mapper.shogi_move_to_usi(move_obj)
-            kif_file.write(f"{i+1} {usi_move_str}\\n")
+            lines.append(f"{i+1} {usi_move_str}")
 
         # --- Game Termination ---
         if game.game_over:
             if game.termination_reason == TerminationReason.CHECKMATE.value:
-                kif_file.write("Tsumi\n")
+                lines.append("Tsumi")
             elif game.termination_reason == TerminationReason.RESIGNATION.value:
-                kif_file.write("Toryo\n")
+                lines.append("Toryo")
             elif game.termination_reason == TerminationReason.MAX_MOVES_EXCEEDED.value:
-                kif_file.write("Jishogi\n")
+                lines.append("Jishogi")
             elif game.termination_reason == TerminationReason.REPETITION.value:
-                kif_file.write("Sennichite\n")
+                lines.append("Sennichite")
             elif game.termination_reason == TerminationReason.ILLEGAL_MOVE.value:
-                kif_file.write("Illegal move\n")
+                lines.append("Illegal move")
             elif game.termination_reason == TerminationReason.TIME_FORFEIT.value:
-                kif_file.write("Time_up\n")
+                lines.append("Time_up")
 
-        kif_file.write("*EOF\n")  # Standard KIF end marker
+        lines.append("*EOF")  # Standard KIF end marker
+        return "\n".join(lines)
+
+    # Generate KIF content
+    kif_content = create_kif_content()
+
+    # Either write to file or return as string
+    if filename:
+        with open(filename, "w", encoding="utf-8") as kif_file:
+            kif_file.write(kif_content)
+        return None
+    else:
+        return kif_content
 
 
 # --- SFEN Move Parsing ---
@@ -326,13 +353,13 @@ def sfen_to_move_tuple(sfen_move_str: str) -> MoveTuple:
     # Regex for drop moves: e.g., "P*5e"
     # Group 1: Piece character (P, L, N, S, G, B, R)
     # Group 2: Square (e.g., 5e)
-    drop_move_pattern = re.compile(r"^([PLNSGBR])\\*([1-9][a-i])$")
+    drop_move_pattern = re.compile(r"^([PLNSGBR])\*([1-9][a-i])$")
 
     # Regex for board moves: e.g., "7g7f", "2b3a+"
     # Group 1: From square (e.g., 7g)
     # Group 2: To square (e.g., 7f)
     # Group 3: Optional promotion character (+)
-    board_move_pattern = re.compile(r"^([1-9][a-i])([1-9][a-i])(\\+)?$")
+    board_move_pattern = re.compile(r"^([1-9][a-i])([1-9][a-i])(\+)?$")
 
     drop_match = drop_move_pattern.match(sfen_move_str)
     if drop_match:

@@ -41,25 +41,6 @@ def fresh_game():
     return ShogiGame(max_moves_per_game=512)
 
 
-def test_make_undo_simple_move(fresh_game):
-    game = fresh_game
-    state_before = serialize_state(game)
-    # Simple pawn move from (6,4) to (5,4)
-    move: BoardMoveTuple = (6, 4, 5, 4, False)
-    # Use make_move and undo_move via ShogiGame interface
-    game.make_move(move)
-    game.undo_move()
-    state_after = serialize_state(game)
-    assert state_before == state_after
-
-
-def test_make_undo_capture_move(fresh_game):
-    game = fresh_game
-    # Place opponent pawn in front of black pawn to capture
-    game.set_piece(5, 4, Piece(PieceType.PAWN, Color.WHITE))
-    state_before = serialize_state(game)
-    move: BoardMoveTuple = (6, 4, 5, 4, False)
-    game.make_move(move)
-    game.undo_move()
-    state_after = serialize_state(game)
-    assert state_before == state_after
+# DEPRECATED: All undo move tests have been consolidated into
+# 'test_shogi_game_mock_comprehensive.py' and 'test_shogi_game_updated_with_mocks.py'.
+# This file is retained for reference only. Do not add new tests here.
