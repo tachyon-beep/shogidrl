@@ -33,6 +33,7 @@ class PPOAgent:
         value_loss_coeff: float = 0.5,
         entropy_coef: float = 0.01,
         device: str = "cpu",
+        name: str = "PPOAgent",  # Added name parameter
     ):
         """
         Initialize the PPOAgent with model, optimizer, and PPO hyperparameters.
@@ -49,6 +50,7 @@ class PPOAgent:
         self.ppo_epochs = ppo_epochs
         self.minibatch_size = minibatch_size
         self.last_kl_div = 0.0  # Initialize KL divergence tracker
+        self.name = name  # Initialize name attribute
 
     def select_action(
         self,

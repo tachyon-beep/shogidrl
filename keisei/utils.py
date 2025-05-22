@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import datetime
 import sys
+from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Dict, List, Set, TextIO
 
 import torch
@@ -20,6 +21,7 @@ from keisei.shogi.shogi_core_definitions import (  # Import the standalone funct
 
 if TYPE_CHECKING:
     from keisei.shogi.shogi_core_definitions import MoveTuple
+    from keisei.shogi.shogi_game import ShogiGame # Added for type hinting
 
 
 class PolicyOutputMapper:
@@ -351,3 +353,88 @@ class TrainingLogger:
         if self.file_handle:
             self.file_handle.close()
             self.file_handle = None
+
+
+class EvaluationLogger:
+    """Logs evaluation results against different opponents."""
+
+    def __init__(self, log_file_path: str, also_stdout: bool = True):
+        """Initialize the logger.
+
+        Args:
+            log_file_path: Path to the log file.
+            also_stdout: If True, also print log messages to stdout.
+        """
+        self.log_file_path = log_file_path
+        self.also_stdout = also_stdout
+        self.file_handle: TextIO | None = None
+
+    def __enter__(self) -> "EvaluationLogger":
+        self.file_handle = open(self.log_file_path, "a", encoding="utf-8")
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.file_handle:
+            self.file_handle.close()
+            self.file_handle = None
+
+    def log_evaluation_result(
+        self,
+        iteration: int,
+        opponent_name: str,
+        win_rate: float,
+        avg_game_length: float,
+        num_games: int,
+    ) -> None:
+        """Logs the result of an evaluation match."""
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_entry = (
+            f"[{timestamp}] Iteration: {iteration}, Opponent: {opponent_name}, "
+            f"Win Rate: {win_rate:.2f}, Avg Game Length: {avg_game_length:.2f}, Games: {num_games}"
+        )
+        if self.file_handle:
+            self.file_handle.write(log_entry + "\n")
+            self.file_handle.flush()
+
+        if self.also_stdout:
+            print(log_entry, file=sys.stdout)
+
+    def log_custom_message(self, message: str) -> None:
+        """Logs a custom message."""
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_entry = f"[{timestamp}] {message}"
+        if self.file_handle:
+            self.file_handle.write(log_entry + "\n")
+            self.file_handle.flush()
+
+        if self.also_stdout:
+            print(log_entry, file=sys.stdout)
+
+    def close(self) -> None:
+        """Close the log file."""
+        if self.file_handle:
+            self.file_handle.close()
+            self.file_handle = None
+
+
+class BaseOpponent(ABC):
+    """Abstract base class for all opponents used in evaluation."""
+
+    def __init__(self, name: str):
+        self.name = name
+
+    @abstractmethod
+    def select_move(self, game_instance: "ShogiGame") -> "MoveTuple":
+        """
+        Selects a move given the current game state.
+
+        Args:
+            game_instance: The current ShogiGame instance.
+
+        Returns:
+            The selected move as a MoveTuple.
+        """
+        pass
+
+    def __str__(self) -> str:
+        return self.name
