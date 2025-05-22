@@ -3,21 +3,18 @@ Core Shogi game rules, move generation, and validation logic.
 Functions in this module operate on a ShogiGame instance.
 """
 
-from copy import deepcopy  # ensure deep copy is available
 from typing import TYPE_CHECKING, List, Optional, Set, Tuple  # Added Set
 
 # Ensure all necessary types are imported:
 from .shogi_core_definitions import (
     BASE_TO_PROMOTED_TYPE,
     Color,
-    DropMoveTuple,
     MoveTuple,
     Piece,
     PieceType,
 )
 
 if TYPE_CHECKING:
-    from .shogi_core_definitions import BoardMoveTuple  # Added for type hinting
     from .shogi_game import ShogiGame  # For type hinting the 'game' parameter
 
 
@@ -93,6 +90,7 @@ def generate_piece_potential_moves(
     the square is included (as a capture). If friendly, it's not included.
     (Formerly ShogiGame.get_individual_piece_moves)
     """
+
     moves: List[Tuple[int, int]] = []
     # Black (Sente, 0) moves towards smaller row indices, White (Gote, 1) towards larger
     forward: int = (
@@ -206,6 +204,7 @@ def generate_piece_potential_moves(
                     if target_piece.color != piece.color:
                         moves.append((nr, nc))
                     break
+
     return list(set(moves))  # Remove duplicates, type is List[Tuple[int, int]]
 
 
@@ -263,7 +262,7 @@ def check_if_square_is_attacked(
                 if (r_target, c_target) in potential_moves_of_attacker:
                     if debug:
                         print(
-                            f"DEBUG_CHECK_SQ_ATTACKED: YES, {piece.type.name} ({piece.color.name}) at ({r_attacker},{c_attacker}) attacks ({r_target},{c_target}). Potential moves: {potential_moves_of_attacker}"
+                            f"DEBUG_CHECK_SQ_ATTACKED: ***ASSERTION TRIGGER*** YES, {piece.type.name} ({piece.color.name}) at ({r_attacker},{c_attacker}) attacks target ({r_target},{c_target}). Attacker potential moves: {potential_moves_of_attacker}. Game SFEN: {game.to_sfen_string()}"
                         )
                     return True
     if debug:
@@ -344,18 +343,14 @@ def check_for_uchi_fu_zume(
     # 2. Check if the opponent's king has any legal moves to escape the check.
     #    Temporarily switch current player in the game to opponent to generate their legal moves.
     game.current_player = opp_color  # Now it's opponent's turn to find escapes
-    # print(f"DEBUG_UCHI_FU_ZUME_DETAILED: Switched game.current_player to {game.current_player} (opp_color) for opponent move generation.")
-    # print(f"DEBUG_UCHI_FU_ZUME_DETAILED: Calling generate_all_legal_moves for {opp_color} with is_uchi_fu_zume_check=True. SFEN: {game.to_sfen_string()}")
 
     opponent_legal_moves = generate_all_legal_moves(game, is_uchi_fu_zume_check=True)
 
-    # print(f"DEBUG_UCHI_FU_ZUME_DETAILED: Opponent ({opp_color}) legal moves found: {len(opponent_legal_moves)} moves: {opponent_legal_moves}")
-
+    # print(f\"DEBUG_UCHI_FU_ZUME_DETAILED: Opponent ({opp_color}) legal moves found: {len(opponent_legal_moves)} moves: {opponent_legal_moves}\")
     # Revert pawn drop and restore original player *before* returning the result
     game.set_piece(drop_row, drop_col, None)  # Corrected: Use set_piece with None
     game.hands[color.value][PieceType.PAWN] += 1
     game.current_player = original_current_player  # Restore original player
-    # print(f"DEBUG_UCHI_FU_ZUME_DETAILED: Restored game.current_player to {game.current_player}. Pawn drop reverted.")
 
     # If opponent_legal_moves is empty, it means the opponent is checkmated by the pawn drop.
     # Therefore, it IS uchi_fu_zume.
@@ -372,17 +367,16 @@ def is_king_in_check_after_simulated_move(
     Assumes the board reflects the state *after* a move has been made.
     (Formerly ShogiGame._king_in_check_after_move)
     """
-    # MODIFIED: Use find_king helper
     king_pos = find_king(game, player_color)
 
     if not king_pos:
-        # This implies king was captured or somehow removed.
-        # In Shogi, a move that results in your own king being captured is illegal.
-        # If king is missing, it's an invalid state for this check, effectively means check.
         return True
 
     opponent_color = Color.WHITE if player_color == Color.BLACK else Color.BLACK
-    return check_if_square_is_attacked(game, king_pos[0], king_pos[1], opponent_color)
+    in_check = check_if_square_is_attacked(
+        game, king_pos[0], king_pos[1], opponent_color, debug=False
+    )  # debug was from the removed flag
+    return in_check
 
 
 def can_promote_specific_piece(
@@ -492,51 +486,20 @@ def can_drop_specific_piece(
 
 
 def generate_all_legal_moves(
-    game: "ShogiGame", is_uchi_fu_zume_check: bool = False
+    game: "ShogiGame",
+    is_uchi_fu_zume_check: bool = False,  # Restored is_uchi_fu_zume_check
 ) -> List[MoveTuple]:
-    """
-    Generates all legal moves for the current player.
-
-    RECURSION HANDLING: The is_uchi_fu_zume_check parameter is used to prevent infinite
-    recursion when checking for Uchi-Fu-Zume (illegal pawn drop checkmate). When True:
-
-    1. This function is being called from check_for_uchi_fu_zume() to find opponent escapes
-    2. The flag is passed to can_drop_specific_piece() as is_escape_check
-    3. When is_escape_check=True, pawn drops skip the uchi_fu_zume check
-
-    This breaks potential infinite recursion where:
-    - check_for_uchi_fu_zume calls generate_all_legal_moves for opponent
-    - generate_all_legal_moves processes pawn drops and calls can_drop_specific_piece
-    - can_drop_specific_piece calls check_for_uchi_fu_zume
-    - And the cycle would repeat
-
-    A move is legal if:
-    1. It follows the piece's movement rules.
-    2. For drops: it follows drop rules (Nifu, Uchi Fu Zume, no-move squares).
-    3. It does not leave the current player's king in check.
-    (Formerly ShogiGame.get_legal_moves)
-    """
+    # Basic entry log
+    print(
+        f"\nDEBUG_GALM: Entered for player {game.current_player}. SFEN: {game.to_sfen_string()}"
+    )
     if is_uchi_fu_zume_check:
-        # print(f"DEBUG_GALM_UCHI_CHECK: Entered for player {game.current_player}. SFEN: {game.to_sfen_string()}")
-        # print(f"DEBUG_GALM_UCHI_CHECK: Hands for {game.current_player}: {game.hands[game.current_player.value]}")
-        current_player_king_exists = find_king(game, game.current_player) is not None
-        if not current_player_king_exists:
-            # print(f"DEBUG_GALM_UCHI_CHECK: Exiting early because current player {game.current_player} (opponent) has no king. SFEN: {game.to_sfen_string()}")
-            return []
-    else:
-        has_black_king = find_king(game, Color.BLACK) is not None
-        has_white_king = find_king(game, Color.WHITE) is not None
-        if not (has_black_king and has_white_king):
-            # print(f"DEBUG_GALM_NORMAL_CHECK: Exiting early because not (has_black_king and has_white_king). BK: {has_black_king}, WK: {has_white_king}. SFEN: {game.to_sfen_string()}")
-            return []
+        print("DEBUG_GALM: Mode: is_uchi_fu_zume_check=True")  # Corrected f-string
 
     legal_moves: List[MoveTuple] = []
     original_player_color = game.current_player
-    # opponent_color = Color.WHITE if original_player_color == Color.BLACK else Color.BLACK # Not strictly needed here with new approach
 
-    # I. Generate Board Moves (moving a piece already on the board)
-    # if is_uchi_fu_zume_check:
-    # print(f"DEBUG_GALM_UCHI_CHECK: [{original_player_color}] Starting board move generation.\")
+    # I. Generate Board Moves
     for r_from in range(9):
         for c_from in range(9):
             piece = game.get_piece(r_from, c_from)
@@ -544,113 +507,122 @@ def generate_all_legal_moves(
                 potential_squares = generate_piece_potential_moves(
                     game, piece, r_from, c_from
                 )
-                # if is_uchi_fu_zume_check and potential_squares:
-                # print(f"DEBUG_GALM_UCHI_CHECK: [{original_player_color}] Piece {piece.type.name} at ({r_from},{c_from}) potential squares: {potential_squares}\")
-
                 for r_to, c_to in potential_squares:
-                    # Check for promotion possibilities
                     can_promote = can_promote_specific_piece(game, piece, r_from, r_to)
                     must_promote = must_promote_specific_piece(piece, r_to)
-
                     possible_promotions = [False]
                     if can_promote:
                         possible_promotions.append(True)
-
-                    if (
-                        must_promote and True not in possible_promotions
-                    ):  # Should not happen if can_promote is correct
-                        possible_promotions = [True]
-                    elif must_promote:  # Ensure only True is considered if must_promote
+                    if must_promote:
                         possible_promotions = [True]
 
                     for promote_option in possible_promotions:
                         if must_promote and not promote_option:
-                            continue  # Skip non-promotion if promotion is mandatory
-
-                        move_tuple: MoveTuple = (
-                            r_from,
-                            c_from,
-                            r_to,
-                            c_to,
-                            promote_option,
-                        )
-
-                        # Simulate the move on the actual game board
-                        # Store enough info to undo if ShogiGame.undo_move() is not used or not suitable
-                        # For board moves, ShogiGame.make_move and ShogiGame.undo_move should handle history.
+                            continue
+                        move_tuple = (r_from, c_from, r_to, c_to, promote_option)
 
                         simulation_details = game.make_move(
                             move_tuple, is_simulation=True
-                        )  # Apply move
+                        )
 
-                        # Check if the current player's king is in check *after* this move
-                        if not is_king_in_check_after_simulated_move(
+                        # --- TRACE PRINT BLOCK START ---
+                        king_pos_trace = find_king(game, original_player_color)
+                        king_r_trace, king_c_trace = (
+                            king_pos_trace if king_pos_trace else (-1, -1)
+                        )
+                        opponent_color_trace = (
+                            Color.WHITE
+                            if original_player_color == Color.BLACK
+                            else Color.BLACK
+                        )
+                        is_attacked_after_sim = False  # Default if king not found
+                        if king_pos_trace:  # Only check if king exists
+                            is_attacked_after_sim = check_if_square_is_attacked(
+                                game, king_r_trace, king_c_trace, opponent_color_trace
+                            )
+                        target_square_content_after_sim = game.get_piece(r_to, c_to)
+                        king_is_safe_eval = not is_attacked_after_sim
+
+                        # print(f"TRACE_SIM_BOARD_MOVE: Player {original_player_color}, Move {move_tuple}, Piece {piece}, Promoted: {promote_option}")
+                        # print(f"  King at ({king_r_trace},{king_c_trace}), Target sq ({r_to},{c_to}) content after sim: {target_square_content_after_sim}")
+                        # print(f"  Is king attacked after sim? {is_attacked_after_sim}. Final king_is_safe: {king_is_safe_eval}")
+                        # --- TRACE PRINT BLOCK END ---
+
+                        king_is_safe = not is_king_in_check_after_simulated_move(
                             game, original_player_color
-                        ):
+                        )
+                        if king_is_safe:
                             legal_moves.append(move_tuple)
-                            # if is_uchi_fu_zume_check:
-                            # print(f\"DEBUG_GALM_UCHI_CHECK: [{original_player_color}] Added legal board move: {move_tuple}\")
-                        # else:
-                        # if is_uchi_fu_zume_check:
-                        # print(f\"DEBUG_GALM_UCHI_CHECK: [{original_player_color}] Illegal board move (self-check): {move_tuple}\")
-
-                        game.undo_move(
-                            simulation_undo_details=simulation_details
-                        )  # Revert the move
+                        game.undo_move(simulation_undo_details=simulation_details)
 
     # II. Generate Drop Moves
-    # if is_uchi_fu_zume_check:
-    # print(f\"DEBUG_GALM_UCHI_CHECK: [{original_player_color}] Starting drop move generation. Hand: {game.hands[original_player_color.value]}\")
-
     for piece_type_to_drop_val, count in game.hands[
         original_player_color.value
     ].items():
         if count > 0:
-            piece_type_to_drop = PieceType(
-                piece_type_to_drop_val
-            )  # Ensure it's PieceType enum
-            for r_to in range(9):
-                for c_to in range(9):
-                    # Check basic drop rules (empty square, nifu, no-move squares, uchi_fu_zume)
-                    # Pass is_escape_check=is_uchi_fu_zume_check to can_drop_specific_piece
-                    # This ensures that if we are generating moves for an uchi_fu_zume check (i.e., opponent's escapes),
-                    # we don't recursively call uchi_fu_zume check for the opponent's pawn drops.
+            piece_type_to_drop = PieceType(piece_type_to_drop_val)
+            for r_to_drop in range(9):
+                for c_to_drop in range(9):
                     if can_drop_specific_piece(
                         game,
                         piece_type_to_drop,
-                        r_to,
-                        c_to,
+                        r_to_drop,
+                        c_to_drop,
                         original_player_color,
-                        is_escape_check=is_uchi_fu_zume_check,  # Pass the flag here
+                        is_escape_check=is_uchi_fu_zume_check,
                     ):
-                        drop_move_tuple: MoveTuple = (
+                        drop_move_tuple = (
                             None,
                             None,
-                            r_to,
-                            c_to,
+                            r_to_drop,
+                            c_to_drop,
                             piece_type_to_drop,
                         )
-
-                        # Simulate the drop using make_move for consistency
-                        simulation_details = game.make_move(
+                        simulation_details_drop = game.make_move(
                             drop_move_tuple, is_simulation=True
                         )
 
-                        if not is_king_in_check_after_simulated_move(
-                            game, original_player_color
-                        ):
+                        # --- TRACE PRINT BLOCK START (DROP) ---
+                        king_pos_trace_drop = find_king(game, original_player_color)
+                        king_r_trace_drop, king_c_trace_drop = (
+                            king_pos_trace_drop if king_pos_trace_drop else (-1, -1)
+                        )
+                        opponent_color_trace_drop = (
+                            Color.WHITE
+                            if original_player_color == Color.BLACK
+                            else Color.BLACK
+                        )
+                        is_attacked_after_drop_sim = False  # Default if king not found
+                        if king_pos_trace_drop:  # Only check if king exists
+                            is_attacked_after_drop_sim = check_if_square_is_attacked(
+                                game,
+                                king_r_trace_drop,
+                                king_c_trace_drop,
+                                opponent_color_trace_drop,
+                            )
+                        target_square_content_after_drop_sim = game.get_piece(
+                            r_to_drop, c_to_drop
+                        )
+                        king_is_safe_eval_drop = not is_attacked_after_drop_sim
+
+                        # print(f"TRACE_SIM_DROP_MOVE: Player {original_player_color}, Drop {drop_move_tuple}")
+                        # print(f"  King at ({king_r_trace_drop},{king_c_trace_drop}), Target sq ({r_to_drop},{c_to_drop}) content after sim: {target_square_content_after_drop_sim}")
+                        # print(f"  Is king attacked after drop sim? {is_attacked_after_drop_sim}. Final king_is_safe: {king_is_safe_eval_drop}")
+                        # --- TRACE PRINT BLOCK END (DROP) ---
+
+                        king_is_safe_after_drop = (
+                            not is_king_in_check_after_simulated_move(
+                                game, original_player_color
+                            )
+                        )
+                        if king_is_safe_after_drop:
                             legal_moves.append(drop_move_tuple)
-                            # if is_uchi_fu_zume_check:
-                            # print(f\"DEBUG_GALM_UCHI_CHECK: [{original_player_color}] Added legal drop move: {drop_move_tuple}\")
-                        # else:
-                        # if is_uchi_fu_zume_check:
-                        # print(f\"DEBUG_GALM_UCHI_CHECK: [{original_player_color}] Illegal drop move (self-check): {drop_move_tuple}\")
+                        game.undo_move(simulation_undo_details=simulation_details_drop)
 
-                        # Revert the drop using undo_move
-                        game.undo_move(simulation_undo_details=simulation_details)
-
-    # if is_uchi_fu_zume_check:
-    # print(f\"DEBUG_GALM_UCHI_CHECK: [{original_player_color}] Total legal moves found: {len(legal_moves)}\")
+    # Keep this final print for now to confirm the list content before returning
+    print(
+        f"DEBUG_GALM: FINALIZING for {original_player_color}. Total legal moves: {len(legal_moves)}. Moves: {legal_moves}"
+    )
     return legal_moves
 
 

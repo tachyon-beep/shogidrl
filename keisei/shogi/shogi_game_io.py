@@ -18,18 +18,13 @@ from .shogi_core_definitions import (  # Observation plane constants
     OBS_OPP_PLAYER_PROMOTED_START,
     OBS_OPP_PLAYER_UNPROMOTED_START,
     OBS_PROMOTED_ORDER,
-    OBS_RESERVED_1,
-    OBS_RESERVED_2,
     OBS_UNPROMOTED_ORDER,
     SYMBOL_TO_PIECE_TYPE,
-    BoardMoveTuple,
     Color,
-    DropMoveTuple,
     MoveTuple,
     Piece,
     PieceType,
     TerminationReason,
-    get_piece_type_from_symbol,
     get_unpromoted_types,
 )
 
@@ -277,18 +272,41 @@ def game_to_kif(
 
         # --- Game Termination ---
         if game.game_over:
-            if game.termination_reason == TerminationReason.CHECKMATE.value:
-                lines.append("Tsumi")
-            elif game.termination_reason == TerminationReason.RESIGNATION.value:
-                lines.append("Toryo")
-            elif game.termination_reason == TerminationReason.MAX_MOVES_EXCEEDED.value:
-                lines.append("Jishogi")
-            elif game.termination_reason == TerminationReason.REPETITION.value:
-                lines.append("Sennichite")
-            elif game.termination_reason == TerminationReason.ILLEGAL_MOVE.value:
-                lines.append("Illegal move")
-            elif game.termination_reason == TerminationReason.TIME_FORFEIT.value:
-                lines.append("Time_up")
+            termination_map: Dict[str, str] = {
+                "Tsumi": "詰み",
+                "Toryo": "投了",
+                "Sennichite": "千日手",
+                "Stalemate": "持将棋",
+                "Max moves reached": "持将棋",  # Or "最大手数" or similar
+                # Add other mappings for values set in game.termination_reason
+            }
+            reason_str: Optional[str] = game.termination_reason
+            kif_termination_reason_display: str
+
+            if reason_str is None:
+                kif_termination_reason_display = ""  # No reason string if None
+            else:
+                # Now reason_str is str, so termination_map.get(str, str) is used
+                kif_termination_reason_display = termination_map.get(
+                    reason_str, reason_str
+                )
+
+            if kif_termination_reason_display:
+                lines.append(kif_termination_reason_display)
+
+            # Append the RESULT line based on winner
+            if game.winner == Color.BLACK:
+                lines.append("RESULT:SENTE_WIN")
+            elif game.winner == Color.WHITE:
+                lines.append("RESULT:GOTE_WIN")
+            elif game.winner is None:  # Draw conditions
+                # More specific draw reasons could be mapped to KIF draw results
+                if game.termination_reason in [
+                    TerminationReason.REPETITION.value,
+                    TerminationReason.IMPASSE.value,
+                    TerminationReason.MAX_MOVES_EXCEEDED.value,
+                ]:
+                    lines.append("RESULT:DRAW")  # Or HIKIWAKE etc.
 
         lines.append("*EOF")  # Standard KIF end marker
         return "\n".join(lines)

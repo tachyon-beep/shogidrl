@@ -264,9 +264,7 @@ def test_parse_sfen_square_parses_various_squares():
 def test_get_piece_type_from_sfen_char_handles_all_piece_types_and_promotions():
     """Test that _get_piece_type_from_sfen_char parses all supported piece types and promoted pieces."""
     with setup_pytorch_mock_environment():
-        assert (
-            _get_piece_type_from_sfen_char("P") == PieceType.PAWN
-        ), "P should be pawn"
+        assert _get_piece_type_from_sfen_char("P") == PieceType.PAWN, "P should be pawn"
         assert (
             _get_piece_type_from_sfen_char("L") == PieceType.LANCE
         ), "L should be lance"
@@ -276,15 +274,11 @@ def test_get_piece_type_from_sfen_char_handles_all_piece_types_and_promotions():
         assert (
             _get_piece_type_from_sfen_char("S") == PieceType.SILVER
         ), "S should be silver"
-        assert (
-            _get_piece_type_from_sfen_char("G") == PieceType.GOLD
-        ), "G should be gold"
+        assert _get_piece_type_from_sfen_char("G") == PieceType.GOLD, "G should be gold"
         assert (
             _get_piece_type_from_sfen_char("B") == PieceType.BISHOP
         ), "B should be bishop"
-        assert (
-            _get_piece_type_from_sfen_char("R") == PieceType.ROOK
-        ), "R should be rook"
+        assert _get_piece_type_from_sfen_char("R") == PieceType.ROOK, "R should be rook"
         try:
             _get_piece_type_from_sfen_char("K")
         except ValueError:

@@ -20,10 +20,9 @@ from keisei.utils import PolicyOutputMapper, TrainingLogger
 
 # Expose main at the module level for import by the root-level shim
 
+
 def parse_args():
-    parser = argparse.ArgumentParser(
-        description="DRL Shogi Client Training (train.py)"
-    )
+    parser = argparse.ArgumentParser(description="DRL Shogi Client Training (train.py)")
     parser.add_argument(
         "--device", type=str, default=None, help="Device to use (cpu/cuda)"
     )
@@ -89,7 +88,9 @@ def find_latest_checkpoint(model_dir):
     if not ckpts:
         return None
     import re
+
     checkpoint_pattern = re.compile(r"episode_(\d+).*ts_(\d+)|ep(\d+).*ts(\d+)")
+
     def extract_ts(filename):
         match = checkpoint_pattern.search(filename)
         if match:
@@ -108,6 +109,7 @@ def find_latest_checkpoint(model_dir):
                 except ValueError:
                     return (0, 0)
         return (0, 0)
+
     valid_ckpts = []
     for f in ckpts:
         ep_ts = extract_ts(f)
@@ -126,6 +128,7 @@ def serialize_config(cfg_module):
         if k.isupper() and not k.startswith("__")
     }
     return json.dumps(d, indent=2)
+
 
 # --- MAIN TRAINING LOOP (SCAFFOLD) ---
 def main():
@@ -158,7 +161,7 @@ def main():
     # Print key log messages to both stdout and logger for CLI discoverability
     def log_both(msg):
         print(msg)
-        if 'logger' in locals():
+        if "logger" in locals():
             logger.log(msg)
 
     # Initialize environment and agent
@@ -234,6 +237,7 @@ def main():
         # This ensures test_train_runs_minimal passes even if no episode boundary was hit
         std_ckpt_pattern = os.path.join(model_dir, "ppo_shogi_ep*_ts*.pth")
         import glob
+
         if not glob.glob(std_ckpt_pattern):
             std_ckpt_path = os.path.join(
                 model_dir,
@@ -241,6 +245,7 @@ def main():
             )
             agent.save_model(std_ckpt_path, global_timestep, total_episodes_completed)
             log_both(f"Minimal run: extra checkpoint saved to {std_ckpt_path}")
+
 
 __all__ = ["main"]
 

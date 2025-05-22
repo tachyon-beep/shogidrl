@@ -225,21 +225,29 @@ def test_make_move_basic(new_game):
 
 def test_make_move_capture(new_game):
     """Test making a capturing move."""
+    # Black pawn advance, White pawn reply, Black pawn advance (existing opening)
     new_game.make_move((6, 4, 5, 4, False))
-    new_game.make_move((2, 3, 3, 3, False))
+    # new_game.make_move((2, 3, 3, 3, False))
+    new_game.make_move((2, 6, 3, 6, False))
     new_game.make_move((5, 4, 4, 4, False))
 
-    move = (1, 7, 4, 4, False)
+    # --- clear the bishop’s diagonal properly ---
+    # White pawn at (2,6) steps forward to (3,6); that frees squares (2,6) & (3,5)
+    # new_game.make_move((2, 6, 3, 6, False))
+
+    # Now the bishop capture is legal
+    move = (1, 7, 4, 4, False)  # White bishop b9-e6 (1,7 ➜ 4,4)
 
     white_hand_before = new_game.hands[Color.WHITE.value].copy()
 
     new_game.make_move(move)
 
+    # Assertions
     assert new_game.get_piece(1, 7) is None
     capturing_bishop = new_game.get_piece(4, 4)
     assert isinstance(capturing_bishop, Piece), "Bishop not at target after capture."
-    assert capturing_bishop.type.value == PieceType.BISHOP.value
-    assert capturing_bishop.color.value == Color.WHITE.value
+    assert capturing_bishop.type is PieceType.BISHOP
+    assert capturing_bishop.color is Color.WHITE
 
     captured_type = PieceType.PAWN
     assert (
@@ -318,6 +326,9 @@ def test_undo_capture_move(new_game):
     new_game.make_move((6, 4, 5, 4, False))
     new_game.make_move((2, 3, 3, 3, False))
     new_game.make_move((5, 4, 4, 4, False))  # Black pawn to (4,4)
+
+    # Clear the path for the bishop by removing the pawn at (2,6)
+    new_game.set_piece(2, 6, None)
 
     state_before_capture = GameState.from_game(new_game)
     initial_white_hand_pawn_count = new_game.hands[Color.WHITE.value].get(
@@ -413,6 +424,68 @@ def test_undo_drop_move(empty_game):
     state_after_undo = GameState.from_game(empty_game)
     assert state_before_drop.current_player == state_after_undo.current_player
     assert state_before_drop.black_hand == state_after_undo.black_hand  # Compare hands
+
+
+def test_undo_move_preserves_legal_moves_pinned_piece_in_check(empty_game):
+    """
+    Tests if make_move followed by undo_move correctly restores the game state
+    such that get_legal_moves returns the same results, specifically in a scenario
+    where a piece is pinned and the king is in check by the pinning piece.
+    This is relevant to the bug observed in test_move_legality_pinned_piece.
+    """
+    game = empty_game
+
+    # Setup: Black King at (8,4), Black Rook at (6,4) (pinned),
+    # White Rook at (1,4) (pinner & checker). White King at (0,0).
+    game.set_piece(8, 4, Piece(PieceType.KING, Color.BLACK))
+    game.set_piece(6, 4, Piece(PieceType.ROOK, Color.BLACK))  # Pinned piece
+    game.set_piece(
+        1, 4, Piece(PieceType.ROOK, Color.WHITE)
+    )  # Pinning and checking piece
+    game.set_piece(0, 0, Piece(PieceType.KING, Color.WHITE))  # Opponent king
+    game.current_player = Color.BLACK
+    game.move_count = 5  # Arbitrary starting move count
+
+    initial_state_snapshot = GameState.from_game(game)
+    initial_legal_moves = game.get_legal_moves()  # CORRECTED_CALL
+
+    # Ensure there are legal moves to make (e.g., king escape, capture pinner)
+    assert len(initial_legal_moves) > 0, "Test setup: No legal moves found for Black."
+
+    move_to_make = initial_legal_moves[0]
+
+    # Make and undo the move
+    game.make_move(move_to_make)
+    game.undo_move()
+
+    final_legal_moves = game.get_legal_moves()  # CORRECTED_CALL
+    final_state_snapshot = GameState.from_game(game)
+
+    # Primary assertion: Legal moves should be identical
+    assert set(initial_legal_moves) == set(
+        final_legal_moves
+    ), "Legal moves differ after make/undo cycle."
+
+    # Secondary assertion: Full game state should be restored
+    assert (
+        initial_state_snapshot.board_str == final_state_snapshot.board_str
+    ), "Board state differs after make/undo."
+    assert (
+        initial_state_snapshot.current_player == final_state_snapshot.current_player
+    ), "Current player differs after make/undo."
+    assert (
+        initial_state_snapshot.move_count == final_state_snapshot.move_count
+    ), "Move count differs after make/undo."
+    assert (
+        initial_state_snapshot.black_hand == final_state_snapshot.black_hand
+    ), "Black's hand differs after make/undo."
+    assert (
+        initial_state_snapshot.white_hand == final_state_snapshot.white_hand
+    ), "White's hand differs after make/undo."
+    # Check all GameState fields for equality
+    assert (
+        initial_state_snapshot == final_state_snapshot
+    ), "GameState object differs after make/undo."
 
 
 def test_move_limit():
