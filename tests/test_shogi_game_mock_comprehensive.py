@@ -22,9 +22,7 @@ if __name__ == "__main__":
 # pylint: disable=wrong-import-position
 from tests.mock_utilities import setup_pytorch_mock_environment
 from keisei.shogi import ShogiGame, Color, PieceType
-
-# Global imports for types used in GameState if not importing them locally each time
-# from keisei.shogi.shogi_core_definitions import Color, PieceType # Example if needed globally
+from keisei.shogi.shogi_core_definitions import Piece
 
 
 @dataclass
@@ -44,12 +42,7 @@ class GameState:
     @classmethod
     def from_game(cls, game):
         """Creates a GameState snapshot from a ShogiGame instance."""
-        # This inner setup is redundant if from_game is called from an already mocked context,
-        # but it makes from_game usable independently if needed.
         with setup_pytorch_mock_environment():
-            # pylint: disable=import-outside-toplevel
-            from keisei.shogi.shogi_core_definitions import Color
-
             # Convert PieceType objects in hands to their string names
             black_hand_str = {
                 pt.name: count for pt, count in game.hands[Color.BLACK.value].items()
@@ -57,7 +50,6 @@ class GameState:
             white_hand_str = {
                 pt.name: count for pt, count in game.hands[Color.WHITE.value].items()
             }
-
             return cls(
                 board_str=game.to_string(),
                 current_player=game.current_player.name,  # Assuming Color enum has a .name attribute
@@ -74,9 +66,6 @@ class GameState:
 def new_game():
     """Fixture providing a fresh ShogiGame instance."""
     with setup_pytorch_mock_environment():
-        # pylint: disable=import-outside-toplevel
-        from keisei.shogi.shogi_game import ShogiGame
-
         return ShogiGame()
 
 
@@ -84,11 +73,6 @@ def new_game():
 def empty_game():
     """Fixture providing an empty board ShogiGame instance."""
     with setup_pytorch_mock_environment():
-        # pylint: disable=import-outside-toplevel
-        from keisei.shogi.shogi_game import ShogiGame
-
-        # from keisei.shogi.shogi_core_definitions import Color # Not strictly needed if not used
-
         game = ShogiGame()
         # Clear the board
         for row in range(9):
@@ -103,9 +87,6 @@ def empty_game():
 
 def test_game_initialization(new_game):  # Use fixture
     """Test that ShogiGame initializes correctly."""
-    # pylint: disable=import-outside-toplevel
-    from keisei.shogi.shogi_core_definitions import Color, Piece, PieceType
-
     game = new_game  # Use the fixture
 
     assert game.current_player.value == Color.BLACK.value
@@ -117,33 +98,46 @@ def test_game_initialization(new_game):  # Use fixture
     # Black pieces
     black_king = game.get_piece(8, 4)
     # FIX: Avoid isinstance due to possible duplicate Piece class from mocks
-    assert hasattr(black_king, "type") and hasattr(black_king, "color"), "Black King not found or not a Piece-like object."
-    assert black_king.type.name == "KING" and black_king.color.name == "BLACK", "Black King not found at (8,4) or has wrong type/color."
+    assert hasattr(black_king, "type") and hasattr(
+        black_king, "color"
+    ), "Black King not found or not a Piece-like object."
+    assert (
+        black_king.type.name == "KING" and black_king.color.name == "BLACK"
+    ), "Black King not found at (8,4) or has wrong type/color."
 
     # White pieces
     white_king = game.get_piece(0, 4)
     # FIX: Avoid isinstance due to possible duplicate Piece class from mocks
-    assert hasattr(white_king, "type") and hasattr(white_king, "color"), "White King not found or not a Piece-like object."
-    assert white_king.type.name == "KING" and white_king.color.name == "WHITE", "White King not found at (0,4) or has wrong type/color."
+    assert hasattr(white_king, "type") and hasattr(
+        white_king, "color"
+    ), "White King not found or not a Piece-like object."
+    assert (
+        white_king.type.name == "KING" and white_king.color.name == "WHITE"
+    ), "White King not found at (0,4) or has wrong type/color."
 
     # Pawns
     for col in range(9):
         black_pawn = game.get_piece(6, col)
         # FIX: Avoid isinstance due to possible duplicate Piece class from mocks
-        assert hasattr(black_pawn, "type") and hasattr(black_pawn, "color"), f"Black Pawn at (6,{col}) not found or not a Piece-like object."
-        assert black_pawn.type.name == "PAWN" and black_pawn.color.name == "BLACK", f"Black Pawn at (6,{col}) has wrong type/color."
+        assert hasattr(black_pawn, "type") and hasattr(
+            black_pawn, "color"
+        ), f"Black Pawn at (6,{col}) not found or not a Piece-like object."
+        assert (
+            black_pawn.type.name == "PAWN" and black_pawn.color.name == "BLACK"
+        ), f"Black Pawn at (6,{col}) has wrong type/color."
 
         white_pawn = game.get_piece(2, col)
         # FIX: Avoid isinstance due to possible duplicate Piece class from mocks
-        assert hasattr(white_pawn, "type") and hasattr(white_pawn, "color"), f"White Pawn at (2,{col}) not found or not a Piece-like object."
-        assert white_pawn.type.name == "PAWN" and white_pawn.color.name == "WHITE", f"White Pawn at (2,{col}) has wrong type/color."
+        assert hasattr(white_pawn, "type") and hasattr(
+            white_pawn, "color"
+        ), f"White Pawn at (2,{col}) not found or not a Piece-like object."
+        assert (
+            white_pawn.type.name == "PAWN" and white_pawn.color.name == "WHITE"
+        ), f"White Pawn at (2,{col}) has wrong type/color."
 
 
 def test_game_reset(new_game):
     """Test that ShogiGame.reset() properly resets the game state."""
-    # pylint: disable=import-outside-toplevel
-    from keisei.shogi.shogi_core_definitions import Color, Piece, PieceType
-
     new_game.make_move((6, 4, 5, 4, False))
     new_game.make_move((2, 4, 3, 4, False))
 
@@ -174,9 +168,6 @@ def test_game_reset(new_game):
 
 def test_get_set_piece(empty_game):
     """Test get_piece and set_piece methods."""
-    # pylint: disable=import-outside-toplevel
-    from keisei.shogi.shogi_core_definitions import Color, Piece, PieceType
-
     for row in range(9):
         for col in range(9):
             assert empty_game.get_piece(row, col) is None
@@ -217,11 +208,6 @@ def test_is_on_board(new_game):
 
 def test_make_move_basic(new_game):
     """Test making a basic non-capturing move."""
-    # pylint: disable=import-outside-toplevel
-    from keisei.shogi.shogi_core_definitions import Color, Piece, PieceType
-
-    # initial_state = GameState.from_game(new_game) # Not used in this specific test
-
     move = (6, 4, 5, 4, False)
     new_game.make_move(move)
 
@@ -239,9 +225,6 @@ def test_make_move_basic(new_game):
 
 def test_make_move_capture(new_game):
     """Test making a capturing move."""
-    # pylint: disable=import-outside-toplevel
-    from keisei.shogi.shogi_core_definitions import Color, Piece, PieceType
-
     new_game.make_move((6, 4, 5, 4, False))
     new_game.make_move((2, 3, 3, 3, False))
     new_game.make_move((5, 4, 4, 4, False))
@@ -267,9 +250,6 @@ def test_make_move_capture(new_game):
 
 def test_make_move_promotion(empty_game):
     """Test making a move with promotion."""
-    # pylint: disable=import-outside-toplevel
-    from keisei.shogi.shogi_core_definitions import Color, Piece, PieceType
-
     pawn = Piece(PieceType.PAWN, Color.BLACK)
     empty_game.set_piece(3, 4, pawn)
     empty_game.set_piece(8, 8, Piece(PieceType.KING, Color.BLACK))
@@ -287,11 +267,6 @@ def test_make_move_promotion(empty_game):
 
 def test_make_move_piece_drop(empty_game):
     """Test dropping a piece from hand."""
-    # pylint: disable=import-outside-toplevel
-    from keisei.shogi.shogi_core_definitions import Color, Piece, PieceType
-
-    # from keisei.shogi.shogi_core_definitions import DropMoveTuple # Not needed if tuple is constructed directly
-
     empty_game.hands[Color.BLACK.value][PieceType.PAWN] = 1
     empty_game.current_player = Color.BLACK
 
@@ -312,9 +287,6 @@ def test_make_move_piece_drop(empty_game):
 
 def test_undo_basic_move(new_game):
     """Test undoing a basic non-capturing move."""
-    # pylint: disable=import-outside-toplevel
-    from keisei.shogi.shogi_core_definitions import Color, Piece, PieceType
-
     initial_state = GameState.from_game(new_game)
 
     new_game.make_move((6, 4, 5, 4, False))
@@ -343,9 +315,6 @@ def test_undo_basic_move(new_game):
 
 def test_undo_capture_move(new_game):
     """Test undoing a capturing move."""
-    # pylint: disable=import-outside-toplevel
-    from keisei.shogi.shogi_core_definitions import Color, Piece, PieceType
-
     new_game.make_move((6, 4, 5, 4, False))
     new_game.make_move((2, 3, 3, 3, False))
     new_game.make_move((5, 4, 4, 4, False))  # Black pawn to (4,4)
@@ -395,9 +364,6 @@ def test_undo_capture_move(new_game):
 
 def test_undo_promotion_move(empty_game):
     """Test undoing a move with promotion."""
-    # pylint: disable=import-outside-toplevel
-    from keisei.shogi.shogi_core_definitions import Color, Piece, PieceType
-
     pawn = Piece(PieceType.PAWN, Color.BLACK)
     empty_game.set_piece(3, 4, pawn)
     empty_game.set_piece(8, 8, Piece(PieceType.KING, Color.BLACK))
@@ -426,9 +392,6 @@ def test_undo_promotion_move(empty_game):
 
 def test_undo_drop_move(empty_game):
     """Test undoing a drop move."""
-    # pylint: disable=import-outside-toplevel
-    from keisei.shogi.shogi_core_definitions import Color, Piece, PieceType
-
     empty_game.hands[Color.BLACK.value][PieceType.PAWN] = 1
     empty_game.current_player = Color.BLACK
 
@@ -452,7 +415,7 @@ def test_undo_drop_move(empty_game):
     assert state_before_drop.black_hand == state_after_undo.black_hand  # Compare hands
 
 
-def test_move_limit(new_game: ShogiGame):
+def test_move_limit():
     """Test that the game enforces the move limit and ends the game appropriately."""
     # Set up a game with a low move limit for testing
     game = ShogiGame(max_moves_per_game=3)
@@ -462,7 +425,11 @@ def test_move_limit(new_game: ShogiGame):
         for r in range(9):
             for c in range(9):
                 piece = game.get_piece(r, c)
-                if piece and piece.color == game.current_player and piece.type == PieceType.PAWN:
+                if (
+                    piece
+                    and piece.color == game.current_player
+                    and piece.type == PieceType.PAWN
+                ):
                     to_r = r - 1 if game.current_player == Color.BLACK else r + 1
                     if 0 <= to_r < 9 and game.get_piece(to_r, c) is None:
                         move = (r, c, to_r, c, False)

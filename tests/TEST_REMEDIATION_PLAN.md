@@ -128,39 +128,6 @@ This updated remediation plan tracks progress on addressing the significant test
 | shogi_game_io.py            | 3%      | 70%    |
 | OVERALL                     | 10%     | 75%    |
 
-## Best Practices for Using the Mock Pattern
-
-When implementing new tests using the mock pattern:
-
-1. **Import Pattern**: 
-   ```python
-   from tests.mock_utilities import setup_pytorch_mock_environment
-   ```
-
-2. **Context Manager Usage**:
-   - Use the context manager for imports and test code:
-   ```python
-   def test_something():
-       with setup_pytorch_mock_environment():
-           # Import modules that depend on PyTorch
-           from keisei.shogi.shogi_game import ShogiGame
-           from keisei.shogi.shogi_game_io import generate_neural_network_observation
-           
-           # Test code here
-   ```
-   
-3. **Running Tests Directly**:
-   - Add path handling for direct execution:
-   ```python
-   if __name__ == "__main__":
-       REPO_ROOT = Path(__file__).parent.parent.absolute()
-       sys.path.insert(0, str(REPO_ROOT))
-   ```
-
-4. **Dealing with Pylint**:
-   - Disable the `wrong-import-position` and `import-outside-toplevel` warnings
-   - Format files with Black to handle spacing issues
-
 ## Conclusion
 
 Phase 1 of the remediation plan is now complete with a working solution for testing modules that depend on PyTorch. With this foundation in place, we can now move forward with expanding test coverage across the codebase. The next steps focus on implementing comprehensive tests for core game logic and game I/O capabilities using our established mock pattern.

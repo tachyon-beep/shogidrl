@@ -2,15 +2,16 @@
 Unit tests for Shogi game I/O functions in shogi_game_io.py
 """
 
+import os
+import tempfile
 import numpy as np
 import pytest
 
-# Import enums and constants at the top level to ensure identity
+from tests.mock_utilities import setup_pytorch_mock_environment
 from keisei.shogi.shogi_core_definitions import (
     Color,
     PieceType,
     Piece,
-    OBS_CURR_PLAYER_HAND_START,
     OBS_OPP_PLAYER_HAND_START,
     OBS_UNPROMOTED_ORDER,
     OBS_CURR_PLAYER_INDICATOR,
@@ -21,8 +22,6 @@ from keisei.shogi.shogi_core_definitions import (
     OBS_OPP_PLAYER_PROMOTED_START,
     OBS_PROMOTED_ORDER,
 )
-
-from tests.mock_utilities import setup_pytorch_mock_environment
 from keisei.shogi.shogi_game import ShogiGame
 from keisei.shogi.shogi_game_io import (
     generate_neural_network_observation,
@@ -143,13 +142,14 @@ def test_generate_neural_network_observation_after_pawn_capture(game_with_captur
         pawn_position_in_hand = OBS_OPP_PLAYER_HAND_START + pawn_index
         capturing_player = 1 if game_with_capture.current_player.value == 0 else 0
         assert (
-            game_with_capture.hands[capturing_player].get(PieceType.PAWN, 0)
-            > 0
+            game_with_capture.hands[capturing_player].get(PieceType.PAWN, 0) > 0
         ), "Pawn should be in the capturing player's hand according to game state"
         text_repr = convert_game_to_text_representation(game_with_capture)
         assert "{'PAWN': 1}" in text_repr, "Hand should show PAWN: 1"
         hand_plane_sum = np.sum(obs[pawn_position_in_hand])
-        assert hand_plane_sum > 0, "Captured pawn should appear in the opponent's hand plane in the observation"
+        assert (
+            hand_plane_sum > 0
+        ), "Captured pawn should appear in the opponent's hand plane in the observation"
 
 
 def test_generate_neural_network_observation_after_pawn_promotion(game_with_promotion):
@@ -162,7 +162,8 @@ def test_generate_neural_network_observation_after_pawn_promotion(game_with_prom
         promoted_piece = game_with_promotion.get_piece(2, 4)
         assert promoted_piece is not None, "No piece found at the promotion location"
         assert (
-            promoted_piece.type.value == PieceType.PROMOTED_PAWN.value and promoted_piece.color.value == Color.BLACK.value
+            promoted_piece.type.value == PieceType.PROMOTED_PAWN.value
+            and promoted_piece.color.value == Color.BLACK.value
         ), f"Expected promoted pawn of color BLACK, got {promoted_piece.type}, {promoted_piece.color}"
         found_in_planes = (np.sum(obs[curr_player_pawn_plane]) > 0) or (
             np.sum(obs[opp_player_pawn_plane]) > 0
@@ -213,7 +214,7 @@ def test_game_to_kif_writes_valid_kif_file_after_moves():
         game = ShogiGame()
     game.make_move((6, 4, 5, 4, False))  # Black pawn
     game.make_move((2, 4, 3, 4, False))  # White pawn
-    import tempfile
+
     with tempfile.NamedTemporaryFile(suffix=".kif", delete=False) as temp_file:
         filename = temp_file.name
     game_to_kif(
@@ -224,87 +225,73 @@ def test_game_to_kif_writes_valid_kif_file_after_moves():
     assert "Player1" in kif_content, "Black player name should be present"
     assert "Player2" in kif_content, "White player name should be present"
     assert "KIF" in kif_content, "KIF header should be present"
-    import os
+    # Remove the file after test
     os.remove(filename)
 
 
 def test_sfen_to_move_tuple_parses_standard_and_drop_moves():
     """Test that sfen_to_move_tuple parses both normal and drop moves correctly."""
     with setup_pytorch_mock_environment():
-        try:
-            result = sfen_to_move_tuple("7g7f")
-            assert result is not None, "sfen_to_move_tuple should not return None"
-            assert isinstance(result, tuple), "sfen_to_move_tuple should return a tuple"
-            from_row, from_col, to_row, to_col, promotion = result
-            assert from_row is not None
-            assert from_col is not None
-            assert to_row is not None
-            assert to_col is not None
-            assert isinstance(promotion, bool)
-            drop_result = sfen_to_move_tuple("P*7f")
-            assert drop_result is not None
-        except Exception as e:
-            import warnings
-            warnings.warn(f"sfen_to_move_tuple testing issue: {e}")
+        result = sfen_to_move_tuple("7g7f")
+        assert result is not None, "sfen_to_move_tuple should not return None"
+        assert isinstance(result, tuple), "sfen_to_move_tuple should return a tuple"
+        from_row, from_col, to_row, to_col, promotion = result
+        assert from_row is not None
+        assert from_col is not None
+        assert to_row is not None
+        assert to_col is not None
+        assert isinstance(promotion, bool)
+        drop_result = sfen_to_move_tuple("P*7f")
+        assert drop_result is not None
 
 
 def test_parse_sfen_square_parses_various_squares():
     """Test that _parse_sfen_square parses various SFEN coordinates correctly and distinguishes them."""
     with setup_pytorch_mock_environment():
-        try:
-            result = _parse_sfen_square("7g")
-            assert result is not None, "_parse_sfen_square should not return None"
-            assert isinstance(result, tuple), "_parse_sfen_square should return a tuple"
-            assert (
-                len(result) == 2
-            ), "_parse_sfen_square should return a tuple of length 2"
-            result1 = _parse_sfen_square("7g")
-            result2 = _parse_sfen_square("1a")
-            result3 = _parse_sfen_square("9i")
-            assert result1 != result2, "Different squares should give different results"
-            assert result1 != result3, "Different squares should give different results"
-            assert result2 != result3, "Different squares should give different results"
-        except Exception as e:
-            assert False, f"_parse_sfen_square testing failed: {e}"
+        result = _parse_sfen_square("7g")
+        assert result is not None, "_parse_sfen_square should not return None"
+        assert isinstance(result, tuple), "_parse_sfen_square should return a tuple"
+        assert len(result) == 2, "_parse_sfen_square should return a tuple of length 2"
+        result1 = _parse_sfen_square("7g")
+        result2 = _parse_sfen_square("1a")
+        result3 = _parse_sfen_square("9i")
+        assert result1 != result2, "Different squares should give different results"
+        assert result1 != result3, "Different squares should give different results"
+        assert result2 != result3, "Different squares should give different results"
 
 
 def test_get_piece_type_from_sfen_char_handles_all_piece_types_and_promotions():
     """Test that _get_piece_type_from_sfen_char parses all supported piece types and promoted pieces."""
     with setup_pytorch_mock_environment():
+        assert (
+            _get_piece_type_from_sfen_char("P") == PieceType.PAWN
+        ), "P should be pawn"
+        assert (
+            _get_piece_type_from_sfen_char("L") == PieceType.LANCE
+        ), "L should be lance"
+        assert (
+            _get_piece_type_from_sfen_char("N") == PieceType.KNIGHT
+        ), "N should be knight"
+        assert (
+            _get_piece_type_from_sfen_char("S") == PieceType.SILVER
+        ), "S should be silver"
+        assert (
+            _get_piece_type_from_sfen_char("G") == PieceType.GOLD
+        ), "G should be gold"
+        assert (
+            _get_piece_type_from_sfen_char("B") == PieceType.BISHOP
+        ), "B should be bishop"
+        assert (
+            _get_piece_type_from_sfen_char("R") == PieceType.ROOK
+        ), "R should be rook"
         try:
+            _get_piece_type_from_sfen_char("K")
+        except ValueError:
+            pass
+        try:
+            promoted_pawn = _get_piece_type_from_sfen_char("+P")
             assert (
-                _get_piece_type_from_sfen_char("P") == PieceType.PAWN
-            ), "P should be pawn"
-            assert (
-                _get_piece_type_from_sfen_char("L") == PieceType.LANCE
-            ), "L should be lance"
-            assert (
-                _get_piece_type_from_sfen_char("N") == PieceType.KNIGHT
-            ), "N should be knight"
-            assert (
-                _get_piece_type_from_sfen_char("S") == PieceType.SILVER
-            ), "S should be silver"
-            assert (
-                _get_piece_type_from_sfen_char("G") == PieceType.GOLD
-            ), "G should be gold"
-            assert (
-                _get_piece_type_from_sfen_char("B") == PieceType.BISHOP
-            ), "B should be bishop"
-            assert (
-                _get_piece_type_from_sfen_char("R") == PieceType.ROOK
-            ), "R should be rook"
-            try:
-                _get_piece_type_from_sfen_char("K")
-            except ValueError:
-                pass
-            try:
-                promoted_pawn = _get_piece_type_from_sfen_char("+P")
-                assert (
-                    promoted_pawn == PieceType.PROMOTED_PAWN
-                ), "+P should be promoted pawn"
-            except (ValueError, TypeError):
-                pass
-        except Exception as e:
-            assert False, f"_get_piece_type_from_sfen_char testing failed: {e}"
-
-# File renamed from test_shogi_game_io.py to test_shogi_game_observation_and_io.py for clarity.
+                promoted_pawn == PieceType.PROMOTED_PAWN
+            ), "+P should be promoted pawn"
+        except (ValueError, TypeError):
+            pass

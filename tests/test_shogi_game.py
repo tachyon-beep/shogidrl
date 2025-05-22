@@ -857,6 +857,7 @@ def test_sfen_invalid_strings(invalid_sfen: str, error_message_part: str):
         ShogiGame.from_sfen(invalid_sfen)
     assert error_message_part in str(excinfo.value).strip()
 
+
 # DEPRECATED: All undo move and observation tests have been consolidated into
 # 'test_shogi_game_updated_with_mocks.py' and 'test_shogi_game_mock_comprehensive.py'.
 # This file is retained for reference only. Do not add new tests here.
