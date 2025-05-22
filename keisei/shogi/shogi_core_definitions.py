@@ -1,19 +1,63 @@
 """
 shogi_core_definitions.py: Core type definitions, enums, constants,
 and the Piece class for the Shogi game engine.
+
+This module provides fundamental building blocks for a Shogi game,
+including representations for piece colors, types, game termination
+reasons, move structures, and the `Piece` class itself. It also defines
+constants related to game notation (KIF) and observation tensors for
+potential AI applications.
 """
 
 from enum import Enum
-from typing import Dict, List, Set, Tuple, Union
+from typing import Dict, List, Set, Tuple, Union, Optional
+
+# --- Public API ---
+__all__ = [
+    "Color",
+    "PieceType",
+    "KIF_PIECE_SYMBOLS",
+    "TerminationReason",
+    "BoardMoveTuple",
+    "DropMoveTuple",
+    "MoveTuple",
+    "get_unpromoted_types",
+    "PROMOTED_TYPES_SET",
+    "BASE_TO_PROMOTED_TYPE",
+    "PROMOTED_TO_BASE_TYPE",
+    "PIECE_TYPE_TO_HAND_TYPE",
+    "OBS_CURR_PLAYER_UNPROMOTED_START",
+    "OBS_CURR_PLAYER_PROMOTED_START",
+    "OBS_OPP_PLAYER_UNPROMOTED_START",
+    "OBS_OPP_PLAYER_PROMOTED_START",
+    "OBS_CURR_PLAYER_HAND_START",
+    "OBS_OPP_PLAYER_HAND_START",
+    "OBS_CURR_PLAYER_INDICATOR",
+    "OBS_MOVE_COUNT",
+    "OBS_RESERVED_1",
+    "OBS_RESERVED_2",
+    "SYMBOL_TO_PIECE_TYPE",
+    "get_piece_type_from_symbol",
+    "OBS_UNPROMOTED_ORDER",
+    "OBS_PROMOTED_ORDER",
+    "Piece",
+]
 
 
 # --- Enums and Constants ---
 class Color(Enum):
-    BLACK = 0  # Sente
-    WHITE = 1  # Gote
+    """
+    Represents the player color.
+    In Shogi, Black (Sente) typically moves first.
+    """
+    BLACK = 0  # Sente (先手), typically moves first
+    WHITE = 1  # Gote (後手)
 
 
 class PieceType(Enum):
+    """
+    Represents the type of a Shogi piece, including promoted states.
+    """
     PAWN = 0
     LANCE = 1
     KNIGHT = 2
@@ -22,13 +66,13 @@ class PieceType(Enum):
     BISHOP = 5
     ROOK = 6
     KING = 7
-    PROMOTED_PAWN = 8  # Tokin
-    PROMOTED_LANCE = 9  # Promoted Lance
-    PROMOTED_KNIGHT = 10  # Promoted Knight
-    PROMOTED_SILVER = 11  # Promoted Silver
+    PROMOTED_PAWN = 8     # Tokin (と)
+    PROMOTED_LANCE = 9    # Promoted Lance (成香 - Narikyō)
+    PROMOTED_KNIGHT = 10  # Promoted Knight (成桂 - Narikei)
+    PROMOTED_SILVER = 11  # Promoted Silver (成銀 - Narigin)
     # Gold does not promote
-    PROMOTED_BISHOP = 12  # Horse
-    PROMOTED_ROOK = 13  # Dragon
+    PROMOTED_BISHOP = 12  # Horse (竜馬 - Ryūma)
+    PROMOTED_ROOK = 13    # Dragon (竜王 - Ryūō)
     # King does not promote
 
 
@@ -41,42 +85,53 @@ KIF_PIECE_SYMBOLS: Dict[PieceType, str] = {
     PieceType.GOLD: "KI",
     PieceType.BISHOP: "KA",
     PieceType.ROOK: "HI",
-    PieceType.KING: "OU",  # Or "GY" for Gyoku, "OU" is common for King
-    PieceType.PROMOTED_PAWN: "TO",  # Tokin
-    PieceType.PROMOTED_LANCE: "NY",  # Promoted Lance (Nari-Kyo)
-    PieceType.PROMOTED_KNIGHT: "NK",  # Promoted Knight (Nari-Kei)
-    PieceType.PROMOTED_SILVER: "NG",  # Promoted Silver (Nari-Gin)
-    PieceType.PROMOTED_BISHOP: "UM",  # Horse (Uma)
-    PieceType.PROMOTED_ROOK: "RY",  # Dragon (Ryu)
+    PieceType.KING: "OU",  # Or "GY" for Gyoku (玉), "OU" (王) is common for King
+    PieceType.PROMOTED_PAWN: "TO",    # Tokin
+    PieceType.PROMOTED_LANCE: "NY",   # Nari-Kyo (Promoted Lance)
+    PieceType.PROMOTED_KNIGHT: "NK",  # Nari-Kei (Promoted Knight)
+    PieceType.PROMOTED_SILVER: "NG",  # Nari-Gin (Promoted Silver)
+    PieceType.PROMOTED_BISHOP: "UM",   # Uma (Horse)
+    PieceType.PROMOTED_ROOK: "RY",    # Ryu (Dragon)
 }
 
 
 class TerminationReason(Enum):
+    """
+    Enumerates reasons why a Shogi game might terminate.
+    """
     CHECKMATE = "checkmate"
     RESIGNATION = "resignation"
     MAX_MOVES_EXCEEDED = "max_moves_exceeded"
-    REPETITION = "repetition"  # Sennichite
-    IMPASSE = "impasse"  # Jishogi (by points, declaration, etc.)
+    REPETITION = "repetition"  # Sennichite (千日手)
+    IMPASSE = "impasse"        # Jishogi (持将棋) (by points, declaration, etc.)
     ILLEGAL_MOVE = "illegal_move"
     TIME_FORFEIT = "time_forfeit"
     NO_CONTEST = "no_contest"  # E.g. server error, mutual agreement for no result
 
 
 # --- Custom Types for Moves ---
+
 # BoardMoveTuple: (from_row, from_col, to_row, to_col, promote_flag)
+#   - from_row, from_col: 0-indexed source square coordinates.
+#   - to_row, to_col: 0-indexed destination square coordinates.
+#   - promote_flag: Boolean indicating if promotion occurs on this move.
 BoardMoveTuple = Tuple[int, int, int, int, bool]
 
 # DropMoveTuple: (None, None, to_row, to_col, piece_type_to_drop)
-# Using None for from_row, from_col to distinguish from board moves.
-# piece_type_to_drop should be one of the unpromoted PieceType enums.
-DropMoveTuple = Tuple[None, None, int, int, PieceType]
+#   - from_row, from_col: Always None to distinguish from board moves.
+#   - to_row, to_col: 0-indexed destination square coordinates for the drop.
+#   - piece_type_to_drop: The PieceType (unpromoted) to be dropped.
+DropMoveTuple = Tuple[Optional[int], Optional[int], int, int, PieceType]
 
 # MoveTuple is a union of the two types of moves.
 MoveTuple = Union[BoardMoveTuple, DropMoveTuple]
 
 
-# Helper for unpromoted hand types
 def get_unpromoted_types() -> List[PieceType]:
+    """
+    Returns a list of all PieceType enums that represent unpromoted pieces
+    capable of being held in hand. King is not included as it cannot be held.
+    """
     return [
         PieceType.PAWN,
         PieceType.LANCE,
@@ -96,6 +151,7 @@ PROMOTED_TYPES_SET: Set[PieceType] = {
     PieceType.PROMOTED_BISHOP,
     PieceType.PROMOTED_ROOK,
 }
+"""A set of all piece types that are in a promoted state."""
 
 BASE_TO_PROMOTED_TYPE: Dict[PieceType, PieceType] = {
     PieceType.PAWN: PieceType.PROMOTED_PAWN,
@@ -105,18 +161,20 @@ BASE_TO_PROMOTED_TYPE: Dict[PieceType, PieceType] = {
     PieceType.BISHOP: PieceType.PROMOTED_BISHOP,
     PieceType.ROOK: PieceType.PROMOTED_ROOK,
 }
+"""Maps base (unpromoted) piece types to their promoted counterparts."""
 
 PROMOTED_TO_BASE_TYPE: Dict[PieceType, PieceType] = {
     v: k for k, v in BASE_TO_PROMOTED_TYPE.items()
 }
+"""Maps promoted piece types back to their base (unpromoted) counterparts."""
 
-# For II.7: add_to_hand()
+
 PIECE_TYPE_TO_HAND_TYPE: Dict[PieceType, PieceType] = {
     PieceType.PAWN: PieceType.PAWN,
     PieceType.LANCE: PieceType.LANCE,
     PieceType.KNIGHT: PieceType.KNIGHT,
     PieceType.SILVER: PieceType.SILVER,
-    PieceType.GOLD: PieceType.GOLD,
+    PieceType.GOLD: PieceType.GOLD,  # Gold is already its base type
     PieceType.BISHOP: PieceType.BISHOP,
     PieceType.ROOK: PieceType.ROOK,
     PieceType.PROMOTED_PAWN: PieceType.PAWN,
@@ -125,41 +183,63 @@ PIECE_TYPE_TO_HAND_TYPE: Dict[PieceType, PieceType] = {
     PieceType.PROMOTED_SILVER: PieceType.SILVER,
     PieceType.PROMOTED_BISHOP: PieceType.BISHOP,
     PieceType.PROMOTED_ROOK: PieceType.ROOK,
-    # Kings (PieceType.KING) and Gold (PieceType.GOLD) don't change type when captured.
-    # King is handled separately in add_to_hand. Gold is already its base type.
+    # Note: Kings (PieceType.KING) are not capturable in a way that adds them to hand.
+    # Gold pieces (PieceType.GOLD) do not promote, so they remain Gold when captured.
 }
+"""
+Maps a captured piece type (which could be promoted) to the
+PieceType it becomes when added to a player's hand (always unpromoted).
+"""
 
 # Observation Plane Constants
-# ----------------------
-# Network observation planes grouping and indexing
-# Channel map for the (46, 9, 9) observation tensor:
+# ---------------------------
+# These constants define the structure of a (46, 9, 9) observation tensor,
+# commonly used as input for neural networks in Shogi AI.
+#
+# Channel map:
+#
+# Board Piece Channels (28 total):
+#   Channels  0-7: Current player's unpromoted pieces (P, L, N, S, G, B, R, K)
+#   Channels  8-13: Current player's promoted pieces (+P, +L, +N, +S, +B, +R)
+#   Channels 14-21: Opponent's unpromoted pieces (P, L, N, S, G, B, R, K)
+#   Channels 22-27: Opponent's promoted pieces (+P, +L, +N, +S, +B, +R)
+#
+# Hand Piece Channels (14 total):
+#   Channels 28-34: Current player's hand (P, L, N, S, G, B, R count planes)
+#   Channels 35-41: Opponent's hand (P, L, N, S, G, B, R count planes)
+#
+# Meta Information Channels (4 total):
+#   Channel 42: Current player indicator (1.0 if Black, 0.0 if White)
+#   Channel 43: Move count (normalized or raw)
+#   Channel 44: Reserved for future use (e.g., repetition count)
+#   Channel 45: Reserved for future use
 
-# Board Piece Channels (28 total)
-OBS_CURR_PLAYER_UNPROMOTED_START = 0  # Channels 0-7: Current player's unpromoted pieces
-OBS_CURR_PLAYER_PROMOTED_START = 8  # Channels 8-13: Current player's promoted pieces
-OBS_OPP_PLAYER_UNPROMOTED_START = 14  # Channels 14-21: Opponent's unpromoted pieces
-OBS_OPP_PLAYER_PROMOTED_START = 22  # Channels 22-27: Opponent's promoted pieces
+OBS_CURR_PLAYER_UNPROMOTED_START = 0
+OBS_CURR_PLAYER_PROMOTED_START = 8
+OBS_OPP_PLAYER_UNPROMOTED_START = 14
+OBS_OPP_PLAYER_PROMOTED_START = 22
 
-# Hand Piece Channels (14 total)
-OBS_CURR_PLAYER_HAND_START = 28  # Channels 28-34: Current player's hand
-OBS_OPP_PLAYER_HAND_START = 35  # Channels 35-41: Opponent's hand
+OBS_CURR_PLAYER_HAND_START = 28
+OBS_OPP_PLAYER_HAND_START = 35
 
-# Meta Information Channels (4 total)
-OBS_CURR_PLAYER_INDICATOR = 42  # Channel 42: Current player indicator (1.0 if Black)
-OBS_MOVE_COUNT = 43  # Channel 43: Move count (normalized)
-OBS_RESERVED_1 = 44  # Channel 44: Reserved for future use
-OBS_RESERVED_2 = 45  # Channel 45: Reserved for future use
+OBS_CURR_PLAYER_INDICATOR = 42
+OBS_MOVE_COUNT = 43
+OBS_RESERVED_1 = 44  # Potentially for repetition count or other game state
+OBS_RESERVED_2 = 45  # Potentially for game phase or other features
 
 # Total observation planes: 46 channels
-#   - 14 current player board pieces
-#   - 14 opponent board pieces
-#   - 7 current player hand pieces
-#   - 7 opponent hand pieces
+#   - 8 current player unpromoted board pieces
+#   - 6 current player promoted board pieces
+#   - 8 opponent unpromoted board pieces
+#   - 6 opponent promoted board pieces
+#   - 7 current player hand pieces (types)
+#   - 7 opponent hand pieces (types)
 #   - 4 meta information planes
 
 
-# Symbol to PieceType mapping (inverse of parts of Piece.symbol)
+# Symbol to PieceType mapping.
 # Uses uppercase symbols as canonical representation.
+# E.g., "P" for Pawn, "+P" for Promoted Pawn (Tokin).
 SYMBOL_TO_PIECE_TYPE: Dict[str, PieceType] = {
     "P": PieceType.PAWN,
     "L": PieceType.LANCE,
@@ -180,31 +260,32 @@ SYMBOL_TO_PIECE_TYPE: Dict[str, PieceType] = {
 
 def get_piece_type_from_symbol(symbol: str) -> PieceType:
     """
-    Converts a piece symbol string (e.g., "P", "+R") to a PieceType enum.
-    Assumes canonical (uppercase) symbols.
-    """
-    # Normalize to uppercase in case lowercase symbols are passed,
-    # though canonical form is uppercase (e.g. "p" -> "P")
-    # For promoted pieces, the '+' sign is significant.
-    # If a symbol like "p" is passed, it should be treated as "P".
-    # If "+p" is passed, it should be treated as "+P".
+    Converts a piece symbol string (e.g., "P", "+R", "p", "+r") to a PieceType enum.
 
-    # Simple case: direct match
+    The function prefers canonical uppercase symbols (e.g., "P", "+R") but will
+    attempt to normalize common lowercase variations (e.g., "p" to "P", "+p" to "+P").
+
+    Args:
+        symbol: The piece symbol string.
+
+    Returns:
+        The corresponding PieceType enum.
+
+    Raises:
+        ValueError: If the symbol is unknown or malformed.
+    """
+    # Primary check for canonical symbols (already in SYMBOL_TO_PIECE_TYPE)
     if symbol in SYMBOL_TO_PIECE_TYPE:
         return SYMBOL_TO_PIECE_TYPE[symbol]
 
-    # Handle potentially lowercase symbols (e.g. "p" for "P", but "+p" for "+P")
-    # The SYMBOL_TO_PIECE_TYPE map uses uppercase, so we should convert input.
-    # If symbol is like "p", convert to "P". If "+p", convert to "+P".
-
-    # Check if it's a promoted piece symbol like "+p"
+    # Handle normalization for common lowercase variants
+    # Case 1: Promoted piece like "+p"
     if len(symbol) == 2 and symbol.startswith("+") and symbol[1].islower():
-        # Convert to uppercase promoted symbol, e.g., "+p" -> "+P"
         upper_symbol = "+" + symbol[1].upper()
         if upper_symbol in SYMBOL_TO_PIECE_TYPE:
             return SYMBOL_TO_PIECE_TYPE[upper_symbol]
+    # Case 2: Unpromoted piece like "p"
     elif len(symbol) == 1 and symbol.islower():
-        # Convert to uppercase unpromoted symbol, e.g., "p" -> "P"
         upper_symbol = symbol.upper()
         if upper_symbol in SYMBOL_TO_PIECE_TYPE:
             return SYMBOL_TO_PIECE_TYPE[upper_symbol]
@@ -212,8 +293,8 @@ def get_piece_type_from_symbol(symbol: str) -> PieceType:
     raise ValueError(f"Unknown piece symbol: {symbol}")
 
 
-# Unpromoted pieces for observation channels
-OBS_UNPROMOTED_ORDER = [
+# Order of unpromoted pieces for observation channels (excluding King for hand)
+OBS_UNPROMOTED_ORDER: List[PieceType] = [
     PieceType.PAWN,
     PieceType.LANCE,
     PieceType.KNIGHT,
@@ -221,10 +302,11 @@ OBS_UNPROMOTED_ORDER = [
     PieceType.GOLD,
     PieceType.BISHOP,
     PieceType.ROOK,
-    PieceType.KING,
+    PieceType.KING,  # King is included for on-board representation
 ]
-# Promoted pieces for observation channels
-OBS_PROMOTED_ORDER = [
+
+# Order of promoted pieces for observation channels
+OBS_PROMOTED_ORDER: List[PieceType] = [
     PieceType.PROMOTED_PAWN,
     PieceType.PROMOTED_LANCE,
     PieceType.PROMOTED_KNIGHT,
@@ -233,12 +315,49 @@ OBS_PROMOTED_ORDER = [
     PieceType.PROMOTED_ROOK,
 ]
 
+# Internal mapping for Piece.symbol() method for conciseness.
+_PIECE_TYPE_TO_CHAR_SYMBOL: Dict[PieceType, str] = {
+    PieceType.PAWN: "P",
+    PieceType.LANCE: "L",
+    PieceType.KNIGHT: "N",
+    PieceType.SILVER: "S",
+    PieceType.GOLD: "G",
+    PieceType.BISHOP: "B",
+    PieceType.ROOK: "R",
+    PieceType.KING: "K",
+    PieceType.PROMOTED_PAWN: "+P",
+    PieceType.PROMOTED_LANCE: "+L",
+    PieceType.PROMOTED_KNIGHT: "+N",
+    PieceType.PROMOTED_SILVER: "+S",
+    PieceType.PROMOTED_BISHOP: "+B",
+    PieceType.PROMOTED_ROOK: "+R",
+}
+
 
 # --- Piece Class ---
 class Piece:
-    """Represents a single Shogi piece on the board."""
+    """
+    Represents a single Shogi piece.
+
+    Attributes:
+        type (PieceType): The type of the piece (e.g., PAWN, GOLD, PROMOTED_ROOK).
+        color (Color): The color of the piece (BLACK or WHITE).
+        is_promoted (bool): True if the piece is in its promoted state, False otherwise.
+                            This is derived from `type`.
+    """
 
     def __init__(self, piece_type: PieceType, color: Color):
+        """
+        Initializes a Piece instance.
+
+        Args:
+            piece_type: The type of the piece.
+            color: The color of the piece.
+
+        Raises:
+            TypeError: If `piece_type` is not a `PieceType` or
+                       `color` is not a `Color`.
+        """
         if not isinstance(piece_type, PieceType):
             raise TypeError("piece_type must be an instance of PieceType")
         if not isinstance(color, Color):
@@ -246,74 +365,90 @@ class Piece:
 
         self.type: PieceType = piece_type
         self.color: Color = color
+        # is_promoted is derived from the piece_type for consistency
         self.is_promoted: bool = piece_type in PROMOTED_TYPES_SET
 
     def symbol(self) -> str:
-        """Returns a 1 or 2 character string symbol for the piece (e.g., P, +P, K)."""
-        base_symbol: str
-        if self.type == PieceType.PAWN:
-            base_symbol = "P"
-        elif self.type == PieceType.LANCE:
-            base_symbol = "L"
-        elif self.type == PieceType.KNIGHT:
-            base_symbol = "N"
-        elif self.type == PieceType.SILVER:
-            base_symbol = "S"
-        elif self.type == PieceType.GOLD:
-            base_symbol = "G"
-        elif self.type == PieceType.BISHOP:
-            base_symbol = "B"
-        elif self.type == PieceType.ROOK:
-            base_symbol = "R"
-        elif self.type == PieceType.KING:
-            base_symbol = "K"
-        elif self.type == PieceType.PROMOTED_PAWN:
-            base_symbol = "+P"
-        elif self.type == PieceType.PROMOTED_LANCE:
-            base_symbol = "+L"
-        elif self.type == PieceType.PROMOTED_KNIGHT:
-            base_symbol = "+N"
-        elif self.type == PieceType.PROMOTED_SILVER:
-            base_symbol = "+S"
-        elif self.type == PieceType.PROMOTED_BISHOP:
-            base_symbol = "+B"
-        elif self.type == PieceType.PROMOTED_ROOK:
-            base_symbol = "+R"
-        else:
-            raise ValueError(f"Unknown piece type: {self.type}")
+        """
+        Returns a string symbol for the piece (e.g., "P", "+P", "k").
+        Uppercase for Black (Sente), lowercase for White (Gote).
+        Promoted pieces are prefixed with '+'.
+
+        Returns:
+            The piece symbol string.
+
+        Raises:
+            ValueError: If the piece has an unknown type.
+        """
+        try:
+            base_symbol = _PIECE_TYPE_TO_CHAR_SYMBOL[self.type]
+        except KeyError as exc:
+            # This should ideally not happen if PieceType enum is comprehensive
+            # and _PIECE_TYPE_TO_CHAR_SYMBOL is kept in sync.
+            raise ValueError(f"Unknown piece type: {self.type}") from exc
 
         return base_symbol.lower() if self.color == Color.WHITE else base_symbol
 
     def promote(self) -> None:
-        """Promotes the piece if it is promotable and not already promoted."""
+        """
+        Promotes the piece if it is promotable and not already promoted.
+        If the piece type cannot be promoted or is already promoted,
+        this method has no effect.
+        Updates `self.type` and `self.is_promoted` accordingly.
+        """
         if self.type in BASE_TO_PROMOTED_TYPE and not self.is_promoted:
             self.type = BASE_TO_PROMOTED_TYPE[self.type]
             self.is_promoted = True
-        # else: No change if not promotable or already promoted
+        # No change if not promotable or already promoted
 
     def unpromote(self) -> None:
-        """Unpromotes the piece if it is promoted."""
+        """
+        Unpromotes the piece if it is currently in a promoted state.
+        If the piece is not promoted, this method has no effect.
+        Updates `self.type` and `self.is_promoted` accordingly.
+        """
         if self.is_promoted and self.type in PROMOTED_TO_BASE_TYPE:
             self.type = PROMOTED_TO_BASE_TYPE[self.type]
             self.is_promoted = False
-        # else: No change if not promoted
+        # No change if not promoted
 
     def __repr__(self) -> str:
+        """
+        Returns an unambiguous string representation of the Piece.
+        """
         return f"Piece({self.type.name}, {self.color.name})"
 
     def __eq__(self, other: object) -> bool:
+        """
+        Checks if this Piece is equal to another object.
+        Two pieces are equal if they have the same type and color.
+        """
         if not isinstance(other, Piece):
             return NotImplemented
         return self.type == other.type and self.color == other.color
 
     def __hash__(self) -> int:
+        """
+        Returns a hash value for the Piece.
+        Based on the piece type and color.
+        """
         return hash((self.type, self.color))
 
-    def __deepcopy__(self, memo: Dict[int, "Piece"]) -> "Piece":
-        # Create a new Piece instance without calling __init__ again if not necessary,
-        # or simply create a new one.
-        # Since Piece is simple, creating a new one is fine.
+    def __deepcopy__(self, memo: Dict[int, 'Piece']) -> 'Piece':
+        """
+        Creates a deep copy of this Piece instance.
+        Since Piece instances are relatively simple and their core attributes
+        (type, color) define their state, creating a new instance is sufficient.
+
+        Args:
+            memo: The memoization dictionary used by `copy.deepcopy`.
+
+        Returns:
+            A new Piece instance identical to this one.
+        """
+        # Piece objects are simple enough that creating a new one with the same
+        # attributes serves as a deep copy. `is_promoted` is derived correctly
+        # by the __init__ method.
         new_piece = Piece(self.type, self.color)
-        # self.is_promoted is derived, so no need to copy explicitly
-        memo[id(self)] = new_piece
+        memo[id(self)] = new_piece  # Store in memo for `deepcopy` consistency
         return new_piece
