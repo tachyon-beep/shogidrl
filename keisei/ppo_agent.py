@@ -4,7 +4,7 @@ Minimal PPOAgent for DRL Shogi Client.
 
 import os
 import sys  # For stderr
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple  # Removed Any
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -56,31 +56,23 @@ class PPOAgent:
         legal_shogi_moves: List[
             "MoveTuple"
         ],  # Still useful for policy_index_to_shogi_move
-        legal_mask: torch.Tensor,  # INPUT PARAMETER
+        legal_mask: torch.Tensor,
         is_training: bool = True,
     ) -> Tuple[
         Optional["MoveTuple"],
         int,
         float,
         float,
-        # No longer returns legal_mask
-    ]:  # Return Shogi move (Any for now), policy index, log_prob, value
+    ]:
         """
         Select an action given an observation, legal Shogi moves, and a precomputed legal_mask.
         Returns the selected Shogi move, its policy index, log probability, and value estimate.
         """
-        self.model.train(is_training)  # Set model to train or eval mode
+        self.model.train(is_training)
 
         obs_tensor = torch.tensor(
             obs, dtype=torch.float32, device=self.device
         ).unsqueeze(0)
-
-        # legal_mask is now passed as an argument.
-        # The internal creation of legal_mask is removed.
-        # Example:
-        # legal_mask = self.policy_output_mapper.get_legal_mask(
-        # legal_shogi_moves, self.device
-        # ) # REMOVED
 
         if not legal_mask.any():
             print(
@@ -96,7 +88,7 @@ class PPOAgent:
         # Get action, log_prob, and value from the ActorCritic model
         # Pass deterministic based on not is_training
         selected_policy_index_tensor, log_prob_tensor, value_tensor = (
-            self.model.get_action_and_value(  # Pass the provided legal_mask
+            self.model.get_action_and_value(
                 obs_tensor, legal_mask=legal_mask, deterministic=not is_training
             )
         )
@@ -107,7 +99,7 @@ class PPOAgent:
             value_tensor.item()
         )  # Value is already squeezed in get_action_and_value
 
-        selected_shogi_move: Optional["MoveTuple"] = None  # Quoted
+        selected_shogi_move: Optional["MoveTuple"] = None
         try:
             selected_shogi_move = self.policy_output_mapper.policy_index_to_shogi_move(
                 selected_policy_index_val
@@ -118,7 +110,7 @@ class PPOAgent:
                 file=sys.stderr,
             )
             # Handle by returning no move or re-raising, depending on desired robustness.
-            return None, -1, 0.0, value_float  # Return 4 items
+            return None, -1, 0.0, value_float
             # Or raise the error
 
         return (
@@ -126,19 +118,18 @@ class PPOAgent:
             selected_policy_index_val,
             log_prob_val,
             value_float,
-            # legal_mask, # REMOVED from return
         )
 
     def get_value(self, obs_np: np.ndarray) -> float:
         """Get the value prediction from the critic for a given NumPy observation."""
-        self.model.eval()  # Set model to evaluation mode
+        self.model.eval()
         obs_tensor = torch.tensor(
             obs_np, dtype=torch.float32, device=self.device
         ).unsqueeze(0)
         with torch.no_grad():
             _, _, value_estimate = self.model.get_action_and_value(
                 obs_tensor, deterministic=True
-            )  # Get value deterministically
+            )
         return float(value_estimate.item())
 
     def learn(self, experience_buffer: ExperienceBuffer) -> Dict[str, float]:
@@ -174,7 +165,7 @@ class PPOAgent:
         returns_batch = batch_data["returns"].to(self.device)
         legal_masks_batch = batch_data["legal_masks"].to(
             self.device
-        )  # Added legal_masks_batch
+        )
 
         # Normalize advantages
         advantages_batch = (advantages_batch - advantages_batch.mean()) / (
@@ -204,7 +195,7 @@ class PPOAgent:
                 returns_minibatch = returns_batch[minibatch_indices]
                 legal_masks_minibatch = legal_masks_batch[
                     minibatch_indices
-                ]  # Added legal_masks_minibatch
+                ]
 
                 # Get new log_probs, entropy, and value from the model
                 # Note on entropy: legal_mask is now passed here. Entropy is calculated
@@ -212,7 +203,7 @@ class PPOAgent:
                 new_log_probs, entropy, new_values = self.model.evaluate_actions(
                     obs_minibatch,
                     actions_minibatch,
-                    legal_mask=legal_masks_minibatch,  # Pass legal_masks_minibatch
+                    legal_mask=legal_masks_minibatch,
                 )
 
                 # PPO Loss Calculation
@@ -324,11 +315,11 @@ class PPOAgent:
         self.model.load_state_dict(checkpoint["model_state_dict"])
         if "optimizer_state_dict" in checkpoint:
             self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-            # Ensure optimizer state is also moved to the correct device if necessary
-            # This is often handled by PyTorch if model parameters are on the device already
-            # or by explicitly iterating through optimizer state and moving tensors.
-            # For Adam, this might involve: for state in self.optimizer.state.values():
-            # for k, v in state.items(): if isinstance(v, torch.Tensor): state[k] = v.to(self.device)
+            # Ensure optimizer state is also moved to the correct device
+            for state_group in self.optimizer.state.values():
+                for param_state_key, param_state_value in state_group.items():
+                    if isinstance(param_state_value, torch.Tensor):
+                        state_group[param_state_key] = param_state_value.to(self.device)
         else:
             print(
                 "Warning: Optimizer state not found in checkpoint. Initializing optimizer from scratch.",
@@ -336,4 +327,4 @@ class PPOAgent:
             )
         self.model.to(self.device)
         print(f"PPOAgent model, optimizer, and state loaded from {file_path}")
-        return checkpoint  # Return the loaded checkpoint dictionary
+        return checkpoint

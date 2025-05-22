@@ -490,9 +490,9 @@ def generate_all_legal_moves(
     is_uchi_fu_zume_check: bool = False,  # Restored is_uchi_fu_zume_check
 ) -> List[MoveTuple]:
     # Basic entry log
-    print(
-        f"DEBUG_GALM: Entered for player {game.current_player}. SFEN: {game.to_sfen_string()}"
-    )
+    #print(
+    #    f"DEBUG_GALM: Entered for player {game.current_player}. SFEN: {game.to_sfen_string()}"
+    #)
     #if is_uchi_fu_zume_check:
     #    print("DEBUG_GALM: Mode: is_uchi_fu_zume_check=True")  # Corrected f-string
 
