@@ -1311,7 +1311,6 @@ def test_move_legality_pinned_piece(  # pylint: disable=too-many-arguments, too-
     )
 
     for move_tuple, reason in expected_allowed_moves:
-
         assert (
             move_tuple in legal_moves
         ), f"Pinned piece {pinned_piece_pos} should be able to make move {move_tuple} ({reason}). Not in {legal_moves}"

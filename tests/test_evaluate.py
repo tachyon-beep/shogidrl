@@ -353,9 +353,10 @@ def test_evaluate_main_basic_random_opponent(
     )
 
     # Check that run_evaluation_loop was called with wandb_enabled=False
-    _run_loop_pos_args, run_loop_kwargs = (
-        mock_run_loop.call_args
-    )  # Corrected argument capture
+    (
+        _run_loop_pos_args,
+        run_loop_kwargs,
+    ) = mock_run_loop.call_args  # Corrected argument capture
     assert run_loop_kwargs.get("wandb_enabled") is False
 
     mock_eval_logger_class.assert_called_once_with(str(log_file), also_stdout=True)
@@ -448,9 +449,10 @@ def test_evaluate_main_heuristic_opponent_with_wandb(
         "heuristic", None, "cpu", actual_policy_mapper_instance, INPUT_CHANNELS
     )
 
-    _run_loop_pos_args, run_loop_kwargs = (
-        mock_run_loop.call_args
-    )  # Corrected argument capture
+    (
+        _run_loop_pos_args,
+        run_loop_kwargs,
+    ) = mock_run_loop.call_args  # Corrected argument capture
     assert run_loop_kwargs.get("wandb_enabled") is True
 
     mock_eval_logger_class.assert_called_once_with(str(log_file), also_stdout=True)
@@ -673,9 +675,10 @@ def test_evaluate_main_ppo_vs_ppo_opponent_with_wandb(
         agent2_path, "cpu", actual_policy_mapper_instance, INPUT_CHANNELS
     )  # Called via initialize_opponent
 
-    run_loop_pos_args, run_loop_kwargs = (
-        mock_run_loop.call_args
-    )  # Corrected argument capture
+    (
+        run_loop_pos_args,
+        run_loop_kwargs,
+    ) = mock_run_loop.call_args  # Corrected argument capture
     assert run_loop_pos_args[0] == mock_agent1  # Check positional arg for agent_to_eval
     assert run_loop_pos_args[1] == mock_agent2  # Check positional arg for opponent
     assert run_loop_kwargs.get("wandb_enabled") is True

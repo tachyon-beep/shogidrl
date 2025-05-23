@@ -180,7 +180,6 @@ def test_make_move_returns_correct_reward_at_terminal_state():
         patch.object(ShogiGame, "get_reward", return_value=1.0),
         patch.object(game, "make_move", new=mock_make_move_inner),
     ):
-
         # Now make a move that will trigger our mocked behavior
         # The actual move details don't matter as make_move is mocked
         _move_outcome = game.make_move((6, 6, 5, 6, False))

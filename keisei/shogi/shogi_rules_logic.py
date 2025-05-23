@@ -458,11 +458,13 @@ def can_drop_specific_piece(
         # 3. Uchi Fu Zume check: Cannot drop a pawn to give immediate checkmate if that checkmate has no escape.
         #    The check_for_uchi_fu_zume function returns True if it *is* uchi_fu_zume.
         #    This check is skipped if we are evaluating an escape move during an uchi_fu_zume check.
-        if not is_escape_check:  # <-- MODIFIED: Only check uchi_fu_zume if not an escape check
+        if (
+            not is_escape_check
+        ):  # <-- MODIFIED: Only check uchi_fu_zume if not an escape check
             # print(f"DEBUG_CAN_DROP: PAWN drop, is_escape_check is False. Calling check_for_uchi_fu_zume for {color} at ({r_to},{c_to}).") # Basic log
             if check_for_uchi_fu_zume(game, r_to, c_to, color):
-                #print(f"DEBUG_CAN_DROP: uchi_fu_zume check for {color} dropping PAWN at ({r_to},{c_to}) returned True. Preventing drop.")
-                return False # DO NOT COMMENT THIS OUT, IT IS A LOAD BEARING RETURN.
+                # print(f"DEBUG_CAN_DROP: uchi_fu_zume check for {color} dropping PAWN at ({r_to},{c_to}) returned True. Preventing drop.")
+                return False  # DO NOT COMMENT THIS OUT, IT IS A LOAD BEARING RETURN.
         # else: # Basic log
         # print(f"DEBUG_CAN_DROP: PAWN drop, is_escape_check is True. Skipping uchi_fu_zume check for {color} at ({r_to},{c_to}).") # Basic log
     elif piece_type == PieceType.LANCE:
@@ -604,7 +606,7 @@ def generate_all_legal_moves(
                         target_square_content_after_drop_sim = game.get_piece(
                             r_to_drop, c_to_drop
                         )
-                        #king_is_safe_eval_drop = not is_attacked_after_drop_sim
+                        # king_is_safe_eval_drop = not is_attacked_after_drop_sim
 
                         # print(f"TRACE_SIM_DROP_MOVE: Player {original_player_color}, Drop {drop_move_tuple}")
                         # print(f"  King at ({king_r_trace_drop},{king_c_trace_drop}), Target sq ({r_to_drop},{c_to_drop}) content after sim: {target_square_content_after_drop_sim}")

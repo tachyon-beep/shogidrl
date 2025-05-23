@@ -18,6 +18,7 @@ from tqdm import tqdm
 
 import config as app_config
 import wandb  # Import wandb at the top level
+import wandb.errors  # Import wandb errors for specific error handling
 
 # Import the callable evaluation function
 from evaluate import execute_full_evaluation_run
@@ -241,26 +242,38 @@ def main():
         is_train_wandb_active = False
         if getattr(
             cfg, "WANDB_LOG_TRAIN", False
-        ):  # Assuming a config like WANDB_LOG_TRAIN
+        ):
             try:
-                # import wandb # Moved to top
+                # Prepare config for W&B
+                wandb_config_data = json.loads(serialize_config(cfg))
+                # You might also want to add CLI args if they are not already in serialize_config(cfg)
+                # wandb_config_data.update(vars(args)) # If args are relevant and not fully in cfg serialization
+
                 wandb.init(
                     project=getattr(cfg, "WANDB_PROJECT_TRAIN", "keisei-training"),
                     entity=getattr(cfg, "WANDB_ENTITY_TRAIN", None),
-                    name=run_name,  # Use the main run_name
-                    config=json.loads(
-                        serialize_config(cfg)
-                    ),  # Log the effective config
-                    reinit=True,  # In case of multiple main() calls in one process (e.g. testing)
+                    name=run_name,
+                    config=wandb_config_data,
+                    reinit=True, # Consider if still needed or use W&B settings for multiple inits
                     group="TrainingRuns",
                 )
                 log_both(
-                    f"Weights & Biases logging enabled for main training run: {run_name}"
+                    f"Weights & Biases logging enabled for main training run: {run_name} (ID: {wandb.run.id if wandb.run else 'N/A'})"
                 )
                 is_train_wandb_active = True
-            except Exception as e:
+            except wandb.errors.AuthenticationError as e:
                 log_both(
-                    f"Error initializing W&B for training: {e}. W&B logging for training disabled."
+                    f"W&B Authentication Error: Could not log in to W&B. Ensure API key is set. Details: {e}. W&B logging for training disabled."
+                )
+                is_train_wandb_active = False
+            except wandb.errors.CommError as e:
+                log_both(
+                    f"W&B Communication Error: Could not connect to W&B servers. Details: {e}. W&B logging for training disabled."
+                )
+                is_train_wandb_active = False
+            except wandb.errors.UsageError as e: # Or wandb.errors.Error for more general W&B client errors
+                log_both(
+                    f"W&B Usage Error: Invalid arguments or configuration for wandb.init(). Details: {e}. W&B logging for training disabled."
                 )
                 is_train_wandb_active = False
 
@@ -520,13 +533,16 @@ def main():
                 )  # Dummy mask
 
                 # --- W&B episode metrics logging ---
-                #print(f"DEBUG: EPISODE wandb.log | is_train_wandb_active = {is_train_wandb_active}, wandb.run exists = {bool(wandb.run)}")
+                # print(f"DEBUG: EPISODE wandb.log | is_train_wandb_active = {is_train_wandb_active}, wandb.run exists = {bool(wandb.run)}")
                 if is_train_wandb_active and wandb.run:
-                    wandb.log({
-                        "episode/reward": current_episode_reward,
-                        "episode/length": current_episode_length,
-                        "episode/total_episodes_completed": total_episodes_completed,
-                    }, step=global_timestep)
+                    wandb.log(
+                        {
+                            "episode/reward": current_episode_reward,
+                            "episode/length": current_episode_length,
+                            "episode/total_episodes_completed": total_episodes_completed,
+                        },
+                        step=global_timestep,
+                    )
 
                 if total_episodes_completed % cfg.SAVE_FREQ_EPISODES == 0:
                     ckpt_path_ep = os.path.join(
@@ -668,7 +684,9 @@ def main():
                 pbar.set_postfix(pbar_postfix)
 
                 # --- W&B PPO/learn metrics logging ---
-                print(f"DEBUG: PPO wandb.log | is_train_wandb_active = {is_train_wandb_active}, wandb.run exists = {bool(wandb.run)}")
+                print(
+                    f"DEBUG: PPO wandb.log | is_train_wandb_active = {is_train_wandb_active}, wandb.run exists = {bool(wandb.run)}"
+                )
                 if is_train_wandb_active and wandb.run:
                     wandb.log(learn_metrics, step=global_timestep)
 

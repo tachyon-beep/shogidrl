@@ -52,10 +52,13 @@ def test_ppo_agent_init_and_select_action():
     # Create legal_mask based on legal_moves
     legal_mask = mapper.get_legal_mask(legal_moves, device=agent.device)
 
-    selected_move, idx, log_prob, value = (
-        agent.select_action(  # Removed legal_mask_returned
-            obs, legal_shogi_moves=legal_moves, legal_mask=legal_mask
-        )
+    (
+        selected_move,
+        idx,
+        log_prob,
+        value,
+    ) = agent.select_action(  # Removed legal_mask_returned
+        obs, legal_shogi_moves=legal_moves, legal_mask=legal_mask
     )
     assert isinstance(idx, int)
     assert 0 <= idx < agent.num_actions_total
