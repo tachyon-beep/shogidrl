@@ -358,6 +358,7 @@ def execute_full_evaluation_run(
     wandb_extra_config: Optional[dict] = None,   # <--- NEW PARAM for extra CLI args
     wandb_reinit: Optional[bool] = None,         # <--- Only pass if not None
     wandb_group: Optional[str] = None,           # <--- Only pass if not None
+    _called_from_cli: bool = False,  # <--- NEW PARAM
 ) -> Optional[dict]:  # Return summary metrics dict or None if error
     """
     Performs a complete evaluation run programmatically.
@@ -450,9 +451,11 @@ def execute_full_evaluation_run(
         if is_eval_wandb_active and wandb.run:
             wandb.log({"eval/error": 1, "error_message": str(e)})
     finally:
-        if is_eval_wandb_active and wandb.run:
+        if is_eval_wandb_active and wandb.run and _called_from_cli:
             wandb.finish()
-            print("[Eval Function] W&B run for this evaluation finished.")
+            print("[Eval Function] W&B run for this evaluation finished (called from CLI).")
+        elif is_eval_wandb_active and wandb.run:
+            print("[Eval Function] W&B run for this evaluation remains active (called programmatically).")
 
     return results_summary
 
@@ -562,6 +565,7 @@ def main():
         wandb_run_name_eval=args.wandb_run_name,  # Pass exactly what was given (may be None)
         logger_also_stdout=True,  # <--- CLI should print to stdout
         wandb_extra_config=wandb_extra_config,
+        _called_from_cli=True,  # <--- NEW ARGUMENT
     )
 
 

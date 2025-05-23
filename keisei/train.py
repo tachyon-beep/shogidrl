@@ -448,7 +448,8 @@ def main():
                     game_info, str
                 ):  # Should not happen if game_info_raw is dict
                     log_msg += f", Info: {game_info}"
-                logger.log(log_msg)
+                if getattr(cfg, "PRINT_GAME_REAL_TIME", False):
+                    logger.log(log_msg)
             # else: No move was made (e.g. if done or no legal moves initially)
             # obs_for_buffer (s_t) is already set
             # next_obs (s_t+1) remains current obs (obs_for_buffer)
@@ -517,6 +518,15 @@ def main():
                     dtype=torch.bool,
                     device=agent.device,
                 )  # Dummy mask
+
+                # --- W&B episode metrics logging ---
+                print(f"DEBUG: EPISODE wandb.log | is_train_wandb_active = {is_train_wandb_active}, wandb.run exists = {bool(wandb.run)}")
+                if is_train_wandb_active and wandb.run:
+                    wandb.log({
+                        "episode/reward": current_episode_reward,
+                        "episode/length": current_episode_length,
+                        "episode/total_episodes_completed": total_episodes_completed,
+                    }, step=global_timestep)
 
                 if total_episodes_completed % cfg.SAVE_FREQ_EPISODES == 0:
                     ckpt_path_ep = os.path.join(
@@ -656,6 +666,11 @@ def main():
                     "lr": f"{lr:.1e}",
                 }
                 pbar.set_postfix(pbar_postfix)
+
+                # --- W&B PPO/learn metrics logging ---
+                print(f"DEBUG: PPO wandb.log | is_train_wandb_active = {is_train_wandb_active}, wandb.run exists = {bool(wandb.run)}")
+                if is_train_wandb_active and wandb.run:
+                    wandb.log(learn_metrics, step=global_timestep)
 
         pbar.close()
         if global_timestep >= cfg.TOTAL_TIMESTEPS:  # Check if loop completed normally
