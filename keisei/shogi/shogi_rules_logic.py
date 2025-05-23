@@ -604,7 +604,7 @@ def generate_all_legal_moves(
                         target_square_content_after_drop_sim = game.get_piece(
                             r_to_drop, c_to_drop
                         )
-                        king_is_safe_eval_drop = not is_attacked_after_drop_sim
+                        #king_is_safe_eval_drop = not is_attacked_after_drop_sim
 
                         # print(f"TRACE_SIM_DROP_MOVE: Player {original_player_color}, Drop {drop_move_tuple}")
                         # print(f"  King at ({king_r_trace_drop},{king_c_trace_drop}), Target sq ({r_to_drop},{c_to_drop}) content after sim: {target_square_content_after_drop_sim}")

@@ -520,7 +520,7 @@ def main():
                 )  # Dummy mask
 
                 # --- W&B episode metrics logging ---
-                print(f"DEBUG: EPISODE wandb.log | is_train_wandb_active = {is_train_wandb_active}, wandb.run exists = {bool(wandb.run)}")
+                #print(f"DEBUG: EPISODE wandb.log | is_train_wandb_active = {is_train_wandb_active}, wandb.run exists = {bool(wandb.run)}")
                 if is_train_wandb_active and wandb.run:
                     wandb.log({
                         "episode/reward": current_episode_reward,
