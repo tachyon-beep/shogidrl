@@ -11,6 +11,7 @@ This package contains:
 # Re-export the main components for easy access
 from .shogi.shogi_core_definitions import Color, MoveTuple, Piece, PieceType
 from .shogi.shogi_game import ShogiGame
+from .evaluate import execute_full_evaluation_run
 
 __all__ = [
     # Shogi core types
@@ -19,5 +20,6 @@ __all__ = [
     "Piece",
     "MoveTuple",
     "ShogiGame",
+    "execute_full_evaluation_run",
     # Let the other modules be imported explicitly
 ]

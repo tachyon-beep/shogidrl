@@ -59,5 +59,5 @@ EVAL_WANDB_ENTITY = None  # W&B entity for periodic evaluation runs. None uses W
 EVAL_WANDB_RUN_NAME_PREFIX = "periodic_eval_"  # Prefix for W&B run names for evaluation runs.
 
 # --- Debugging & Display Settings ---
-PRINT_GAME_REAL_TIME = False  # If True, prints game states/moves to console. Significantly slows down training.
+PRINT_GAME_REAL_TIME = True  # If True, prints game states/moves to console. Significantly slows down training.
 REAL_TIME_PRINT_DELAY = 0.5  # Delay in seconds between moves when PRINT_GAME_REAL_TIME is True.

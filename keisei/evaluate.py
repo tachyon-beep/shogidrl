@@ -1,19 +1,16 @@
+\
+# filepath: /home/john/keisei/keisei/evaluate.py
 """
 evaluate.py: Main script for evaluating PPO Shogi agents.
 """
-
-import argparse
-import random
+import os
 import sys
-import os  # Added os import
-from datetime import datetime  # Ensure datetime is imported
-from typing import Optional, List, TYPE_CHECKING, Union, Any # MODIFIED: Added Any
-
-from dotenv import load_dotenv  # Add this import
-
-import numpy as np  # Import numpy
-import torch  # For torch.device and model loading
-import wandb  # Ensure wandb is imported
+import random
+from typing import Optional, List, TYPE_CHECKING, Union, Any
+from dotenv import load_dotenv
+import numpy as np
+import torch
+import wandb
 
 from keisei.ppo_agent import PPOAgent
 from keisei.utils import PolicyOutputMapper, EvaluationLogger, BaseOpponent
@@ -97,18 +94,13 @@ class SimpleHeuristicOpponent(BaseOpponent):
                     destination_piece is not None
                     and destination_piece.color != game_instance.current_player
                 ):
-                    is_capture = True
+                    is_capture = True # MODIFIED: Set is_capture to True
 
                 # Heuristic 2: Check for non-promoting pawn moves (only if not a capture).
                 if not is_capture:
-                    current_piece_on_board = game_instance.board[from_r][from_c]
-                    if (
-                        current_piece_on_board is not None
-                        and current_piece_on_board.type == PieceType.PAWN
-                        and not promote
-                    ):
-                        is_pawn_move_no_promo = True
-
+                    source_piece = game_instance.board[from_r][from_c] # MODIFIED: Get source piece
+                    if source_piece and source_piece.type == PieceType.PAWN and not promote: # MODIFIED: Check if pawn and not promoting
+                        is_pawn_move_no_promo = True # MODIFIED: Set is_pawn_move_no_promo to True
             # Drop moves (Tuple[None, None, int, int, PieceType]) and other types of moves
             # will not pass the isinstance checks above.
 
@@ -231,21 +223,24 @@ def run_evaluation_loop(
             selected_move: Optional[MoveTuple] = None
             if isinstance(active_agent, PPOAgent):
                 obs_np = shogi_game_io.generate_neural_network_observation(game)
-                obs_tensor = torch.tensor(
-                    obs_np, dtype=torch.float32, device=device
-                ).unsqueeze(0)
+                # obs_tensor = torch.tensor( # This variable was unused.
+                #     obs_np, dtype=torch.float32, device=device
+                # ).unsqueeze(0)
                 legal_mask = policy_mapper.get_legal_mask(legal_moves, device)
 
                 if not legal_mask.any() and legal_moves:
                     logger.log_custom_message(
-                        f"Warning: Game {game_num}, Move {game.move_count + 1}: All legal moves masked out by PPO agent {active_agent.name}. Legal moves: {len(legal_moves)}"
+                        f"Error: Game {game_num}, Move {game.move_count + 1}: "
+                        f"Agent {active_agent.name} ({game.current_player.name}) has legal moves, "
+                        f"but legal_mask is all False. Legal moves: {legal_moves}. "
+                        f"This indicates an issue with PolicyOutputMapper or move generation."
                     )
-                    selected_move = random.choice(legal_moves)
+                    # PPOAgent.select_action should handle this.
+                    selected_shogi_move, action_idx, log_prob, value = active_agent.select_action(obs_np, legal_moves, legal_mask, is_training=False)
+                    selected_move = selected_shogi_move # MODIFIED: Assign to selected_move
                 else:
-                    action_tuple = active_agent.select_action(
-                        obs_np, legal_moves, legal_mask, is_training=False
-                    )
-                    selected_move = action_tuple[0]
+                    selected_shogi_move, action_idx, log_prob, value = active_agent.select_action(obs_np, legal_moves, legal_mask, is_training=False)
+                    selected_move = selected_shogi_move # MODIFIED: Assign to selected_move
             elif isinstance(
                 active_agent, BaseOpponent
             ):  # Opponent is a BaseOpponent (Random, Heuristic)
@@ -296,7 +291,7 @@ def run_evaluation_loop(
         )
         # Log additional custom metrics for this game
         logger.log_custom_message(
-            f"Game {game_num} Details: Length: {game_length}, Outcome: {outcome_str}, Agent Eval Color: {"Black" if agent_is_black else "White"}"
+            f"Game {game_num} Details: Length: {game_length}, Outcome: {outcome_str}, Agent Eval Color: {'Black' if agent_is_black else 'White'}"
         )
         logger.log_custom_message(
             f"Game {game_num} ended. Winner: {winner if winner else 'Draw'}"
@@ -354,7 +349,7 @@ def execute_full_evaluation_run(
     wandb_project_eval: Optional[str] = None,
     wandb_entity_eval: Optional[str] = None,
     wandb_run_name_eval: Optional[str] = None,
-    logger_also_stdout: bool = False,  # <--- NEW PARAM
+    logger_also_stdout: bool = True,  # <--- MODIFIED DEFAULT TO TRUE
     wandb_extra_config: Optional[dict] = None,   # <--- NEW PARAM for extra CLI args
     wandb_reinit: Optional[bool] = None,         # <--- Only pass if not None
     wandb_group: Optional[str] = None,           # <--- Only pass if not None
@@ -402,7 +397,7 @@ def execute_full_evaluation_run(
             wandb.init(**wandb_kwargs)
             print(f"[Eval Function] Weights & Biases logging enabled for this evaluation run: {current_wandb_run_name}")
             is_eval_wandb_active = True
-        except Exception as e:
+        except Exception as e: # MODIFIED: Catch specific exception if possible, or at least use 'as e'
             print(f"[Eval Function] Error initializing W&B for evaluation: {e}. W&B logging for this eval run disabled.", file=sys.stderr)
             is_eval_wandb_active = False
 
@@ -413,7 +408,11 @@ def execute_full_evaluation_run(
 
     results_summary = None
     try:
-        with EvaluationLogger(log_file_path_eval, also_stdout=logger_also_stdout) as logger:
+        # MODIFIED: Removed run_name_for_log logic as it's not a parameter for EvaluationLogger
+        with EvaluationLogger(
+            log_file_path_eval,
+            also_stdout=logger_also_stdout
+        ) as logger:
             logger.log_custom_message("Starting Shogi Agent Evaluation (Programmatic Call).")
             logger.log_custom_message(f"Parameters: agent_ckpt='{agent_checkpoint_path}', opponent='{opponent_type}', num_games={num_games}")
 
@@ -443,138 +442,30 @@ def execute_full_evaluation_run(
                 f"[Eval Function] Evaluation Summary: {results_summary}"
             )
 
-    except Exception as e:
-        print(
-            f"[Eval Function] An error occurred during programmatic evaluation: {e}",
-            file=sys.stderr,
-        )
-        if is_eval_wandb_active and wandb.run:
-            wandb.log({"eval/error": 1, "error_message": str(e)})
-    finally:
-        if is_eval_wandb_active and wandb.run and _called_from_cli:
+    except Exception as e: # MODIFIED: Catch specific exception if possible, or at least use 'as e'
+        print(f"[Eval Function] Error during evaluation run: {e}", file=sys.stderr)
+        results_summary = None
+
+    # Final W&B logging to ensure all metrics are captured
+    if is_eval_wandb_active and results_summary is not None:
+        try:
+            wandb.log(
+                {
+                    "eval/final_win_rate": results_summary["win_rate"],
+                    "eval/final_loss_rate": results_summary["loss_rate"],
+                    "eval/final_draw_rate": results_summary["draw_rate"],
+                    "eval/final_avg_game_length": results_summary["avg_game_length"],
+                }
+            )
+            print("[Eval Function] Final W&B metrics logged.")
+        except Exception as e:
+            print(f"[Eval Function] Error logging final metrics to W&B: {e}", file=sys.stderr)
+
+    if is_eval_wandb_active: # ADDED: Call wandb.finish() if W&B was active
+        try:
             wandb.finish()
-            print("[Eval Function] W&B run for this evaluation finished (called from CLI).")
-        elif is_eval_wandb_active and wandb.run:
-            print("[Eval Function] W&B run for this evaluation remains active (called programmatically).")
+            print("[Eval Function] W&B run finished.")
+        except Exception as e:
+            print(f"[Eval Function] Error finishing W&B run: {e}", file=sys.stderr)
 
     return results_summary
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Evaluate a PPO Shogi agent.")
-    parser.add_argument(
-        "--agent-checkpoint",
-        type=str,
-        required=True,
-        help="Path to the agent's model checkpoint (.pth file).",
-    )
-    parser.add_argument(
-        "--opponent-type",
-        type=str,
-        default="random",
-        choices=["random", "heuristic", "ppo"],
-        help="Type of opponent to play against.",
-    )
-    parser.add_argument(
-        "--opponent-checkpoint",
-        type=str,
-        default=None,
-        help="Path to opponent's model checkpoint (if opponent_type is 'ppo').",
-    )
-    parser.add_argument(
-        "--num-games", type=int, default=10, help="Number of games to play."
-    )
-    parser.add_argument(
-        "--max-moves-per-game",
-        type=int,
-        default=300,  # Default from your example
-        help="Maximum number of moves per game before declaring a draw.",
-    )
-    parser.add_argument(
-        "--device",
-        type=str,
-        default="cpu",
-        choices=["cpu", "cuda"],
-        help="Device to run evaluation on ('cpu' or 'cuda').",
-    )
-    parser.add_argument(
-        "--log-file",
-        type=str,
-        default=None,  # Default to None, let the function construct if not provided by CLI
-        help="Path to the log file for evaluation results.",
-    )
-    parser.add_argument(
-        "--seed", type=int, default=None, help="Random seed for reproducibility."
-    )
-    # W&B arguments
-    parser.add_argument(
-        "--wandb-log", action="store_true", help="Enable Weights & Biases logging."
-    )
-    parser.add_argument(
-        "--wandb-project",
-        type=str,
-        default=None,  # Default to None, execute_full_evaluation_run has its own default
-        help="W&B project name.",
-    )
-    parser.add_argument(
-        "--wandb-entity", type=str, default=None, help="W&B entity (username or team)."
-    )
-    parser.add_argument(
-        "--wandb-run-name",
-        type=str,
-        default=None,
-        help="Custom W&B run name for this evaluation.",
-    )
-    args = parser.parse_args()
-
-    # Create a PolicyOutputMapper instance here to pass to the function
-    policy_mapper_instance = PolicyOutputMapper()
-
-    # Determine log file path if not provided
-    effective_log_file_path = args.log_file
-    if not effective_log_file_path:
-        # Create a default log file name if not specified
-        log_dir = "logs"  # Or any default directory you prefer
-        if not os.path.exists(log_dir):
-            os.makedirs(log_dir)
-        effective_log_file_path = os.path.join(
-            log_dir, f"eval_run_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-        )
-
-    # Build a config dict with all CLI args for wandb.config
-    wandb_extra_config = {
-        "log_file": effective_log_file_path,
-        "wandb_log": args.wandb_log,
-        "wandb_project": args.wandb_project,
-        "wandb_entity": args.wandb_entity,
-        "wandb_run_name": args.wandb_run_name,
-    }
-    execute_full_evaluation_run(
-        agent_checkpoint_path=args.agent_checkpoint,
-        opponent_type=args.opponent_type,
-        opponent_checkpoint_path=args.opponent_checkpoint,
-        num_games=args.num_games,
-        max_moves_per_game=args.max_moves_per_game,
-        device_str=args.device,
-        log_file_path_eval=effective_log_file_path,  # Use the determined log_file arg from CLI or default
-        policy_mapper=policy_mapper_instance,
-        seed=args.seed,
-        wandb_log_eval=args.wandb_log,
-        wandb_project_eval=args.wandb_project,
-        wandb_entity_eval=args.wandb_entity,
-        wandb_run_name_eval=args.wandb_run_name,  # Pass exactly what was given (may be None)
-        logger_also_stdout=True,  # <--- CLI should print to stdout
-        wandb_extra_config=wandb_extra_config,
-        _called_from_cli=True,  # <--- NEW ARGUMENT
-    )
-
-
-if __name__ == "__main__":
-    # If evaluate.py is run directly, ensure the project root is in sys.path
-    # so that 'keisei' module and its submodules can be imported.
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(
-        current_dir
-    )  # Assuming evaluate.py is in a dir like 'keisei_project/evaluate.py'
-    # If evaluate.py is in the root, then project_root = current_dir
-    # Based on workspace structure, evaluate.py is in the root /home/john/keisi

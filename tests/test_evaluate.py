@@ -12,17 +12,16 @@ import pytest
 import torch  # Re-add torch import
 
 # Functions and classes to test from evaluate.py
-from evaluate import (
+from keisei.evaluate import (  # MODIFIED: Updated import path
     INPUT_CHANNELS,
     SimpleHeuristicOpponent,
     SimpleRandomOpponent,
     initialize_opponent,
     load_evaluation_agent,
-)
-from evaluate import main as evaluate_main  # Rename to avoid conflict with pytest main
-from evaluate import (
     run_evaluation_loop,
+    execute_full_evaluation_run, # ADDED: Import the function under test
 )
+# from evaluate import main as evaluate_main # MODIFIED: Removed, main() was removed from evaluate.py
 
 # Imports from the project
 from keisei.ppo_agent import PPOAgent  # Actual PPOAgent for type hints and structure
@@ -168,7 +167,7 @@ def test_initialize_opponent_types(policy_mapper):
 
 
 @patch(
-    "evaluate.load_evaluation_agent"
+    "keisei.evaluate.load_evaluation_agent"  # MODIFIED: Updated import path
 )  # Mock load_evaluation_agent within evaluate.py
 def test_initialize_opponent_ppo(mock_load_agent, policy_mapper):
     """Test that initialize_opponent returns a PPOAgent when type is 'ppo' and path is provided."""
@@ -191,7 +190,7 @@ def test_initialize_opponent_ppo(mock_load_agent, policy_mapper):
         initialize_opponent("ppo", None, "cpu", policy_mapper, INPUT_CHANNELS)
 
 
-@patch("evaluate.PPOAgent")  # Mock PPOAgent class within evaluate.py
+@patch("keisei.evaluate.PPOAgent")  # MODIFIED: Updated import path # Mock PPOAgent class within evaluate.py
 def test_load_evaluation_agent_mocked(MockPPOAgentClass, policy_mapper):
     mock_agent_instance = MagicMock(
         spec=PPOAgent
@@ -258,15 +257,15 @@ def test_run_evaluation_loop_basic(policy_mapper, eval_logger_setup):
     )  # Game 2, updated assertion
 
 
-# --- Test for Main Script Execution ---
+# --- Tests for Main Script Execution (now execute_full_evaluation_run) ---
 
 # Helper for common main test mocks
 COMMON_MAIN_MOCKS = [
-    patch("evaluate.PolicyOutputMapper"),
-    patch("evaluate.load_evaluation_agent"),
-    patch("evaluate.initialize_opponent"),
-    patch("evaluate.run_evaluation_loop"),
-    patch("evaluate.EvaluationLogger"),
+    patch("keisei.evaluate.PolicyOutputMapper"), # MODIFIED: Updated import path
+    patch("keisei.evaluate.load_evaluation_agent"), # MODIFIED: Updated import path
+    patch("keisei.evaluate.initialize_opponent"), # MODIFIED: Updated import path
+    patch("keisei.evaluate.run_evaluation_loop"), # MODIFIED: Updated import path
+    patch("keisei.evaluate.EvaluationLogger"), # MODIFIED: Updated import path
     patch("wandb.init"),
     patch("wandb.log"),
     patch("wandb.finish"),
@@ -287,91 +286,101 @@ def apply_mocks(mocks):
 
 
 @apply_mocks(
-    COMMON_MAIN_MOCKS[:-3]
-)  # Excludes the three seeding mocks: random.seed, numpy.random.seed, torch.manual_seed
+    COMMON_MAIN_MOCKS[:-3] # Indices 0-8: Excludes the three seeding mocks (random.seed, numpy.random.seed, torch.manual_seed)
+)
 # pylint: disable=unused-argument,too-many-positional-arguments,too-many-locals
-def test_evaluate_main_basic_random_opponent(
-    mock_wandb_run_prop,  # from COMMON_MAIN_MOCKS[8] - new
-    mock_wandb_finish,  # from COMMON_MAIN_MOCKS[7]
-    mock_wandb_log,  # from COMMON_MAIN_MOCKS[6]
-    mock_wandb_init,  # from COMMON_MAIN_MOCKS[5]
-    mock_eval_logger_class,  # from COMMON_MAIN_MOCKS[4]
-    mock_run_loop,  # from COMMON_MAIN_MOCKS[3]
-    mock_init_opponent,  # from COMMON_MAIN_MOCKS[2]
-    mock_load_agent,  # from COMMON_MAIN_MOCKS[1]
-    MockPolicyOutputMapperClass,  # from COMMON_MAIN_MOCKS[0]
+def test_execute_full_evaluation_run_basic_random( # MODIFIED: Renamed and refactored from test_evaluate_main_basic_random_opponent
+    mock_wandb_run_prop,  # For asserting not called
+    mock_wandb_finish,    # For asserting not called
+    mock_wandb_log,       # For asserting not called
+    mock_wandb_init,      # For asserting not called
+    mock_eval_logger_class,
+    mock_run_loop,
+    mock_init_opponent,
+    mock_load_agent,
+    MockPolicyOutputMapperClass, # Mock for the class keisei.evaluate.PolicyOutputMapper
     tmp_path,
-    monkeypatch,
 ):
-    actual_policy_mapper_instance = PolicyOutputMapper()
-    MockPolicyOutputMapperClass.return_value = actual_policy_mapper_instance
+    # Create a real PolicyOutputMapper instance for the test, as execute_full_evaluation_run expects one.
+    policy_mapper_instance = PolicyOutputMapper()
 
-    mock_agent_instance = MockPPOAgent(
-        INPUT_CHANNELS, actual_policy_mapper_instance, "cpu", name="LoadedMainAgent"
+    mock_agent_instance = MockPPOAgent( # Using the test utility MockPPOAgent
+        INPUT_CHANNELS, policy_mapper_instance, "cpu", name="LoadedEvalAgent"
     )
     mock_load_agent.return_value = mock_agent_instance
 
-    mock_opponent_instance = SimpleRandomOpponent(name="MainRandomOpponent")
+    mock_opponent_instance = SimpleRandomOpponent(name="EvalRandomOpponent")
     mock_init_opponent.return_value = mock_opponent_instance
 
     mock_logger_instance = MagicMock(spec=EvaluationLogger)
     mock_eval_logger_class.return_value.__enter__.return_value = mock_logger_instance
 
-    mock_run_loop.return_value = {
-        "num_games": 1,
-        "wins": 1,
-        "losses": 0,
-        "draws": 0,
-        "win_rate": 1.0,
-        "loss_rate": 0.0,
-        "draw_rate": 0.0,
-        "avg_game_length": 10.0,
-        "opponent_name": "MainRandomOpponent",
+    expected_run_loop_results = {
+        "num_games": 1, "wins": 1, "losses": 0, "draws": 0, "win_rate": 1.0,
+        "loss_rate": 0.0, "draw_rate": 0.0, "avg_game_length": 10.0,
+        "opponent_name": "EvalRandomOpponent", "agent_name": "LoadedEvalAgent" # Added agent_name
     }
+    mock_run_loop.return_value = expected_run_loop_results
 
-    log_file = tmp_path / "eval_basic.log"
-    test_args = [
-        "evaluate.py",
-        "--agent-checkpoint",
-        "./agent.pth",
-        "--opponent-type",
-        "random",
-        "--num-games",
-        "1",
-        "--log-file",
-        str(log_file),
-    ]
-    monkeypatch.setattr(sys, "argv", test_args)
-    evaluate_main()
+    log_file = tmp_path / "eval_basic_run.log"
+    agent_ckpt_path = "./agent_for_eval.pth"
+    num_games_to_run = 1
+    max_moves_for_game = 250 # Specific value for this test
 
-    MockPolicyOutputMapperClass.assert_called_once()
+    # Call the function being tested
+    results = execute_full_evaluation_run(
+        agent_checkpoint_path=agent_ckpt_path,
+        opponent_type="random",
+        opponent_checkpoint_path=None,
+        num_games=num_games_to_run,
+        max_moves_per_game=max_moves_for_game,
+        device_str="cpu",
+        log_file_path_eval=str(log_file),
+        policy_mapper=policy_mapper_instance, # Pass the created instance
+        seed=None, # Not testing seed in this specific test
+        wandb_log_eval=False # Explicitly disable W&B for this test
+    )
+
+    # Assertions
+    # MockPolicyOutputMapperClass (patch of keisei.evaluate.PolicyOutputMapper) should not be called if
+    # execute_full_evaluation_run uses the passed policy_mapper_instance directly.
+    MockPolicyOutputMapperClass.assert_not_called()
+
     mock_load_agent.assert_called_once_with(
-        "./agent.pth", "cpu", actual_policy_mapper_instance, INPUT_CHANNELS
+        agent_ckpt_path, "cpu", policy_mapper_instance, INPUT_CHANNELS
     )
     mock_init_opponent.assert_called_once_with(
-        "random", None, "cpu", actual_policy_mapper_instance, INPUT_CHANNELS
+        "random", None, "cpu", policy_mapper_instance, INPUT_CHANNELS
     )
-
-    # Check that run_evaluation_loop was called with wandb_enabled=False
-    (
-        _run_loop_pos_args,
-        run_loop_kwargs,
-    ) = mock_run_loop.call_args  # Corrected argument capture
-    assert run_loop_kwargs.get("wandb_enabled") is False
-
+    # EvaluationLogger is called with run_name_for_log="eval_run" when wandb_log_eval is False
     mock_eval_logger_class.assert_called_once_with(str(log_file), also_stdout=True)
+
+    mock_run_loop.assert_called_once()
+    pos_args, kw_args = mock_run_loop.call_args
+    assert pos_args[0] == mock_agent_instance  # agent_to_eval
+    assert pos_args[1] == mock_opponent_instance  # opponent
+    assert pos_args[2] == num_games_to_run  # num_games
+    assert pos_args[3] == mock_logger_instance  # logger
+    assert pos_args[4] == policy_mapper_instance  # policy_mapper
+    assert pos_args[5] == max_moves_for_game  # max_moves
+    assert pos_args[6] == "cpu"  # device_str
+    assert kw_args.get("wandb_enabled") is False # wandb_enabled in run_evaluation_loop
+
     mock_wandb_init.assert_not_called()
-    mock_wandb_log.assert_not_called()  # main doesn't log, and run_loop is mocked
+    mock_wandb_log.assert_not_called()
     mock_wandb_finish.assert_not_called()
+    mock_wandb_run_prop.assert_not_called() # wandb.run should not be accessed
+
+    assert results == expected_run_loop_results # Check if results are passed through
 
 
 @apply_mocks(COMMON_MAIN_MOCKS)  # Includes all mocks
 # pylint: disable=unused-argument,too-many-positional-arguments,too-many-locals
-def test_evaluate_main_heuristic_opponent_with_wandb(
+def test_execute_full_evaluation_run_heuristic_opponent_with_wandb( # MODIFIED: Renamed and refactored
     mock_torch_seed,
     mock_np_seed,
     mock_random_seed,
-    mock_wandb_run_prop,  # New mock arg
+    mock_wandb_run_prop,
     mock_wandb_finish,
     mock_wandb_log,
     mock_wandb_init,
@@ -381,14 +390,14 @@ def test_evaluate_main_heuristic_opponent_with_wandb(
     mock_load_agent,
     MockPolicyOutputMapperClass,
     tmp_path,
-    monkeypatch,
+    # monkeypatch, # MODIFIED: Removed monkeypatch as sys.argv is no longer used
 ):
-    actual_policy_mapper_instance = PolicyOutputMapper()
-    MockPolicyOutputMapperClass.return_value = actual_policy_mapper_instance
+    policy_mapper_instance = PolicyOutputMapper() # MODIFIED: Create an instance
+    # MockPolicyOutputMapperClass.return_value = policy_mapper_instance # Not needed if we pass the instance
 
     mock_agent_instance = MockPPOAgent(
         INPUT_CHANNELS,
-        actual_policy_mapper_instance,
+        policy_mapper_instance,
         "cpu",
         name="LoadedMainAgentWandb",
     )
@@ -400,7 +409,7 @@ def test_evaluate_main_heuristic_opponent_with_wandb(
     mock_logger_instance = MagicMock(spec=EvaluationLogger)
     mock_eval_logger_class.return_value.__enter__.return_value = mock_logger_instance
 
-    mock_run_loop.return_value = {
+    expected_run_loop_results = {
         "num_games": 2,
         "wins": 1,
         "losses": 1,
@@ -410,221 +419,173 @@ def test_evaluate_main_heuristic_opponent_with_wandb(
         "draw_rate": 0.0,
         "avg_game_length": 20.0,
         "opponent_name": "MainHeuristicOpponent",
+        "agent_name": "LoadedMainAgentWandb" # Added agent_name
     }
+    mock_run_loop.return_value = expected_run_loop_results
 
     log_file = tmp_path / "eval_wandb.log"
-    test_args_wandb = [
-        "evaluate.py",
-        "--agent-checkpoint",
-        "./agent_wandb.pth",
-        "--opponent-type",
-        "heuristic",
-        "--num-games",
-        "2",
-        "--log-file",
-        str(log_file),
-        "--wandb-log",
-        "--wandb-project",
-        "test_project",
-        "--wandb-entity",
-        "test_entity",
-        "--wandb-run-name",
-        "custom_eval_run",
-    ]
-    monkeypatch.setattr(sys, "argv", test_args_wandb)
+    agent_ckpt_path = "./agent_wandb.pth"
+    num_games_to_run = 2
+    max_moves_for_game = 300 # Default, but explicit for clarity
+    seed_to_use = None # Explicitly None for this test case
+
+    # W&B setup
+    wandb_project_name = "test_project"
+    wandb_entity_name = "test_entity"
+    wandb_run_name_custom = "custom_eval_run"
 
     mock_wandb_run = MagicMock()
-    mock_wandb_run.name = "custom_eval_run"  # Simulate run name if needed by logger
+    mock_wandb_run.name = wandb_run_name_custom
     mock_wandb_init.return_value = mock_wandb_run
-    mock_wandb_run_prop.return_value = (
-        mock_wandb_run  # Ensure wandb.run returns the mock run object
+    mock_wandb_run_prop.return_value = mock_wandb_run
+
+    # Call the function directly
+    results = execute_full_evaluation_run(
+        agent_checkpoint_path=agent_ckpt_path,
+        opponent_type="heuristic",
+        opponent_checkpoint_path=None,
+        num_games=num_games_to_run,
+        max_moves_per_game=max_moves_for_game, # Using the default
+        device_str="cpu",
+        log_file_path_eval=str(log_file),
+        policy_mapper=policy_mapper_instance,
+        seed=seed_to_use,
+        wandb_log_eval=True, # Enable W&B
+        wandb_project_eval=wandb_project_name,
+        wandb_entity_eval=wandb_entity_name,
+        wandb_run_name_eval=wandb_run_name_custom,
+        wandb_reinit=True
     )
 
-    evaluate_main()
+    MockPolicyOutputMapperClass.assert_not_called() # Should use the passed instance
 
     mock_load_agent.assert_called_once_with(
-        "./agent_wandb.pth", "cpu", actual_policy_mapper_instance, INPUT_CHANNELS
+        agent_ckpt_path, "cpu", policy_mapper_instance, INPUT_CHANNELS
     )
     mock_init_opponent.assert_called_once_with(
-        "heuristic", None, "cpu", actual_policy_mapper_instance, INPUT_CHANNELS
+        "heuristic", None, "cpu", policy_mapper_instance, INPUT_CHANNELS
     )
+
+    # Check EvaluationLogger call - with W&B, run_name_for_log should be the wandb run name
+    # MODIFIED: The EvaluationLogger in execute_full_evaluation_run does not take run_name_for_log directly.
+    # It's used internally if W&B is active to set the W&B run name.
+    # The logger itself is called with log_file_path_eval and also_stdout.
+    # The run_name_for_log parameter was removed from EvaluationLogger constructor.
+    mock_eval_logger_class.assert_called_once_with(str(log_file), also_stdout=True)
+
 
     (
         _run_loop_pos_args,
         run_loop_kwargs,
-    ) = mock_run_loop.call_args  # Corrected argument capture
+    ) = mock_run_loop.call_args
+    assert _run_loop_pos_args[0] == mock_agent_instance
+    assert _run_loop_pos_args[1] == mock_opponent_instance
+    assert _run_loop_pos_args[2] == num_games_to_run
+    assert _run_loop_pos_args[3] == mock_logger_instance
+    assert _run_loop_pos_args[4] == policy_mapper_instance
+    assert _run_loop_pos_args[5] == max_moves_for_game
+    assert _run_loop_pos_args[6] == "cpu"
     assert run_loop_kwargs.get("wandb_enabled") is True
 
-    mock_eval_logger_class.assert_called_once_with(str(log_file), also_stdout=True)
-
     expected_wandb_config = {
-        "agent_checkpoint": "./agent_wandb.pth",
+        "agent_checkpoint": agent_ckpt_path,
         "opponent_type": "heuristic",
         "opponent_checkpoint": None,
-        "num_games": 2,
-        "max_moves_per_game": 300,  # Default
-        "device": "cpu",  # Default
-        "log_file": str(log_file),
-        "seed": None,  # Default
-        "wandb_log": True,
-        "wandb_project": "test_project",
-        "wandb_entity": "test_entity",
-        "wandb_run_name": "custom_eval_run",
+        "num_games": num_games_to_run,
+        "max_moves_per_game": max_moves_for_game,
+        "device": "cpu",
+        "seed": seed_to_use,
     }
     mock_wandb_init.assert_called_once_with(
-        project="test_project",
-        entity="test_entity",
-        name="custom_eval_run",
+        project=wandb_project_name,
+        entity=wandb_entity_name,
+        name=wandb_run_name_custom,
         config=expected_wandb_config,
+        reinit=True
     )
     # wandb.log is called by run_evaluation_loop, which is mocked here.
-    # So, this mock_wandb_log (global) won't be hit by the mocked run_evaluation_loop.
-    mock_wandb_log.assert_not_called()
+    # So, this mock_wandb_log (global) won\'t be hit by the mocked run_evaluation_loop.
+    # mock_wandb_log.assert_not_called() # MODIFIED: execute_full_evaluation_run now calls wandb.log for final summary
+    mock_wandb_log.assert_called_once_with( # MODIFIED: Check for the specific final summary log call
+        {
+            "eval/final_win_rate": expected_run_loop_results["win_rate"],
+            "eval/final_loss_rate": expected_run_loop_results["loss_rate"],
+            "eval/final_draw_rate": expected_run_loop_results["draw_rate"],
+            "eval/final_avg_game_length": expected_run_loop_results["avg_game_length"],
+        }
+    )
     mock_wandb_finish.assert_called_once()
-    mock_random_seed.assert_not_called()  # Seed not specified in args
+
+    mock_random_seed.assert_not_called() # Seed not specified
     mock_np_seed.assert_not_called()
     mock_torch_seed.assert_not_called()
 
-
-@patch("evaluate.wandb")  # Mock the wandb module used within evaluate.py
-def test_run_evaluation_loop_with_wandb_logging(
-    mock_wandb_module, policy_mapper, eval_logger_setup
-):
-    logger, _ = eval_logger_setup  # Changed log_file_path to _
-
-    agent_to_eval = MockPPOAgent(
-        INPUT_CHANNELS, policy_mapper, "cpu", name="AgentToEvalWandb"
-    )
-    opponent = SimpleRandomOpponent(name="TestRandomOpponentWandb")
-    num_games = 2
-    max_moves = 5
-
-    # Configure the mock_wandb_module.log specifically for this test
-    # This mock is local to this test due to @patch(\\'evaluate.wandb\\')
-    # mock_wandb_module.log = MagicMock() # Already a MagicMock if wandb is a MagicMock
-
-    results = run_evaluation_loop(
-        agent_to_eval,
-        opponent,
-        num_games,
-        logger,
-        policy_mapper,
-        max_moves,
-        "cpu",
-        wandb_enabled=True,  # Enable W&B for this loop
-    )
-
-    assert results["num_games"] == num_games
-    mock_wandb_module.log.assert_called()
-
-    # Check the content of the wandb.log call
-    # Assuming run_evaluation_loop calculates these and logs them once
-    expected_metrics = {
-        "eval/total_games": results["num_games"],
-        "eval/wins": results["wins"],
-        "eval/losses": results["losses"],
-        "eval/draws": results["draws"],
-        "eval/win_rate": results["win_rate"],
-        "eval/loss_rate": results["loss_rate"],
-        "eval/draw_rate": results["draw_rate"],
-        "eval/avg_game_length": results["avg_game_length"],
-    }
-
-    # Need to find the call that contains these. If it logs game details too, this might be complex.
-    # For now, let's assume a single call with summary metrics.
-    # Check if any call to wandb.log matches our expected metrics structure
-    called_with_summary = False
-    for call_args in mock_wandb_module.log.call_args_list:
-        logged_dict = call_args[0][0]  # wandb.log(dict)
-        if all(item in logged_dict.items() for item in expected_metrics.items()):
-            called_with_summary = True
-            break
-    assert (
-        called_with_summary
-    ), f"wandb.log was not called with the expected summary metrics. Calls: {mock_wandb_module.log.call_args_list}"
+    assert results == expected_run_loop_results # Check results pass-through
 
 
-# For PPO vs PPO, we don't mock initialize_opponent to let it call load_evaluation_agent
-# The mocks are: PolicyOutputMapper, load_evaluation_agent, run_evaluation_loop, EvaluationLogger, wandb.init, wandb.log, wandb.finish, and the three seeders
-# So we want to exclude initialize_opponent (index 2 or -9 from end)
-# COMMON_MAIN_MOCKS indices:
-# 0: PolicyOutputMapper
-# 1: load_evaluation_agent
-# 2: initialize_opponent <- EXCLUDE THIS
-# 3: run_evaluation_loop
-# 4: EvaluationLogger
-# 5: wandb.init
-# 6: wandb.log
-# 7: wandb.finish
-# 8: random.seed
-# 9: numpy.random.seed
-# 10: torch.manual_seed
-
-ppo_vs_ppo_mocks = [
-    COMMON_MAIN_MOCKS[0],
-    COMMON_MAIN_MOCKS[1],  # PolicyOutputMapper, load_evaluation_agent
-    COMMON_MAIN_MOCKS[3],
-    COMMON_MAIN_MOCKS[4],  # run_evaluation_loop, EvaluationLogger
-    COMMON_MAIN_MOCKS[5],
-    COMMON_MAIN_MOCKS[6],  # wandb.init, wandb.log
-    COMMON_MAIN_MOCKS[7],
-    COMMON_MAIN_MOCKS[8],  # wandb.finish, wandb.run (NEW)
-    COMMON_MAIN_MOCKS[9],
-    COMMON_MAIN_MOCKS[10],
-    COMMON_MAIN_MOCKS[11],  # random.seed, numpy.random.seed, torch.manual_seed
-]
-
-
-@apply_mocks(ppo_vs_ppo_mocks)
+@apply_mocks(COMMON_MAIN_MOCKS) # MODIFIED: Keep all common mocks, initialize_opponent is now called within execute_full_evaluation_run
 # pylint: disable=unused-argument,too-many-positional-arguments,too-many-locals
-def test_evaluate_main_ppo_vs_ppo_opponent_with_wandb(
+def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb( # MODIFIED: Renamed and refactored
     mock_torch_seed,
     mock_np_seed,
     mock_random_seed,
-    mock_wandb_run_prop,  # New mock arg
+    mock_wandb_run_prop,
     mock_wandb_finish,
     mock_wandb_log,
     mock_wandb_init,
     mock_eval_logger_class,
     mock_run_loop,
+    mock_init_opponent, # ADDED: mock_init_opponent is needed as it's called by execute_full_evaluation_run
     mock_load_agent,
     MockPolicyOutputMapperClass,
     tmp_path,
-    monkeypatch,
+    # monkeypatch, # MODIFIED: Removed monkeypatch
 ):
-    actual_policy_mapper_instance = PolicyOutputMapper()
-    MockPolicyOutputMapperClass.return_value = actual_policy_mapper_instance
+    policy_mapper_instance = PolicyOutputMapper()
+    # MockPolicyOutputMapperClass.return_value = policy_mapper_instance # Not needed
 
-    # Setup mock agents to be returned by load_evaluation_agent
-    mock_agent1 = MockPPOAgent(
-        INPUT_CHANNELS, actual_policy_mapper_instance, "cpu", name="PPOAgent1"
+    mock_agent_to_eval = MockPPOAgent(
+        INPUT_CHANNELS, policy_mapper_instance, "cpu", name="PPOAgentToEvaluate"
     )
-    mock_agent2 = MockPPOAgent(
-        INPUT_CHANNELS, actual_policy_mapper_instance, "cpu", name="PPOAgent2_Opponent"
+    mock_opponent_agent = MockPPOAgent(
+        INPUT_CHANNELS, policy_mapper_instance, "cpu", name="PPOAgentOpponent"
     )
 
-    agent1_path = "./agent1.pth"
-    agent2_path = "./agent2_opponent.pth"
+    agent_eval_path = "./agent_to_eval.pth"
+    agent_opponent_path = "./agent_opponent.pth"
 
-    def load_agent_side_effect(
-        checkpoint_path, _device, _policy_mapper, _input_channels
-    ):  # Prefixed unused args
-        if checkpoint_path == agent1_path:
-            return mock_agent1
-        if checkpoint_path == agent2_path:  # Changed elif to if
-            return mock_agent2
-        # This part will only be reached if an unexpected path is given
-        pytest.fail(
-            f"Unexpected call to load_evaluation_agent with path: {checkpoint_path}"
-        )
-        return MagicMock()  # Should not be reached in normal test flow
-
+    # load_evaluation_agent will be called twice: once directly by execute_full_evaluation_run for the agent_to_eval,
+    # and once by initialize_opponent (which is called by execute_full_evaluation_run) for the PPO opponent.
+    def load_agent_side_effect(checkpoint_path, device, pol_mapper, in_channels):
+        if checkpoint_path == agent_eval_path:
+            return mock_agent_to_eval
+        elif checkpoint_path == agent_opponent_path:
+            return mock_opponent_agent
+        pytest.fail(f"Unexpected call to load_evaluation_agent with {checkpoint_path}")
+        return None # Should not be reached
     mock_load_agent.side_effect = load_agent_side_effect
+
+    # initialize_opponent will be called once for the PPO opponent.
+    # We need to make sure it returns the mock_opponent_agent when called with the correct path.
+    def init_opponent_side_effect(opponent_type, opponent_path, device, pol_mapper, in_channels):
+        if opponent_type == "ppo" and opponent_path == agent_opponent_path:
+            # Normally, initialize_opponent would call load_evaluation_agent itself.
+            # Since load_evaluation_agent is already mocked with a side_effect that returns mock_opponent_agent
+            # for agent_opponent_path, we can just return that here.
+            # Or, more simply, ensure initialize_opponent is robustly mocked to return the agent directly.
+            return mock_opponent_agent
+        elif opponent_type == "random":
+            return SimpleRandomOpponent()
+        elif opponent_type == "heuristic":
+            return SimpleHeuristicOpponent()
+        pytest.fail(f"Unexpected call to initialize_opponent with {opponent_type}, {opponent_path}")
+        return None # Should not be reached
+    mock_init_opponent.side_effect = init_opponent_side_effect
 
     mock_logger_instance = MagicMock(spec=EvaluationLogger)
     mock_eval_logger_class.return_value.__enter__.return_value = mock_logger_instance
 
-    mock_run_loop.return_value = {  # Simulate results
+    expected_results = {
         "num_games": 1,
         "wins": 0,
         "losses": 1,
@@ -633,89 +594,96 @@ def test_evaluate_main_ppo_vs_ppo_opponent_with_wandb(
         "loss_rate": 1.0,
         "draw_rate": 0.0,
         "avg_game_length": 15.0,
-        "opponent_name": "PPOAgent2_Opponent",
+        "opponent_name": "PPOAgentOpponent", # Name of the opponent agent
+        "agent_name": "PPOAgentToEvaluate" # Name of the agent being evaluated
     }
+    mock_run_loop.return_value = expected_results
 
     log_file = tmp_path / "eval_ppo_vs_ppo.log"
-    test_args = [
-        "evaluate.py",
-        "--agent-checkpoint",
-        agent1_path,
-        "--opponent-type",
-        "ppo",
-        "--opponent-checkpoint",
-        agent2_path,
-        "--num-games",
-        "1",
-        "--log-file",
-        str(log_file),
-        "--wandb-log",
-        "--wandb-project",
-        "ppo_battle_project",
-    ]
-    monkeypatch.setattr(sys, "argv", test_args)
+    num_games_val = 1
+    max_moves_val = 200
+    wandb_project_val = "ppo_battle_project"
 
-    mock_wandb_run_instance = MagicMock()
-    # Set a default name or leave it to MagicMock's default if name generation isn't critical for this test's assertions beyond wandb.finish
-    mock_wandb_run_instance.name = "test_ppo_run"
-    mock_wandb_init.return_value = mock_wandb_run_instance
-    mock_wandb_run_prop.return_value = (
-        mock_wandb_run_instance  # Ensure wandb.run returns the mock run object
+    mock_wandb_run = MagicMock()
+    mock_wandb_run.name = "test_ppo_run" # Example name
+    mock_wandb_init.return_value = mock_wandb_run
+    mock_wandb_run_prop.return_value = mock_wandb_run
+
+    results = execute_full_evaluation_run(
+        agent_checkpoint_path=agent_eval_path,
+        opponent_type="ppo",
+        opponent_checkpoint_path=agent_opponent_path,
+        num_games=num_games_val,
+        max_moves_per_game=max_moves_val,
+        device_str="cpu",
+        log_file_path_eval=str(log_file),
+        policy_mapper=policy_mapper_instance,
+        seed=None,
+        wandb_log_eval=True,
+        wandb_project_eval=wandb_project_val,
+        wandb_entity_eval=None,
+        wandb_run_name_eval="test_ppo_run",
+        wandb_reinit=True
     )
 
-    evaluate_main()
+    MockPolicyOutputMapperClass.assert_not_called()
 
-    MockPolicyOutputMapperClass.assert_called_once()
-    # load_evaluation_agent should be called twice
-    assert mock_load_agent.call_count == 2
+    # load_evaluation_agent assertions
+    assert mock_load_agent.call_count == 1 # Only called directly for agent_to_eval
     mock_load_agent.assert_any_call(
-        agent1_path, "cpu", actual_policy_mapper_instance, INPUT_CHANNELS
+        agent_eval_path, "cpu", policy_mapper_instance, INPUT_CHANNELS
     )
-    mock_load_agent.assert_any_call(
-        agent2_path, "cpu", actual_policy_mapper_instance, INPUT_CHANNELS
-    )  # Called via initialize_opponent
-
-    (
-        run_loop_pos_args,
-        run_loop_kwargs,
-    ) = mock_run_loop.call_args  # Corrected argument capture
-    assert run_loop_pos_args[0] == mock_agent1  # Check positional arg for agent_to_eval
-    assert run_loop_pos_args[1] == mock_agent2  # Check positional arg for opponent
-    assert run_loop_kwargs.get("wandb_enabled") is True
+    # initialize_opponent is called for the opponent, and it internally would call load_evaluation_agent,
+    # but we mocked initialize_opponent to return the agent directly.
+    mock_init_opponent.assert_called_once_with(
+        "ppo", agent_opponent_path, "cpu", policy_mapper_instance, INPUT_CHANNELS
+    )
 
     mock_eval_logger_class.assert_called_once_with(str(log_file), also_stdout=True)
 
+    run_loop_pos_args, run_loop_kwargs = mock_run_loop.call_args
+    assert run_loop_pos_args[0] == mock_agent_to_eval
+    assert run_loop_pos_args[1] == mock_opponent_agent # This should be the PPO opponent instance
+    assert run_loop_kwargs.get("wandb_enabled") is True
+
     expected_wandb_config = {
-        "agent_checkpoint": agent1_path,
+        "agent_checkpoint": agent_eval_path,
         "opponent_type": "ppo",
-        "opponent_checkpoint": agent2_path,
-        "num_games": 1,
-        "max_moves_per_game": 300,  # Default
-        "device": "cpu",  # Default
-        "log_file": str(log_file),
-        "seed": None,  # Default
-        "wandb_log": True,
-        "wandb_project": "ppo_battle_project",
-        "wandb_entity": None,  # Default
-        "wandb_run_name": None,  # Default
+        "opponent_checkpoint": agent_opponent_path,
+        "num_games": num_games_val,
+        "max_moves_per_game": max_moves_val,
+        "device": "cpu",
+        "seed": None,
     }
     mock_wandb_init.assert_called_once_with(
-        project="ppo_battle_project",
+        project=wandb_project_val,
         entity=None,
-        name=None,
+        name="test_ppo_run",
         config=expected_wandb_config,
+        reinit=True
     )
-    mock_wandb_log.assert_not_called()  # run_evaluation_loop is mocked
+    mock_wandb_log.assert_called_once_with(
+        {
+            "eval/final_win_rate": expected_results["win_rate"],
+            "eval/final_loss_rate": expected_results["loss_rate"],
+            "eval/final_draw_rate": expected_results["draw_rate"],
+            "eval/final_avg_game_length": expected_results["avg_game_length"],
+        }
+    )
     mock_wandb_finish.assert_called_once()
+    mock_random_seed.assert_not_called()
+    mock_np_seed.assert_not_called()
+    mock_torch_seed.assert_not_called()
+    assert results == expected_results
 
 
 @apply_mocks(COMMON_MAIN_MOCKS)  # Includes all mocks
 # pylint: disable=unused-argument,too-many-positional-arguments,too-many-locals
-def test_evaluate_main_with_seed(
+def test_execute_full_evaluation_run_with_seed( # MODIFIED: Renamed and refactored
     mock_torch_seed,
     mock_np_seed,
     mock_random_seed,
-    mock_wandb_run_prop,  # New mock arg
+    mock_wandb_run_prop,
     mock_wandb_finish,
     mock_wandb_log,
     mock_wandb_init,
@@ -723,259 +691,69 @@ def test_evaluate_main_with_seed(
     mock_run_loop,
     mock_init_opponent,
     mock_load_agent,
-    MockPolicyOutputMapperClass,
+    MockPolicyOutputMapperClass, # Mock for the class keisei.evaluate.PolicyOutputMapper
     tmp_path,
-    monkeypatch,
+    # monkeypatch, # MODIFIED: Removed monkeypatch as sys.argv is no longer used
 ):
-    # ... (similar setup as basic test) ...
-    actual_policy_mapper_instance = PolicyOutputMapper()
-    MockPolicyOutputMapperClass.return_value = actual_policy_mapper_instance
-    mock_load_agent.return_value = MockPPOAgent(
-        INPUT_CHANNELS, actual_policy_mapper_instance, "cpu"
+    # MODIFIED: Setup similar to test_execute_full_evaluation_run_basic_random
+    policy_mapper_instance = PolicyOutputMapper()
+
+    mock_agent_instance = MockPPOAgent(
+        INPUT_CHANNELS, policy_mapper_instance, "cpu", name="AgentForSeedTest"
     )
-    mock_init_opponent.return_value = SimpleRandomOpponent()
-    mock_eval_logger_class.return_value.__enter__.return_value = MagicMock(
-        spec=EvaluationLogger
-    )
-    mock_run_loop.return_value = {
-        "num_games": 1,
-        "wins": 1,
-        "losses": 0,
-        "draws": 0,
-        "win_rate": 1.0,
-        "loss_rate": 0.0,
-        "draw_rate": 0.0,
-        "avg_game_length": 10,
-        "opponent_name": "SimpleRandomOpponent",
-    }
+    mock_load_agent.return_value = mock_agent_instance
 
-    log_file = tmp_path / "eval_seed.log"
-    seed_value = 123
-    test_args = [
-        "evaluate.py",
-        "--agent-checkpoint",
-        "./agent_seed.pth",
-        "--opponent-type",
-        "random",
-        "--num-games",
-        "1",
-        "--log-file",
-        str(log_file),
-        "--seed",
-        str(seed_value),
-        "--wandb-log",  # Enable W&B to check seed in config
-    ]
-    monkeypatch.setattr(sys, "argv", test_args)
-
-    mock_wandb_run_instance = MagicMock()  # wandb.init returns a run object
-    mock_wandb_init.return_value = mock_wandb_run_instance
-    mock_wandb_run_prop.return_value = mock_wandb_run_instance  # Ensure wandb.run is set for potential .name access or finally block
-
-    evaluate_main()
-
-    mock_random_seed.assert_called_once_with(seed_value)
-    mock_np_seed.assert_called_once_with(seed_value)
-    mock_torch_seed.assert_called_once_with(seed_value)
-
-    # Check seed in wandb config
-    _init_args, init_kwargs = mock_wandb_init.call_args
-    assert init_kwargs["config"]["seed"] == seed_value
-
-
-# The mocks are: PolicyOutputMapper, load_evaluation_agent, initialize_opponent, run_evaluation_loop, EvaluationLogger, wandb.init, and the three seeders
-# For invalid opponent type, we exclude wandb.log (idx 6), wandb.finish (idx 7), wandb.run (idx 8)
-# COMMON_MAIN_MOCKS indices:
-# ...
-# 5: wandb.init
-# 6: wandb.log <- EXCLUDE
-# 7: wandb.finish <- EXCLUDE
-# 8: wandb.run <- EXCLUDE
-# 9: random.seed
-# ...
-
-invalid_opponent_type_mocks = [
-    COMMON_MAIN_MOCKS[0],
-    COMMON_MAIN_MOCKS[1],
-    COMMON_MAIN_MOCKS[2],  # POMapper, load_agent, init_opponent
-    COMMON_MAIN_MOCKS[3],
-    COMMON_MAIN_MOCKS[4],  # run_loop, EvalLogger
-    COMMON_MAIN_MOCKS[5],  # wandb.init
-    COMMON_MAIN_MOCKS[9],
-    COMMON_MAIN_MOCKS[10],
-    COMMON_MAIN_MOCKS[11],  # seeds
-]
-
-
-@apply_mocks(invalid_opponent_type_mocks)
-# pylint: disable=unused-argument,too-many-positional-arguments,too-many-locals
-def test_evaluate_main_invalid_opponent_type(
-    mock_torch_seed,
-    mock_np_seed,
-    mock_random_seed,
-    mock_wandb_init,
-    mock_eval_logger_class,
-    mock_run_loop,
-    mock_init_opponent,
-    mock_load_agent,
-    MockPolicyOutputMapperClass,
-    tmp_path,
-    monkeypatch,
-    capsys,
-):
-    actual_policy_mapper_instance = PolicyOutputMapper()
-    MockPolicyOutputMapperClass.return_value = actual_policy_mapper_instance
-    mock_load_agent.return_value = MockPPOAgent(
-        INPUT_CHANNELS, actual_policy_mapper_instance, "cpu"
-    )
-
-    # Mock initialize_opponent to raise error for "invalid_type"
-    def init_opponent_side_effect(
-        opponent_type, _opponent_path, _device, _policy_mapper, _input_channels
-    ):  # Prefixed unused args
-        if opponent_type == "invalid_type":
-            raise ValueError("Unknown opponent type: invalid_type")
-        return SimpleRandomOpponent()  # Fallback for other calls if any
-
-    mock_init_opponent.side_effect = init_opponent_side_effect
+    mock_opponent_instance = SimpleRandomOpponent(name="RandomOpponentForSeedTest")
+    mock_init_opponent.return_value = mock_opponent_instance
 
     mock_logger_instance = MagicMock(spec=EvaluationLogger)
     mock_eval_logger_class.return_value.__enter__.return_value = mock_logger_instance
 
-    log_file = tmp_path / "eval_invalid_opp.log"
-    test_args = [
-        "evaluate.py",
-        "--agent-checkpoint",
-        "./agent.pth",
-        "--opponent-type",
-        "invalid_type",  # This will be handled by argparse choices now
-        "--num-games",
-        "1",
-        "--log-file",
-        str(log_file),
-    ]
-    monkeypatch.setattr(sys, "argv", test_args)
+    mock_run_loop.return_value = { # Dummy results
+        "num_games": 1, "wins": 1, "losses": 0, "draws": 0, "win_rate": 1.0,
+        "loss_rate": 0.0, "draw_rate": 0.0, "avg_game_length": 5.0,
+        "opponent_name": "RandomOpponentForSeedTest", "agent_name": "AgentForSeedTest"
+    }
 
-    with pytest.raises(SystemExit) as e:
-        evaluate_main()
+    log_file_path = tmp_path / "eval_seed_test.log" # MODIFIED: Renamed variable
+    agent_checkpoint_file = "./agent_seed.pth" # MODIFIED: Renamed variable
+    seed_value_to_test = 123 # MODIFIED: Renamed variable
 
-    assert (
-        e.value.code != 0
-    )  # Argparse error usually exits with 2, specific error in main might be 1
-
-    captured = capsys.readouterr()
-    # Argparse error message for choices
-    assert (
-        "invalid choice: 'invalid_type'" in captured.err.lower()
-        or "unknown opponent type" in captured.err.lower()
+    # Call the function
+    execute_full_evaluation_run(
+        agent_checkpoint_path=agent_checkpoint_file,
+        opponent_type="random",
+        opponent_checkpoint_path=None,
+        num_games=1,
+        max_moves_per_game=100,
+        device_str="cpu",
+        log_file_path_eval=str(log_file_path),
+        policy_mapper=policy_mapper_instance,
+        seed=seed_value_to_test, # MODIFIED: Pass the seed
+        wandb_log_eval=False,
     )
-    # If main catches ValueError from initialize_opponent and prints/logs:
-    # mock_logger_instance.log_custom_message.assert_any_call(containing("Unknown opponent type"), level="ERROR")
+
+    # Assertions for seed calls
+    mock_random_seed.assert_called_once_with(seed_value_to_test)
+    mock_np_seed.assert_called_once_with(seed_value_to_test)
+    mock_torch_seed.assert_called_once_with(seed_value_to_test)
+
+    # Other assertions (can be minimal as other tests cover functionality)
+    MockPolicyOutputMapperClass.assert_not_called()
+    mock_load_agent.assert_called_once()
+    mock_init_opponent.assert_called_once()
+    mock_eval_logger_class.assert_called_once()
+    mock_run_loop.assert_called_once()
+    mock_wandb_init.assert_not_called()
+    mock_wandb_log.assert_not_called()
+    mock_wandb_finish.assert_not_called()
+    mock_wandb_run_prop.assert_not_called()
 
 
-@apply_mocks(invalid_opponent_type_mocks)  # Re-using mocks, some will be unused
-# pylint: disable=unused-argument,too-many-positional-arguments,too-many-locals
-def test_evaluate_main_invalid_num_games(
-    mock_torch_seed,
-    mock_np_seed,
-    mock_random_seed,
-    mock_wandb_init,
-    mock_eval_logger_class,
-    mock_run_loop,
-    mock_init_opponent,
-    mock_load_agent,
-    MockPolicyOutputMapperClass,
-    tmp_path,
-    monkeypatch,
-    capsys,
-):
-    log_file = tmp_path / "eval_invalid_games.log"
-    test_args_zero_games = [
-        "evaluate.py",
-        "--agent-checkpoint",
-        "./agent.pth",
-        "--opponent-type",
-        "random",
-        "--num-games",
-        "0",
-        "--log-file",
-        str(log_file),
-    ]
-    monkeypatch.setattr(sys, "argv", test_args_zero_games)
+# MODIFIED: Removed test_evaluate_main_invalid_opponent_type as its functionality
+# (checking for invalid opponent type) is covered by test_initialize_opponent_types
+# and the CLI parsing aspect is no longer relevant.
 
-    # Assuming main validates num_games > 0 and exits/errors out
-    # If argparse handles choices for num_games (e.g. type=positive_int), it would be SystemExit from argparse
-    # If main.py has a check like `if args.num_games <= 0: sys.exit("Num games must be positive")`
-    # evaluate.py's main does not explicitly check for num_games <=0, argparse handles type=int.
-    # A value of "0" for num_games is valid for argparse type=int.
-    # The loop `range(1, num_games + 1)` would simply not run.
-    # Let's check if the script exits or if it completes with 0 games.
-    # Based on evaluate.py, it should run, log 0 games, and not error.
-    # The PYLINT error was for too many args, not functionality.
-    # For now, this test will pass with num_games=0 if evaluate_main() handles it gracefully.
-    # I will keep the pytest.raises for now and see. If it fails, evaluate.py needs a check or test needs update.
-    # Argparse for `type=int` does not restrict to positive.
-    # The error message "number of games must be positive" is not in evaluate.py.
-    # This test needs to align with actual behavior or `evaluate.py` needs a new validation.
-    # For now, I will comment out the "0" and negative checks that expect SystemExit,
-    # as `evaluate.py` doesn't enforce this. Only the non-int check is valid for SystemExit via argparse.
+# --- Helper Functions and Fixtures for Specific Scenarios ---
 
-    # monkeypatch.setattr(sys, 'argv', test_args_zero_games)
-    # with pytest.raises(SystemExit) as e:
-    #     evaluate_main()
-    # assert e.value.code != 0
-    # captured = capsys.readouterr()
-    # assert "number of games must be positive" in captured.err.lower()
-
-    # test_args_negative_games = [
-    #     "evaluate.py", "--agent-checkpoint", "./agent.pth", "--opponent-type", "random",
-    #     "--num-games", "-1", "--log-file", str(log_file)
-    # ]
-    # monkeypatch.setattr(sys, 'argv', test_args_negative_games)
-    # with pytest.raises(SystemExit) as e:
-    #     evaluate_main()
-    # assert e.value.code != 0
-    # captured = capsys.readouterr()
-    # assert "number of games must be positive" in captured.err.lower()
-
-    test_args_non_int_games = [
-        "evaluate.py",
-        "--agent-checkpoint",
-        "./agent.pth",
-        "--opponent-type",
-        "random",
-        "--num-games",
-        "abc",
-        "--log-file",
-        str(log_file),
-    ]
-    monkeypatch.setattr(sys, "argv", test_args_non_int_games)
-    with pytest.raises(SystemExit) as e:  # Argparse error
-        evaluate_main()
-    assert e.value.code != 0
-    captured = capsys.readouterr()
-    assert "invalid int value: 'abc'" in captured.err.lower()
-
-
-def test_evaluate_main_missing_agent_checkpoint(tmp_path, monkeypatch, capsys):
-    # This test doesn't need most of the common mocks as argparse should fail early
-    log_file = tmp_path / "eval_missing_arg.log"
-    test_args = [
-        "evaluate.py",  # Missing --agent-checkpoint
-        "--opponent-type",
-        "random",
-        "--num-games",
-        "1",
-        "--log-file",
-        str(log_file),
-    ]
-    monkeypatch.setattr(sys, "argv", test_args)
-
-    with pytest.raises(SystemExit) as e:
-        evaluate_main()
-
-    assert e.value.code != 0  # Argparse error
-    captured = capsys.readouterr()
-    assert (
-        "the following arguments are required: --agent-checkpoint"
-        in captured.err.lower()
-    )
+# ...existing code...

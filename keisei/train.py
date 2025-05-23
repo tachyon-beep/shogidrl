@@ -21,15 +21,11 @@ import wandb  # Import wandb at the top level
 import wandb.errors  # Import wandb errors for specific error handling
 
 # Import the callable evaluation function
-from evaluate import execute_full_evaluation_run
+from keisei.evaluate import execute_full_evaluation_run
 from keisei.experience_buffer import ExperienceBuffer
 from keisei.ppo_agent import PPOAgent
 from keisei.shogi.shogi_engine import Color, ShogiGame
 from keisei.utils import PolicyOutputMapper, TrainingLogger
-
-# Add datetime and os if not already imported (os and datetime are already imported)
-# import os
-# from datetime import datetime
 
 
 # Expose main at the module level for import by the root-level shim
@@ -199,7 +195,7 @@ def main():
 
     # Print key log messages to both stdout and logger for CLI discoverability
     def log_both(msg):
-        print(msg)
+        # print(msg) # MODIFIED: Removed direct print, logger handles tqdm.write
         if "logger" in locals():
             logger.log(msg)
 
@@ -719,15 +715,3 @@ def main():
 
 
 __all__ = ["main"]
-
-if __name__ == "__main__":
-    # This block is for when keisei/train.py is run directly as a script
-    try:
-        mp.set_start_method("spawn", force=True)  # Added force=True
-        print("Successfully set multiprocessing start method to 'spawn' (direct run)")
-    except RuntimeError as e:
-        print(
-            f"Could not set multiprocessing start method (direct run): {e}",
-            file=sys.stderr,
-        )
-    main()
