@@ -790,23 +790,26 @@ def test_sfen_hand_piece_order_canonicalization():
     sfen_non_canonical_mixed_hand = (
         "lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b pP 1"
     )
-    with pytest.raises(ValueError, match="Invalid SFEN hands: Black's pieces must precede White's pieces."):
+    with pytest.raises(
+        ValueError,
+        match="Invalid SFEN hands: Black's pieces must precede White's pieces.",
+    ):
         ShogiGame.from_sfen(sfen_non_canonical_mixed_hand)
 
     # Test to_sfen_string canonicalizes piece order within a single player's hand
     # Black has P, G, L in non-standard order
-    game_black_non_canonical_hand = ShogiGame.from_sfen(
-        "4k4/9/9/9/9/9/9/9/4K4 b PGL 1"
-    )
+    game_black_non_canonical_hand = ShogiGame.from_sfen("4k4/9/9/9/9/9/9/9/4K4 b PGL 1")
     expected_sfen_black_canonical = "4k4/9/9/9/9/9/9/9/4K4 b GLP 1"
-    assert game_black_non_canonical_hand.to_sfen_string() == expected_sfen_black_canonical
+    assert (
+        game_black_non_canonical_hand.to_sfen_string() == expected_sfen_black_canonical
+    )
 
     # White has p, g, l in non-standard order
-    game_white_non_canonical_hand = ShogiGame.from_sfen(
-        "4k4/9/9/9/9/9/9/9/4K4 w pgl 1"
-    )
+    game_white_non_canonical_hand = ShogiGame.from_sfen("4k4/9/9/9/9/9/9/9/4K4 w pgl 1")
     expected_sfen_white_canonical = "4k4/9/9/9/9/9/9/9/4K4 w glp 1"
-    assert game_white_non_canonical_hand.to_sfen_string() == expected_sfen_white_canonical
+    assert (
+        game_white_non_canonical_hand.to_sfen_string() == expected_sfen_white_canonical
+    )
 
 
 @pytest.mark.parametrize(

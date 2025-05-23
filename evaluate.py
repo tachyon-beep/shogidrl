@@ -5,9 +5,12 @@ evaluate.py: Main script for evaluating PPO Shogi agents.
 import argparse
 import random
 import sys
+import os # Added os import
 from typing import Optional, List, TYPE_CHECKING, Union
 
+import numpy as np # Import numpy
 import torch # For torch.device and model loading
+import wandb # Added for Weights & Biases
 
 from keisei.ppo_agent import PPOAgent
 from keisei.utils import PolicyOutputMapper, EvaluationLogger, BaseOpponent
@@ -152,7 +155,8 @@ def run_evaluation_loop(
     logger: EvaluationLogger, 
     policy_mapper: PolicyOutputMapper, 
     max_moves_per_game: int, 
-    device_str: str
+    device_str: str,
+    wandb_enabled: bool = False # Added for W&B
 ) -> dict:
     """Runs the evaluation loop for a set number of games."""
     wins = 0
@@ -169,73 +173,89 @@ def run_evaluation_loop(
         game = ShogiGame(max_moves_per_game=max_moves_per_game)
         # Alternate starting player: agent_to_eval is Black (Sente) in odd games, White (Gote) in even games
         agent_is_black = game_num % 2 == 1
-        current_player_agent = agent_to_eval if agent_is_black else opponent
-        other_agent = opponent if agent_is_black else agent_to_eval
         
-        logger.log_custom_message(f"Starting Game {game_num}/{num_games}. Agent to eval is {"Black" if agent_is_black else "White"}.")
+        # Determine who is playing which color for this game
+        black_player = agent_to_eval if agent_is_black else opponent
+        white_player = opponent if agent_is_black else agent_to_eval
+        
+        # Corrected log message format
+        logger.log_custom_message(f"Starting Game {game_num}/{num_games}. "
+                                  f"Agent to eval ({agent_to_eval.name}) is {'Black' if agent_is_black else 'White'}. "
+                                  f"Opponent ({current_opponent_name}) is {'White' if agent_is_black else 'Black'}.")
 
         while not game.game_over:
-            active_agent = current_player_agent if game.current_player == (Color.BLACK if agent_is_black else Color.WHITE) else other_agent
+            # Determine whose turn it is based on game.current_player
+            active_agent = black_player if game.current_player == Color.BLACK else white_player
             
-            legal_moves = game.get_legal_moves() # Removed current_player argument
+            legal_moves = game.get_legal_moves() 
             if not legal_moves:
-                # This should be caught by game.game_over, but as a safeguard:
-                # print(f"Game {game_num}: No legal moves for {game.current_player}, game should be over.")
                 break
 
             selected_move: Optional[MoveTuple] = None
             if isinstance(active_agent, PPOAgent):
-                obs_np = shogi_game_io.generate_neural_network_observation(game) # Removed current_player argument
-                obs_tensor = torch.tensor(obs_np, dtype=torch.float32, device=device).unsqueeze(0) # pylint: disable=unused-variable
+                obs_np = shogi_game_io.generate_neural_network_observation(game) 
+                obs_tensor = torch.tensor(obs_np, dtype=torch.float32, device=device).unsqueeze(0) 
                 legal_mask = policy_mapper.get_legal_mask(legal_moves, device)
                 
-                # Ensure legal_mask is not all False if legal_moves exist
                 if not legal_mask.any() and legal_moves:
-                    logger.log_custom_message(f"Warning: Game {game_num}, Move {game.move_count + 1}: All legal moves masked out by PPO agent. Legal moves: {len(legal_moves)}")
-                    # This indicates a potential issue with policy_mapper or move generation
-                    # Fallback: choose a random move to prevent crash, or handle as error
+                    logger.log_custom_message(f"Warning: Game {game_num}, Move {game.move_count + 1}: All legal moves masked out by PPO agent {active_agent.name}. Legal moves: {len(legal_moves)}")
                     selected_move = random.choice(legal_moves) 
                 else:
-                    # Pass is_training=False for deterministic action selection
                     action_tuple = active_agent.select_action(obs_np, legal_moves, legal_mask, is_training=False)
-                    selected_move = action_tuple[0] # (move_tuple, policy_idx, log_prob, value)
-            
-            elif isinstance(active_agent, BaseOpponent): # Catches SimpleRandomOpponent and SimpleHeuristicOpponent
+                    selected_move = action_tuple[0]
+            elif isinstance(active_agent, BaseOpponent): # Opponent is a BaseOpponent (Random, Heuristic)
                 selected_move = active_agent.select_move(game)
-            
-            if selected_move:
-                # Log move before making it
-                # usi_move = policy_mapper.shogi_move_to_usi(selected_move)
-                # logger.log_custom_message(f"Game {game_num}, Ply {game.move_count+1} ({active_agent.name} as {game.current_player.name}): {usi_move}")
-                game.make_move(selected_move)
             else:
-                # This case should ideally not be reached if legal_moves exist and agents select a move.
-                active_agent_name = active_agent.name if isinstance(active_agent, BaseOpponent) else active_agent.__class__.__name__
-                logger.log_custom_message(f"Error: Game {game_num}, Move {game.move_count + 1}: No move selected by {active_agent_name}.") # Removed sfen
-                # Decide how to handle: break, assign loss, etc.
-                game.winner = Color.WHITE if game.current_player == Color.BLACK else Color.BLACK # Assign loss to current player
-                game.game_over = True
-                game.termination_reason = "Error: No move selected"
-                break
-        
-        # Game finished
-        total_game_length += game.move_count
-        outcome_message = f"Game {game_num} ended. Winner: {game.winner}, Reason: {game.termination_reason}, Length: {game.move_count}"
-        logger.log_custom_message(outcome_message)
+                # This case should not be reached if opponent types are correctly handled
+                raise TypeError(f"Unsupported agent type for active_agent: {type(active_agent)}")
 
-        if game.winner is None: # Draw
+            if selected_move is None:
+                logger.log_custom_message(f"Error: Game {game_num}, Move {game.move_count + 1}: Active agent {active_agent.name} failed to select a move despite legal moves being available.")
+                # Decide how to handle this: break, assign loss, etc. For now, break.
+                break 
+            
+            game.make_move(selected_move)
+            # logger.log_custom_message(f"Game {game_num}, Move {game.move_count}: {active_agent.name} ({game.current_player.name}) played {selected_move}")
+
+
+        # Game ended
+        game_length = game.move_count
+        total_game_length += game_length
+        winner = game.winner
+
+        outcome_str = "Draw"
+        if winner is not None:
+            if (winner == Color.BLACK and agent_is_black) or \
+               (winner == Color.WHITE and not agent_is_black):
+                wins += 1
+                outcome_str = f"{agent_to_eval.name} (Agent) wins"
+            else:
+                losses += 1
+                outcome_str = f"{current_opponent_name} (Opponent) wins"
+        else: # Draw
             draws += 1
-        elif (game.winner == Color.BLACK and agent_is_black) or (game.winner == Color.WHITE and not agent_is_black):
-            wins +=1
-        else:
-            losses +=1
+        
+        # Log main evaluation results
+        logger.log_evaluation_result(
+            iteration=game_num, # Using game_num as iteration for per-game logging
+            opponent_name=current_opponent_name,
+            win_rate=wins / game_num if game_num > 0 else 0, # Cumulative win rate
+            avg_game_length=total_game_length / game_num if game_num > 0 else 0, # Cumulative avg length
+            num_games=game_num # Pass the current game number as num_games for this specific log entry
+        )
+        # Log additional custom metrics for this game
+        logger.log_custom_message(
+            f"Game {game_num} Details: Length: {game_length}, Outcome: {outcome_str}, Agent Eval Color: {"Black" if agent_is_black else "White"}"
+        )
+        logger.log_custom_message(f"Game {game_num} ended. Winner: {winner if winner else 'Draw'}")
 
     avg_game_length = total_game_length / num_games if num_games > 0 else 0
     win_rate = wins / num_games if num_games > 0 else 0
-    loss_rate = losses / num_games if num_games > 0 else 0 # For completeness
-    draw_rate = draws / num_games if num_games > 0 else 0 # For completeness
+    loss_rate = losses / num_games if num_games > 0 else 0
+    draw_rate = draws / num_games if num_games > 0 else 0
 
-    summary_results = {
+    results = {
+        "num_games": num_games,
         "wins": wins,
         "losses": losses,
         "draws": draws,
@@ -243,89 +263,136 @@ def run_evaluation_loop(
         "loss_rate": loss_rate,
         "draw_rate": draw_rate,
         "avg_game_length": avg_game_length,
-        "num_games": num_games
+        "opponent_name": current_opponent_name,
+        "agent_name": agent_to_eval.name
     }
-    logger.log_custom_message(f"Evaluation finished. Results: {summary_results}")
-    return summary_results
+    
+    logger.log_custom_message(f"Evaluation finished. Results: {results}")
+    if wandb_enabled:
+        wandb.log({
+            "eval/total_games": num_games,
+            "eval/wins": wins,
+            "eval/losses": losses,
+            "eval/draws": draws,
+            "eval/win_rate": win_rate,
+            "eval/loss_rate": loss_rate,
+            "eval/draw_rate": draw_rate,
+            "eval/avg_game_length": avg_game_length,
+            # Log opponent name if needed, though it's in config
+        })
+
+    return results
 
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate a PPO Shogi agent.")
     parser.add_argument("--agent-checkpoint", type=str, required=True, help="Path to the agent's .pth checkpoint file.")
-    parser.add_argument("--opponent-type", type=str, default="random", choices=["random", "heuristic", "ppo"], help="Type of opponent to play against.")
-    parser.add_argument("--opponent-checkpoint", type=str, help="Path to the opponent's .pth checkpoint file (if opponent-type is 'ppo').")
-    parser.add_argument("--num-games", type=int, default=10, help="Number of games to play for evaluation.")
-    parser.add_argument("--device", type=str, default="cpu", choices=["cpu", "cuda"], help="Device to use for evaluation (cpu or cuda).")
-    parser.add_argument("--max-moves-per-game", type=int, default=256, help="Maximum moves per game before it's declared a draw.")
-    parser.add_argument("--log-file", type=str, default="evaluation_log.txt", help="Path to the evaluation log file.")
-    # Add other arguments as needed from the plan, e.g., seed
+    parser.add_argument("--opponent-type", type=str, required=True, choices=["random", "heuristic", "ppo"], help="Type of opponent.")
+    parser.add_argument("--opponent-checkpoint", type=str, help="Path to opponent's .pth checkpoint file (if opponent-type is 'ppo').")
+    parser.add_argument("--num-games", type=int, default=10, help="Number of games to play.")
+    parser.add_argument("--max-moves-per-game", type=int, default=300, help="Maximum moves per game.")
+    parser.add_argument("--device", type=str, default="cpu", choices=["cpu", "cuda"], help="Device to use ('cpu' or 'cuda').")
+    parser.add_argument("--log-file", type=str, default="logs/evaluation_log.txt", help="Path to the evaluation log file.")
+    parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducibility.")
+    
+    # W&B arguments
+    parser.add_argument("--wandb-log", action="store_true", help="Enable Weights & Biases logging.")
+    parser.add_argument("--wandb-project", type=str, default="shogi-ppo-evaluation", help="W&B project name.")
+    parser.add_argument("--wandb-entity", type=str, default=None, help="W&B entity (username or team name).")
+    parser.add_argument("--wandb-run-name", type=str, default=None, help="Custom name for the W&B run.")
+
 
     args = parser.parse_args()
 
-    print("Starting evaluation with the following configuration:")
-    print(f"  Agent Checkpoint: {args.agent_checkpoint}")
-    print(f"  Opponent Type: {args.opponent_type}")
-    if args.opponent_type == "ppo":
-        if not args.opponent_checkpoint:
-            print("Error: --opponent-checkpoint must be specified when --opponent-type is 'ppo'.", file=sys.stderr)
-            sys.exit(1)
-        print(f"  Opponent Checkpoint: {args.opponent_checkpoint}")
-    print(f"  Number of Games: {args.num_games}")
-    print(f"  Device: {args.device}")
-    print(f"  Max Moves Per Game: {args.max_moves_per_game}")
-    print(f"  Log File: {args.log_file}")
+    if args.seed is not None:
+        random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        np.random.seed(args.seed) # Add numpy random seed
+        if args.device == "cuda":
+            torch.cuda.manual_seed_all(args.seed)
+        print(f"Set random seed to: {args.seed}")
 
-    # Initialize PolicyOutputMapper (needed for PPOAgent)
-    policy_mapper = PolicyOutputMapper()
+    # Initialize W&B if enabled
+    if args.wandb_log:
+        try:
+            wandb.init(
+                project=args.wandb_project,
+                entity=args.wandb_entity,
+                name=args.wandb_run_name,
+                config=vars(args) # Log all CLI arguments
+            )
+            print(f"Weights & Biases logging enabled. Project: {args.wandb_project}, Run Name: {wandb.run.name if wandb.run else 'N/A'}")
+        except Exception as e:
+            print(f"Error initializing Weights & Biases: {e}. W&B logging will be disabled.", file=sys.stderr)
+            args.wandb_log = False # Disable if init fails
 
-    # Initialize EvaluationLogger
-    with EvaluationLogger(log_file_path=args.log_file, also_stdout=True) as eval_logger:
-        eval_logger.log_custom_message(f"Evaluation script started. Args: {vars(args)}")
 
-        # --- Agent Loading ---
-        agent_to_eval = load_evaluation_agent(
-            args.agent_checkpoint, 
-            args.device, 
-            policy_mapper, 
-            INPUT_CHANNELS
-        )
+    policy_mapper = PolicyOutputMapper() # Assuming this doesn't need device yet
 
-        # --- Opponent Initialization ---
-        opponent = initialize_opponent(
-            args.opponent_type, 
-            args.opponent_checkpoint, 
-            args.device, 
-            policy_mapper, 
-            INPUT_CHANNELS
-        )
-        
-        # Determine opponent name for logging summary (moved after opponent initialization)
-        opponent_name_for_summary = opponent.name if isinstance(opponent, BaseOpponent) else opponent.__class__.__name__
+    # Ensure log directory exists (EvaluationLogger might not create it)
+    log_dir = os.path.dirname(args.log_file)
+    if log_dir and not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+        print(f"Created log directory: {log_dir}")
 
-        # --- Evaluation Loop ---
-        results = run_evaluation_loop(
-            agent_to_eval, 
-            opponent, 
-            args.num_games, 
-            eval_logger, 
-            policy_mapper, 
-            args.max_moves_per_game, 
-            args.device
-        )
+    with EvaluationLogger(args.log_file, also_stdout=True) as logger:
+        logger.log_custom_message("Starting Shogi Agent Evaluation Script.")
+        logger.log_custom_message(f"Arguments: {vars(args)}")
 
-        # --- Log Summary using EvaluationLogger's dedicated method ---
-        eval_logger.log_evaluation_result(
-            iteration=0, # Or some other relevant iteration number if applicable
-            opponent_name=opponent_name_for_summary, # Use stored opponent_name
-            win_rate=results["win_rate"],
-            avg_game_length=results["avg_game_length"],
-            num_games=results["num_games"]
-        )
-        eval_logger.log_custom_message(f"Detailed results: Wins={results['wins']}, Losses={results['losses']}, Draws={results['draws']}")
+        try:
+            agent_to_eval = load_evaluation_agent(
+                args.agent_checkpoint, args.device, policy_mapper, INPUT_CHANNELS
+            )
+            opponent = initialize_opponent(
+                args.opponent_type, args.opponent_checkpoint, args.device, policy_mapper, INPUT_CHANNELS
+            )
 
-    print(f"\nEvaluation complete. Log saved to {args.log_file}")
-    print(f"Summary: Win Rate: {results['win_rate']:.2f}, Avg Game Length: {results['avg_game_length']:.2f} over {results['num_games']} games.")
+            results = run_evaluation_loop(
+                agent_to_eval, 
+                opponent, 
+                args.num_games, 
+                logger, 
+                policy_mapper, 
+                args.max_moves_per_game, 
+                args.device,
+                wandb_enabled=args.wandb_log # Pass W&B status
+            )
+
+            print("\\n--- Evaluation Summary ---")
+            print(f"Agent: {agent_to_eval.name}")
+            print(f"Opponent: {opponent.name if isinstance(opponent, BaseOpponent) else opponent.__class__.__name__}")
+            print(f"Number of Games: {results['num_games']}")
+            print(f"Wins: {results['wins']} ({results['win_rate']:.2%})")
+            print(f"Losses: {results['losses']} ({results['loss_rate']:.2%})")
+            print(f"Draws: {results['draws']} ({results['draw_rate']:.2%})")
+            print(f"Average Game Length: {results['avg_game_length']:.2f} moves")
+            logger.log_custom_message(f"Final Summary: {results}")
+
+        except Exception as e:
+            logger.log_custom_message(f"An error occurred during evaluation: {e}") # Removed level="ERROR"
+            print(f"An error occurred: {e}", file=sys.stderr)
+            if args.wandb_log and wandb.run:
+                wandb.log({"eval/error": 1}) # Log an error metric
+            # sys.exit(1) # Exit with error code # Commented out to allow finally to run
+        finally:
+            if args.wandb_log and wandb.run:
+                wandb.finish()
+                print("Weights & Biases run finished.")
 
 
 if __name__ == "__main__":
+    # Add os import for path manipulation if not already present at the top
+    import os 
+    # This ensures that the script can find other modules in the 'keisei' package
+    # when run directly, especially if 'keisei' is not installed in the environment.
+    if __package__ is None:
+        # Get the directory of the current script (evaluate.py)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        # Get the parent directory (which should be the project root, e.g., /home/john/keisei)
+        project_root = os.path.dirname(script_dir)
+        # Add the project root to sys.path so Python can find the \'keisei\' package
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
+            # print(f"Added {project_root} to sys.path for module resolution.")
+
     main()
