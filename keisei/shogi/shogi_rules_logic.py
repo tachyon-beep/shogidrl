@@ -458,15 +458,11 @@ def can_drop_specific_piece(
         # 3. Uchi Fu Zume check: Cannot drop a pawn to give immediate checkmate if that checkmate has no escape.
         #    The check_for_uchi_fu_zume function returns True if it *is* uchi_fu_zume.
         #    This check is skipped if we are evaluating an escape move during an uchi_fu_zume check.
-        if (
-            not is_escape_check
-        ):  # <-- MODIFIED: Only check uchi_fu_zume if not an escape check
+        if not is_escape_check:  # <-- MODIFIED: Only check uchi_fu_zume if not an escape check
             # print(f"DEBUG_CAN_DROP: PAWN drop, is_escape_check is False. Calling check_for_uchi_fu_zume for {color} at ({r_to},{c_to}).") # Basic log
             if check_for_uchi_fu_zume(game, r_to, c_to, color):
-                print(
-                    f"DEBUG_CAN_DROP: uchi_fu_zume check for {color} dropping PAWN at ({r_to},{c_to}) returned True. Preventing drop."
-                )  # Debug print
-                return False
+                #print(f"DEBUG_CAN_DROP: uchi_fu_zume check for {color} dropping PAWN at ({r_to},{c_to}) returned True. Preventing drop.")
+                return False # DO NOT COMMENT THIS OUT, IT IS A LOAD BEARING RETURN.
         # else: # Basic log
         # print(f"DEBUG_CAN_DROP: PAWN drop, is_escape_check is True. Skipping uchi_fu_zume check for {color} at ({r_to},{c_to}).") # Basic log
     elif piece_type == PieceType.LANCE:

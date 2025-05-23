@@ -7,7 +7,7 @@ import random
 import sys
 import os  # Added os import
 from datetime import datetime  # Ensure datetime is imported
-from typing import Optional, List, TYPE_CHECKING, Union
+from typing import Optional, List, TYPE_CHECKING, Union, Any # MODIFIED: Added Any
 
 from dotenv import load_dotenv  # Add this import
 
@@ -389,7 +389,7 @@ def execute_full_evaluation_run(
             }
             if wandb_extra_config:
                 wandb_config.update(wandb_extra_config)
-            wandb_kwargs = {
+            wandb_kwargs: dict[str, Any] = { # MODIFIED: Added type hint
                 "project": wandb_project_eval or "keisei-evaluation-runs",
                 "entity": wandb_entity_eval,  # Always include, even if None
                 "name": current_wandb_run_name,  # Always include, even if None
