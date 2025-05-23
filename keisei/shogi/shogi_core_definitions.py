@@ -10,7 +10,7 @@ potential AI applications.
 """
 
 from enum import Enum
-from typing import Dict, List, Set, Tuple, Union, Optional
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 # --- Public API ---
 __all__ = [

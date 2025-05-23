@@ -6,11 +6,11 @@ This file contains the actual training logic and exposes a main() function.
 import argparse
 import glob
 import json
+import multiprocessing as mp
 import os
 import re
 import sys
 from datetime import datetime
-import multiprocessing as mp
 
 import numpy as np
 import torch
@@ -19,10 +19,11 @@ from tqdm import tqdm
 import config as app_config
 from keisei.experience_buffer import ExperienceBuffer
 from keisei.ppo_agent import PPOAgent
-from keisei.shogi.shogi_engine import ShogiGame, Color
+from keisei.shogi.shogi_engine import Color, ShogiGame
 from keisei.utils import PolicyOutputMapper, TrainingLogger
 
 # Expose main at the module level for import by the root-level shim
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="DRL Shogi Client Training (train.py)")
@@ -317,13 +318,16 @@ def main():
                 if not done:
                     try:
                         # PPOAgent.select_action now expects legal_mask and returns 4 items
-                        selected_shogi_move, action_idx, log_prob, value = (
-                            agent.select_action(
-                                obs,
-                                legal_moves,
-                                legal_mask_for_buffer,
-                                is_training=True,  # Pass legal_mask
-                            )
+                        (
+                            selected_shogi_move,
+                            action_idx,
+                            log_prob,
+                            value,
+                        ) = agent.select_action(
+                            obs,
+                            legal_moves,
+                            legal_mask_for_buffer,
+                            is_training=True,  # Pass legal_mask
                         )
                         # The 5th item (value_tensor) was removed from select_action's direct return
                         # It was originally `move_tuple` then `selected_shogi_move, action_idx, log_prob, value, _ = move_tuple`

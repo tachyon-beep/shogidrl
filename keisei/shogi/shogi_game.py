@@ -93,7 +93,6 @@ class ShogiGame:
         self.board[0][7] = Piece(PieceType.KNIGHT, Color.WHITE)
         self.board[0][8] = Piece(PieceType.LANCE, Color.WHITE)
 
-
         self.board[1][1] = Piece(PieceType.ROOK, Color.WHITE)
         self.board[1][7] = Piece(PieceType.BISHOP, Color.WHITE)
 
@@ -106,7 +105,6 @@ class ShogiGame:
         self.board[8][6] = Piece(PieceType.SILVER, Color.BLACK)
         self.board[8][7] = Piece(PieceType.KNIGHT, Color.BLACK)
         self.board[8][8] = Piece(PieceType.LANCE, Color.BLACK)
-
 
         self.board[7][1] = Piece(PieceType.BISHOP, Color.BLACK)
         self.board[7][7] = Piece(PieceType.ROOK, Color.BLACK)
@@ -768,9 +766,9 @@ class ShogiGame:
             move_details_for_history["is_drop"] = True
             if isinstance(move_tuple[4], PieceType):
                 drop_piece_type_for_move = move_tuple[4]
-                move_details_for_history["dropped_piece_type"] = (
-                    drop_piece_type_for_move
-                )
+                move_details_for_history[
+                    "dropped_piece_type"
+                ] = drop_piece_type_for_move
                 # The actual board update and hand removal will happen in Part 2 for consistency
             else:
                 raise ValueError(
@@ -806,12 +804,12 @@ class ShogiGame:
                 )
             # --- END ADDED ---
 
-            move_details_for_history["original_type_before_promotion"] = (
-                piece_to_move.type
-            )
-            move_details_for_history["original_color_of_moved_piece"] = (
-                piece_to_move.color
-            )
+            move_details_for_history[
+                "original_type_before_promotion"
+            ] = piece_to_move.type
+            move_details_for_history[
+                "original_color_of_moved_piece"
+            ] = piece_to_move.color
 
             if r_to is not None and c_to is not None:  # Should always be true
                 target_piece_on_board = self.get_piece(r_to, c_to)
@@ -1022,10 +1020,9 @@ class ShogiGame:
             # For now, let's assume if a winner exists, it's from their perspective.
             # If stalemate, it's neutral.
             if self.winner is not None:
-                perspective_player = self.winner # Win is +1 for winner
-            else: # Stalemate or other draw
+                perspective_player = self.winner  # Win is +1 for winner
+            else:  # Stalemate or other draw
                 return 0.0
-
 
         if self.winner == perspective_player:
             return 1.0  # Win

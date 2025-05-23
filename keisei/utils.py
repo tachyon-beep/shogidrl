@@ -21,7 +21,7 @@ from keisei.shogi.shogi_core_definitions import (  # Import the standalone funct
 
 if TYPE_CHECKING:
     from keisei.shogi.shogi_core_definitions import MoveTuple
-    from keisei.shogi.shogi_game import ShogiGame # Added for type hinting
+    from keisei.shogi.shogi_game import ShogiGame  # Added for type hinting
 
 
 class PolicyOutputMapper:
@@ -32,9 +32,15 @@ class PolicyOutputMapper:
         self.idx_to_move: List["MoveTuple"] = []
         self.move_to_idx: Dict["MoveTuple", int] = {}
         current_idx = 0
-        self._unrecognized_moves_log_cache: Set[str] = set()  # Cache for logging distinct unrecognized moves
-        self._unrecognized_moves_logged_count = 0  # Counter for logged distinct unrecognized moves
-        self._max_distinct_unrecognized_to_log = 5  # Max distinct unrecognized moves to log in detail
+        self._unrecognized_moves_log_cache: Set[
+            str
+        ] = set()  # Cache for logging distinct unrecognized moves
+        self._unrecognized_moves_logged_count = (
+            0  # Counter for logged distinct unrecognized moves
+        )
+        self._max_distinct_unrecognized_to_log = (
+            5  # Max distinct unrecognized moves to log in detail
+        )
 
         # Generate Board Moves: (from_r, from_c, to_r, to_c, promote_flag: bool)
         for r_from in range(9):
@@ -63,9 +69,9 @@ class PolicyOutputMapper:
                         current_idx += 1
 
         # Define droppable piece types (standard 7, excluding King)
-        droppable_piece_types: List[PieceType] = (
-            get_unpromoted_types()
-        )  # Use the imported function
+        droppable_piece_types: List[
+            PieceType
+        ] = get_unpromoted_types()  # Use the imported function
 
         # Generate Drop Moves: (None, None, to_r, to_c, piece_type_to_drop: PieceType)
         for r_to in range(9):
@@ -134,8 +140,11 @@ class PolicyOutputMapper:
             except ValueError as e:
                 unrecognized_count_this_call += 1
                 move_repr = repr(move)
-                if move_repr not in self._unrecognized_moves_log_cache and \
-                   self._unrecognized_moves_logged_count < self._max_distinct_unrecognized_to_log:
+                if (
+                    move_repr not in self._unrecognized_moves_log_cache
+                    and self._unrecognized_moves_logged_count
+                    < self._max_distinct_unrecognized_to_log
+                ):
                     self._unrecognized_moves_log_cache.add(move_repr)
                     self._unrecognized_moves_logged_count += 1
                     warning_msg = (
@@ -146,14 +155,28 @@ class PolicyOutputMapper:
                         f"This could indicate an issue with move generation in ShogiGame or an incomplete PolicyOutputMapper. "
                         f"Example of a known move key: {repr(next(iter(self.move_to_idx.keys())))}"
                     )
-                    print(warning_msg, file=sys.stderr)  # Print to stderr for visibility
-                elif move_repr not in self._unrecognized_moves_log_cache and \
-                     self._unrecognized_moves_logged_count == self._max_distinct_unrecognized_to_log:
+                    print(
+                        warning_msg, file=sys.stderr
+                    )  # Print to stderr for visibility
+                elif (
+                    move_repr not in self._unrecognized_moves_log_cache
+                    and self._unrecognized_moves_logged_count
+                    == self._max_distinct_unrecognized_to_log
+                ):
                     # Log once that we've stopped detailed logging for new distinct moves
-                    print(f"[PolicyOutputMapper Warning] Max distinct unrecognized moves ({self._max_distinct_unrecognized_to_log}) logged. Further distinct errors will not be detailed.", file=sys.stderr)
-                    self._unrecognized_moves_logged_count += 1 # Increment to prevent this message from repeating
+                    print(
+                        f"[PolicyOutputMapper Warning] Max distinct unrecognized moves ({self._max_distinct_unrecognized_to_log}) logged. Further distinct errors will not be detailed.",
+                        file=sys.stderr,
+                    )
+                    self._unrecognized_moves_logged_count += (
+                        1  # Increment to prevent this message from repeating
+                    )
 
-        if unrecognized_count_this_call > 0 and self._unrecognized_moves_logged_count <= self._max_distinct_unrecognized_to_log : # Avoid logging summary if we already hit max detailed logs
+        if (
+            unrecognized_count_this_call > 0
+            and self._unrecognized_moves_logged_count
+            <= self._max_distinct_unrecognized_to_log
+        ):  # Avoid logging summary if we already hit max detailed logs
             summary_warning = (
                 f"[PolicyOutputMapper Summary] In this call to get_legal_mask, "
                 f"{unrecognized_count_this_call} out of {len(legal_shogi_moves)} legal moves "

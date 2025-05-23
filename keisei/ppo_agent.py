@@ -60,12 +60,7 @@ class PPOAgent:
         ],  # Still useful for policy_index_to_shogi_move
         legal_mask: torch.Tensor,
         is_training: bool = True,
-    ) -> Tuple[
-        Optional["MoveTuple"],
-        int,
-        float,
-        float,
-    ]:
+    ) -> Tuple[Optional["MoveTuple"], int, float, float,]:
         """
         Select an action given an observation, legal Shogi moves, and a precomputed legal_mask.
         Returns the selected Shogi move, its policy index, log probability, and value estimate.
@@ -89,10 +84,12 @@ class PPOAgent:
 
         # Get action, log_prob, and value from the ActorCritic model
         # Pass deterministic based on not is_training
-        selected_policy_index_tensor, log_prob_tensor, value_tensor = (
-            self.model.get_action_and_value(
-                obs_tensor, legal_mask=legal_mask, deterministic=not is_training
-            )
+        (
+            selected_policy_index_tensor,
+            log_prob_tensor,
+            value_tensor,
+        ) = self.model.get_action_and_value(
+            obs_tensor, legal_mask=legal_mask, deterministic=not is_training
         )
 
         selected_policy_index_val = int(selected_policy_index_tensor.item())
@@ -165,9 +162,7 @@ class PPOAgent:
         old_log_probs_batch = batch_data["log_probs"].to(self.device)
         advantages_batch = batch_data["advantages"].to(self.device)
         returns_batch = batch_data["returns"].to(self.device)
-        legal_masks_batch = batch_data["legal_masks"].to(
-            self.device
-        )
+        legal_masks_batch = batch_data["legal_masks"].to(self.device)
 
         # Normalize advantages
         advantages_batch = (advantages_batch - advantages_batch.mean()) / (
@@ -195,9 +190,7 @@ class PPOAgent:
                 old_log_probs_minibatch = old_log_probs_batch[minibatch_indices]
                 advantages_minibatch = advantages_batch[minibatch_indices]
                 returns_minibatch = returns_batch[minibatch_indices]
-                legal_masks_minibatch = legal_masks_batch[
-                    minibatch_indices
-                ]
+                legal_masks_minibatch = legal_masks_batch[minibatch_indices]
 
                 # Get new log_probs, entropy, and value from the model
                 # Note on entropy: legal_mask is now passed here. Entropy is calculated

@@ -31,14 +31,14 @@ def run_evaluation(checkpoint_path: str, current_timestep: int, current_episode:
     ]
     if app_config.EVAL_OPPONENT_TYPE == "ppo" and app_config.EVAL_OPPONENT_CHECKPOINT_PATH:
         command.extend(["--opponent-checkpoint", app_config.EVAL_OPPONENT_CHECKPOINT_PATH])
-    
+
     if app_config.EVAL_WANDB_LOG:
         command.append("--wandb-log")
         if app_config.EVAL_WANDB_PROJECT:
             command.extend(["--wandb-project", app_config.EVAL_WANDB_PROJECT])
         if app_config.EVAL_WANDB_ENTITY:
             command.extend(["--wandb-entity", app_config.EVAL_WANDB_ENTITY])
-        
+
         run_name = f"{app_config.EVAL_WANDB_RUN_NAME_PREFIX}ts{current_timestep}_ep{current_episode}"
         command.extend(["--wandb-run-name", run_name])
 
@@ -83,5 +83,5 @@ if __name__ == "__main__":
     current_dir = os.path.dirname(os.path.abspath(__file__))
     if current_dir not in sys.path:
         sys.path.insert(0, current_dir)
-    
+
     keisei.train.main()
