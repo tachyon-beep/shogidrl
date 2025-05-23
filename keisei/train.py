@@ -17,10 +17,19 @@ import torch
 from tqdm import tqdm
 
 import config as app_config
+import wandb  # Import wandb at the top level
+
+# Import the callable evaluation function
+from evaluate import execute_full_evaluation_run
 from keisei.experience_buffer import ExperienceBuffer
 from keisei.ppo_agent import PPOAgent
 from keisei.shogi.shogi_engine import Color, ShogiGame
 from keisei.utils import PolicyOutputMapper, TrainingLogger
+
+# Add datetime and os if not already imported (os and datetime are already imported)
+# import os
+# from datetime import datetime
+
 
 # Expose main at the module level for import by the root-level shim
 
@@ -227,6 +236,33 @@ def main():
     with TrainingLogger(log_file) as logger:
         log_both(f"Starting run: {run_name}")
         log_both(f"Effective Config: {serialize_config(cfg)}")
+
+        # Initialize W&B for the main training run if enabled in config
+        is_train_wandb_active = False
+        if getattr(
+            cfg, "WANDB_LOG_TRAIN", False
+        ):  # Assuming a config like WANDB_LOG_TRAIN
+            try:
+                # import wandb # Moved to top
+                wandb.init(
+                    project=getattr(cfg, "WANDB_PROJECT_TRAIN", "keisei-training"),
+                    entity=getattr(cfg, "WANDB_ENTITY_TRAIN", None),
+                    name=run_name,  # Use the main run_name
+                    config=json.loads(
+                        serialize_config(cfg)
+                    ),  # Log the effective config
+                    reinit=True,  # In case of multiple main() calls in one process (e.g. testing)
+                    group="TrainingRuns",
+                )
+                log_both(
+                    f"Weights & Biases logging enabled for main training run: {run_name}"
+                )
+                is_train_wandb_active = True
+            except Exception as e:
+                log_both(
+                    f"Error initializing W&B for training: {e}. W&B logging for training disabled."
+                )
+                is_train_wandb_active = False
 
         if ckpt_path and os.path.exists(ckpt_path):
             log_both(f"Resuming from checkpoint: {ckpt_path}")
@@ -484,13 +520,96 @@ def main():
 
                 if total_episodes_completed % cfg.SAVE_FREQ_EPISODES == 0:
                     ckpt_path_ep = os.path.join(
-                        model_dir,
+                        model_dir,  # model_dir is run_dir here
                         f"ppo_shogi_ep{total_episodes_completed}_ts{global_timestep}.pth",
                     )
                     agent.save_model(
                         ckpt_path_ep, global_timestep, total_episodes_completed
                     )
-                    logger.log(f"Model saved to {ckpt_path_ep}")
+                    logger.log(f"Model saved to {ckpt_path_ep}")  # Main training logger
+
+                    # === New Periodic Evaluation Call ===
+                    if getattr(cfg, "EVAL_DURING_TRAINING", False):
+                        log_both(
+                            f"--- Triggering Periodic Evaluation for: {ckpt_path_ep} ---"
+                        )
+
+                        eval_log_filename = f"periodic_eval_ts{global_timestep}_ep{total_episodes_completed}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+                        # Store eval logs in a subfolder of the run_dir
+                        eval_log_dir = os.path.join(run_dir, "eval_logs")
+                        os.makedirs(eval_log_dir, exist_ok=True)
+                        eval_log_path = os.path.join(eval_log_dir, eval_log_filename)
+
+                        # policy_mapper is already instantiated in keisei/train.py main()
+
+                        eval_results = execute_full_evaluation_run(
+                            agent_checkpoint_path=ckpt_path_ep,
+                            opponent_type=getattr(cfg, "EVAL_OPPONENT_TYPE", "random"),
+                            opponent_checkpoint_path=getattr(
+                                cfg, "EVAL_OPPONENT_CHECKPOINT_PATH", None
+                            ),
+                            num_games=getattr(cfg, "EVAL_NUM_GAMES", 10),
+                            max_moves_per_game=getattr(
+                                cfg, "MAX_MOVES_PER_GAME_EVAL", 300
+                            ),  # Use the eval specific config
+                            device_str=getattr(
+                                cfg, "EVAL_DEVICE", cfg.DEVICE
+                            ),  # Default to main training device if EVAL_DEVICE not set
+                            log_file_path_eval=eval_log_path,
+                            policy_mapper=policy_mapper,  # Pass existing instance
+                            seed=getattr(
+                                cfg, "SEED", None
+                            ),  # Optionally use the main training seed or a different one for eval
+                            wandb_log_eval=getattr(cfg, "EVAL_WANDB_LOG", False),
+                            wandb_project_eval=getattr(
+                                cfg, "EVAL_WANDB_PROJECT", "keisei-periodic-evals"
+                            ),
+                            wandb_entity_eval=getattr(cfg, "EVAL_WANDB_ENTITY", None),
+                            # Construct a unique run name for this specific evaluation W&B run
+                            wandb_run_name_eval=f"{getattr(cfg, 'EVAL_WANDB_RUN_NAME_PREFIX', 'eval_')}{run_name}_ts{global_timestep}_ep{total_episodes_completed}",
+                        )
+
+                        if eval_results:
+                            log_both(
+                                f"--- Periodic Evaluation Summary (vs {eval_results.get('opponent_name', 'N/A')} for agent {eval_results.get('agent_name', 'N/A')}) ---"
+                            )
+                            log_both(
+                                f"  Games: {eval_results.get('num_games')}, Wins: {eval_results.get('wins')}, Losses: {eval_results.get('losses')}, Draws: {eval_results.get('draws')}"
+                            )
+                            log_both(
+                                f"  Win Rate: {eval_results.get('win_rate', 0):.2%}, Avg Game Length: {eval_results.get('avg_game_length', 0):.2f}"
+                            )
+                            # Optionally log key eval metrics to the main training W&B run if desired (prefix them)
+                            if (
+                                is_train_wandb_active and wandb.run
+                            ):  # is_train_wandb_active from main W&B init
+                                wandb.log(
+                                    {
+                                        f"eval_vs_{eval_results.get('opponent_name', 'opponent')}/win_rate": eval_results.get(
+                                            "win_rate", 0
+                                        ),
+                                        f"eval_vs_{eval_results.get('opponent_name', 'opponent')}/avg_game_length": eval_results.get(
+                                            "avg_game_length", 0
+                                        ),
+                                        f"eval_vs_{eval_results.get('opponent_name', 'opponent')}/wins": eval_results.get(
+                                            "wins", 0
+                                        ),
+                                        f"eval_vs_{eval_results.get('opponent_name', 'opponent')}/losses": eval_results.get(
+                                            "losses", 0
+                                        ),
+                                        f"eval_vs_{eval_results.get('opponent_name', 'opponent')}/draws": eval_results.get(
+                                            "draws", 0
+                                        ),
+                                    },
+                                    step=global_timestep,
+                                )
+                        else:
+                            log_both(
+                                "--- Periodic Evaluation did not return results or failed. ---"
+                            )
+                        log_both(
+                            f"--- Finished Periodic Evaluation for: {ckpt_path_ep} ---"
+                        )
 
             if len(experience_buffer) >= cfg.STEPS_PER_EPOCH:
                 # `obs` here is s_t+N (the state *after* the last transition collected in the buffer)

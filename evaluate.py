@@ -6,13 +6,14 @@ import argparse
 import random
 import sys
 import os  # Added os import
+from datetime import datetime  # Ensure datetime is imported
 from typing import Optional, List, TYPE_CHECKING, Union
 
 from dotenv import load_dotenv  # Add this import
 
 import numpy as np  # Import numpy
 import torch  # For torch.device and model loading
-import wandb  # Added for Weights & Biases
+import wandb  # Ensure wandb is imported
 
 from keisei.ppo_agent import PPOAgent
 from keisei.utils import PolicyOutputMapper, EvaluationLogger, BaseOpponent
@@ -338,49 +339,170 @@ def run_evaluation_loop(
     return results
 
 
+def execute_full_evaluation_run(
+    agent_checkpoint_path: str,
+    opponent_type: str,
+    opponent_checkpoint_path: Optional[str],
+    num_games: int,
+    max_moves_per_game: int,
+    device_str: str,
+    log_file_path_eval: str,  # Specific log file for this evaluation run
+    policy_mapper: PolicyOutputMapper,  # Pass existing instance
+    seed: Optional[int] = None,
+    # W&B specific parameters for this evaluation run
+    wandb_log_eval: bool = False,
+    wandb_project_eval: Optional[str] = None,
+    wandb_entity_eval: Optional[str] = None,
+    wandb_run_name_eval: Optional[str] = None,
+    logger_also_stdout: bool = False,  # <--- NEW PARAM
+    wandb_extra_config: Optional[dict] = None,   # <--- NEW PARAM for extra CLI args
+    wandb_reinit: Optional[bool] = None,         # <--- Only pass if not None
+    wandb_group: Optional[str] = None,           # <--- Only pass if not None
+) -> Optional[dict]:  # Return summary metrics dict or None if error
+    """
+    Performs a complete evaluation run programmatically.
+    Initializes agents, logger, W&B (if enabled), runs games, and logs results.
+    """
+    if seed is not None:
+        random.seed(seed)
+        torch.manual_seed(seed)
+        np.random.seed(seed)
+        if device_str == "cuda":  # Assuming torch is imported
+            torch.cuda.manual_seed_all(seed)
+        print(f"[Eval Function] Set random seed to: {seed}")
+
+    # W&B Initialization for this specific evaluation run
+    is_eval_wandb_active = False
+    if wandb_log_eval:
+        try:
+            current_wandb_run_name = wandb_run_name_eval
+            # Build config dict with all CLI args if provided
+            wandb_config = {
+                "agent_checkpoint": agent_checkpoint_path,
+                "opponent_type": opponent_type,
+                "opponent_checkpoint": opponent_checkpoint_path,
+                "num_games": num_games,
+                "max_moves_per_game": max_moves_per_game,
+                "device": device_str,
+                "seed": seed,
+            }
+            if wandb_extra_config:
+                wandb_config.update(wandb_extra_config)
+            wandb_kwargs = {
+                "project": wandb_project_eval or "keisei-evaluation-runs",
+                "entity": wandb_entity_eval,  # Always include, even if None
+                "name": current_wandb_run_name,  # Always include, even if None
+                "config": wandb_config,
+            }
+            if wandb_reinit is not None:
+                wandb_kwargs["reinit"] = wandb_reinit
+            if wandb_group is not None:
+                wandb_kwargs["group"] = wandb_group
+            wandb.init(**wandb_kwargs)
+            print(f"[Eval Function] Weights & Biases logging enabled for this evaluation run: {current_wandb_run_name}")
+            is_eval_wandb_active = True
+        except Exception as e:
+            print(f"[Eval Function] Error initializing W&B for evaluation: {e}. W&B logging for this eval run disabled.", file=sys.stderr)
+            is_eval_wandb_active = False
+
+    # Ensure log directory for this specific evaluation log exists
+    log_dir_eval = os.path.dirname(log_file_path_eval)
+    if log_dir_eval and not os.path.exists(log_dir_eval):
+        os.makedirs(log_dir_eval)
+
+    results_summary = None
+    try:
+        with EvaluationLogger(log_file_path_eval, also_stdout=logger_also_stdout) as logger:
+            logger.log_custom_message("Starting Shogi Agent Evaluation (Programmatic Call).")
+            logger.log_custom_message(f"Parameters: agent_ckpt='{agent_checkpoint_path}', opponent='{opponent_type}', num_games={num_games}")
+
+            agent_to_eval = load_evaluation_agent(
+                agent_checkpoint_path, device_str, policy_mapper, INPUT_CHANNELS
+            )
+            opponent = initialize_opponent(
+                opponent_type,
+                opponent_checkpoint_path,
+                device_str,
+                policy_mapper,
+                INPUT_CHANNELS,
+            )
+
+            results_summary = run_evaluation_loop(
+                agent_to_eval,
+                opponent,
+                num_games,
+                logger,
+                policy_mapper,
+                max_moves_per_game,
+                device_str,
+                wandb_enabled=is_eval_wandb_active,  # Pass the status
+            )
+
+            logger.log_custom_message(
+                f"[Eval Function] Evaluation Summary: {results_summary}"
+            )
+
+    except Exception as e:
+        print(
+            f"[Eval Function] An error occurred during programmatic evaluation: {e}",
+            file=sys.stderr,
+        )
+        if is_eval_wandb_active and wandb.run:
+            wandb.log({"eval/error": 1, "error_message": str(e)})
+    finally:
+        if is_eval_wandb_active and wandb.run:
+            wandb.finish()
+            print("[Eval Function] W&B run for this evaluation finished.")
+
+    return results_summary
+
+
 def main():
     parser = argparse.ArgumentParser(description="Evaluate a PPO Shogi agent.")
     parser.add_argument(
         "--agent-checkpoint",
         type=str,
         required=True,
-        help="Path to the agent's .pth checkpoint file.",
+        help="Path to the agent's model checkpoint (.pth file).",
     )
     parser.add_argument(
         "--opponent-type",
         type=str,
-        required=True,
+        default="random",
         choices=["random", "heuristic", "ppo"],
-        help="Type of opponent.",
+        help="Type of opponent to play against.",
     )
     parser.add_argument(
         "--opponent-checkpoint",
         type=str,
-        help="Path to opponent's .pth checkpoint file (if opponent-type is 'ppo').",
+        default=None,
+        help="Path to opponent's model checkpoint (if opponent_type is 'ppo').",
     )
     parser.add_argument(
         "--num-games", type=int, default=10, help="Number of games to play."
     )
     parser.add_argument(
-        "--max-moves-per-game", type=int, default=300, help="Maximum moves per game."
+        "--max-moves-per-game",
+        type=int,
+        default=300,  # Default from your example
+        help="Maximum number of moves per game before declaring a draw.",
     )
     parser.add_argument(
         "--device",
         type=str,
         default="cpu",
         choices=["cpu", "cuda"],
-        help="Device to use ('cpu' or 'cuda').",
+        help="Device to run evaluation on ('cpu' or 'cuda').",
     )
     parser.add_argument(
         "--log-file",
         type=str,
-        default="logs/evaluation_log.txt",
-        help="Path to the evaluation log file.",
+        default=None,  # Default to None, let the function construct if not provided by CLI
+        help="Path to the log file for evaluation results.",
     )
     parser.add_argument(
         "--seed", type=int, default=None, help="Random seed for reproducibility."
     )
-
     # W&B arguments
     parser.add_argument(
         "--wandb-log", action="store_true", help="Enable Weights & Biases logging."
@@ -388,123 +510,67 @@ def main():
     parser.add_argument(
         "--wandb-project",
         type=str,
-        default="shogi-ppo-evaluation",
+        default=None,  # Default to None, execute_full_evaluation_run has its own default
         help="W&B project name.",
     )
     parser.add_argument(
-        "--wandb-entity",
-        type=str,
-        default=None,
-        help="W&B entity (username or team name).",
+        "--wandb-entity", type=str, default=None, help="W&B entity (username or team)."
     )
     parser.add_argument(
-        "--wandb-run-name", type=str, default=None, help="Custom name for the W&B run."
+        "--wandb-run-name",
+        type=str,
+        default=None,
+        help="Custom W&B run name for this evaluation.",
     )
-
     args = parser.parse_args()
 
-    if args.seed is not None:
-        random.seed(args.seed)
-        torch.manual_seed(args.seed)
-        np.random.seed(args.seed)  # Add numpy random seed
-        if args.device == "cuda":
-            torch.cuda.manual_seed_all(args.seed)
-        print(f"Set random seed to: {args.seed}")
+    # Create a PolicyOutputMapper instance here to pass to the function
+    policy_mapper_instance = PolicyOutputMapper()
 
-    # Initialize W&B if enabled
-    if args.wandb_log:
-        try:
-            wandb.init(
-                project=args.wandb_project,
-                entity=args.wandb_entity,
-                name=args.wandb_run_name,
-                config=vars(args),  # Log all CLI arguments
-            )
-            print(
-                f"Weights & Biases logging enabled. Project: {args.wandb_project}, Run Name: {wandb.run.name if wandb.run else 'N/A'}"
-            )
-        except Exception as e:
-            print(
-                f"Error initializing Weights & Biases: {e}. W&B logging will be disabled.",
-                file=sys.stderr,
-            )
-            args.wandb_log = False  # Disable if init fails
+    # Determine log file path if not provided
+    effective_log_file_path = args.log_file
+    if not effective_log_file_path:
+        # Create a default log file name if not specified
+        log_dir = "logs"  # Or any default directory you prefer
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        effective_log_file_path = os.path.join(
+            log_dir, f"eval_run_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        )
 
-    policy_mapper = PolicyOutputMapper()  # Assuming this doesn't need device yet
-
-    # Ensure log directory exists (EvaluationLogger might not create it)
-    log_dir = os.path.dirname(args.log_file)
-    if log_dir and not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-        print(f"Created log directory: {log_dir}")
-
-    with EvaluationLogger(args.log_file, also_stdout=True) as logger:
-        logger.log_custom_message("Starting Shogi Agent Evaluation Script.")
-        logger.log_custom_message(f"Arguments: {vars(args)}")
-
-        try:
-            agent_to_eval = load_evaluation_agent(
-                args.agent_checkpoint, args.device, policy_mapper, INPUT_CHANNELS
-            )
-            opponent = initialize_opponent(
-                args.opponent_type,
-                args.opponent_checkpoint,
-                args.device,
-                policy_mapper,
-                INPUT_CHANNELS,
-            )
-
-            results = run_evaluation_loop(
-                agent_to_eval,
-                opponent,
-                args.num_games,
-                logger,
-                policy_mapper,
-                args.max_moves_per_game,
-                args.device,
-                wandb_enabled=args.wandb_log,  # Pass W&B status
-            )
-
-            print("\\n--- Evaluation Summary ---")
-            print(f"Agent: {agent_to_eval.name}")
-            print(
-                f"Opponent: {opponent.name if isinstance(opponent, BaseOpponent) else opponent.__class__.__name__}"
-            )
-            print(f"Number of Games: {results['num_games']}")
-            print(f"Wins: {results['wins']} ({results['win_rate']:.2%})")
-            print(f"Losses: {results['losses']} ({results['loss_rate']:.2%})")
-            print(f"Draws: {results['draws']} ({results['draw_rate']:.2%})")
-            print(f"Average Game Length: {results['avg_game_length']:.2f} moves")
-            logger.log_custom_message(f"Final Summary: {results}")
-
-        except Exception as e:
-            logger.log_custom_message(
-                f"An error occurred during evaluation: {e}"
-            )  # Removed level="ERROR"
-            print(f"An error occurred: {e}", file=sys.stderr)
-            if args.wandb_log and wandb.run:
-                wandb.log({"eval/error": 1})  # Log an error metric
-            # sys.exit(1) # Exit with error code # Commented out to allow finally to run
-        finally:
-            if args.wandb_log and wandb.run:
-                wandb.finish()
-                print("Weights & Biases run finished.")
+    # Build a config dict with all CLI args for wandb.config
+    wandb_extra_config = {
+        "log_file": effective_log_file_path,
+        "wandb_log": args.wandb_log,
+        "wandb_project": args.wandb_project,
+        "wandb_entity": args.wandb_entity,
+        "wandb_run_name": args.wandb_run_name,
+    }
+    execute_full_evaluation_run(
+        agent_checkpoint_path=args.agent_checkpoint,
+        opponent_type=args.opponent_type,
+        opponent_checkpoint_path=args.opponent_checkpoint,
+        num_games=args.num_games,
+        max_moves_per_game=args.max_moves_per_game,
+        device_str=args.device,
+        log_file_path_eval=effective_log_file_path,  # Use the determined log_file arg from CLI or default
+        policy_mapper=policy_mapper_instance,
+        seed=args.seed,
+        wandb_log_eval=args.wandb_log,
+        wandb_project_eval=args.wandb_project,
+        wandb_entity_eval=args.wandb_entity,
+        wandb_run_name_eval=args.wandb_run_name,  # Pass exactly what was given (may be None)
+        logger_also_stdout=True,  # <--- CLI should print to stdout
+        wandb_extra_config=wandb_extra_config,
+    )
 
 
 if __name__ == "__main__":
-    # Add os import for path manipulation if not already present at the top
-    import os
-
-    # This ensures that the script can find other modules in the 'keisei' package
-    # when run directly, especially if 'keisei' is not installed in the environment.
-    if __package__ is None:
-        # Get the directory of the current script (evaluate.py)
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        # Get the parent directory (which should be the project root, e.g., /home/john/keisei)
-        project_root = os.path.dirname(script_dir)
-        # Add the project root to sys.path so Python can find the \'keisei\' package
-        if project_root not in sys.path:
-            sys.path.insert(0, project_root)
-            # print(f"Added {project_root} to sys.path for module resolution.")
-
-    main()
+    # If evaluate.py is run directly, ensure the project root is in sys.path
+    # so that 'keisei' module and its submodules can be imported.
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(
+        current_dir
+    )  # Assuming evaluate.py is in a dir like 'keisei_project/evaluate.py'
+    # If evaluate.py is in the root, then project_root = current_dir
+    # Based on workspace structure, evaluate.py is in the root /home/john/keisi

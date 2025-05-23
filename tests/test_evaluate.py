@@ -50,7 +50,7 @@ class MockPPOAgent(PPOAgent, BaseOpponent):  # Inherit from PPOAgent and BaseOpp
             device=device_str,
             name=name,
         )
-
+        BaseOpponent.__init__(self, name=name)  # Ensure BaseOpponent is initialized
         self.model = MagicMock()  # Mock the underlying torch model after PPOAgent init
         self._is_ppo_agent_mock = True  # Flag to identify this mock
         # self.name is set by PPOAgent's __init__ via BaseOpponent
@@ -133,6 +133,7 @@ def shogi_game_initial():
 
 
 def test_simple_random_opponent_select_move(shogi_game_initial: ShogiGame):
+    """Test that SimpleRandomOpponent selects a legal move from the game state."""
     opponent = SimpleRandomOpponent()
     legal_moves = shogi_game_initial.get_legal_moves()
     selected_move = opponent.select_move(shogi_game_initial)
@@ -140,6 +141,7 @@ def test_simple_random_opponent_select_move(shogi_game_initial: ShogiGame):
 
 
 def test_simple_heuristic_opponent_select_move(shogi_game_initial: ShogiGame):
+    """Test that SimpleHeuristicOpponent selects a legal move from the game state."""
     opponent = SimpleHeuristicOpponent()
     legal_moves = shogi_game_initial.get_legal_moves()
     selected_move = opponent.select_move(shogi_game_initial)
@@ -169,6 +171,7 @@ def test_initialize_opponent_types(policy_mapper):
     "evaluate.load_evaluation_agent"
 )  # Mock load_evaluation_agent within evaluate.py
 def test_initialize_opponent_ppo(mock_load_agent, policy_mapper):
+    """Test that initialize_opponent returns a PPOAgent when type is 'ppo' and path is provided."""
     mock_ppo_instance = MockPPOAgent(
         INPUT_CHANNELS, policy_mapper, "cpu", name="MockPPOAgentForTest"
     )
@@ -214,6 +217,7 @@ def test_load_evaluation_agent_mocked(MockPPOAgentClass, policy_mapper):
 
 
 def test_run_evaluation_loop_basic(policy_mapper, eval_logger_setup):
+    """Test that run_evaluation_loop runs games and logs results correctly."""
     logger, log_file_path = eval_logger_setup
 
     agent_to_eval = MockPPOAgent(

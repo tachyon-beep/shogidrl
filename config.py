@@ -42,15 +42,23 @@ MAX_MOVES_PER_GAME_EVAL = (
 
 # New settings for periodic evaluation from train.py
 EVAL_DURING_TRAINING = True  # Enable/disable periodic evaluation
-EVAL_OPPONENT_TYPE = "heuristic"  # Opponent type for periodic evaluation: "random", "heuristic", "ppo"
-EVAL_OPPONENT_CHECKPOINT_PATH = None  # Path to opponent PPO checkpoint if EVAL_OPPONENT_TYPE is "ppo"
+EVAL_OPPONENT_TYPE = (
+    "heuristic"  # Opponent type for periodic evaluation: "random", "heuristic", "ppo"
+)
+EVAL_OPPONENT_CHECKPOINT_PATH = (
+    None  # Path to opponent PPO checkpoint if EVAL_OPPONENT_TYPE is "ppo"
+)
 EVAL_DEVICE = "cpu"  # Device for periodic evaluation ("cpu" or "cuda")
 
 # W&B settings for periodic evaluations triggered by train.py
-EVAL_WANDB_LOG = False  # Enable W&B logging for periodic evaluations
-EVAL_WANDB_PROJECT = "shogi-ppo-periodic-evaluation"  # W&B project for periodic evaluation runs
+EVAL_WANDB_LOG = True  # Enable W&B logging for periodic evaluations by default. Set to False in config override to disable.
+EVAL_WANDB_PROJECT = (
+    "shogi-ppo-periodic-evaluation"  # W&B project for periodic evaluation runs
+)
 EVAL_WANDB_ENTITY = None  # W&B entity (username or team name), if None, uses default
-EVAL_WANDB_RUN_NAME_PREFIX = "periodic_eval_"  # Prefix for W&B run names, train.py will append timestamp/step
+EVAL_WANDB_RUN_NAME_PREFIX = (
+    "periodic_eval_"  # Prefix for W&B run names, train.py will append timestamp/step
+)
 
 # --- Real-time Game Printing Configuration ---
 # Set to True to print game states and moves to the console during training/evaluation.
