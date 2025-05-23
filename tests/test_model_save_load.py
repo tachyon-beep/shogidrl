@@ -31,7 +31,8 @@ def test_model_save_and_load(tmp_path):
     }
 
     model_path = tmp_path / "test_model.pth"
-    agent.save_model(model_path)
+    # Provide default values for the new arguments
+    agent.save_model(model_path, global_timestep=0, total_episodes_completed=0)
 
     assert os.path.exists(model_path)
 

@@ -8,6 +8,8 @@ import sys
 import os # Added os import
 from typing import Optional, List, TYPE_CHECKING, Union
 
+from dotenv import load_dotenv # Add this import
+
 import numpy as np # Import numpy
 import torch # For torch.device and model loading
 import wandb # Added for Weights & Biases
@@ -25,6 +27,7 @@ NUM_ACTIONS_TOTAL = 13527 # As per PolicyOutputMapper, or could be from config i
 if TYPE_CHECKING:
     pass # torch already imported above
 
+load_dotenv() # Load environment variables from .env file
 
 class SimpleRandomOpponent(BaseOpponent):
     """An opponent that selects a random legal move."""

@@ -4,12 +4,14 @@ import sys
 import os
 import subprocess
 import datetime
+from dotenv import load_dotenv # Add this import
 import keisei.train  # Moved import to the top
 # Correctly import the config module from the root of the project
 import config as app_config # Use app_config to avoid conflict with this script's name if it were config.py
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
+load_dotenv() # Load environment variables from .env file
 
 def run_evaluation(checkpoint_path: str, current_timestep: int, current_episode: int):
     """Runs the evaluation script as a subprocess."""

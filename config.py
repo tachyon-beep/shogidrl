@@ -18,7 +18,7 @@ ENTROPY_COEFF = 0.01  # Entropy bonus coefficient
 VALUE_LOSS_COEFF = 0.5  # Coefficient for the value loss in PPO (already present, kept)
 
 # --- Game Specific ---
-MAX_MOVES_PER_GAME = 300  # Max moves for a game
+MAX_MOVES_PER_GAME = 500  # Max moves for a game
 
 # --- Network Architecture Related (Verification, not typically tuned here directly) ---
 INPUT_CHANNELS = 46  # As per DESIGN.md - determined by get_observation()
