@@ -488,6 +488,17 @@ def main():
             current_episode_reward += reward
 
             if done:
+                # Log episode metrics *before* resetting them and before incrementing total_episodes_completed for the log
+                if is_train_wandb_active and wandb.run:
+                    wandb.log(
+                        {
+                            "episode/reward": current_episode_reward,
+                            "episode/length": current_episode_length,
+                            "episode/total_episodes_completed": total_episodes_completed + 1, # Log for the episode that just finished
+                        },
+                        step=global_timestep,
+                    )
+
                 total_episodes_completed += 1
                 logger.log(
                     f"Episode {total_episodes_completed} finished. Length: {current_episode_length}, Reward: {current_episode_reward:.2f}"
@@ -527,18 +538,6 @@ def main():
                     dtype=torch.bool,
                     device=agent.device,
                 )  # Dummy mask
-
-                # --- W&B episode metrics logging ---
-                # print(f"DEBUG: EPISODE wandb.log | is_train_wandb_active = {is_train_wandb_active}, wandb.run exists = {bool(wandb.run)}")
-                if is_train_wandb_active and wandb.run:
-                    wandb.log(
-                        {
-                            "episode/reward": current_episode_reward,
-                            "episode/length": current_episode_length,
-                            "episode/total_episodes_completed": total_episodes_completed,
-                        },
-                        step=global_timestep,
-                    )
 
                 if total_episodes_completed % cfg.SAVE_FREQ_EPISODES == 0:
                     ckpt_path_ep = os.path.join(
