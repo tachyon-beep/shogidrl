@@ -25,12 +25,12 @@ class ExperienceBuffer:
         self.values: list[float] = []
         self.dones: list[bool] = []
         self.legal_masks: list[torch.Tensor] = []  # Added to store legal masks
-        self.advantages: list[
-            torch.Tensor
-        ] = []  # Populated by compute_advantages_and_returns
-        self.returns: list[
-            torch.Tensor
-        ] = []  # Populated by compute_advantages_and_returns
+        self.advantages: list[torch.Tensor] = (
+            []
+        )  # Populated by compute_advantages_and_returns
+        self.returns: list[torch.Tensor] = (
+            []
+        )  # Populated by compute_advantages_and_returns
         self.ptr = 0
 
     def add(

@@ -3,7 +3,6 @@ Unit and integration tests for the evaluate.py script.
 """
 
 import random
-import sys
 from typing import Optional, Tuple  # Ensure Tuple and Optional are imported
 from unittest.mock import MagicMock, PropertyMock, patch  # Added PropertyMock
 
@@ -19,8 +18,9 @@ from keisei.evaluate import (  # MODIFIED: Updated import path
     initialize_opponent,
     load_evaluation_agent,
     run_evaluation_loop,
-    execute_full_evaluation_run, # ADDED: Import the function under test
+    execute_full_evaluation_run,  # ADDED: Import the function under test
 )
+
 # from evaluate import main as evaluate_main # MODIFIED: Removed, main() was removed from evaluate.py
 
 # Imports from the project
@@ -190,7 +190,9 @@ def test_initialize_opponent_ppo(mock_load_agent, policy_mapper):
         initialize_opponent("ppo", None, "cpu", policy_mapper, INPUT_CHANNELS)
 
 
-@patch("keisei.evaluate.PPOAgent")  # MODIFIED: Updated import path # Mock PPOAgent class within evaluate.py
+@patch(
+    "keisei.evaluate.PPOAgent"
+)  # MODIFIED: Updated import path # Mock PPOAgent class within evaluate.py
 def test_load_evaluation_agent_mocked(MockPPOAgentClass, policy_mapper):
     mock_agent_instance = MagicMock(
         spec=PPOAgent
@@ -261,11 +263,11 @@ def test_run_evaluation_loop_basic(policy_mapper, eval_logger_setup):
 
 # Helper for common main test mocks
 COMMON_MAIN_MOCKS = [
-    patch("keisei.evaluate.PolicyOutputMapper"), # MODIFIED: Updated import path
-    patch("keisei.evaluate.load_evaluation_agent"), # MODIFIED: Updated import path
-    patch("keisei.evaluate.initialize_opponent"), # MODIFIED: Updated import path
-    patch("keisei.evaluate.run_evaluation_loop"), # MODIFIED: Updated import path
-    patch("keisei.evaluate.EvaluationLogger"), # MODIFIED: Updated import path
+    patch("keisei.evaluate.PolicyOutputMapper"),  # MODIFIED: Updated import path
+    patch("keisei.evaluate.load_evaluation_agent"),  # MODIFIED: Updated import path
+    patch("keisei.evaluate.initialize_opponent"),  # MODIFIED: Updated import path
+    patch("keisei.evaluate.run_evaluation_loop"),  # MODIFIED: Updated import path
+    patch("keisei.evaluate.EvaluationLogger"),  # MODIFIED: Updated import path
     patch("wandb.init"),
     patch("wandb.log"),
     patch("wandb.finish"),
@@ -286,25 +288,27 @@ def apply_mocks(mocks):
 
 
 @apply_mocks(
-    COMMON_MAIN_MOCKS[:-3] # Indices 0-8: Excludes the three seeding mocks (random.seed, numpy.random.seed, torch.manual_seed)
+    COMMON_MAIN_MOCKS[
+        :-3
+    ]  # Indices 0-8: Excludes the three seeding mocks (random.seed, numpy.random.seed, torch.manual_seed)
 )
 # pylint: disable=unused-argument,too-many-positional-arguments,too-many-locals
-def test_execute_full_evaluation_run_basic_random( # MODIFIED: Renamed and refactored from test_evaluate_main_basic_random_opponent
+def test_execute_full_evaluation_run_basic_random(  # MODIFIED: Renamed and refactored from test_evaluate_main_basic_random_opponent
     mock_wandb_run_prop,  # For asserting not called
-    mock_wandb_finish,    # For asserting not called
-    mock_wandb_log,       # For asserting not called
-    mock_wandb_init,      # For asserting not called
+    mock_wandb_finish,  # For asserting not called
+    mock_wandb_log,  # For asserting not called
+    mock_wandb_init,  # For asserting not called
     mock_eval_logger_class,
     mock_run_loop,
     mock_init_opponent,
     mock_load_agent,
-    MockPolicyOutputMapperClass, # Mock for the class keisei.evaluate.PolicyOutputMapper
+    MockPolicyOutputMapperClass,  # Mock for the class keisei.evaluate.PolicyOutputMapper
     tmp_path,
 ):
     # Create a real PolicyOutputMapper instance for the test, as execute_full_evaluation_run expects one.
     policy_mapper_instance = PolicyOutputMapper()
 
-    mock_agent_instance = MockPPOAgent( # Using the test utility MockPPOAgent
+    mock_agent_instance = MockPPOAgent(  # Using the test utility MockPPOAgent
         INPUT_CHANNELS, policy_mapper_instance, "cpu", name="LoadedEvalAgent"
     )
     mock_load_agent.return_value = mock_agent_instance
@@ -316,16 +320,23 @@ def test_execute_full_evaluation_run_basic_random( # MODIFIED: Renamed and refac
     mock_eval_logger_class.return_value.__enter__.return_value = mock_logger_instance
 
     expected_run_loop_results = {
-        "num_games": 1, "wins": 1, "losses": 0, "draws": 0, "win_rate": 1.0,
-        "loss_rate": 0.0, "draw_rate": 0.0, "avg_game_length": 10.0,
-        "opponent_name": "EvalRandomOpponent", "agent_name": "LoadedEvalAgent" # Added agent_name
+        "num_games": 1,
+        "wins": 1,
+        "losses": 0,
+        "draws": 0,
+        "win_rate": 1.0,
+        "loss_rate": 0.0,
+        "draw_rate": 0.0,
+        "avg_game_length": 10.0,
+        "opponent_name": "EvalRandomOpponent",
+        "agent_name": "LoadedEvalAgent",  # Added agent_name
     }
     mock_run_loop.return_value = expected_run_loop_results
 
     log_file = tmp_path / "eval_basic_run.log"
     agent_ckpt_path = "./agent_for_eval.pth"
     num_games_to_run = 1
-    max_moves_for_game = 250 # Specific value for this test
+    max_moves_for_game = 250  # Specific value for this test
 
     # Call the function being tested
     results = execute_full_evaluation_run(
@@ -336,9 +347,9 @@ def test_execute_full_evaluation_run_basic_random( # MODIFIED: Renamed and refac
         max_moves_per_game=max_moves_for_game,
         device_str="cpu",
         log_file_path_eval=str(log_file),
-        policy_mapper=policy_mapper_instance, # Pass the created instance
-        seed=None, # Not testing seed in this specific test
-        wandb_log_eval=False # Explicitly disable W&B for this test
+        policy_mapper=policy_mapper_instance,  # Pass the created instance
+        seed=None,  # Not testing seed in this specific test
+        wandb_log_eval=False,  # Explicitly disable W&B for this test
     )
 
     # Assertions
@@ -364,19 +375,19 @@ def test_execute_full_evaluation_run_basic_random( # MODIFIED: Renamed and refac
     assert pos_args[4] == policy_mapper_instance  # policy_mapper
     assert pos_args[5] == max_moves_for_game  # max_moves
     assert pos_args[6] == "cpu"  # device_str
-    assert kw_args.get("wandb_enabled") is False # wandb_enabled in run_evaluation_loop
+    assert kw_args.get("wandb_enabled") is False  # wandb_enabled in run_evaluation_loop
 
     mock_wandb_init.assert_not_called()
     mock_wandb_log.assert_not_called()
     mock_wandb_finish.assert_not_called()
-    mock_wandb_run_prop.assert_not_called() # wandb.run should not be accessed
+    mock_wandb_run_prop.assert_not_called()  # wandb.run should not be accessed
 
-    assert results == expected_run_loop_results # Check if results are passed through
+    assert results == expected_run_loop_results  # Check if results are passed through
 
 
 @apply_mocks(COMMON_MAIN_MOCKS)  # Includes all mocks
 # pylint: disable=unused-argument,too-many-positional-arguments,too-many-locals
-def test_execute_full_evaluation_run_heuristic_opponent_with_wandb( # MODIFIED: Renamed and refactored
+def test_execute_full_evaluation_run_heuristic_opponent_with_wandb(  # MODIFIED: Renamed and refactored
     mock_torch_seed,
     mock_np_seed,
     mock_random_seed,
@@ -392,7 +403,7 @@ def test_execute_full_evaluation_run_heuristic_opponent_with_wandb( # MODIFIED: 
     tmp_path,
     # monkeypatch, # MODIFIED: Removed monkeypatch as sys.argv is no longer used
 ):
-    policy_mapper_instance = PolicyOutputMapper() # MODIFIED: Create an instance
+    policy_mapper_instance = PolicyOutputMapper()  # MODIFIED: Create an instance
     # MockPolicyOutputMapperClass.return_value = policy_mapper_instance # Not needed if we pass the instance
 
     mock_agent_instance = MockPPOAgent(
@@ -419,15 +430,15 @@ def test_execute_full_evaluation_run_heuristic_opponent_with_wandb( # MODIFIED: 
         "draw_rate": 0.0,
         "avg_game_length": 20.0,
         "opponent_name": "MainHeuristicOpponent",
-        "agent_name": "LoadedMainAgentWandb" # Added agent_name
+        "agent_name": "LoadedMainAgentWandb",  # Added agent_name
     }
     mock_run_loop.return_value = expected_run_loop_results
 
     log_file = tmp_path / "eval_wandb.log"
     agent_ckpt_path = "./agent_wandb.pth"
     num_games_to_run = 2
-    max_moves_for_game = 300 # Default, but explicit for clarity
-    seed_to_use = None # Explicitly None for this test case
+    max_moves_for_game = 300  # Default, but explicit for clarity
+    seed_to_use = None  # Explicitly None for this test case
 
     # W&B setup
     wandb_project_name = "test_project"
@@ -445,19 +456,19 @@ def test_execute_full_evaluation_run_heuristic_opponent_with_wandb( # MODIFIED: 
         opponent_type="heuristic",
         opponent_checkpoint_path=None,
         num_games=num_games_to_run,
-        max_moves_per_game=max_moves_for_game, # Using the default
+        max_moves_per_game=max_moves_for_game,  # Using the default
         device_str="cpu",
         log_file_path_eval=str(log_file),
         policy_mapper=policy_mapper_instance,
         seed=seed_to_use,
-        wandb_log_eval=True, # Enable W&B
+        wandb_log_eval=True,  # Enable W&B
         wandb_project_eval=wandb_project_name,
         wandb_entity_eval=wandb_entity_name,
         wandb_run_name_eval=wandb_run_name_custom,
-        wandb_reinit=True
+        wandb_reinit=True,
     )
 
-    MockPolicyOutputMapperClass.assert_not_called() # Should use the passed instance
+    MockPolicyOutputMapperClass.assert_not_called()  # Should use the passed instance
 
     mock_load_agent.assert_called_once_with(
         agent_ckpt_path, "cpu", policy_mapper_instance, INPUT_CHANNELS
@@ -472,7 +483,6 @@ def test_execute_full_evaluation_run_heuristic_opponent_with_wandb( # MODIFIED: 
     # The logger itself is called with log_file_path_eval and also_stdout.
     # The run_name_for_log parameter was removed from EvaluationLogger constructor.
     mock_eval_logger_class.assert_called_once_with(str(log_file), also_stdout=True)
-
 
     (
         _run_loop_pos_args,
@@ -501,12 +511,12 @@ def test_execute_full_evaluation_run_heuristic_opponent_with_wandb( # MODIFIED: 
         entity=wandb_entity_name,
         name=wandb_run_name_custom,
         config=expected_wandb_config,
-        reinit=True
+        reinit=True,
     )
     # wandb.log is called by run_evaluation_loop, which is mocked here.
     # So, this mock_wandb_log (global) won\'t be hit by the mocked run_evaluation_loop.
     # mock_wandb_log.assert_not_called() # MODIFIED: execute_full_evaluation_run now calls wandb.log for final summary
-    mock_wandb_log.assert_called_once_with( # MODIFIED: Check for the specific final summary log call
+    mock_wandb_log.assert_called_once_with(  # MODIFIED: Check for the specific final summary log call
         {
             "eval/final_win_rate": expected_run_loop_results["win_rate"],
             "eval/final_loss_rate": expected_run_loop_results["loss_rate"],
@@ -516,16 +526,18 @@ def test_execute_full_evaluation_run_heuristic_opponent_with_wandb( # MODIFIED: 
     )
     mock_wandb_finish.assert_called_once()
 
-    mock_random_seed.assert_not_called() # Seed not specified
+    mock_random_seed.assert_not_called()  # Seed not specified
     mock_np_seed.assert_not_called()
     mock_torch_seed.assert_not_called()
 
-    assert results == expected_run_loop_results # Check results pass-through
+    assert results == expected_run_loop_results  # Check results pass-through
 
 
-@apply_mocks(COMMON_MAIN_MOCKS) # MODIFIED: Keep all common mocks, initialize_opponent is now called within execute_full_evaluation_run
+@apply_mocks(
+    COMMON_MAIN_MOCKS
+)  # MODIFIED: Keep all common mocks, initialize_opponent is now called within execute_full_evaluation_run
 # pylint: disable=unused-argument,too-many-positional-arguments,too-many-locals
-def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb( # MODIFIED: Renamed and refactored
+def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(  # MODIFIED: Renamed and refactored
     mock_torch_seed,
     mock_np_seed,
     mock_random_seed,
@@ -535,7 +547,7 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb( # MODIFIED: Renamed 
     mock_wandb_init,
     mock_eval_logger_class,
     mock_run_loop,
-    mock_init_opponent, # ADDED: mock_init_opponent is needed as it's called by execute_full_evaluation_run
+    mock_init_opponent,  # ADDED: mock_init_opponent is needed as it's called by execute_full_evaluation_run
     mock_load_agent,
     MockPolicyOutputMapperClass,
     tmp_path,
@@ -559,27 +571,33 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb( # MODIFIED: Renamed 
     def load_agent_side_effect(checkpoint_path, device, pol_mapper, in_channels):
         if checkpoint_path == agent_eval_path:
             return mock_agent_to_eval
-        elif checkpoint_path == agent_opponent_path:
+        if checkpoint_path == agent_opponent_path:
             return mock_opponent_agent
         pytest.fail(f"Unexpected call to load_evaluation_agent with {checkpoint_path}")
-        return None # Should not be reached
+        return None  # Should not be reached
+
     mock_load_agent.side_effect = load_agent_side_effect
 
     # initialize_opponent will be called once for the PPO opponent.
     # We need to make sure it returns the mock_opponent_agent when called with the correct path.
-    def init_opponent_side_effect(opponent_type, opponent_path, device, pol_mapper, in_channels):
+    def init_opponent_side_effect(
+        opponent_type, opponent_path, device, pol_mapper, in_channels
+    ):
         if opponent_type == "ppo" and opponent_path == agent_opponent_path:
             # Normally, initialize_opponent would call load_evaluation_agent itself.
             # Since load_evaluation_agent is already mocked with a side_effect that returns mock_opponent_agent
             # for agent_opponent_path, we can just return that here.
             # Or, more simply, ensure initialize_opponent is robustly mocked to return the agent directly.
             return mock_opponent_agent
-        elif opponent_type == "random":
+        if opponent_type == "random":
             return SimpleRandomOpponent()
-        elif opponent_type == "heuristic":
+        if opponent_type == "heuristic":
             return SimpleHeuristicOpponent()
-        pytest.fail(f"Unexpected call to initialize_opponent with {opponent_type}, {opponent_path}")
-        return None # Should not be reached
+        pytest.fail(
+            f"Unexpected call to initialize_opponent with {opponent_type}, {opponent_path}"
+        )
+        return None  # Should not be reached
+
     mock_init_opponent.side_effect = init_opponent_side_effect
 
     mock_logger_instance = MagicMock(spec=EvaluationLogger)
@@ -594,8 +612,8 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb( # MODIFIED: Renamed 
         "loss_rate": 1.0,
         "draw_rate": 0.0,
         "avg_game_length": 15.0,
-        "opponent_name": "PPOAgentOpponent", # Name of the opponent agent
-        "agent_name": "PPOAgentToEvaluate" # Name of the agent being evaluated
+        "opponent_name": "PPOAgentOpponent",  # Name of the opponent agent
+        "agent_name": "PPOAgentToEvaluate",  # Name of the agent being evaluated
     }
     mock_run_loop.return_value = expected_results
 
@@ -605,7 +623,7 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb( # MODIFIED: Renamed 
     wandb_project_val = "ppo_battle_project"
 
     mock_wandb_run = MagicMock()
-    mock_wandb_run.name = "test_ppo_run" # Example name
+    mock_wandb_run.name = "test_ppo_run"  # Example name
     mock_wandb_init.return_value = mock_wandb_run
     mock_wandb_run_prop.return_value = mock_wandb_run
 
@@ -623,13 +641,13 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb( # MODIFIED: Renamed 
         wandb_project_eval=wandb_project_val,
         wandb_entity_eval=None,
         wandb_run_name_eval="test_ppo_run",
-        wandb_reinit=True
+        wandb_reinit=True,
     )
 
     MockPolicyOutputMapperClass.assert_not_called()
 
     # load_evaluation_agent assertions
-    assert mock_load_agent.call_count == 1 # Only called directly for agent_to_eval
+    assert mock_load_agent.call_count == 1  # Only called directly for agent_to_eval
     mock_load_agent.assert_any_call(
         agent_eval_path, "cpu", policy_mapper_instance, INPUT_CHANNELS
     )
@@ -643,7 +661,9 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb( # MODIFIED: Renamed 
 
     run_loop_pos_args, run_loop_kwargs = mock_run_loop.call_args
     assert run_loop_pos_args[0] == mock_agent_to_eval
-    assert run_loop_pos_args[1] == mock_opponent_agent # This should be the PPO opponent instance
+    assert (
+        run_loop_pos_args[1] == mock_opponent_agent
+    )  # This should be the PPO opponent instance
     assert run_loop_kwargs.get("wandb_enabled") is True
 
     expected_wandb_config = {
@@ -660,7 +680,7 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb( # MODIFIED: Renamed 
         entity=None,
         name="test_ppo_run",
         config=expected_wandb_config,
-        reinit=True
+        reinit=True,
     )
     mock_wandb_log.assert_called_once_with(
         {
@@ -679,7 +699,7 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb( # MODIFIED: Renamed 
 
 @apply_mocks(COMMON_MAIN_MOCKS)  # Includes all mocks
 # pylint: disable=unused-argument,too-many-positional-arguments,too-many-locals
-def test_execute_full_evaluation_run_with_seed( # MODIFIED: Renamed and refactored
+def test_execute_full_evaluation_run_with_seed(  # MODIFIED: Renamed and refactored
     mock_torch_seed,
     mock_np_seed,
     mock_random_seed,
@@ -691,7 +711,7 @@ def test_execute_full_evaluation_run_with_seed( # MODIFIED: Renamed and refactor
     mock_run_loop,
     mock_init_opponent,
     mock_load_agent,
-    MockPolicyOutputMapperClass, # Mock for the class keisei.evaluate.PolicyOutputMapper
+    MockPolicyOutputMapperClass,  # Mock for the class keisei.evaluate.PolicyOutputMapper
     tmp_path,
     # monkeypatch, # MODIFIED: Removed monkeypatch as sys.argv is no longer used
 ):
@@ -709,15 +729,22 @@ def test_execute_full_evaluation_run_with_seed( # MODIFIED: Renamed and refactor
     mock_logger_instance = MagicMock(spec=EvaluationLogger)
     mock_eval_logger_class.return_value.__enter__.return_value = mock_logger_instance
 
-    mock_run_loop.return_value = { # Dummy results
-        "num_games": 1, "wins": 1, "losses": 0, "draws": 0, "win_rate": 1.0,
-        "loss_rate": 0.0, "draw_rate": 0.0, "avg_game_length": 5.0,
-        "opponent_name": "RandomOpponentForSeedTest", "agent_name": "AgentForSeedTest"
+    mock_run_loop.return_value = {  # Dummy results
+        "num_games": 1,
+        "wins": 1,
+        "losses": 0,
+        "draws": 0,
+        "win_rate": 1.0,
+        "loss_rate": 0.0,
+        "draw_rate": 0.0,
+        "avg_game_length": 5.0,
+        "opponent_name": "RandomOpponentForSeedTest",
+        "agent_name": "AgentForSeedTest",
     }
 
-    log_file_path = tmp_path / "eval_seed_test.log" # MODIFIED: Renamed variable
-    agent_checkpoint_file = "./agent_seed.pth" # MODIFIED: Renamed variable
-    seed_value_to_test = 123 # MODIFIED: Renamed variable
+    log_file_path = tmp_path / "eval_seed_test.log"  # MODIFIED: Renamed variable
+    agent_checkpoint_file = "./agent_seed.pth"  # MODIFIED: Renamed variable
+    seed_value_to_test = 123  # MODIFIED: Renamed variable
 
     # Call the function
     execute_full_evaluation_run(
@@ -729,7 +756,7 @@ def test_execute_full_evaluation_run_with_seed( # MODIFIED: Renamed and refactor
         device_str="cpu",
         log_file_path_eval=str(log_file_path),
         policy_mapper=policy_mapper_instance,
-        seed=seed_value_to_test, # MODIFIED: Pass the seed
+        seed=seed_value_to_test,  # MODIFIED: Pass the seed
         wandb_log_eval=False,
     )
 
