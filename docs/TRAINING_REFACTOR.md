@@ -38,20 +38,22 @@ To achieve better organization, the following directory structure changes are pr
 **Objective:** Implement a robust and centralized configuration system. This allows for easy modification of parameters for training, evaluation, model architecture, and other aspects without altering the core codebase. It also improves reproducibility.
 
 **Guiding Principle for Configuration Settings:**
-*   **`config.py` as the Single Source of Truth for Settings:** The `config.py` file (or its equivalent in the new structure, e.g., a base YAML file in `keisei/configs/`) defines all *available* configuration settings and their reasonable default *values*.
-*   **No Hidden Defaults:** The system must not introduce or rely on default/fallback values for configuration settings that are not explicitly defined in `config.py` (or the base config file). All configurable aspects of the system must be declared.
-*   **Transparency in Overrides:** While CLI arguments and specific config files (like `keisei/configs/my_experiment.yaml`) can override the *values* of these settings, they cannot introduce new, previously undeclared settings.
-*   **Strict Validation:** If a loaded configuration (after overrides) is found to be invalid (e.g., missing required settings defined in the base, or containing unrecognized settings), the system should:
-    *   Clearly report the validation errors.
-    *   Terminate execution (hard crash) rather than attempting to run with a partially valid or silently modified configuration. This prevents unexpected behavior and aids debugging.
-*   **Adding New Settings:** Any new configurable parameter required by the system must first be added to `config.py` (or the base configuration definition) with a sensible default value. This ensures that the "schema" of the configuration is always explicit and version-controlled.
+*   **Pydantic Models as the Single Source of Truth for Settings and Defaults:** The Pydantic model definitions (e.g., in a new file like `keisei/configs/schemas.py`) will define all *available* configuration settings, their types, validation rules, and their reasonable default *values*.
+*   **No Hidden Defaults:** The system must not introduce or rely on default/fallback values for configuration settings that are not explicitly defined in the Pydantic models. All configurable aspects of the system must be declared within these models.
+*   **Transparency in Overrides:** While CLI arguments and specific config files (like `keisei/configs/my_experiment.yaml`) can override the *values* of these settings, they cannot introduce new, previously undeclared settings (i.e., settings not defined in the Pydantic models).
+*   **Strict Validation:** Pydantic will handle the validation. If a loaded configuration (after merging YAML and CLI overrides) is found to be invalid against the Pydantic models (e.g., type errors, missing required fields without defaults, or containing unrecognized settings if `extra='forbid'` is used), Pydantic will raise a validation error. The system should:
+    *   Clearly report these validation errors.
+    *   Terminate execution (hard crash) rather than attempting to run with a partially valid or silently modified configuration.
+*   **Adding New Settings:** Any new configurable parameter required by the system must first be added to the relevant Pydantic model definition with appropriate type hints and a sensible default value if applicable. This ensures that the "schema" of the configuration is always explicit, version-controlled, and type-safe.
 
 **Actions:**
 
-1.  **Configuration Files:**
-    *   Utilize YAML for configuration files stored in `keisei/configs/`.
-    *   Define clear structures for training, evaluation, agent, and environment configurations.
-    *   Use [Pydantic](https://docs.pydantic.dev/) for data validation and settings management, loading from the YAML files. This will ensure robust and type-safe configurations. Consider a base Pydantic model for common settings and inherit from it for specific configurations (training, evaluation, agent).
+1.  **Configuration Files and Pydantic Schemas:**
+    *   Utilize YAML for configuration files stored in `keisei/configs/` (e.g., `default_config.yaml`, `experiment_specific.yaml`).
+    *   Create a new file, for example `keisei/configs/schemas.py`, to house all Pydantic model definitions.
+    *   Define a hierarchical structure for Pydantic models. For instance, a main `AppConfig` model could contain nested models like `TrainingConfig`, `EvaluationConfig`, `AgentConfig` (itself potentially a base for specific agent configs like `PPOAgentConfig`), `EnvironmentConfig`, `LoggingConfig`, and `WandBConfig`.
+    *   Default values for settings should primarily be defined directly within the Pydantic models. An initial `keisei/configs/default_config.yaml` can be generated from these Pydantic models to serve as a user-friendly template.
+    *   Use Pydantic for data validation and settings management, loading data from the YAML files into these model instances. Consider a base Pydantic model for common settings and inherit from it for specific configurations (training, evaluation, agent).
 
 2.  **Argument Parsing (in `keisei/train.py` and `keisei/evaluate.py`):**
     *   Refactor `parse_args()` in `keisei/train.py` (and create a similar one for `keisei/evaluate.py` or a shared one in `keisei/utils/config_utils.py`).
@@ -316,9 +318,95 @@ This directory will contain the heart of the RL agent's logic.
     *   Update any existing design documents (e.g., in `docs/`) that describe the system architecture.
     *   This `TRAINING_REFACTOR.md` document will serve as a key piece of documentation for these changes.
 
-## 8. Conclusion
+## 8. Phased Execution Plan
+
+To manage the complexity of this refactoring, the following phased approach is recommended. Each phase should conclude with updating and passing all relevant tests.
+
+**Step 0: Baseline Configuration Schema Definition and Validation**
+*   **Objective:** Document the current system's configuration (especially neural network architecture and key training parameters) by defining initial Pydantic models. Validate that these models accurately reflect the existing implementation before any code is changed.
+*   **Actions:**
+    1.  **Inspect Current Configuration Sources:**
+        *   Thoroughly review `keisei/neural_network.py` to identify all hardcoded or implicitly defined architectural parameters (e.g., number of convolutional filters, kernel sizes, strides, padding, number of units in linear layers, activation functions).
+        *   Review `config.py` and other relevant files (e.g., `ppo_agent.py`, `experience_buffer.py`, `train.py`) to identify all current configuration values (e.g., learning rates, gamma, buffer sizes, PPO hyperparameters, batch sizes, total timesteps, save directories, device settings, etc.).
+    2.  **Define Initial Pydantic Schemas:**
+        *   Create the new file `keisei/configs/schemas.py`.
+        *   Based on the inspection, define the initial Pydantic models. This should include a main `AppConfig` model, which in turn might contain nested models like `NetworkConfig`, `PPOAgentConfig`, `TrainingConfig`, `ExperienceBufferConfig`, `EnvironmentConfig`, `LoggingConfig`, and `WandBConfig`.
+        *   Populate these models with fields corresponding to all identified parameters. Crucially, set their **default values to exactly match the current, existing implementation** (whether hardcoded or from `config.py`).
+    3.  **Cross-Verify Pydantic Schema Against Current Implementation:**
+        *   Manually cross-reference the defined Pydantic models and their default values against the actual values used in `keisei/neural_network.py`, `config.py`, and other relevant parts of the current codebase.
+        *   The goal is to confirm that if the new Pydantic-based configuration system were hypothetically used *today* (with these defaults and no YAML/CLI overrides), it would produce the *exact same configuration values* that the system currently operates with. This is a manual validation of the schema's accuracy against the current state.
+    4.  **Document Baseline:**
+        *   Add a note or section in this `TRAINING_REFACTOR.md` document (or as comments within `keisei/configs/schemas.py`) confirming the completion of this validation. Highlight any specific parameters whose current values were captured, any ambiguities encountered, or assumptions made during this process. This establishes the validated baseline configuration schema.
+
+**Phase 1: Configuration Infrastructure Implementation** (was Phase 1)
+*   **Objective:** Build the infrastructure to load, merge, and validate configurations using the Pydantic schemas defined in Step 0.
+*   **Actions:**
+    1.  Create the new directory structures: `keisei/core/`, `keisei/evaluation/`, `keisei/configs/` (if not already created for `schemas.py`), `keisei/utils/`.
+    2.  Implement the YAML loading and Pydantic model instantiation logic in a new `keisei/utils/config_loader.py`. This loader should:
+        *   Accept a path to a YAML configuration file (e.g., via a CLI argument).
+        *   Load the YAML data.
+        *   Instantiate the main `AppConfig` Pydantic model (defined in `keisei/configs/schemas.py`), populating it from the YAML data. Values in YAML will override the defaults defined in the Pydantic models.
+        *   Implement CLI argument parsing (e.g., using `argparse` in `train.py` and `evaluate.py`, potentially calling a shared parsing function in `config_loader.py`) for essential overrides (like `--config-path`, `--run-name`, `--savedir`, `--device`, `--seed`, `--total-timesteps`).
+        *   Merge CLI overrides into the Pydantic model instance. Pydantic will perform validation upon instantiation and any subsequent updates.
+    3.  Create an initial `keisei/configs/default_config.yaml`. This file should ideally be minimal or even empty initially if all defaults are well-defined in the Pydantic models (Step 0). It can serve as a template for users to copy and customize for their experiments.
+    4.  Refactor `keisei/train.py` (and `keisei/evaluate.py` if time permits for basic config loading) to:
+        *   Use the new `config_loader.py` to load the `AppConfig`.
+        *   Begin passing relevant parts of the `AppConfig` object to components (even if those components don't fully utilize them yet, preparing for later phases).
+    5.  Write unit tests for:
+        *   The Pydantic models themselves (e.g., ensuring defaults are correct, validation rules for types and constraints work as expected).
+        *   The configuration loading and merging logic in `config_loader.py` (e.g., test loading from YAML, applying CLI overrides correctly, handling missing files or invalid YAML).
+
+**Phase 2: Core Component Refactoring (Iterative)** (was Phase 2)
+*   **2a. `neural_network.py`:**
+        *   Move `keisei/neural_network.py` to `keisei/core/neural_network.py`.
+        *   Refactor `ActorCritic` to accept its architecture parameters (input channels, num_actions, layer sizes, etc.) from the `NetworkConfig` part of the main `AppConfig` object.
+        *   Implement the critical bug fix for the `forward` method.
+        *   Complete the `get_action_and_value` and `evaluate_actions` methods as specified.
+        *   Update existing tests and write new unit tests for `ActorCritic`, focusing on the new methods and configurability via the config object.
+    *   **2b. `experience_buffer.py`:**
+        *   Move `keisei/experience_buffer.py` to `keisei/core/experience_buffer.py`.
+        *   Refactor `ExperienceBuffer` to accept its parameters (buffer_size, minibatch_size, device) from the `ExperienceBufferConfig` (or `TrainingConfig`) part of the `AppConfig`.
+        *   Complete the `add`, `compute_advantages_and_returns`, and `get_batch` methods.
+        *   Refine the `clear` method.
+        *   Update existing tests and write new unit tests for `ExperienceBuffer`.
+    *   **2c. `ppo_agent.py`:**
+        *   Move `keisei/ppo_agent.py` to `keisei/core/ppo_agent.py`.
+        *   Refactor `PPOAgent.__init__` to take the `PPOAgentConfig` (and potentially `NetworkConfig` or the main `AppConfig`) and the instantiated `ActorCritic` model.
+        *   Ensure all hyperparameters (learning_rate, gamma, clip_epsilon, ppo_epochs, value_loss_coeff, entropy_coef, etc.) are sourced from the config object.
+        *   Update the `learn` method to use the completed `ActorCritic` and `ExperienceBuffer` methods.
+        *   Consider creating `keisei/core/base_agent.py` with `BaseAgent` if time permits, and have `PPOAgent` inherit from it.
+        *   Update existing tests and write new unit tests for `PPOAgent`.
+
+**Phase 3: Training System Refactoring** (was Phase 3)
+    *   Create `keisei/training/trainer.py` with the `Trainer` class.
+    *   The `Trainer.__init__` should accept the main `AppConfig` (or relevant sub-configs like `TrainingConfig`, `AgentConfig`), the instantiated `PPOAgent`, `ShogiGame` environment, `ExperienceBuffer`, `PolicyOutputMapper`, and `TrainingLogger`.
+    *   Implement the `Trainer.train()` method, orchestrating the training loop, experience collection, PPO updates, checkpointing, and periodic evaluation calls as detailed in the plan, sourcing all parameters from the config object.
+    *   Refactor `keisei/train.py` to be a lightweight script: initialize components (loading config, creating agent, environment, buffer, logger, policy_mapper, all configured via `AppConfig`) and then create and run the `Trainer`.
+    *   Update existing tests for `train.py` and write new unit tests for the `Trainer` class.
+
+**Phase 4: Evaluation System Refactoring** (was Phase 4)
+    *   Create `keisei/evaluation/evaluator.py` with the `Evaluator` class.
+    *   The `Evaluator.__init__` should accept the `AppConfig` (or `EvaluationConfig`), `PolicyOutputMapper`, and device string (from config).
+    *   Implement the `Evaluator.evaluate_agent()` method, incorporating logic from `execute_full_evaluation_run`, `load_evaluation_agent`, `initialize_opponent`, and `run_evaluation_loop`, sourcing parameters from the config.
+    *   Refactor `keisei/evaluate.py` to be a lightweight script: initialize components (loading config) and then create and run the `Evaluator`.
+    *   Update existing tests for `evaluate.py` and write new unit tests for the `Evaluator` class.
+
+**Phase 5: Utilities Refactoring & Import Updates** (was Phase 5)
+    *   Move the contents of the old `keisei/utils.py` into the `keisei/utils/` directory, splitting into logical files: `loggers.py` (for `TrainingLogger`, `EvaluationLogger`, configured via `LoggingConfig`), `mappers.py` (for `PolicyOutputMapper`), `opponents.py`, `checkpoint_utils.py`. (Note: `config_loader.py` would already be in `keisei/utils/` from Phase 1).
+    *   Ensure `keisei/utils/__init__.py` is created if needed to re-export key utilities for cleaner imports.
+    *   Carefully update all import statements across the entire project to reflect the new file locations and module structure. This is a critical and potentially error-prone step.
+    *   Review `keisei/shogi/shogi_game_io.py` for any functions that should be moved to `keisei/utils/mappers.py`.
+    *   Update/write unit tests for all refactored utility modules.
+
+**Phase 6: Finalization, Documentation & Full System Test** (was Phase 6)
+    *   Conduct a thorough review of all changes.
+    *   Ensure all docstrings (module, class, function) are updated and comprehensive.
+    *   Update `README.md` and any other high-level documentation to reflect the new architecture and usage instructions (including how to use YAML configs and CLI overrides).
+    *   Perform a full integration test of the training and evaluation pipelines with a sample configuration.
+    *   Ensure all tests in the suite are passing reliably.
+
+## 9. Conclusion (was 8)
 
 This refactoring represents a significant effort to modernize the `keisei` codebase. The outcome will be a more robust, flexible, and maintainable system, better suited for ongoing research and development in Shogi reinforcement learning. Incremental changes and thorough testing at each step will be crucial for a successful transition.
 
 **Overarching Constraint for Each Step:**
-*   **Test Suite Integrity:** At the completion of each individual refactoring step or sub-step outlined in this plan, the entire test suite must be updated as necessary to reflect the changes. All tests must pass before proceeding to the next step. This ensures that regressions are caught early and the codebase remains in a consistently working state.
