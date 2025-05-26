@@ -63,10 +63,8 @@ def test_train_resume_autodetect(tmp_path):
         check=True,
     )
     assert result.returncode == 0
-    assert (
-        "Resuming from checkpoint" in result.stdout
-        or "Resuming from checkpoint" in result.stderr
-    )
+    # The 'Resumed training from checkpoint' message is in stderr (Rich logs)
+    assert "Resumed training from checkpoint" in result.stderr
 
 
 def test_train_runs_minimal(tmp_path):
@@ -200,10 +198,8 @@ def test_train_explicit_resume(tmp_path):
         check=True,
     )
     assert result.returncode == 0
-    assert (
-        "Resuming from checkpoint" in result.stdout
-        or "Resuming from checkpoint" in result.stderr
-    )
+    # The 'Resumed training from checkpoint' message is in stderr (Rich logs)
+    assert "Resumed training from checkpoint" in result.stderr
 
 
 # --- Tests for Periodic Evaluation ---

@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from keisei.utils import PolicyOutputMapper
-from keisei.train import (
+from keisei.move_formatting import (
     format_move_with_description,
     format_move_with_description_enhanced,
     _get_piece_name,
