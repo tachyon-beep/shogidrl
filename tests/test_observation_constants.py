@@ -6,6 +6,7 @@ Test for the observation plane constants defined in shogi_core_definitions.py
 # 'test_shogi_game_updated_with_mocks.py'. This file is retained for reference only.
 
 import numpy as np
+import config
 
 from keisei.shogi.shogi_core_definitions import (
     OBS_CURR_PLAYER_HAND_START,
@@ -31,7 +32,7 @@ def test_observation_plane_constants_match_implementation():
     # Get observation
     obs = generate_neural_network_observation(game)
 
-    # Test the shape based on constants - we have 46 planes total (through OBS_RESERVED_2 which is index 45)
+    # Test the shape based on constants - we have config.INPUT_CHANNELS planes total (through OBS_RESERVED_2 which is index 45)
     expected_num_planes = OBS_RESERVED_2 + 1
     assert (
         obs.shape[0] == expected_num_planes

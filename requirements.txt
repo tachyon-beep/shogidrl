@@ -13,16 +13,11 @@ python-dotenv==1.1.0
 # Example: shogi_library==x.y.z
 
 # Utilities
-GitPython==3.1.44  # For W&B versioning or other git interactions
 Jinja2==3.1.6      # Often a dependency of other tools or for templating
 MarkupSafe==3.0.2  # Dependency of Jinja2
-networkx==3.4.2    # If used for graph operations (e.g. in analysis)
 requests==2.32.3   # For API interactions (e.g. W&B)
-sentry-sdk==2.28.0 # Error tracking
-sympy==1.14.0      # Symbolic mathematics, might be a deeper dependency
 triton==3.3.0      # For PyTorch, especially with NVIDIA GPUs
 wandb==0.19.11     # Experiment tracking
-tqdm==4.67.1       # Progress bars
 rich==14.0.0       # Rich text and beautiful formatting in CLIs
 
 # Indirect dependencies (usually managed by pip, but can be pinned for stability)
@@ -54,6 +49,3 @@ pydantic_core==2.33.2 # Core for pydantic
 PyYAML==6.0.2 # For config file handling
 setproctitle==1.3.6 # For W&B
 six==1.17.0 # Compatibility library, often a dependency
-smmap==5.0.2
-typing_extensions==4.13.2 # Backports for typing module
-urllib3==2.4.0 # For requests

@@ -1029,3 +1029,7 @@ class ShogiGame:
         if self.winner is not None and self.winner != perspective_player:
             return -1.0  # Loss
         return 0.0  # Draw or game not over from this perspective
+
+    def seed(self, seed_value=None):
+        """Seed the game environment for reproducibility (no-op for standard Shogi)."""
+        pass

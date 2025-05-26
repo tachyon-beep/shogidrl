@@ -202,6 +202,43 @@ def test_train_explicit_resume(tmp_path):
     assert "Resumed training from checkpoint" in result.stderr
 
 
+def test_apply_config_overrides_unit():
+    """Unit test for apply_config_overrides: top-level and nested keys."""
+    from types import SimpleNamespace
+    from keisei.train import apply_config_overrides
+
+    # Top-level override
+    cfg = SimpleNamespace(FOO=1, BAR="baz")
+    overrides = ["FOO=42", "BAR=qux"]
+    apply_config_overrides(cfg, overrides)
+    assert cfg.FOO == 42
+    assert cfg.BAR == "qux"
+
+    # Nested override
+    cfg = SimpleNamespace()
+    cfg.NESTED = SimpleNamespace(SUB=123)
+    overrides = ["NESTED.SUB=456"]
+    apply_config_overrides(cfg, overrides)
+    assert cfg.NESTED.SUB == 456
+
+    # Create nested if missing
+    cfg = SimpleNamespace()
+    overrides = ["NEWNEST.NEWVAL=hello"]
+    apply_config_overrides(cfg, overrides)
+    assert hasattr(cfg, "NEWNEST")
+    assert cfg.NEWNEST.NEWVAL == "hello"
+
+    # Type parsing
+    cfg = SimpleNamespace()
+    overrides = ["BOOL1=true", "BOOL2=false", "NONEVAL=none", "FLOATVAL=3.14", "INTVAL=7"]
+    apply_config_overrides(cfg, overrides)
+    assert cfg.BOOL1 is True
+    assert cfg.BOOL2 is False
+    assert cfg.NONEVAL is None
+    assert cfg.FLOATVAL == 3.14
+    assert cfg.INTVAL == 7
+
+
 # --- Tests for Periodic Evaluation ---
 
 # Remove all tests that reference run_evaluation or monkey-patching in the root train.py

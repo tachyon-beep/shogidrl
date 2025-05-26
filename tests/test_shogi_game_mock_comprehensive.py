@@ -8,6 +8,7 @@ by testing its functionality in various scenarios.
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
+import config
 import numpy as np
 import pytest
 
@@ -151,7 +152,7 @@ def test_game_reset(new_game):
     assert new_game.get_piece(5, 4) is None
 
     assert isinstance(observation, np.ndarray)
-    assert observation.shape == (46, 9, 9)
+    assert observation.shape == (config.INPUT_CHANNELS, 9, 9)
 
 
 # --- Test Board Manipulation ---

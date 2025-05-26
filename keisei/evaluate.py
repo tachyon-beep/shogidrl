@@ -10,6 +10,7 @@ import numpy as np
 import torch
 import wandb
 
+from config import NUM_ACTIONS_TOTAL, INPUT_CHANNELS  # Use values from config.py for consistency
 from keisei.ppo_agent import PPOAgent
 from keisei.utils import PolicyOutputMapper, EvaluationLogger, BaseOpponent
 from keisei.shogi.shogi_game import ShogiGame
@@ -19,12 +20,6 @@ from keisei.shogi.shogi_core_definitions import (
     PieceType,
 )  # Added PieceType
 from keisei.shogi import shogi_game_io  # For observations
-
-# Constants from config or to be defined here
-INPUT_CHANNELS = 46  # As per your config.py and shogi_core_definitions.py
-NUM_ACTIONS_TOTAL = (
-    13527  # As per PolicyOutputMapper, or could be from config if defined there
-)
 
 if TYPE_CHECKING:
     pass  # torch already imported above

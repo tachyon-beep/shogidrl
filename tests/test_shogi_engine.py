@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from keisei.shogi.shogi_core_definitions import Color, Piece, PieceType
+import config
 
 # If OBS_UNPROMOTED_ORDER is used in get_observation, ensure it's imported
 # from keisei.shogi.shogi_core_definitions import OBS_UNPROMOTED_ORDER
@@ -517,7 +518,7 @@ def test_shogigame_get_observation(
     obs = game.get_observation()
     assert isinstance(obs, np.ndarray)
     assert obs.shape == (
-        46,
+        config.INPUT_CHANNELS,
         9,
         9,
     )  # Ensure this shape is accurate for your implementation

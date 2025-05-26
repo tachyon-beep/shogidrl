@@ -233,6 +233,9 @@ class Trainer:
         """Initialize game environment and policy mapper."""
         try:
             self.game = ShogiGame()
+            # Deterministic seeding for reproducibility
+            if hasattr(self.game, "seed") and hasattr(self.cfg, "SEED"):
+                self.game.seed(self.cfg.SEED)
             self.obs_space_shape = (self.cfg.INPUT_CHANNELS, self.cfg.BOARD_ROWS, self.cfg.BOARD_COLS)
         except Exception as e:
             self.rich_console.print(

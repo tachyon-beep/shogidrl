@@ -8,10 +8,8 @@ file paths, and debugging/display options.
 
 # --- Core Environment & Agent Settings ---
 DEVICE = "cpu"  # Default device ('cpu' or 'cuda'). Dynamically updated in train.py if CUDA is available.
-INPUT_CHANNELS = (
-    46  # Number of input channels for the neural network (from observation space).
-)
-NUM_ACTIONS_TOTAL = 3159  # Total number of possible actions (from PolicyOutputMapper).
+INPUT_CHANNELS = 46  # Number of input channels for the neural network (from observation space).
+NUM_ACTIONS_TOTAL = 13527  # Total number of possible actions (from PolicyOutputMapper, verified by test_utils).
 
 # --- Paths & File Logging ---
 MODEL_DIR = "models/"  # Directory to save model checkpoints.

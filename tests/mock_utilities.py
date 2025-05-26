@@ -20,6 +20,7 @@ from typing import (  # MODIFIED: Added ContextManager, Iterator
 from unittest.mock import patch
 
 import numpy as np
+import config
 
 
 class MockTensor:
@@ -89,7 +90,7 @@ class MockModule:
 class MockPolicyValueNetwork(MockModule):
     """Mock implementation of PolicyValueNetwork for testing."""
 
-    def __init__(self, input_planes=46, board_size=9):
+    def __init__(self, input_planes=config.INPUT_CHANNELS, board_size=9):
         """Initialize with same signature as the real network."""
         super().__init__()
         self.input_planes = input_planes
