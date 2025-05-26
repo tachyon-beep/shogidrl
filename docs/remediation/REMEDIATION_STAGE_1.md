@@ -73,27 +73,32 @@ To improve the clarity of the training loop, break down the monolithic `while` l
 
 ---
 
-#### **Phase 1.2: Refactor the Evaluation Module (Symmetrically)** ⬜
+#### **Phase 1.2: Refactor the Evaluation Module (Symmetrically)** ✅
 
 Apply the same class-based pattern to the evaluation script to improve consistency and structure.
 
-**Step 1: Create the `Evaluator` Class** ⬜
+**Step 1: Create the `Evaluator` Class** ✅
 
-1.  ⬜ In `keisei/evaluate.py`, define an `Evaluator` class as proposed in the audit's refactor example[cite: 484].
-2.  ⬜ Define an `__init__` method that takes evaluation-specific configuration (e.g., agent checkpoint path, opponent type, number of games).
-3.  ⬜ Move the setup logic from `execute_full_evaluation_run` (loading the agent, initializing the opponent, setting up logging) into the `Evaluator.__init__` method.
+1.  ✅ In `keisei/evaluate.py`, defined an `Evaluator` class as proposed in the audit's refactor example.
+2.  ✅ Defined an `__init__` method that takes evaluation-specific configuration (e.g., agent checkpoint path, opponent type, number of games).
+3.  ✅ Moved the setup logic from `execute_full_evaluation_run` (loading the agent, initializing the opponent, setting up logging) into the `Evaluator.__init__` method.
 
-**Step 2: Implement the `evaluate()` Method** ⬜
+**Step 2: Implement the `evaluate()` Method** ✅
 
-1.  ⬜ Define an `evaluate(self)` method.
-2.  ⬜ Move the game-playing loop (`for game_idx in range(self.num_games):`) from `execute_full_evaluation_run` into this method.
-3.  ⬜ The method should return a dictionary of results (wins, losses, draws, win rate)[cite: 491].
+1.  ✅ Defined an `evaluate(self)` method.
+2.  ✅ Moved the game-playing loop (`for game_idx in range(self.num_games):`) from `execute_full_evaluation_run` into this method.
+3.  ✅ The method returns a dictionary of results (wins, losses, draws, win rate).
 
-**Step 3: Update the `keisei/evaluate.py` Entry Point** ⬜
+**Step 3: Update the `keisei/evaluate.py` Entry Point** ✅
 
-1.  ⬜ The audit notes that `evaluate.py` currently has no CLI[cite: 371]. Add an `if __name__ == "__main__":` block.
-2.  ⬜ Add `argparse` logic to accept command-line arguments for the agent checkpoint, opponent type, etc., as suggested in the refactor proposal[cite: 491].
-3.  ⬜ This block should instantiate the `Evaluator` class with the parsed arguments and call its `evaluate()` method, printing the final results.
+1.  ✅ Added an `if __name__ == "__main__":` block with CLI argument parsing.
+2.  ✅ CLI instantiates the `Evaluator` class and calls its `evaluate()` method, printing the final results.
+3.  ✅ The legacy `execute_full_evaluation_run` function is preserved as a wrapper for backward compatibility.
+
+**Testing and Verification**
+
+1.  ✅ All unit and integration tests in `tests/test_evaluate.py` pass, including a new integration test that directly exercises the `Evaluator` class.
+2.  ✅ The refactor maintains compatibility with all legacy code and test utilities.
 
 ---
 

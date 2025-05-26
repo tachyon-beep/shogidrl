@@ -783,4 +783,48 @@ def test_execute_full_evaluation_run_with_seed(  # MODIFIED: Renamed and refacto
 
 # --- Helper Functions and Fixtures for Specific Scenarios ---
 
-# ...existing code...
+
+def test_evaluator_class_basic(monkeypatch, tmp_path, policy_mapper):
+    """
+    Integration test for the Evaluator class: random-vs-agent, no W&B, log to file.
+    """
+    # Patch load_evaluation_agent and initialize_opponent to return mocks
+    class DummyAgent(PPOAgent):
+        def __init__(self):
+            super().__init__(input_channels=INPUT_CHANNELS, policy_output_mapper=policy_mapper, device="cpu", name="DummyAgent")
+            self.model = MagicMock()
+        def select_action(self, obs, legal_shogi_moves, legal_mask, is_training=False):
+            # Always pick the first legal move, index 0, dummy log_prob and value
+            return legal_shogi_moves[0], 0, 0.0, 0.0
+    class DummyOpponent(BaseOpponent):
+        def __init__(self):
+            super().__init__(name="DummyOpponent")
+        def select_move(self, game_instance):
+            return game_instance.get_legal_moves()[0]
+    monkeypatch.setattr("keisei.evaluate.load_evaluation_agent", lambda *a, **kw: DummyAgent())
+    monkeypatch.setattr("keisei.evaluate.initialize_opponent", lambda *a, **kw: DummyOpponent())
+    log_file = tmp_path / "evaluator_test.log"
+    evaluator = __import__("keisei.evaluate", fromlist=["Evaluator"]).Evaluator(
+        agent_checkpoint_path="dummy_agent.pth",
+        opponent_type="random",
+        opponent_checkpoint_path=None,
+        num_games=1,
+        max_moves_per_game=5,
+        device_str="cpu",
+        log_file_path_eval=str(log_file),
+        policy_mapper=policy_mapper,
+        seed=42,
+        wandb_log_eval=False,
+        wandb_project_eval=None,
+        wandb_entity_eval=None,
+        wandb_run_name_eval=None,
+        logger_also_stdout=False,
+    )
+    results = evaluator.evaluate()
+    assert isinstance(results, dict)
+    assert results["num_games"] == 1
+    assert "wins" in results and "losses" in results and "draws" in results
+    with open(log_file, encoding="utf-8") as f:
+        log_content = f.read()
+    assert "Starting Shogi Agent Evaluation" in log_content
+    assert "Evaluation finished. Results:" in log_content
