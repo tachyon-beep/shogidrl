@@ -1,16 +1,59 @@
--e git+https://github.com/tachyon-beep/shogidrl.git@faf5e1e9fd5d818f273f7fb4f83eccf55b1f6c1e#egg=keisei
-GitPython==3.1.44
-Jinja2==3.1.6
-MarkupSafe==3.0.2
-networkx==3.4.2
+# filepath: /home/john/keisei/requirements.txt
+# Main application dependencies
+# Editable install for the current project
+-e git+https://github.com/tachyon-beep/shogidrl.git@60aa1cdb0e9e2980f39f13f93c59518dde9a1ca5#egg=keisei
+
+# Core libraries
 numpy==2.2.6
+torch==2.7.0
 pydantic==2.11.4
 python-dotenv==1.1.0
-requests==2.32.3
-sentry-sdk==2.28.0
-sympy==1.14.0
-torch==2.7.0
-triton==3.3.0
-wandb==0.19.11
-tqdm
-rich
+
+# Shogi specific (if any direct dependencies, otherwise via keisei)
+# Example: shogi_library==x.y.z
+
+# Utilities
+GitPython==3.1.44  # For W&B versioning or other git interactions
+Jinja2==3.1.6      # Often a dependency of other tools or for templating
+MarkupSafe==3.0.2  # Dependency of Jinja2
+networkx==3.4.2    # If used for graph operations (e.g. in analysis)
+requests==2.32.3   # For API interactions (e.g. W&B)
+sentry-sdk==2.28.0 # Error tracking
+sympy==1.14.0      # Symbolic mathematics, might be a deeper dependency
+triton==3.3.0      # For PyTorch, especially with NVIDIA GPUs
+wandb==0.19.11     # Experiment tracking
+tqdm==4.67.1       # Progress bars
+rich==14.0.0       # Rich text and beautiful formatting in CLIs
+
+# Indirect dependencies (usually managed by pip, but can be pinned for stability)
+certifi==2025.4.26
+charset-normalizer==3.4.2
+click==8.2.1 # Often a dependency of CLI tools like wandb
+docker-pycreds==0.4.0 # For W&B
+gitdb==4.0.12
+idna==3.10
+markdown-it-py==3.0.0 # For W&B
+mdurl==0.1.2 # For W&B
+nvidia-cublas-cu12==12.6.4.1
+nvidia-cuda-cupti-cu12==12.6.80
+nvidia-cuda-nvrtc-cu12==12.6.77
+nvidia-cuda-runtime-cu12==12.6.77
+nvidia-cudnn-cu12==9.5.1.17
+nvidia-cufft-cu12==11.3.0.4
+nvidia-cufile-cu12==1.11.1.6
+nvidia-curand-cu12==10.3.7.77
+nvidia-cusolver-cu12==11.7.1.2
+nvidia-cusparse-cu12==12.5.4.2
+nvidia-cusparselt-cu12==0.6.3
+nvidia-nccl-cu12==2.26.2
+nvidia-nvjitlink-cu12==12.6.85
+nvidia-nvtx-cu12==12.6.77
+packaging==25.0 # Often used by setuptools or other build tools
+Pygments==2.19.1 # For W&B or rich
+pydantic_core==2.33.2 # Core for pydantic
+PyYAML==6.0.2 # For config file handling
+setproctitle==1.3.6 # For W&B
+six==1.17.0 # Compatibility library, often a dependency
+smmap==5.0.2
+typing_extensions==4.13.2 # Backports for typing module
+urllib3==2.4.0 # For requests
