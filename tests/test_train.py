@@ -32,9 +32,7 @@ def test_train_resume_autodetect(tmp_path):
     # Create a run directory and place checkpoint there
     run_dir = tmp_path / "run"
     run_dir.mkdir()
-    fake_ckpt = (
-        run_dir / "ppo_shogi_agent_episode_1_ts_1.pth"
-    )  # Corrected filename pattern
+    fake_ckpt = run_dir / "checkpoint_ts1.pth"  # Corrected filename pattern
     policy_mapper = PolicyOutputMapper()
     agent = PPOAgent(
         input_channels=config.INPUT_CHANNELS,
@@ -75,7 +73,7 @@ def test_train_runs_minimal(tmp_path):
     """Test that train.py runs for 1 step and creates log/model files."""
     savedir = tmp_path / "run"
     # Set SAVE_FREQ_EPISODES=1 so a checkpoint is always saved
-    config_override = {"SAVE_FREQ_EPISODES": 1}
+    config_override = {"CHECKPOINT_INTERVAL_TIMESTEPS": 1}
     config_path = tmp_path / "override.json"
     with open(config_path, "w", encoding="utf-8") as f:
         pyjson.dump(config_override, f)
@@ -100,7 +98,7 @@ def test_train_runs_minimal(tmp_path):
     run_dir = run_dirs[0]
     log_file = run_dir / "training_log.txt"
     assert log_file.exists()
-    ckpt_files = list(run_dir.glob("ppo_shogi_ep*_ts*.pth"))
+    ckpt_files = list(run_dir.glob("checkpoint_ts*.pth"))
     assert ckpt_files, "No checkpoint file found in run directory"
 
 

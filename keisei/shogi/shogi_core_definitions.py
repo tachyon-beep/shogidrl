@@ -77,6 +77,35 @@ class PieceType(Enum):
     PROMOTED_ROOK = 13  # Dragon (竜王 - Ryūō)
     # King does not promote
 
+    def to_usi_char(self) -> str:
+        """Returns the USI character for the piece type (for unpromoted pieces used in drops)."""
+        # USI representation for pieces (typically uppercase)
+        # P, L, N, S, G, B, R
+        match self:
+            case PieceType.PAWN:
+                return "P"
+            case PieceType.LANCE:
+                return "L"
+            case PieceType.KNIGHT:
+                return "N"
+            case PieceType.SILVER:
+                return "S"
+            case PieceType.GOLD:
+                return "G"
+            case PieceType.BISHOP:
+                return "B"
+            case PieceType.ROOK:
+                return "R"
+            # King and promoted pieces are not dropped, so they don't have a simple USI char in this context.
+            # However, USI move format for board moves uses piece letters for disambiguation in CSA format,
+            # but not typically in standard USI like 7g7f.
+            # For drops, it's P*5e.
+            # This method is primarily for getting the char for a drop.
+            case _:
+                raise ValueError(
+                    f"Piece type {self.name} cannot be dropped or has no standard single USI drop character."
+                )
+
 
 # KIF Piece Symbol Mapping (Standard two-letter KIF symbols)
 KIF_PIECE_SYMBOLS: Dict[PieceType, str] = {

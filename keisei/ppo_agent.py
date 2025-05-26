@@ -4,7 +4,7 @@ Minimal PPOAgent for DRL Shogi Client.
 
 import os
 import sys  # For stderr
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Any
 
 import numpy as np
 import torch
@@ -60,7 +60,12 @@ class PPOAgent:
         ],  # Still useful for policy_index_to_shogi_move
         legal_mask: torch.Tensor,
         is_training: bool = True,
-    ) -> Tuple[Optional["MoveTuple"], int, float, float,]:
+    ) -> Tuple[
+        Optional["MoveTuple"],
+        int,
+        float,
+        float,
+    ]:
         """
         Select an action given an observation, legal Shogi moves, and a precomputed legal_mask.
         Returns the selected Shogi move, its policy index, log probability, and value estimate.
@@ -286,40 +291,64 @@ class PPOAgent:
         file_path: str,
         global_timestep: int = 0,
         total_episodes_completed: int = 0,
+        stats_to_save: Optional[Dict[str, int]] = None,  # MODIFIED: Added stats_to_save
     ) -> None:
         """Saves the model, optimizer, and training state to a file."""
-        torch.save(
-            {
-                "model_state_dict": self.model.state_dict(),
-                "optimizer_state_dict": self.optimizer.state_dict(),
-                "global_timestep": global_timestep,
-                "total_episodes_completed": total_episodes_completed,
-            },
-            file_path,
-        )
+        save_dict = {
+            "model_state_dict": self.model.state_dict(),
+            "optimizer_state_dict": self.optimizer.state_dict(),
+            "global_timestep": global_timestep,
+            "total_episodes_completed": total_episodes_completed,
+        }
+        if stats_to_save:
+            save_dict.update(stats_to_save)  # Add black_wins, white_wins, draws
+
+        torch.save(save_dict, file_path)
         print(f"PPOAgent model, optimizer, and state saved to {file_path}")
 
-    def load_model(self, file_path: str) -> dict:
-        """Loads the model, optimizer, and training state from a file. Returns the checkpoint dict."""
+    def load_model(
+        self, file_path: str
+    ) -> Dict[str, Any]:  # MODIFIED: Return type to Dict
+        """Loads the model, optimizer, and training state from a file."""
         if not os.path.exists(file_path):
-            print(
-                f"Warning: Model checkpoint not found at {file_path}. Agent not loaded."
-            )
-            return {}
-        checkpoint = torch.load(file_path, map_location=self.device)
-        self.model.load_state_dict(checkpoint["model_state_dict"])
-        if "optimizer_state_dict" in checkpoint:
+            print(f"Error: Checkpoint file {file_path} not found.", file=sys.stderr)
+            # Return a dictionary indicating failure or default values
+            return {
+                "global_timestep": 0,
+                "total_episodes_completed": 0,
+                "black_wins": 0,
+                "white_wins": 0,
+                "draws": 0,
+                "error": "File not found",
+            }
+        try:
+            checkpoint = torch.load(file_path, map_location=self.device)
+            self.model.load_state_dict(checkpoint["model_state_dict"])
             self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-            # Ensure optimizer state is also moved to the correct device
-            for state_group in self.optimizer.state.values():
-                for param_state_key, param_state_value in state_group.items():
-                    if isinstance(param_state_value, torch.Tensor):
-                        state_group[param_state_key] = param_state_value.to(self.device)
-        else:
-            print(
-                "Warning: Optimizer state not found in checkpoint. Initializing optimizer from scratch.",
-                file=sys.stderr,
-            )
-        self.model.to(self.device)
-        print(f"PPOAgent model, optimizer, and state loaded from {file_path}")
-        return checkpoint
+
+            # Return all data from checkpoint for the caller to use
+            # Defaults are provided for backward compatibility if keys are missing
+            return {
+                "global_timestep": checkpoint.get("global_timestep", 0),
+                "total_episodes_completed": checkpoint.get(
+                    "total_episodes_completed", 0
+                ),
+                "black_wins": checkpoint.get("black_wins", 0),
+                "white_wins": checkpoint.get("white_wins", 0),
+                "draws": checkpoint.get("draws", 0),
+                # Include other potential data if needed in the future
+            }
+        except Exception as e:
+            print(f"Error loading checkpoint from {file_path}: {e}", file=sys.stderr)
+            # Return a dictionary indicating failure or default values
+            return {
+                "global_timestep": 0,
+                "total_episodes_completed": 0,
+                "black_wins": 0,
+                "white_wins": 0,
+                "draws": 0,
+                "error": str(e),
+            }
+
+    def get_name(self) -> str:  # Added getter for name
+        return self.name

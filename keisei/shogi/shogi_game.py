@@ -766,9 +766,9 @@ class ShogiGame:
             move_details_for_history["is_drop"] = True
             if isinstance(move_tuple[4], PieceType):
                 drop_piece_type_for_move = move_tuple[4]
-                move_details_for_history[
-                    "dropped_piece_type"
-                ] = drop_piece_type_for_move
+                move_details_for_history["dropped_piece_type"] = (
+                    drop_piece_type_for_move
+                )
                 # The actual board update and hand removal will happen in Part 2 for consistency
             else:
                 raise ValueError(
@@ -804,12 +804,12 @@ class ShogiGame:
                 )
             # --- END ADDED ---
 
-            move_details_for_history[
-                "original_type_before_promotion"
-            ] = piece_to_move.type
-            move_details_for_history[
-                "original_color_of_moved_piece"
-            ] = piece_to_move.color
+            move_details_for_history["original_type_before_promotion"] = (
+                piece_to_move.type
+            )
+            move_details_for_history["original_color_of_moved_piece"] = (
+                piece_to_move.color
+            )
 
             if r_to is not None and c_to is not None:  # Should always be true
                 target_piece_on_board = self.get_piece(r_to, c_to)

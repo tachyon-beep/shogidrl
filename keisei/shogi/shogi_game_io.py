@@ -100,9 +100,9 @@ def generate_neural_network_observation(game: "ShogiGame") -> np.ndarray:
                 obs[channel_offset, flipped_r, flipped_c] = 1.0
 
     # Pieces in hand (7 channels per player: P,L,N,S,G,B,R)
-    hand_piece_order: List[
-        PieceType
-    ] = get_unpromoted_types()  # Use the imported function
+    hand_piece_order: List[PieceType] = (
+        get_unpromoted_types()
+    )  # Use the imported function
 
     # Current player's hand
     for i, piece_type_enum_player in enumerate(hand_piece_order):

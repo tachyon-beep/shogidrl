@@ -1,10 +1,8 @@
-\
 # filepath: /home/john/keisei/keisei/evaluate.py
 """
 evaluate.py: Main script for evaluating PPO Shogi agents.
 """
 import os
-import sys
 import random
 from typing import Optional, List, TYPE_CHECKING, Union, Any
 from dotenv import load_dotenv
@@ -94,26 +92,34 @@ class SimpleHeuristicOpponent(BaseOpponent):
                     destination_piece is not None
                     and destination_piece.color != game_instance.current_player
                 ):
-                    is_capture = True # MODIFIED: Set is_capture to True
+                    is_capture = True  # MODIFIED: Set is_capture to True
 
                 # Heuristic 2: Check for non-promoting pawn moves (only if not a capture).
                 if not is_capture:
-                    source_piece = game_instance.board[from_r][from_c] # MODIFIED: Get source piece
-                    if source_piece and source_piece.type == PieceType.PAWN and not promote: # MODIFIED: Check if pawn and not promoting
-                        is_pawn_move_no_promo = True # MODIFIED: Set is_pawn_move_no_promo to True
+                    source_piece = game_instance.board[from_r][
+                        from_c
+                    ]  # MODIFIED: Get source piece
+                    if (
+                        source_piece
+                        and source_piece.type == PieceType.PAWN
+                        and not promote
+                    ):  # MODIFIED: Check if pawn and not promoting
+                        is_pawn_move_no_promo = (
+                            True  # MODIFIED: Set is_pawn_move_no_promo to True
+                        )
             # Drop moves (Tuple[None, None, int, int, PieceType]) and other types of moves
             # will not pass the isinstance checks above.
 
             if is_capture:
                 capturing_moves.append(move_tuple)
-            elif is_pawn_move_no_promo:
+            if is_pawn_move_no_promo:  # Changed to if
                 non_promoting_pawn_moves.append(move_tuple)
             else:
                 other_moves.append(move_tuple)
 
         if capturing_moves:
             return random.choice(capturing_moves)
-        if non_promoting_pawn_moves:
+        if non_promoting_pawn_moves:  # Changed to if
             return random.choice(non_promoting_pawn_moves)
         if other_moves:
             return random.choice(other_moves)
@@ -190,7 +196,7 @@ def run_evaluation_loop(
         if isinstance(opponent, BaseOpponent)
         else opponent.__class__.__name__
     )
-    logger.log_custom_message(
+    logger.log(  # MODIFIED: Changed to logger.log
         f"Starting evaluation: {agent_to_eval.name} vs {current_opponent_name}"
     )
 
@@ -204,7 +210,7 @@ def run_evaluation_loop(
         white_player = opponent if agent_is_black else agent_to_eval
 
         # Corrected log message format
-        logger.log_custom_message(
+        logger.log(  # MODIFIED: Changed to logger.log
             f"Starting Game {game_num}/{num_games}. "
             f"Agent to eval ({agent_to_eval.name}) is {'Black' if agent_is_black else 'White'}. "
             f"Opponent ({current_opponent_name}) is {'White' if agent_is_black else 'Black'}."
@@ -229,30 +235,45 @@ def run_evaluation_loop(
                 legal_mask = policy_mapper.get_legal_mask(legal_moves, device)
 
                 if not legal_mask.any() and legal_moves:
-                    logger.log_custom_message(
+                    logger.log(  # MODIFIED: Changed to logger.log
                         f"Error: Game {game_num}, Move {game.move_count + 1}: "
                         f"Agent {active_agent.name} ({game.current_player.name}) has legal moves, "
                         f"but legal_mask is all False. Legal moves: {legal_moves}. "
                         f"This indicates an issue with PolicyOutputMapper or move generation."
                     )
                     # PPOAgent.select_action should handle this.
-                    selected_shogi_move, action_idx, log_prob, value = active_agent.select_action(obs_np, legal_moves, legal_mask, is_training=False)
-                    selected_move = selected_shogi_move # MODIFIED: Assign to selected_move
+                    selected_shogi_move, action_idx, log_prob, value = (
+                        active_agent.select_action(
+                            obs_np, legal_moves, legal_mask, is_training=False
+                        )
+                    )
+                    selected_move = (
+                        selected_shogi_move  # MODIFIED: Assign to selected_move
+                    )
                 else:
-                    selected_shogi_move, action_idx, log_prob, value = active_agent.select_action(obs_np, legal_moves, legal_mask, is_training=False)
-                    selected_move = selected_shogi_move # MODIFIED: Assign to selected_move
+                    selected_shogi_move, action_idx, log_prob, value = (
+                        active_agent.select_action(
+                            obs_np, legal_moves, legal_mask, is_training=False
+                        )
+                    )
+                    selected_move = (
+                        selected_shogi_move  # MODIFIED: Assign to selected_move
+                    )
             elif isinstance(
                 active_agent, BaseOpponent
             ):  # Opponent is a BaseOpponent (Random, Heuristic)
                 selected_move = active_agent.select_move(game)
             else:
                 # This case should not be reached if opponent types are correctly handled
+                logger.log(
+                    f"CRITICAL: Unsupported agent type for active_agent: {type(active_agent)}"
+                )  # MODIFIED: Added log and changed to raise TypeError
                 raise TypeError(
                     f"Unsupported agent type for active_agent: {type(active_agent)}"
                 )
 
             if selected_move is None:
-                logger.log_custom_message(
+                logger.log(  # MODIFIED: Changed to logger.log
                     f"Error: Game {game_num}, Move {game.move_count + 1}: Active agent {active_agent.name} failed to select a move despite legal moves being available."
                 )
                 # Decide how to handle this: break, assign loss, etc. For now, break.
@@ -280,20 +301,18 @@ def run_evaluation_loop(
             draws += 1
 
         # Log main evaluation results
-        logger.log_evaluation_result(
-            iteration=game_num,  # Using game_num as iteration for per-game logging
-            opponent_name=current_opponent_name,
-            win_rate=wins / game_num if game_num > 0 else 0,  # Cumulative win rate
-            avg_game_length=(
-                total_game_length / game_num if game_num > 0 else 0
-            ),  # Cumulative avg length
-            num_games=game_num,  # Pass the current game number as num_games for this specific log entry
+        # MODIFIED: Changed to logger.log and formatted the message
+        logger.log(
+            f"Game {game_num} Result: Opponent: {current_opponent_name}, "
+            f"WinRate(cum): {wins / game_num if game_num > 0 else 0:.2f}, "
+            f"AvgGameLen(cum): {(total_game_length / game_num if game_num > 0 else 0):.1f}, "
+            f"Outcome: {outcome_str}"
         )
         # Log additional custom metrics for this game
-        logger.log_custom_message(
+        logger.log(  # MODIFIED: Changed to logger.log
             f"Game {game_num} Details: Length: {game_length}, Outcome: {outcome_str}, Agent Eval Color: {'Black' if agent_is_black else 'White'}"
         )
-        logger.log_custom_message(
+        logger.log(  # MODIFIED: Changed to logger.log
             f"Game {game_num} ended. Winner: {winner if winner else 'Draw'}"
         )
 
@@ -315,7 +334,9 @@ def run_evaluation_loop(
         "agent_name": agent_to_eval.name,
     }
 
-    logger.log_custom_message(f"Evaluation finished. Results: {results}")
+    logger.log(
+        f"Evaluation finished. Results: {results}"
+    )  # MODIFIED: Changed to logger.log
     if wandb_enabled:
         wandb.log(
             {
@@ -350,9 +371,9 @@ def execute_full_evaluation_run(
     wandb_entity_eval: Optional[str] = None,
     wandb_run_name_eval: Optional[str] = None,
     logger_also_stdout: bool = True,  # <--- MODIFIED DEFAULT TO TRUE
-    wandb_extra_config: Optional[dict] = None,   # <--- NEW PARAM for extra CLI args
-    wandb_reinit: Optional[bool] = None,         # <--- Only pass if not None
-    wandb_group: Optional[str] = None,           # <--- Only pass if not None
+    wandb_extra_config: Optional[dict] = None,  # <--- NEW PARAM for extra CLI args
+    wandb_reinit: Optional[bool] = None,  # <--- Only pass if not None
+    wandb_group: Optional[str] = None,  # <--- Only pass if not None
     _called_from_cli: bool = False,  # <--- NEW PARAM
 ) -> Optional[dict]:  # Return summary metrics dict or None if error
     """
@@ -384,7 +405,7 @@ def execute_full_evaluation_run(
             }
             if wandb_extra_config:
                 wandb_config.update(wandb_extra_config)
-            wandb_kwargs: dict[str, Any] = { # MODIFIED: Added type hint
+            wandb_kwargs: dict[str, Any] = {  # MODIFIED: Added type hint
                 "project": wandb_project_eval or "keisei-evaluation-runs",
                 "entity": wandb_entity_eval,  # Always include, even if None
                 "name": current_wandb_run_name,  # Always include, even if None
@@ -395,10 +416,16 @@ def execute_full_evaluation_run(
             if wandb_group is not None:
                 wandb_kwargs["group"] = wandb_group
             wandb.init(**wandb_kwargs)
-            print(f"[Eval Function] Weights & Biases logging enabled for this evaluation run: {current_wandb_run_name}")
+            print(
+                f"[Eval Function] Weights & Biases logging enabled for this evaluation run: {current_wandb_run_name}"
+            )
             is_eval_wandb_active = True
-        except Exception as e: # MODIFIED: Catch specific exception if possible, or at least use 'as e'
-            print(f"[Eval Function] Error initializing W&B for evaluation: {e}. W&B logging for this eval run disabled.", file=sys.stderr)
+        except (
+            Exception
+        ) as e:  # MODIFIED: Catch specific exception if possible, or at least use 'as e'
+            print(
+                f"[Eval Function] Error initializing W&B for evaluation: {e}. W&B logging for this eval run disabled."
+            )  # Removed file=sys.stderr
             is_eval_wandb_active = False
 
     # Ensure log directory for this specific evaluation log exists
@@ -410,11 +437,14 @@ def execute_full_evaluation_run(
     try:
         # MODIFIED: Removed run_name_for_log logic as it's not a parameter for EvaluationLogger
         with EvaluationLogger(
-            log_file_path_eval,
-            also_stdout=logger_also_stdout
+            log_file_path_eval, also_stdout=logger_also_stdout
         ) as logger:
-            logger.log_custom_message("Starting Shogi Agent Evaluation (Programmatic Call).")
-            logger.log_custom_message(f"Parameters: agent_ckpt='{agent_checkpoint_path}', opponent='{opponent_type}', num_games={num_games}")
+            logger.log(
+                "Starting Shogi Agent Evaluation (Programmatic Call)."
+            )  # MODIFIED: Changed to logger.log
+            logger.log(
+                f"Parameters: agent_ckpt='{agent_checkpoint_path}', opponent='{opponent_type}', num_games={num_games}"
+            )  # MODIFIED: Changed to logger.log
 
             agent_to_eval = load_evaluation_agent(
                 agent_checkpoint_path, device_str, policy_mapper, INPUT_CHANNELS
@@ -438,12 +468,16 @@ def execute_full_evaluation_run(
                 wandb_enabled=is_eval_wandb_active,  # Pass the status
             )
 
-            logger.log_custom_message(
+            logger.log(  # MODIFIED: Changed to logger.log
                 f"[Eval Function] Evaluation Summary: {results_summary}"
             )
 
-    except Exception as e: # MODIFIED: Catch specific exception if possible, or at least use 'as e'
-        print(f"[Eval Function] Error during evaluation run: {e}", file=sys.stderr)
+    except (
+        Exception
+    ) as e:  # MODIFIED: Catch specific exception if possible, or at least use 'as e'
+        print(
+            f"[Eval Function] Error during evaluation run: {e}"
+        )  # Removed file=sys.stderr
         results_summary = None
 
     # Final W&B logging to ensure all metrics are captured
@@ -459,13 +493,17 @@ def execute_full_evaluation_run(
             )
             print("[Eval Function] Final W&B metrics logged.")
         except Exception as e:
-            print(f"[Eval Function] Error logging final metrics to W&B: {e}", file=sys.stderr)
+            print(
+                f"[Eval Function] Error logging final metrics to W&B: {e}"
+            )  # Removed file=sys.stderr
 
-    if is_eval_wandb_active: # ADDED: Call wandb.finish() if W&B was active
+    if is_eval_wandb_active:  # ADDED: Call wandb.finish() if W&B was active
         try:
             wandb.finish()
             print("[Eval Function] W&B run finished.")
         except Exception as e:
-            print(f"[Eval Function] Error finishing W&B run: {e}", file=sys.stderr)
+            print(
+                f"[Eval Function] Error finishing W&B run: {e}"
+            )  # Removed file=sys.stderr
 
     return results_summary
