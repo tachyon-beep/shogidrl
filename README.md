@@ -139,8 +139,53 @@ Refer to [HOW_TO_USE.md](HOW_TO_USE.md) for detailed instructions.
 ### Evaluation
 
 -   The `train.py` script includes basic evaluation during training.
--   A dedicated `evaluate.py` script can be used for more thorough evaluation against specific model checkpoints or baselines (development may be ongoing).
+-   A dedicated `evaluate.py` script can be used for more thorough evaluation against specific model checkpoints or baselines.
 -   Tests are located in the `tests/` directory and can be run using `pytest`.
+
+#### Running Evaluation from the Command Line
+
+To evaluate a trained agent against a baseline (random, heuristic, or PPO):
+
+```bash
+python -m keisei.evaluation.evaluate \
+  --agent_checkpoint path/to/agent.ckpt \
+  --opponent_type random \
+  --num_games 20 \
+  --device cpu \
+  --log_file eval_log.txt \
+  --wandb_log_eval
+```
+
+- `--opponent_type` can be `random`, `heuristic`, or `ppo` (if `ppo`, provide `--opponent_checkpoint`).
+- Add `--wandb_log_eval` to enable Weights & Biases logging.
+- See `python -m keisei.evaluation.evaluate --help` for all options.
+
+#### Programmatic Evaluation (Python API)
+
+```python
+from keisei.evaluation.evaluate import Evaluator, PolicyOutputMapper
+
+policy_mapper = PolicyOutputMapper()
+evaluator = Evaluator(
+    agent_checkpoint_path="path/to/agent.ckpt",
+    opponent_type="random",
+    num_games=10,
+    device_str="cpu",
+    log_file_path_eval="eval_log.txt",
+    policy_mapper=policy_mapper,
+)
+results = evaluator.evaluate()
+print(results)
+```
+
+#### Troubleshooting & Error Handling
+
+- If the agent checkpoint file is missing, a clear `FileNotFoundError` will be raised.
+- Invalid opponent types will raise a `ValueError`.
+- W&B logging failures are caught and will not crash evaluation.
+- For more details, see the docstrings in `keisei/evaluation/evaluate.py` and the tests in `tests/test_evaluate.py`.
+
+---
 
 ## Project Structure
 

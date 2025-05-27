@@ -69,7 +69,52 @@ This guide explains how to run the DRL Shogi Client for training a Reinforcement
 ## 5. Evaluation
 
 *   The `train.py` script includes a basic evaluation phase at the end of the training run (or after a set number of episodes in the current test setup).
-*   For more robust evaluation against specific checkpoints or baselines, the `evaluate.py` script (as outlined in `OPS_PLAN.md`) would be used. (Currently, `test_evaluate.py` exists, and a full `evaluate.py` might need further development based on the plan).
+*   For more robust evaluation against specific checkpoints or baselines, use the `evaluate.py` script as shown below.
+
+### Running Evaluation from the Command Line
+
+To evaluate a trained agent against a baseline (random, heuristic, or PPO):
+
+```bash
+python -m keisei.evaluation.evaluate \
+  --agent_checkpoint path/to/agent.ckpt \
+  --opponent_type random \
+  --num_games 20 \
+  --device cpu \
+  --log_file eval_log.txt \
+  --wandb_log_eval
+```
+
+- `--opponent_type` can be `random`, `heuristic`, or `ppo` (if `ppo`, provide `--opponent_checkpoint`).
+- Add `--wandb_log_eval` to enable Weights & Biases logging.
+- See `python -m keisei.evaluation.evaluate --help` for all options.
+
+### Programmatic Evaluation (Python API)
+
+```python
+from keisei.evaluation.evaluate import Evaluator, PolicyOutputMapper
+
+policy_mapper = PolicyOutputMapper()
+evaluator = Evaluator(
+    agent_checkpoint_path="path/to/agent.ckpt",
+    opponent_type="random",
+    num_games=10,
+    device_str="cpu",
+    log_file_path_eval="eval_log.txt",
+    policy_mapper=policy_mapper,
+)
+results = evaluator.evaluate()
+print(results)
+```
+
+### Troubleshooting & Error Handling
+
+- If the agent checkpoint file is missing, a clear `FileNotFoundError` will be raised.
+- Invalid opponent types will raise a `ValueError`.
+- W&B logging failures are caught and will not crash evaluation.
+- For more details, see the docstrings in `keisei/evaluation/evaluate.py` and the tests in `tests/test_evaluate.py`.
+
+---
 
 ## 6. Stopping and Resuming Training
 

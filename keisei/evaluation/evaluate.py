@@ -138,7 +138,10 @@ def load_evaluation_agent(
     policy_mapper: PolicyOutputMapper,
     input_channels: int,
 ) -> PPOAgent:
-    """Loads a PPOAgent from a checkpoint for evaluation."""
+    """Loads a PPOAgent from a checkpoint for evaluation. Raises FileNotFoundError if checkpoint does not exist."""
+    if not os.path.isfile(checkpoint_path):
+        print(f"Error: Checkpoint file {checkpoint_path} not found.")
+        raise FileNotFoundError(f"Checkpoint file {checkpoint_path} not found.")
     # Use minimal config for evaluation
     config = AppConfig(
         env=EnvConfig(
@@ -431,12 +434,15 @@ class Evaluator:
         Raises RuntimeError if any required component fails to initialize.
         """
         if self.seed is not None:
-            random.seed(self.seed)
-            torch.manual_seed(self.seed)
-            np.random.seed(self.seed)
-            if self.device_str == "cuda":
-                torch.cuda.manual_seed_all(self.seed)
-            print(f"[Evaluator] Set random seed to: {self.seed}")
+            try:
+                random.seed(self.seed)
+                torch.manual_seed(self.seed)
+                np.random.seed(self.seed)
+                if self.device_str == "cuda":
+                    torch.cuda.manual_seed_all(self.seed)
+                print(f"[Evaluator] Set random seed to: {self.seed}")
+            except Exception as e:
+                raise RuntimeError(f"Failed to set random seed: {e}")
 
         # W&B Initialization
         if self.wandb_log_eval:
@@ -476,32 +482,47 @@ class Evaluator:
             except (OSError, RuntimeError, ValueError) as e:
                 print(f"[Evaluator] Unexpected error during W&B initialization: {e}")
                 self._wandb_active = False
+            except Exception as e:
+                print(f"[Evaluator] Critical error during W&B initialization: {e}")
+                self._wandb_active = False
 
         # Ensure log directory exists
         log_dir_eval = os.path.dirname(self.log_file_path_eval)
         if log_dir_eval and not os.path.exists(log_dir_eval):
-            os.makedirs(log_dir_eval)
+            try:
+                os.makedirs(log_dir_eval)
+            except Exception as e:
+                raise RuntimeError(f"Failed to create log directory '{log_dir_eval}': {e}")
 
         # Logger
-        self._logger = EvaluationLogger(
-            self.log_file_path_eval, also_stdout=self.logger_also_stdout
-        )
+        try:
+            self._logger = EvaluationLogger(
+                self.log_file_path_eval, also_stdout=self.logger_also_stdout
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to initialize EvaluationLogger: {e}")
         # Agent and opponent
         # Use the correct input_channels from self.policy_mapper if available, else default to 46
         input_channels = getattr(self.policy_mapper, "input_channels", 46)
-        self._agent = load_evaluation_agent(
-            self.agent_checkpoint_path,
-            self.device_str,
-            self.policy_mapper,
-            input_channels,
-        )
-        self._opponent = initialize_opponent(
-            self.opponent_type,
-            self.opponent_checkpoint_path,
-            self.device_str,
-            self.policy_mapper,
-            input_channels,
-        )
+        try:
+            self._agent = load_evaluation_agent(
+                self.agent_checkpoint_path,
+                self.device_str,
+                self.policy_mapper,
+                input_channels,
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to load evaluation agent: {e}")
+        try:
+            self._opponent = initialize_opponent(
+                self.opponent_type,
+                self.opponent_checkpoint_path,
+                self.device_str,
+                self.policy_mapper,
+                input_channels,
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to initialize opponent: {e}")
         if self._logger is None or self._agent is None or self._opponent is None:
             raise RuntimeError(
                 "Evaluator setup failed: logger, agent, or opponent is None."
@@ -510,6 +531,7 @@ class Evaluator:
     def evaluate(self) -> Optional[dict]:
         """
         Run the evaluation and return the results dictionary.
+        Raises RuntimeError if the Evaluator is not properly initialized or if evaluation fails.
         """
         self._setup()
         results_summary = None
@@ -535,6 +557,9 @@ class Evaluator:
         except (RuntimeError, ValueError, OSError) as e:
             print(f"[Evaluator] Error during evaluation run: {e}")
             results_summary = None
+        except Exception as e:
+            print(f"[Evaluator] Unhandled error during evaluation run: {e}")
+            results_summary = None
         # Final W&B logging
         if self._wandb_active and results_summary is not None:
             try:
@@ -551,12 +576,16 @@ class Evaluator:
                 print("[Evaluator] Final W&B metrics logged.")
             except (OSError, RuntimeError, ValueError) as e:
                 print(f"[Evaluator] Error logging final metrics to W&B: {e}")
+            except Exception as e:
+                print(f"[Evaluator] Unhandled error logging to W&B: {e}")
         if self._wandb_active:
             try:
                 wandb.finish()
                 print("[Evaluator] W&B run finished.")
             except (OSError, RuntimeError, ValueError) as e:
                 print(f"[Evaluator] Error finishing W&B run: {e}")
+            except Exception as e:
+                print(f"[Evaluator] Unhandled error finishing W&B run: {e}")
         return results_summary
 
 
