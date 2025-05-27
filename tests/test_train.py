@@ -9,17 +9,10 @@ import sys
 
 import torch
 
-from keisei.config_schema import (
-    AppConfig,
-    DemoConfig,
-    EnvConfig,
-    EvaluationConfig,
-    LoggingConfig,
-    TrainingConfig,
-    WandBConfig,
-)
+from keisei.config_schema import AppConfig
 from keisei.core.ppo_agent import PPOAgent
 from keisei.utils import PolicyOutputMapper
+from keisei.utils.utils import generate_run_name as gen_run_name_util
 
 # Local config constants for test compatibility with new config system
 INPUT_CHANNELS = 46
@@ -50,45 +43,96 @@ def test_train_cli_help():
 
 def test_train_resume_autodetect(tmp_path):
     """Test that train.py can auto-detect a checkpoint (mocked)."""
-    # Create a run directory and place checkpoint there
-    run_dir = tmp_path / "run"
-    run_dir.mkdir()
-    fake_ckpt = run_dir / "checkpoint_ts1.pth"  # Corrected filename pattern
-    policy_mapper = PolicyOutputMapper()
-    config = AppConfig(
-        env=EnvConfig(
-            device=DEVICE,
-            input_channels=INPUT_CHANNELS,
-            num_actions_total=policy_mapper.get_total_actions(),
-            seed=42,
-        ),
-        training=TrainingConfig(
-            total_timesteps=1000,
-            steps_per_epoch=32,
-            ppo_epochs=1,
-            minibatch_size=2,
-            learning_rate=LEARNING_RATE,
-            gamma=GAMMA,
-            clip_epsilon=CLIP_EPSILON,
-            value_loss_coeff=VALUE_LOSS_COEFF,
-            entropy_coef=ENTROPY_COEFF,
-        ),
-        evaluation=EvaluationConfig(num_games=1, opponent_type="random", evaluation_interval_timesteps=1000), # Added evaluation_interval_timesteps
-        logging=LoggingConfig(log_file="/tmp/test.log", model_dir="/tmp/"),
-        wandb=WandBConfig(enabled=False, project="test", entity=None),
-        demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
-    )
-    agent = PPOAgent(config=config, device=torch.device(DEVICE))
-    agent.save_model(str(fake_ckpt))
+    policy_mapper = PolicyOutputMapper() # Used by PPOAgent and initial AppConfig
+
+    # Config for the initial agent save, and for run name generation
+    base_config_data = {
+        "env": {
+            "device": DEVICE, "input_channels": INPUT_CHANNELS,
+            "num_actions_total": policy_mapper.get_total_actions(), "seed": 42,
+        },
+        "training": {
+            "total_timesteps": 1000, "steps_per_epoch": 32, "ppo_epochs": 1,
+            "minibatch_size": 2, "learning_rate": LEARNING_RATE, "gamma": GAMMA,
+            "clip_epsilon": CLIP_EPSILON, "value_loss_coeff": VALUE_LOSS_COEFF,
+            "entropy_coef": ENTROPY_COEFF,
+            "model_type": "dummy", "input_features": "dummyfeats",
+            "checkpoint_interval_timesteps": 1000, # Added default
+            "evaluation_interval_timesteps": 1000, # Added default
+            "mixed_precision": False, "ddp": False, "gradient_clip_max_norm": 0.5, "lambda_gae": 0.95, # Added defaults
+            "render_every_steps": 1, "refresh_per_second": 4, "enable_spinner": True # Added defaults
+        },
+        "evaluation": {"num_games": 1, "opponent_type": "random", "evaluation_interval_timesteps": 1000},
+        "logging": {"log_file": "training.log", "model_dir": str(tmp_path)}, # model_dir is tmp_path for the run
+        "wandb": {"enabled": False, "project": "test", "entity": None, "run_name_prefix": "autodetect",
+                  "watch_model": False, "watch_log_freq": 1000, "watch_log_type": "all"}, # Added defaults
+        "demo": {"enable_demo_mode": False, "demo_mode_delay": 0.0},
+    }
+    initial_agent_config = AppConfig.parse_obj(base_config_data)
+    agent = PPOAgent(config=initial_agent_config, device=torch.device(DEVICE))
+
+    # Place the checkpoint in tmp_path so the subprocess can find it
+    final_ckpt_path = tmp_path / "checkpoint_ts1.pth"
+    agent.save_model(str(final_ckpt_path)) # Save the checkpoint
+
+    # Create the config file that the subprocess will use
+    subprocess_config_path = tmp_path / "subprocess_config_autodetect.yaml"
+    with open(subprocess_config_path, "w", encoding="utf-8") as f:
+        pyjson.dump(base_config_data, f) # Use the same base_config_data
+
     try:
         result = subprocess.run(
             [
                 sys.executable,
                 TRAIN_PATH,
-                "--savedir",
-                str(tmp_path),
-                "--run_name",
-                "run",
+                "--savedir", str(tmp_path),       # This is the parent for the run_dir
+                "--config", str(subprocess_config_path), # This config defines the run name and other params
+                "--resume", "latest",               # Test the 'latest' feature
+                "--total-timesteps", "2",         # Run a bit more
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            env={"WANDB_MODE": "disabled", **os.environ}  # Disable W&B
+        )
+    except subprocess.CalledProcessError as e:
+        print("STDERR from train.py (test_train_resume_autodetect with 'latest'):")
+        print(e.stderr)
+        raise
+    assert result.returncode == 0
+    # Find the run directory (should be the only new directory under tmp_path)
+    run_dirs = [d for d in tmp_path.iterdir() if d.is_dir()]
+    assert run_dirs, f"No run directory created in {tmp_path}"
+    run_dir = max(run_dirs, key=lambda d: d.stat().st_mtime)  # Most recently modified
+    log_file = run_dir / "training.log"
+    assert log_file.exists(), f"Log file {log_file} does not exist"
+    with open(log_file, encoding="utf-8") as f:
+        log_contents = f.read()
+    # Check that the log file contains a resume message for any checkpoint in the run directory
+    resume_logged = False
+    for ckpt_file in run_dir.glob("checkpoint_ts*.pth"):
+        if f"Resumed training from checkpoint: {str(ckpt_file)}" in log_contents:
+            resume_logged = True
+            break
+    assert resume_logged, f"No resume message for any checkpoint in {run_dir} found in log file. Log contents:\n{log_contents}"
+
+
+def test_train_runs_minimal(tmp_path):
+    """Test that train.py runs for 1 step and creates log/model files."""
+    savedir = tmp_path
+    config_override = {"training.checkpoint_interval_timesteps": 1, "logging.model_dir": str(savedir)}
+    config_path = tmp_path / "override.json"
+    with open(config_path, "w", encoding="utf-8") as f:
+        pyjson.dump(config_override, f)
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                TRAIN_PATH,
+                "--savedir", 
+                str(savedir),
+                "--config",
+                str(config_path),
                 "--total-timesteps",
                 "1",
             ],
@@ -97,39 +141,12 @@ def test_train_resume_autodetect(tmp_path):
             check=True,
         )
     except subprocess.CalledProcessError as e:
-        print("STDERR from train.py:")
+        print("STDERR from train.py (test_train_runs_minimal):")
         print(e.stderr)
         raise
-    assert result.returncode == 0
-    # The 'Resumed training from checkpoint' message is in stderr (Rich logs)
-    assert "Resumed training from checkpoint" in result.stderr
 
-
-def test_train_runs_minimal(tmp_path):
-    """Test that train.py runs for 1 step and creates log/model files."""
-    savedir = tmp_path / "run"
-    # Set SAVE_FREQ_EPISODES=1 so a checkpoint is always saved
-    config_override = {"CHECKPOINT_INTERVAL_TIMESTEPS": 1}
-    config_path = tmp_path / "override.json"
-    with open(config_path, "w", encoding="utf-8") as f:
-        pyjson.dump(config_override, f)
-    result = subprocess.run(
-        [
-            sys.executable,
-            TRAIN_PATH,
-            "--savedir",
-            str(savedir),
-            "--config",
-            str(config_path),
-            "--total-timesteps",
-            "1",
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
     assert result.returncode == 0
-    run_dirs = [d for d in savedir.iterdir() if d.is_dir()]
+    run_dirs = [d for d in savedir.iterdir() if d.is_dir() and "keisei" in d.name] 
     assert run_dirs, "No run directory created"
     run_dir = run_dirs[0]
     log_file = run_dir / "training_log.txt"
@@ -140,118 +157,189 @@ def test_train_runs_minimal(tmp_path):
 
 def test_train_config_override(tmp_path):
     """Test that --config JSON override works and is saved in effective_config.json."""
-    config_override = {"TOTAL_TIMESTEPS": 2, "LEARNING_RATE": 0.12345}
+    config_override = {"training.total_timesteps": 2, "training.learning_rate": 0.12345, "logging.model_dir": str(tmp_path)}
     config_path = tmp_path / "override.json"
     with open(config_path, "w", encoding="utf-8") as f:
         pyjson.dump(config_override, f)
-    run_dir = tmp_path / "run"
-    result = subprocess.run(
-        [
-            sys.executable,
-            TRAIN_PATH,
-            "--savedir",
-            str(tmp_path),
-            "--run_name",
-            "run",
-            "--config",
-            str(config_path),
-            "--total-timesteps",
-            "2",
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    try: 
+        result = subprocess.run(
+            [
+                sys.executable,
+                TRAIN_PATH,
+                "--savedir", 
+                str(tmp_path),
+                "--config",
+                str(config_path),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as e: 
+        print("STDERR from train.py (test_train_config_override):")
+        print(e.stderr)
+        raise
     assert result.returncode == 0
+    run_dirs = [d for d in tmp_path.iterdir() if d.is_dir() and "keisei" in d.name] 
+    assert run_dirs, "No run directory created for config override test"
+    run_dir = run_dirs[0]
     eff_cfg = run_dir / "effective_config.json"
     assert eff_cfg.exists()
     with open(eff_cfg, encoding="utf-8") as f:
         eff = pyjson.load(f)
-    # Check nested config structure
     assert eff["training"]["total_timesteps"] == 2
     assert abs(eff["training"]["learning_rate"] - 0.12345) < 1e-6
 
 
 def test_train_run_name_and_savedir(tmp_path):
-    """Test that --run_name and --savedir create the correct directory structure."""
-    run_name = "mytestrun"
-    result = subprocess.run(
-        [
-            sys.executable,
-            TRAIN_PATH,
-            "--savedir",
-            str(tmp_path),
-            "--run_name",
-            run_name,
-            "--total-timesteps",
-            "1",
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    """Test that --savedir influences the base path of the generated run directory."""
+    dummy_config_content = {
+        "wandb": {"enabled": False, "run_name_prefix": "mytestrunprefix"}, # Explicitly disable W&B
+        "training": {"model_type": "testmodel", "input_features": "testfeats"},
+        "logging": {"model_dir": str(tmp_path)} # This should be the parent for the run
+    }
+    dummy_config_path = tmp_path / "dummy_config_for_run_name.yaml"
+    with open(dummy_config_path, "w", encoding="utf-8") as f:
+        pyjson.dump(dummy_config_content, f)
+
+    try: 
+        result = subprocess.run(
+            [
+                sys.executable,
+                TRAIN_PATH,
+                "--savedir", 
+                str(tmp_path), # This is effectively the same as logging.model_dir in this case
+                "--config", 
+                str(dummy_config_path),
+                "--total-timesteps",
+                "1",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            env={"WANDB_MODE": "disabled", **os.environ}  # Disable W&B
+        )
+    except subprocess.CalledProcessError as e: 
+        print("STDERR from train.py (test_train_run_name_and_savedir):")
+        print(e.stderr)
+        raise
+
     assert result.returncode == 0
-    run_dir = tmp_path / run_name
-    assert run_dir.exists()
-    assert (run_dir / "training_log.txt").exists()
-    assert (run_dir / "effective_config.json").exists()
+    found_run_dir = None
+    for item in tmp_path.iterdir():
+        # The run_name format is: prefix_modeltype_feats_inputfeatures_timestamp
+        # So look for 'mytestrunprefix_testmodel_feats' in the name
+        if item.is_dir() and item.name.startswith("mytestrunprefix_testmodel_feats"):
+            found_run_dir = item
+            break
+    assert found_run_dir is not None, f"Expected run directory starting with 'mytestrunprefix_testmodel_feats' not found in {tmp_path}"
+    assert (found_run_dir / "training_log.txt").exists()
+    assert (found_run_dir / "effective_config.json").exists()
 
 
 def test_train_explicit_resume(tmp_path):
     """Test that --resume overrides auto-detection and resumes from the specified checkpoint."""
-    run_dir = tmp_path / "run"
-    run_dir.mkdir()
-    ckpt_path = (
-        run_dir / "ppo_shogi_agent_episode_10_ts_100.pth"
-    )  # Corrected filename pattern
-    # Create a minimal valid PPOAgent and save its checkpoint
+    run_name_prefix = "explicitresume"
+    model_type = "resumemodel"
+    input_features = "resumefeats"
     policy_mapper = PolicyOutputMapper()
-    config = AppConfig(
-        env=EnvConfig(
-            device=DEVICE,
-            input_channels=INPUT_CHANNELS,
-            num_actions_total=policy_mapper.get_total_actions(),
-            seed=42,
-        ),
-        training=TrainingConfig(
-            total_timesteps=1000,
-            steps_per_epoch=32,
-            ppo_epochs=1,
-            minibatch_size=2,
-            learning_rate=LEARNING_RATE,
-            gamma=GAMMA,
-            clip_epsilon=CLIP_EPSILON,
-            value_loss_coeff=VALUE_LOSS_COEFF,
-            entropy_coef=ENTROPY_COEFF,
-        ),
-        evaluation=EvaluationConfig(num_games=1, opponent_type="random", evaluation_interval_timesteps=1000), # Added evaluation_interval_timesteps
-        logging=LoggingConfig(log_file="/tmp/test.log", model_dir="/tmp/"),
-        wandb=WandBConfig(enabled=False, project="test", entity=None),
-        demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
-    )
-    agent = PPOAgent(config=config, device=torch.device(DEVICE))
+    
+    # Config for the initial agent save
+    initial_save_config_dict = {
+        "env": {
+            "device": DEVICE, "input_channels": INPUT_CHANNELS,
+            "num_actions_total": policy_mapper.get_total_actions(), "seed": 42,
+        },
+        "training": {
+            "total_timesteps": 1000, "steps_per_epoch": 32, "ppo_epochs": 1,
+            "minibatch_size": 2, "learning_rate": LEARNING_RATE, "gamma": GAMMA,
+            "clip_epsilon": CLIP_EPSILON, "value_loss_coeff": VALUE_LOSS_COEFF,
+            "entropy_coef": ENTROPY_COEFF,
+            "model_type": model_type, "input_features": input_features,
+            "checkpoint_interval_timesteps": 1000, "evaluation_interval_timesteps": 1000, # Added defaults
+            "mixed_precision": False, "ddp": False, "gradient_clip_max_norm": 0.5, "lambda_gae": 0.95, # Added defaults
+            "render_every_steps": 1, "refresh_per_second": 4, "enable_spinner": True # Added defaults
+        },
+        "evaluation": {"num_games": 1, "opponent_type": "random", "evaluation_interval_timesteps": 1000},
+        "logging": {"log_file": "/tmp/initial_save.log", "model_dir": str(tmp_path / "initial_save_dir")}, 
+        "wandb": {"enabled": False, "project": "test", "entity": None, "run_name_prefix": run_name_prefix,
+                  "watch_model": False, "watch_log_freq": 1000, "watch_log_type": "all"}, # Added defaults
+        "demo": {"enable_demo_mode": False, "demo_mode_delay": 0.0},
+    }
+    initial_save_config_obj = AppConfig.parse_obj(initial_save_config_dict)
+    
+    checkpoint_save_dir = tmp_path / "initial_save_dir" # As per logging.model_dir
+    checkpoint_save_dir.mkdir(parents=True, exist_ok=True)
+    # The checkpoint name itself doesn't need to match the generated run name for explicit resume
+    ckpt_path = checkpoint_save_dir / "my_explicit_checkpoint_ts100.pth"
+    
+    agent = PPOAgent(config=initial_save_config_obj, device=torch.device(DEVICE))
     agent.save_model(str(ckpt_path), global_timestep=100, total_episodes_completed=10)
-    result = subprocess.run(
-        [
-            sys.executable,
-            TRAIN_PATH,
-            "--savedir",
-            str(tmp_path),
-            "--run_name",
-            "run",
-            "--resume",
-            str(ckpt_path),
-            "--total-timesteps",
-            "1",
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    assert result.returncode == 0
-    # The 'Resumed training from checkpoint' message is in stderr (Rich logs)
-    assert "Resumed training from checkpoint" in result.stderr
 
+    # Config for the actual training run that will resume
+    resume_run_config_dict: dict = initial_save_config_dict.copy() # Start with a copy, explicitly type as dict
+    # Mypy needs help understanding the nested structure when using .copy()
+    # For logging, ensure it knows it's a dict
+    if not isinstance(resume_run_config_dict.get("logging"), dict):
+        resume_run_config_dict["logging"] = {} # Initialize if not a dict (should not happen with .copy())
+    resume_run_config_dict["logging"]["model_dir"] = str(tmp_path) # New run will save to tmp_path as parent
+    resume_run_config_dict["logging"]["log_file"] = "resumed_training.log"
+    
+    # For training, ensure it knows it's a dict
+    if not isinstance(resume_run_config_dict.get("training"), dict):
+        resume_run_config_dict["training"] = {} # Initialize if not a dict
+    # Ensure training params are suitable for resuming and running a bit more
+    resume_run_config_dict["training"]["total_timesteps"] = 101 
+
+    resume_config_file_path = tmp_path / "resume_run_config.yaml"
+    with open(resume_config_file_path, "w", encoding="utf-8") as f:
+        pyjson.dump(resume_run_config_dict, f)
+
+    try: 
+        result = subprocess.run(
+            [
+                sys.executable,
+                TRAIN_PATH,
+                "--savedir", str(tmp_path), # Parent directory for the new run
+                "--config", str(resume_config_file_path), # Config for this run
+                "--resume", str(ckpt_path), # Explicit checkpoint to resume from
+                # total_timesteps is now in the config file
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            env={"WANDB_MODE": "disabled", **os.environ}  # Disable W&B
+        )
+    except subprocess.CalledProcessError as e: 
+        print("STDERR from train.py (test_train_explicit_resume):")
+        print(e.stderr)
+        raise
+
+    assert result.returncode == 0
+    # Find the run directory (should be the only new directory under tmp_path not initial_save_dir)
+    run_dirs = [d for d in tmp_path.iterdir() if d.is_dir() and d.name != "initial_save_dir"]
+    assert run_dirs, f"No run directory created in {tmp_path}"
+    found_new_run_dir = max(run_dirs, key=lambda d: d.stat().st_mtime)
+    log_file = found_new_run_dir / "resumed_training.log"
+    assert found_new_run_dir.exists() and found_new_run_dir.is_dir(), \
+        f"New run directory not found in {tmp_path}"
+    assert log_file.exists(), f"Log file {log_file} does not exist"
+    with open(log_file, encoding="utf-8") as f:
+        log_contents = f.read()
+    assert f"Resumed training from checkpoint: {str(ckpt_path)}" in log_contents
+
+    # Verify that a new run directory was created under tmp_path
+    # and that it contains a checkpoint reflecting the continued training.
+    new_ckpt_found = False
+    for ckpt_file_path_obj in found_new_run_dir.glob("checkpoint_ts*.pth"): # Use a different var name
+        try:
+            ts_str = ckpt_file_path_obj.stem.split("_ts")[-1]
+            if ts_str.isdigit() and int(ts_str) > 100: # Should be 101 or more
+                new_ckpt_found = True
+                break
+        except ValueError:
+            continue 
+    assert new_ckpt_found, f"No new checkpoint found in {found_new_run_dir} with timestep > 100"
 
 # --- Tests for Periodic Evaluation ---
 

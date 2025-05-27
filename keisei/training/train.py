@@ -28,12 +28,6 @@ def main():
         help="Path to a YAML or JSON configuration file.",
     )
     parser.add_argument(
-        "--run_name",
-        type=str,
-        default=f"ppo_shogi_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-        help="Name of the run for logging and checkpointing.",
-    )
-    parser.add_argument(
         "--resume",
         type=str,
         default=None,
@@ -80,6 +74,12 @@ def main():
         default=None,
         help="Update display every N steps to reduce flicker. Overrides config value.",
     )
+    parser.add_argument(
+        "--run-name",
+        type=str,
+        default=None,
+        help="Optional name for this run (overrides config and auto-generated name).",
+    )
     args = parser.parse_args()
 
     # Build CLI overrides dict (dot notation)
@@ -100,12 +100,13 @@ def main():
         cli_overrides["logging.model_dir"] = args.savedir
     if args.render_every is not None:
         cli_overrides["training.render_every_steps"] = args.render_every
+    # Do NOT generate run_name here; let Trainer handle it for correct CLI/config/auto priority
 
     # Load config (YAML/JSON + CLI overrides)
     config: AppConfig = load_config(args.config, cli_overrides)
 
-    # Pass run_name and resume directly to Trainer
-    trainer = Trainer(config, args)
+    # Initialize and run the trainer (Trainer will determine run_name)
+    trainer = Trainer(config=config, args=args)
     trainer.run_training_loop()
 
 

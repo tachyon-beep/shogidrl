@@ -145,6 +145,7 @@ def load_config(
 
 
 if TYPE_CHECKING:
+    from keisei.config_schema import AppConfig  # Keep this for type hinting if used elsewhere
     from keisei.shogi.shogi_core_definitions import MoveTuple
     from keisei.shogi.shogi_game import ShogiGame  # Added for type hinting
 
@@ -553,3 +554,20 @@ class EvaluationLogger:
 
         if self.also_stdout:
             print(full_message, file=sys.stderr)  # Print to stderr for visibility
+
+
+def generate_run_name(config: "AppConfig", run_name: Optional[str] = None) -> str:
+    """Generates a unique run name based on config and timestamp, or returns the provided run_name if set."""
+    if run_name:
+        return run_name
+    # Example: keisei_resnet_feats_core46_20231027_153000
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    model_type_short = config.training.model_type[:10]  # Truncate for brevity
+    feature_set_short = config.training.input_features.replace("_", "")[:15]
+    run_name_parts = [
+        config.wandb.run_name_prefix if config.wandb.run_name_prefix else "keisei",
+        model_type_short,
+        f"feats_{feature_set_short}",
+        timestamp,
+    ]
+    return "_".join(filter(None, run_name_parts))

@@ -3,7 +3,7 @@ Pydantic configuration schema for Keisei DRL Shogi Client.
 Defines all configuration sections and their defaults.
 """
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, validator
 
@@ -76,12 +76,21 @@ class LoggingConfig(BaseModel):
     model_dir: str = Field(
         "models/", description="Directory to save model checkpoints."
     )
+    run_name: Optional[str] = Field(
+        None, description="Optional name for this run (overrides auto-generated name if set)."
+    )
 
 
 class WandBConfig(BaseModel):
     enabled: bool = Field(True, description="Enable Weights & Biases logging.")
-    project: str = Field("keisei-shogi", description="W&B project name.")
-    entity: Optional[str] = Field(None, description="W&B entity (user or team).")
+    project: Optional[str] = Field("keisei-shogi-rl", description="W&B project name.")
+    entity: Optional[str] = Field(None, description="W&B entity (username or team).")
+    run_name_prefix: Optional[str] = Field("keisei", description="Prefix for W&B run names.")
+    watch_model: bool = Field(True, description="Use wandb.watch() to log model gradients and parameters.")
+    watch_log_freq: int = Field(1000, description="Frequency for wandb.watch() logging.")
+    watch_log_type: Literal["gradients", "parameters", "all"] = Field(
+        "all", description="Type of data to log with wandb.watch()."
+    )
 
 
 class DemoConfig(BaseModel):

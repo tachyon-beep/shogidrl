@@ -7,13 +7,14 @@ import os
 import sys
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union # pylint: disable=unused-import
 
 import numpy as np
-import torch
-from rich.console import Console, Text
-
+import torch # Add torch import
 import wandb
+from rich.console import Console, Text
+from torch.cuda.amp import GradScaler, autocast # For mixed precision
+
 from keisei.config_schema import AppConfig
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.ppo_agent import PPOAgent
@@ -24,6 +25,7 @@ from keisei.utils import (
     TrainingLogger,
     format_move_with_description_enhanced,
 )
+from keisei.utils.utils import generate_run_name # ADDED: Import generate_run_name from correct location
 from . import utils, display, callbacks
 
 
@@ -32,6 +34,17 @@ class Trainer:
     Manages the training process for the PPO Shogi agent.
     This class orchestrates setup, training loop, evaluation, and logging.
     """
+
+    # Mixed-precision training
+    use_mixed_precision: bool = False
+    scaler: Optional[torch.cuda.amp.GradScaler] = None
+
+    # Statistics for tracking and logging
+    global_timestep: int = 0
+    total_episodes_completed: int = 0
+    black_wins: int = 0
+    white_wins: int = 0
+    draws: int = 0
 
     def __init__(self, config: AppConfig, args: Any):
         """
@@ -43,13 +56,50 @@ class Trainer:
         """
         self.config = config
         self.args = args
-        self.run_name = args.run_name
+        # Determine run_name: CLI > config > auto-generate
+        run_name = None
+        if hasattr(args, "run_name") and args.run_name:
+            run_name = args.run_name
+        elif hasattr(config, "logging") and hasattr(config.logging, "run_name") and config.logging.run_name:
+            run_name = config.logging.run_name
+        self.run_name = generate_run_name(config, run_name)
+
+        # Initialize statistics
         self.global_timestep = 0
         self.total_episodes_completed = 0
         self.black_wins = 0
         self.white_wins = 0
         self.draws = 0
-        self.resumed_from_checkpoint: Optional[str] = None
+
+        self.device = torch.device(config.env.device)
+        self.console = Console()
+
+        # Setup directories
+        dirs = utils.setup_directories(self.config, self.run_name)
+        self.run_artifact_dir = dirs["run_artifact_dir"]
+        self.model_dir = dirs["model_dir"]
+        self.log_file_path = dirs["log_file_path"]
+        self.eval_log_file_path = dirs["eval_log_file_path"]
+
+        self.logger = TrainingLogger(self.log_file_path, self.console)
+
+        # Mixed Precision Setup
+        self.use_mixed_precision = (
+            self.config.training.mixed_precision and self.device.type == "cuda"
+        )
+        if self.use_mixed_precision:
+            self.scaler = GradScaler()
+            self.logger.log(
+                str(Text("Mixed precision training enabled (CUDA).", style="green")) # Convert Text to str
+            )
+        elif self.config.training.mixed_precision and self.device.type != "cuda":
+            self.logger.log(
+                str(Text( # Convert Text to str
+                    "Mixed precision training requested but CUDA is not available/selected. Proceeding without mixed precision.",
+                    style="yellow",
+                ))
+            )
+            self.use_mixed_precision = False
 
         # --- Model/feature config integration ---
         self.input_features = getattr(args, 'input_features', None) or config.training.input_features
@@ -57,8 +107,6 @@ class Trainer:
         self.tower_depth = getattr(args, 'tower_depth', None) or config.training.tower_depth
         self.tower_width = getattr(args, 'tower_width', None) or config.training.tower_width
         self.se_ratio = getattr(args, 'se_ratio', None) or config.training.se_ratio
-        self.mixed_precision = getattr(args, 'mixed_precision', None) or config.training.mixed_precision
-        self.ddp = getattr(args, 'ddp', None) or config.training.ddp
         # Feature builder
         from keisei.shogi import features
         self.feature_spec = features.FEATURE_SPECS[self.input_features]
@@ -79,13 +127,6 @@ class Trainer:
         )
         # else:
         #     raise ValueError(f"Unknown model_type: {self.model_type}")
-
-        # Setup directories
-        dirs = utils.setup_directories(self.config, self.run_name)
-        self.run_artifact_dir = dirs["run_artifact_dir"]
-        self.model_dir = dirs["model_dir"]
-        self.log_file_path = dirs["log_file_path"]
-        self.eval_log_file_path = dirs["eval_log_file_path"]
 
         # Save effective config
         try:
@@ -160,18 +201,40 @@ class Trainer:
             device=self.config.env.device,
         )
 
+    def _log_event(self, message: str):
+        """Log important events to the main training log file."""
+        # Always log to the main log file
+        try:
+            with open(self.log_file_path, "a", encoding="utf-8") as f:
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                f.write(f"[{timestamp}] {message}\n")
+        except Exception as e:
+            print(f"[Trainer] Failed to log event: {e}", file=sys.stderr)
+        # No longer print to stderr for test compatibility
+
     def _handle_checkpoint_resume(self):
         """Handle resuming from checkpoint if specified or auto-detected."""
+        import shutil
         resume_path = self.args.resume
+        def find_ckpt_in_dir(directory):
+            return utils.find_latest_checkpoint(directory)
         if resume_path == "latest" or resume_path is None:
-            # Auto-detect latest checkpoint in model_dir
-            latest_ckpt = utils.find_latest_checkpoint(self.model_dir)
+            # Try to find latest checkpoint in the run's model_dir
+            latest_ckpt = find_ckpt_in_dir(self.model_dir)
+            # If not found, try the parent directory (savedir)
+            if not latest_ckpt:
+                parent_dir = os.path.dirname(self.model_dir.rstrip(os.sep))
+                parent_ckpt = find_ckpt_in_dir(parent_dir)
+                if parent_ckpt:
+                    # Copy the checkpoint into the run's model_dir for consistency
+                    dest_ckpt = os.path.join(self.model_dir, os.path.basename(parent_ckpt))
+                    shutil.copy2(parent_ckpt, dest_ckpt)
+                    latest_ckpt = dest_ckpt
             if latest_ckpt:
                 self.agent.load_model(latest_ckpt)
                 self.resumed_from_checkpoint = latest_ckpt
                 msg = f"Resumed training from checkpoint: {latest_ckpt}"
-                # Note: This print statement is outside Live context, so it's okay
-                print(msg, file=sys.stderr)
+                self._log_event(msg)
                 if hasattr(self, "rich_console"):
                     self.rich_console.print(f"[yellow]{msg}[/yellow]")
             else:
@@ -180,98 +243,11 @@ class Trainer:
             self.agent.load_model(resume_path)
             self.resumed_from_checkpoint = resume_path
             msg = f"Resumed training from checkpoint: {resume_path}"
-            # Note: This print statement is outside Live context, so it's okay
-            print(msg, file=sys.stderr)
+            self._log_event(msg)
             if hasattr(self, "rich_console"):
                 self.rich_console.print(f"[yellow]{msg}[/yellow]")
         else:
             self.resumed_from_checkpoint = None
-
-    def run_training_loop(self):
-        """Executes the main training loop."""
-        # TrainingLogger context manager
-        with TrainingLogger(
-            self.log_file_path,
-            rich_console=self.rich_console,
-            rich_log_panel=self.rich_log_messages,
-        ) as logger:
-
-            def log_both(
-                message: str,
-                also_to_wandb: bool = False,
-                wandb_data: Optional[Dict] = None,
-                log_level: str = "info",
-            ):
-                logger.log(message)
-                if self.is_train_wandb_active and also_to_wandb and wandb.run:
-                    log_payload = {"train_message": message}
-                    if wandb_data:
-                        log_payload.update(wandb_data)
-                    wandb.log(log_payload, step=self.global_timestep)
-
-            self.log_both = log_both  # Expose for callbacks
-            self.execute_full_evaluation_run = execute_full_evaluation_run  # Expose for callbacks
-
-            # Log session start
-            session_start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            log_both(f"--- SESSION START: {self.run_name} at {session_start_time} ---")
-
-            # Setup run information logging
-            self._log_run_info(log_both)
-
-            last_time = time.time()
-            steps_since_last_time = 0
-            current_obs_np = self._initialize_game_state(log_both)
-            current_episode_reward = 0.0
-            current_episode_length = 0
-
-            current_obs_tensor = torch.tensor(
-                current_obs_np,
-                dtype=torch.float32,
-                device=torch.device(self.config.env.device),
-            ).unsqueeze(0)
-            with self.display.start() as live:
-                while self.global_timestep < self.config.training.total_timesteps:
-                    (
-                        current_obs_np,
-                        current_obs_tensor,
-                        current_episode_reward,
-                        current_episode_length,
-                    ) = self._execute_training_step(
-                        current_obs_np,
-                        current_obs_tensor,
-                        current_episode_reward,
-                        current_episode_length,
-                        log_both,
-                    )
-
-                    # Update step counters
-                    self.global_timestep += 1
-                    steps_since_last_time += 1
-
-                    # Display updates
-                    if (self.global_timestep % self.config.training.render_every_steps) == 0:
-                        self.display.update_log_panel(self)
-
-                    current_time = time.time()
-                    time_delta = current_time - last_time
-                    current_speed = steps_since_last_time / time_delta if time_delta > 0 else 0.0
-
-                    if time_delta > 0.1:  # Update speed roughly every 100ms
-                        last_time = current_time
-                        steps_since_last_time = 0
-
-                    self.display.update_progress(
-                        self, current_speed, self.pending_progress_updates
-                    )
-                    self.pending_progress_updates.clear()
-
-                    # Callbacks
-                    for callback in self.callbacks:
-                        callback.on_step_end(self)
-
-                # End of training loop
-                self._finalize_training(log_both)
 
     def _log_run_info(self, log_both):
         """Log run information at the start of training."""
@@ -280,17 +256,26 @@ class Trainer:
             run_title += f" (W&B: {wandb.run.url})"
 
         log_both(run_title)
+        self._log_event(run_title)
         log_both(f"Run directory: {self.run_artifact_dir}")
+        self._log_event(f"Run directory: {self.run_artifact_dir}")
         log_both(
             f"Effective config saved to: {os.path.join(self.run_artifact_dir, 'effective_config.json')}"
         )
+        self._log_event(f"Effective config saved to: {os.path.join(self.run_artifact_dir, 'effective_config.json')}")
 
         if self.config.env.seed is not None:
             log_both(f"Random seed: {self.config.env.seed}")
+            self._log_event(f"Random seed: {self.config.env.seed}")
 
         log_both(f"Device: {self.config.env.device}")
+        self._log_event(f"Device: {self.config.env.device}")
         log_both(f"Agent: {type(self.agent).__name__} ({self.agent.name})")
+        self._log_event(f"Agent: {type(self.agent).__name__} ({self.agent.name})")
         log_both(
+            f"Total timesteps: {self.config.training.total_timesteps}, Steps per PPO epoch: {self.config.training.steps_per_epoch}"
+        )
+        self._log_event(
             f"Total timesteps: {self.config.training.total_timesteps}, Steps per PPO epoch: {self.config.training.steps_per_epoch}"
         )
 
@@ -299,13 +284,19 @@ class Trainer:
                 log_both(
                     f"[green]Resumed training from checkpoint: {self.resumed_from_checkpoint}[/green]"
                 )
+                self._log_event(f"Resumed training from checkpoint: {self.resumed_from_checkpoint}")
             log_both(
+                f"Resuming from timestep {self.global_timestep}, {self.total_episodes_completed} episodes completed."
+            )
+            self._log_event(
                 f"Resuming from timestep {self.global_timestep}, {self.total_episodes_completed} episodes completed."
             )
         else:
             log_both("Starting fresh training.")
+            self._log_event("Starting fresh training.")
 
         log_both(f"Model Structure:\n{self.agent.model}", also_to_wandb=False)
+        self._log_event(f"Model Structure:\n{self.agent.model}")
 
     def _initialize_game_state(self, log_both):
         """Initialize the game state for training."""
@@ -690,3 +681,91 @@ class Trainer:
             f"[bold green]Run '{self.run_name}' processing finished.[/bold green]"
         )
         self.rich_console.print(f"Output and logs are in: {self.run_artifact_dir}")
+
+    def run_training_loop(self):
+        """Executes the main training loop."""
+        # Always log a session start event to ensure log file is created
+        self._log_event(f"--- SESSION START: {self.run_name} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---")
+        # TrainingLogger context manager
+        with TrainingLogger(
+            self.log_file_path,
+            rich_console=self.rich_console,
+            rich_log_panel=self.rich_log_messages,
+        ) as logger:
+
+            def log_both(
+                message: str,
+                also_to_wandb: bool = False,
+                wandb_data: Optional[Dict] = None,
+                log_level: str = "info",
+            ):
+                logger.log(message)
+                if self.is_train_wandb_active and also_to_wandb and wandb.run:
+                    log_payload = {"train_message": message}
+                    if wandb_data:
+                        log_payload.update(wandb_data)
+                    wandb.log(log_payload, step=self.global_timestep)
+
+            self.log_both = log_both  # Expose for callbacks
+            self.execute_full_evaluation_run = execute_full_evaluation_run  # Expose for callbacks
+
+            # Log session start
+            session_start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            log_both(f"--- SESSION START: {self.run_name} at {session_start_time} ---")
+
+            # Setup run information logging
+            self._log_run_info(log_both)
+
+            last_time = time.time()
+            steps_since_last_time = 0
+            current_obs_np = self._initialize_game_state(log_both)
+            current_episode_reward = 0.0
+            current_episode_length = 0
+
+            current_obs_tensor = torch.tensor(
+                current_obs_np,
+                dtype=torch.float32,
+                device=torch.device(self.config.env.device),
+            ).unsqueeze(0)
+            with self.display.start() as live:
+                while self.global_timestep < self.config.training.total_timesteps:
+                    (
+                        current_obs_np,
+                        current_obs_tensor,
+                        current_episode_reward,
+                        current_episode_length,
+                    ) = self._execute_training_step(
+                        current_obs_np,
+                        current_obs_tensor,
+                        current_episode_reward,
+                        current_episode_length,
+                        log_both,
+                    )
+
+                    # Update step counters
+                    self.global_timestep += 1
+                    steps_since_last_time += 1
+
+                    # Display updates
+                    if (self.global_timestep % self.config.training.render_every_steps) == 0:
+                        self.display.update_log_panel(self)
+
+                    current_time = time.time()
+                    time_delta = current_time - last_time
+                    current_speed = steps_since_last_time / time_delta if time_delta > 0 else 0.0
+
+                    if time_delta > 0.1:  # Update speed roughly every 100ms
+                        last_time = current_time
+                        steps_since_last_time = 0
+
+                    self.display.update_progress(
+                        self, current_speed, self.pending_progress_updates
+                    )
+                    self.pending_progress_updates.clear()
+
+                    # Callbacks
+                    for callback in self.callbacks:
+                        callback.on_step_end(self)
+
+                # End of training loop
+                self._finalize_training(log_both)

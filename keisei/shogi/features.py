@@ -140,7 +140,15 @@ def build_core46_all(game) -> np.ndarray:
 CORE46_SPEC = FeatureSpec("core46", build_core46, 46)
 CORE46_ALL_SPEC = FeatureSpec("core46+all", build_core46_all, 51)
 
+# Dummy specs for testing
+DUMMY_FEATS_SPEC = FeatureSpec("dummyfeats", build_core46, 46)
+TEST_FEATS_SPEC = FeatureSpec("testfeats", build_core46, 46)
+RESUME_FEATS_SPEC = FeatureSpec("resumefeats", build_core46, 46) # Add resumefeats
+
 FEATURE_SPECS = {
     "core46": CORE46_SPEC,
     "core46+all": CORE46_ALL_SPEC,
+    "dummyfeats": DUMMY_FEATS_SPEC,
+    "testfeats": TEST_FEATS_SPEC,
+    "resumefeats": RESUME_FEATS_SPEC, # Add resumefeats
 }
