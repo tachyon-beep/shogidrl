@@ -55,26 +55,40 @@ class TrainingConfig(BaseModel):
     value_loss_coeff: float = Field(0.5, description="Value loss coefficient.")
     entropy_coef: float = Field(0.01, description="Entropy regularization coefficient.")
     render_every_steps: int = Field(
-        1, description="Update expensive display elements (metrics, logs) every N steps to reduce flicker."
+        1,
+        description="Update expensive display elements (metrics, logs) every N steps to reduce flicker.",
     )
-    refresh_per_second: int = Field(
-        4, description="Rich Live refresh rate per second."
-    )
+    refresh_per_second: int = Field(4, description="Rich Live refresh rate per second.")
     enable_spinner: bool = Field(
         True, description="Enable spinner column in progress bar (looks cool!)."
     )
     # --- Model/feature config additions ---
-    input_features: str = Field("core46", description="Feature set for observation builder (e.g. 'core46', 'core46+all').")
-    tower_depth: int = Field(9, description="Number of residual blocks in ResNet tower.")
+    input_features: str = Field(
+        "core46",
+        description="Feature set for observation builder (e.g. 'core46', 'core46+all').",
+    )
+    tower_depth: int = Field(
+        9, description="Number of residual blocks in ResNet tower."
+    )
     tower_width: int = Field(256, description="Width (channels) of ResNet tower.")
-    se_ratio: float = Field(0.25, description="SE block squeeze ratio (0 disables SE blocks).")
+    se_ratio: float = Field(
+        0.25, description="SE block squeeze ratio (0 disables SE blocks)."
+    )
     model_type: str = Field("resnet", description="Model type to use (e.g. 'resnet').")
     mixed_precision: bool = Field(False, description="Enable mixed-precision training.")
     ddp: bool = Field(False, description="Enable DistributedDataParallel training.")
-    gradient_clip_max_norm: float = Field(0.5, description="Maximum norm for gradient clipping.")
-    lambda_gae: float = Field(0.95, description="Lambda for Generalized Advantage Estimation (GAE).")
-    checkpoint_interval_timesteps: int = Field(10000, description="Save a model checkpoint every N timesteps.")
-    evaluation_interval_timesteps: int = Field(50000, description="Run evaluation every N timesteps.")
+    gradient_clip_max_norm: float = Field(
+        0.5, description="Maximum norm for gradient clipping."
+    )
+    lambda_gae: float = Field(
+        0.95, description="Lambda for Generalized Advantage Estimation (GAE)."
+    )
+    checkpoint_interval_timesteps: int = Field(
+        10000, description="Save a model checkpoint every N timesteps."
+    )
+    evaluation_interval_timesteps: int = Field(
+        50000, description="Run evaluation every N timesteps."
+    )
 
     @validator("learning_rate")
     # pylint: disable=no-self-argument
@@ -89,7 +103,9 @@ class EvaluationConfig(BaseModel):
     opponent_type: str = Field(
         "random", description="Type of opponent: 'random', 'heuristic', etc."
     )
-    evaluation_interval_timesteps: int = Field(50000, description="Run evaluation every N timesteps.")
+    evaluation_interval_timesteps: int = Field(
+        50000, description="Run evaluation every N timesteps."
+    )
 
 
 class LoggingConfig(BaseModel):
@@ -100,7 +116,8 @@ class LoggingConfig(BaseModel):
         "models/", description="Directory to save model checkpoints."
     )
     run_name: Optional[str] = Field(
-        None, description="Optional name for this run (overrides auto-generated name if set)."
+        None,
+        description="Optional name for this run (overrides auto-generated name if set).",
     )
 
 
@@ -108,9 +125,15 @@ class WandBConfig(BaseModel):
     enabled: bool = Field(True, description="Enable Weights & Biases logging.")
     project: Optional[str] = Field("keisei-shogi-rl", description="W&B project name.")
     entity: Optional[str] = Field(None, description="W&B entity (username or team).")
-    run_name_prefix: Optional[str] = Field("keisei", description="Prefix for W&B run names.")
-    watch_model: bool = Field(True, description="Use wandb.watch() to log model gradients and parameters.")
-    watch_log_freq: int = Field(1000, description="Frequency for wandb.watch() logging.")
+    run_name_prefix: Optional[str] = Field(
+        "keisei", description="Prefix for W&B run names."
+    )
+    watch_model: bool = Field(
+        True, description="Use wandb.watch() to log model gradients and parameters."
+    )
+    watch_log_freq: int = Field(
+        1000, description="Frequency for wandb.watch() logging."
+    )
     watch_log_type: Literal["gradients", "parameters", "all"] = Field(
         "all", description="Type of data to log with wandb.watch()."
     )
@@ -308,7 +331,7 @@ def load_evaluation_agent(
     policy_mapper: PolicyOutputMapper,
     input_channels: int,
     # Add input_features as an optional parameter with a default
-    input_features: Optional[str] = "core46", 
+    input_features: Optional[str] = "core46",
 ) -> PPOAgent:
     """Loads a PPOAgent from a checkpoint for evaluation. Raises FileNotFoundError if checkpoint does not exist."""
     if not os.path.isfile(checkpoint_path):
@@ -323,38 +346,40 @@ def load_evaluation_agent(
             seed=42,  # Default seed for eval agent loading
         ),
         training=TrainingConfig(  # Dummy TrainingConfig for PPOAgent
-            total_timesteps=1,      # Placeholder
-            steps_per_epoch=1,      # Placeholder
-            ppo_epochs=1,           # Placeholder
-            minibatch_size=1,       # Placeholder
-            learning_rate=1e-4,     # Placeholder
-            gamma=0.99,             # Placeholder
-            clip_epsilon=0.2,       # Placeholder
-            value_loss_coeff=0.5,   # Placeholder
-            entropy_coef=0.01,      # Placeholder
-            input_features=input_features if input_features else "core46", # Use provided or default
-            model_type="resnet",    # Default, actual arch baked into model
+            total_timesteps=1,  # Placeholder
+            steps_per_epoch=1,  # Placeholder
+            ppo_epochs=1,  # Placeholder
+            minibatch_size=1,  # Placeholder
+            learning_rate=1e-4,  # Placeholder
+            gamma=0.99,  # Placeholder
+            clip_epsilon=0.2,  # Placeholder
+            value_loss_coeff=0.5,  # Placeholder
+            entropy_coef=0.01,  # Placeholder
+            input_features=(
+                input_features if input_features else "core46"
+            ),  # Use provided or default
+            model_type="resnet",  # Default, actual arch baked into model
             mixed_precision=False,  # Not relevant for eval agent loading
-            ddp=False,              # Not relevant for eval agent loading
-            gradient_clip_max_norm=0.5, # Placeholder
-            lambda_gae=0.95,            # Placeholder
-            checkpoint_interval_timesteps=10000, # Placeholder
-            evaluation_interval_timesteps=50000, # Placeholder for TrainingConfig's own field
+            ddp=False,  # Not relevant for eval agent loading
+            gradient_clip_max_norm=0.5,  # Placeholder
+            lambda_gae=0.95,  # Placeholder
+            checkpoint_interval_timesteps=10000,  # Placeholder
+            evaluation_interval_timesteps=50000,  # Placeholder for TrainingConfig's own field
         ),
         evaluation=EvaluationConfig(
-            num_games=1, 
-            opponent_type="random", 
-            evaluation_interval_timesteps=50000 # Explicitly add, though it has a default
+            num_games=1,
+            opponent_type="random",
+            evaluation_interval_timesteps=50000,  # Explicitly add, though it has a default
         ),  # Minimal
         logging=LoggingConfig(log_file="/tmp/eval.log", model_dir="/tmp/"),
         wandb=WandBConfig(
-            enabled=False, 
-            project="eval", 
+            enabled=False,
+            project="eval",
             entity=None,
-            run_name_prefix="eval-run", # Added
-            watch_model=False,          # Added
-            watch_log_freq=1000,        # Added
-            watch_log_type="all"        # Added
+            run_name_prefix="eval-run",  # Added
+            watch_model=False,  # Added
+            watch_log_freq=1000,  # Added
+            watch_log_type="all",  # Added
         ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
     )
@@ -697,7 +722,9 @@ class Evaluator:
             raise RuntimeError(f"Failed to initialize EvaluationLogger: {e}") from e
         # Agent and opponent
         # Use the correct input_channels from self.policy_mapper if available, else default to 46
-        input_channels = getattr(self.policy_mapper, "input_channels", 46) # TODO: Remove this hardcoded value when possible, generate exception if not set
+        input_channels = getattr(
+            self.policy_mapper, "input_channels", 46
+        )  # TODO: Remove this hardcoded value when possible, generate exception if not set
 
         try:
             self._agent = load_evaluation_agent(
@@ -716,7 +743,7 @@ class Evaluator:
                 self.policy_mapper,
                 input_channels,
             )
-        except Exception as e: # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
             print(f"Error initializing opponent {opponent_type}: {e}")
             return None
         if self._logger is None or self._agent is None or self._opponent is None:
@@ -753,7 +780,7 @@ class Evaluator:
         except (RuntimeError, ValueError, OSError) as e:
             print(f"[Evaluator] Error during evaluation run: {e}")
             results_summary = None
-        except Exception as e: # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
             print(f"Error during evaluation run: {e}")
             results_summary = None
         # Final W&B logging
@@ -780,9 +807,10 @@ class Evaluator:
                 print("[Evaluator] W&B run finished.")
             except (OSError, RuntimeError, ValueError) as e:
                 print(f"[Evaluator] Error finishing W&B run: {e}")
-            except Exception as e: # pylint: disable=broad-except
+            except Exception as e:  # pylint: disable=broad-except
                 print(f"Error finalizing evaluation run: {e}")
         return results_summary
+
 
 # --- Backward-compatible wrapper function ---
 def execute_full_evaluation_run(
@@ -831,11 +859,11 @@ def execute_full_evaluation_run(
 
 
 # --- CLI entry point ---
-def main_cli(): # Renamed from main to main_cli to avoid conflict if this file is imported
+def main_cli():  # Renamed from main to main_cli to avoid conflict if this file is imported
     """
     CLI entry point for evaluation. Parses arguments and runs evaluation using Evaluator.
     """
-    import argparse # Moved import here
+    import argparse  # Moved import here
 
     parser = argparse.ArgumentParser(description="Evaluate a PPO Shogi agent.")
     parser.add_argument(
@@ -913,6 +941,7 @@ def main_cli(): # Renamed from main to main_cli to avoid conflict if this file i
     print("Evaluation Results:")
     print(results)
 
+
 if __name__ == "__main__":
     main_cli()
 
@@ -925,6 +954,9 @@ if __name__ == "__main__":
 """
 training/display.py: Rich UI management for the Shogi RL trainer.
 """
+
+from typing import Any, Dict, List, Union
+
 from rich.console import Console, Group
 from rich.layout import Layout
 from rich.live import Live
@@ -940,7 +972,7 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 from rich.text import Text
-from typing import Any, Dict, List, Union
+
 
 class TrainingDisplay:
     def __init__(self, config, trainer, rich_console: Console):
@@ -948,7 +980,9 @@ class TrainingDisplay:
         self.trainer = trainer
         self.rich_console = rich_console
         self.rich_log_messages = trainer.rich_log_messages
-        self.progress_bar, self.training_task, self.layout, self.log_panel = self._setup_rich_progress_display()
+        self.progress_bar, self.training_task, self.layout, self.log_panel = (
+            self._setup_rich_progress_display()
+        )
 
     def _setup_rich_progress_display(self):
         progress_columns: List[Union[str, ProgressColumn]]
@@ -1092,13 +1126,32 @@ def main():
         "--seed", type=int, default=None, help="Random seed for reproducibility."
     )
     # --- Model/feature CLI flags ---
-    parser.add_argument("--model", type=str, default=None, help="Model type (e.g. 'resnet').")
-    parser.add_argument("--input_features", type=str, default=None, help="Feature set for observation builder.")
-    parser.add_argument("--tower_depth", type=int, default=None, help="ResNet tower depth.")
-    parser.add_argument("--tower_width", type=int, default=None, help="ResNet tower width.")
-    parser.add_argument("--se_ratio", type=float, default=None, help="SE block squeeze ratio.")
-    parser.add_argument("--mixed_precision", action="store_true", help="Enable mixed-precision training.")
-    parser.add_argument("--ddp", action="store_true", help="Enable DistributedDataParallel training.")
+    parser.add_argument(
+        "--model", type=str, default=None, help="Model type (e.g. 'resnet')."
+    )
+    parser.add_argument(
+        "--input_features",
+        type=str,
+        default=None,
+        help="Feature set for observation builder.",
+    )
+    parser.add_argument(
+        "--tower_depth", type=int, default=None, help="ResNet tower depth."
+    )
+    parser.add_argument(
+        "--tower_width", type=int, default=None, help="ResNet tower width."
+    )
+    parser.add_argument(
+        "--se_ratio", type=float, default=None, help="SE block squeeze ratio."
+    )
+    parser.add_argument(
+        "--mixed_precision",
+        action="store_true",
+        help="Enable mixed-precision training.",
+    )
+    parser.add_argument(
+        "--ddp", action="store_true", help="Enable DistributedDataParallel training."
+    )
     parser.add_argument(
         "--device",
         type=str,
@@ -1185,15 +1238,19 @@ if __name__ == "__main__":
 """
 training/utils.py: Helper functions for setup and configuration in the Shogi RL trainer.
 """
+
 import glob
 import json
 import os
 import random
 import sys
 from typing import Any
+
 import numpy as np
 import torch
+
 import wandb
+
 
 def find_latest_checkpoint(model_dir_path):
     try:
@@ -1207,6 +1264,7 @@ def find_latest_checkpoint(model_dir_path):
     except (OSError, FileNotFoundError) as e:
         print(f"Error in find_latest_checkpoint: {e}", file=sys.stderr)
         return None
+
 
 def serialize_config(config_obj: Any) -> str:
     if hasattr(config_obj, "dict"):
@@ -1236,6 +1294,7 @@ def serialize_config(config_obj: Any) -> str:
         print(f"Error serializing config: {e}", file=sys.stderr)
         return "{}"
 
+
 def setup_directories(config, run_name):
     model_dir = config.logging.model_dir
     log_file = config.logging.log_file
@@ -1251,6 +1310,7 @@ def setup_directories(config, run_name):
         "eval_log_file_path": eval_log_file_path,
     }
 
+
 def setup_seeding(config):
     seed = config.env.seed
     if seed is not None:
@@ -1260,15 +1320,14 @@ def setup_seeding(config):
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
 
+
 def setup_wandb(config, run_name, run_artifact_dir):
     wandb_cfg = config.wandb
     is_active = wandb_cfg.enabled
     if is_active:
         try:
             config_dict_for_wandb = (
-                json.loads(serialize_config(config))
-                if serialize_config(config)
-                else {}
+                json.loads(serialize_config(config)) if serialize_config(config) else {}
             )
             wandb.init(
                 project=wandb_cfg.project,
@@ -1281,10 +1340,15 @@ def setup_wandb(config, run_name, run_artifact_dir):
                 id=run_name,
             )
         except (TypeError, ValueError, OSError) as e:
-            print(f"Error initializing W&B: {e}. W&B logging disabled.", file=sys.stderr)
+            print(
+                f"Error initializing W&B: {e}. W&B logging disabled.", file=sys.stderr
+            )
             is_active = False
     if not is_active:
-        print("Weights & Biases logging is disabled or failed to initialize.", file=sys.stderr)
+        print(
+            "Weights & Biases logging is disabled or failed to initialize.",
+            file=sys.stderr,
+        )
     return is_active
 
 ]]></file>
@@ -1298,14 +1362,22 @@ import os
 import sys
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union # pylint: disable=unused-import
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Union,
+)  # pylint: disable=unused-import
 
 import numpy as np
-import torch # Add torch import
-import wandb
+import torch  # Add torch import
 from rich.console import Console, Text
-from torch.cuda.amp import GradScaler, autocast # For mixed precision
+from torch.cuda.amp import GradScaler, autocast  # For mixed precision
 
+import wandb
 from keisei.config_schema import AppConfig
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.ppo_agent import PPOAgent
@@ -1316,8 +1388,11 @@ from keisei.utils import (
     TrainingLogger,
     format_move_with_description_enhanced,
 )
-from keisei.utils.utils import generate_run_name # ADDED: Import generate_run_name from correct location
-from . import utils, display, callbacks
+from keisei.utils.utils import (
+    generate_run_name,
+)  # ADDED: Import generate_run_name from correct location
+
+from . import callbacks, display, utils
 
 
 class Trainer:
@@ -1351,7 +1426,11 @@ class Trainer:
         run_name = None
         if hasattr(args, "run_name") and args.run_name:
             run_name = args.run_name
-        elif hasattr(config, "logging") and hasattr(config.logging, "run_name") and config.logging.run_name:
+        elif (
+            hasattr(config, "logging")
+            and hasattr(config.logging, "run_name")
+            and config.logging.run_name
+        ):
             run_name = config.logging.run_name
         self.run_name = generate_run_name(config, run_name)
 
@@ -1381,35 +1460,47 @@ class Trainer:
         if self.use_mixed_precision:
             self.scaler = GradScaler()
             self.logger.log(
-                str(Text("Mixed precision training enabled (CUDA).", style="green")) # Convert Text to str
+                str(
+                    Text("Mixed precision training enabled (CUDA).", style="green")
+                )  # Convert Text to str
             )
         elif self.config.training.mixed_precision and self.device.type != "cuda":
             self.logger.log(
-                str(Text( # Convert Text to str
-                    "Mixed precision training requested but CUDA is not available/selected. Proceeding without mixed precision.",
-                    style="yellow",
-                ))
+                str(
+                    Text(  # Convert Text to str
+                        "Mixed precision training requested but CUDA is not available/selected. Proceeding without mixed precision.",
+                        style="yellow",
+                    )
+                )
             )
             self.use_mixed_precision = False
 
         # --- Model/feature config integration ---
-        self.input_features = getattr(args, 'input_features', None) or config.training.input_features
-        self.model_type = getattr(args, 'model', None) or config.training.model_type
-        self.tower_depth = getattr(args, 'tower_depth', None) or config.training.tower_depth
-        self.tower_width = getattr(args, 'tower_width', None) or config.training.tower_width
-        self.se_ratio = getattr(args, 'se_ratio', None) or config.training.se_ratio
+        self.input_features = (
+            getattr(args, "input_features", None) or config.training.input_features
+        )
+        self.model_type = getattr(args, "model", None) or config.training.model_type
+        self.tower_depth = (
+            getattr(args, "tower_depth", None) or config.training.tower_depth
+        )
+        self.tower_width = (
+            getattr(args, "tower_width", None) or config.training.tower_width
+        )
+        self.se_ratio = getattr(args, "se_ratio", None) or config.training.se_ratio
         # Feature builder
         from keisei.shogi import features
+
         self.feature_spec = features.FEATURE_SPECS[self.input_features]
         self.obs_shape = (self.feature_spec.num_planes, 9, 9)
         # Model factory
-        from keisei.training.models import model_factory # Corrected import
+        from keisei.training.models import model_factory  # Corrected import
+
         # from keisei.training.models.resnet_tower import ActorCriticResTower # Old direct import
         # if self.model_type == "resnet": # Old direct instantiation
         self.model = model_factory(
             model_type=self.model_type,
-            obs_shape=self.obs_shape, 
-            num_actions=config.env.num_actions_total, # Added num_actions
+            obs_shape=self.obs_shape,
+            num_actions=config.env.num_actions_total,  # Added num_actions
             tower_depth=self.tower_depth,
             tower_width=self.tower_width,
             se_ratio=self.se_ratio if self.se_ratio > 0 else None,
@@ -1455,9 +1546,13 @@ class Trainer:
         # Display and callbacks
         self.display = display.TrainingDisplay(self.config, self, self.rich_console)
         eval_cfg = getattr(self.config, "evaluation", None)
-        checkpoint_interval = self.config.training.checkpoint_interval_timesteps # Use config value
+        checkpoint_interval = (
+            self.config.training.checkpoint_interval_timesteps
+        )  # Use config value
         eval_interval = (
-            eval_cfg.evaluation_interval_timesteps if eval_cfg else self.config.training.evaluation_interval_timesteps # Use config value
+            eval_cfg.evaluation_interval_timesteps
+            if eval_cfg
+            else self.config.training.evaluation_interval_timesteps  # Use config value
         )
         self.callbacks = [
             callbacks.CheckpointCallback(checkpoint_interval, self.model_dir),
@@ -1488,7 +1583,7 @@ class Trainer:
         self.experience_buffer = ExperienceBuffer(
             buffer_size=self.config.training.steps_per_epoch,
             gamma=self.config.training.gamma,
-            lambda_gae=self.config.training.lambda_gae, # Use config value
+            lambda_gae=self.config.training.lambda_gae,  # Use config value
             device=self.config.env.device,
         )
 
@@ -1506,9 +1601,12 @@ class Trainer:
     def _handle_checkpoint_resume(self):
         """Handle resuming from checkpoint if specified or auto-detected."""
         import shutil
+
         resume_path = self.args.resume
+
         def find_ckpt_in_dir(directory):
             return utils.find_latest_checkpoint(directory)
+
         if resume_path == "latest" or resume_path is None:
             # Try to find latest checkpoint in the run's model_dir
             latest_ckpt = find_ckpt_in_dir(self.model_dir)
@@ -1518,7 +1616,9 @@ class Trainer:
                 parent_ckpt = find_ckpt_in_dir(parent_dir)
                 if parent_ckpt:
                     # Copy the checkpoint into the run's model_dir for consistency
-                    dest_ckpt = os.path.join(self.model_dir, os.path.basename(parent_ckpt))
+                    dest_ckpt = os.path.join(
+                        self.model_dir, os.path.basename(parent_ckpt)
+                    )
                     shutil.copy2(parent_ckpt, dest_ckpt)
                     latest_ckpt = dest_ckpt
             if latest_ckpt:
@@ -1553,7 +1653,9 @@ class Trainer:
         log_both(
             f"Effective config saved to: {os.path.join(self.run_artifact_dir, 'effective_config.json')}"
         )
-        self._log_event(f"Effective config saved to: {os.path.join(self.run_artifact_dir, 'effective_config.json')}")
+        self._log_event(
+            f"Effective config saved to: {os.path.join(self.run_artifact_dir, 'effective_config.json')}"
+        )
 
         if self.config.env.seed is not None:
             log_both(f"Random seed: {self.config.env.seed}")
@@ -1575,7 +1677,9 @@ class Trainer:
                 log_both(
                     f"[green]Resumed training from checkpoint: {self.resumed_from_checkpoint}[/green]"
                 )
-                self._log_event(f"Resumed training from checkpoint: {self.resumed_from_checkpoint}")
+                self._log_event(
+                    f"Resumed training from checkpoint: {self.resumed_from_checkpoint}"
+                )
             log_both(
                 f"Resuming from timestep {self.global_timestep}, {self.total_episodes_completed} episodes completed."
             )
@@ -1732,9 +1836,7 @@ class Trainer:
                 (self.global_timestep + 1) % self.config.training.steps_per_epoch == 0
                 and self.experience_buffer.ptr == self.config.training.steps_per_epoch
             ):
-                self._perform_ppo_update(
-                    current_obs_np, log_both
-                )
+                self._perform_ppo_update(current_obs_np, log_both)
 
         except ValueError as e:
             log_both(
@@ -1861,9 +1963,7 @@ class Trainer:
 
         return current_obs_np, current_obs_tensor, 0.0, 0
 
-    def _perform_ppo_update(
-        self, current_obs_np, log_both
-    ):
+    def _perform_ppo_update(self, current_obs_np, log_both):
         """Perform a PPO update."""
         with torch.no_grad():
             last_value_pred_for_gae = self.agent.get_value(current_obs_np)
@@ -1931,7 +2031,9 @@ class Trainer:
             )
 
         # Always save a final checkpoint if one was not just saved at the last step
-        checkpoint_interval = self.config.training.checkpoint_interval_timesteps # Use config value
+        checkpoint_interval = (
+            self.config.training.checkpoint_interval_timesteps
+        )  # Use config value
         last_ckpt_filename = os.path.join(
             self.model_dir, f"checkpoint_ts{self.global_timestep}.pth"
         )
@@ -1976,7 +2078,9 @@ class Trainer:
     def run_training_loop(self):
         """Executes the main training loop."""
         # Always log a session start event to ensure log file is created
-        self._log_event(f"--- SESSION START: {self.run_name} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---")
+        self._log_event(
+            f"--- SESSION START: {self.run_name} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---"
+        )
         # TrainingLogger context manager
         with TrainingLogger(
             self.log_file_path,
@@ -1998,7 +2102,9 @@ class Trainer:
                     wandb.log(log_payload, step=self.global_timestep)
 
             self.log_both = log_both  # Expose for callbacks
-            self.execute_full_evaluation_run = execute_full_evaluation_run  # Expose for callbacks
+            self.execute_full_evaluation_run = (
+                execute_full_evaluation_run  # Expose for callbacks
+            )
 
             # Log session start
             session_start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -2038,12 +2144,16 @@ class Trainer:
                     steps_since_last_time += 1
 
                     # Display updates
-                    if (self.global_timestep % self.config.training.render_every_steps) == 0:
+                    if (
+                        self.global_timestep % self.config.training.render_every_steps
+                    ) == 0:
                         self.display.update_log_panel(self)
 
                     current_time = time.time()
                     time_delta = current_time - last_time
-                    current_speed = steps_since_last_time / time_delta if time_delta > 0 else 0.0
+                    current_speed = (
+                        steps_since_last_time / time_delta if time_delta > 0 else 0.0
+                    )
 
                     if time_delta > 0.1:  # Update speed roughly every 100ms
                         last_time = current_time
@@ -2066,19 +2176,24 @@ class Trainer:
 """
 training/callbacks.py: Periodic task callbacks for the Shogi RL trainer.
 """
+
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from .trainer import Trainer
+
 
 class Callback(ABC):
     def on_step_end(self, trainer: "Trainer"):
         pass
 
+
 class CheckpointCallback(Callback):
     def __init__(self, interval: int, model_dir: str):
         self.interval = interval
         self.model_dir = model_dir
+
     def on_step_end(self, trainer: "Trainer"):
         if (trainer.global_timestep + 1) % self.interval == 0:
             ckpt_save_path = os.path.join(
@@ -2095,7 +2210,9 @@ class CheckpointCallback(Callback):
                         "draws": trainer.draws,
                     },
                 )
-                trainer.log_both(f"Checkpoint saved to {ckpt_save_path}", also_to_wandb=True)
+                trainer.log_both(
+                    f"Checkpoint saved to {ckpt_save_path}", also_to_wandb=True
+                )
             except (OSError, RuntimeError) as e:
                 trainer.log_both(
                     f"Error saving checkpoint {ckpt_save_path}: {e}",
@@ -2103,11 +2220,15 @@ class CheckpointCallback(Callback):
                     also_to_wandb=True,
                 )
 
+
 import os
+
+
 class EvaluationCallback(Callback):
     def __init__(self, eval_cfg, interval: int):
         self.eval_cfg = eval_cfg
         self.interval = interval
+
     def on_step_end(self, trainer: "Trainer"):
         if not getattr(self.eval_cfg, "enable_periodic_evaluation", False):
             return
@@ -2116,7 +2237,9 @@ class EvaluationCallback(Callback):
                 trainer.model_dir, f"eval_checkpoint_ts{trainer.global_timestep+1}.pth"
             )
             trainer.agent.save_model(
-                eval_ckpt_path, trainer.global_timestep + 1, trainer.total_episodes_completed
+                eval_ckpt_path,
+                trainer.global_timestep + 1,
+                trainer.total_episodes_completed,
             )
             trainer.log_both(
                 f"Starting periodic evaluation at timestep {trainer.global_timestep + 1}...",
@@ -2126,7 +2249,9 @@ class EvaluationCallback(Callback):
             eval_results = trainer.execute_full_evaluation_run(
                 agent_checkpoint_path=eval_ckpt_path,
                 opponent_type=getattr(self.eval_cfg, "opponent_type", "random"),
-                opponent_checkpoint_path=getattr(self.eval_cfg, "opponent_checkpoint_path", None),
+                opponent_checkpoint_path=getattr(
+                    self.eval_cfg, "opponent_checkpoint_path", None
+                ),
                 num_games=getattr(self.eval_cfg, "num_games", 20),
                 max_moves_per_game=getattr(self.eval_cfg, "max_moves_per_game", 256),
                 device_str=trainer.config.env.device,
@@ -2146,7 +2271,9 @@ class EvaluationCallback(Callback):
                 f"Periodic evaluation finished. Results: {eval_results}",
                 also_to_wandb=True,
                 wandb_data=(
-                    eval_results if isinstance(eval_results, dict) else {"eval_summary": str(eval_results)}
+                    eval_results
+                    if isinstance(eval_results, dict)
+                    else {"eval_summary": str(eval_results)}
                 ),
             )
 
@@ -2160,9 +2287,11 @@ class EvaluationCallback(Callback):
 resnet_tower.py: ActorCriticResTower model for Keisei Shogi with SE block support.
 """
 from typing import Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 
 class SqueezeExcitation(nn.Module):
     def __init__(self, channels: int, se_ratio: float = 0.25):
@@ -2272,22 +2401,28 @@ __all__ = ["Color", "PieceType", "Piece", "ShogiGame", "MoveTuple"]
 """
 features.py: FeatureSpec registry and core46 observation builder for Keisei Shogi.
 """
+
 from typing import Callable, Dict, List
+
 import numpy as np
 
 # Registry for feature builders
 FEATURE_REGISTRY: Dict[str, Callable] = {}
 
+
 def register_feature(name: str):
     def decorator(fn: Callable):
         FEATURE_REGISTRY[name] = fn
         return fn
+
     return decorator
+
 
 class FeatureSpec:
     """
     Describes a set of feature planes for Shogi observation tensors.
     """
+
     def __init__(self, name: str, builder: Callable, num_planes: int):
         self.name = name
         self.builder = builder
@@ -2295,6 +2430,7 @@ class FeatureSpec:
 
     def build(self, game) -> np.ndarray:
         return self.builder(game)
+
 
 # --- Constants for extra planes ---
 EXTRA_PLANES = {
@@ -2306,6 +2442,7 @@ EXTRA_PLANES = {
 }
 
 # --- Core46 Feature Builder ---
+
 
 @register_feature("core46")
 def build_core46(game) -> np.ndarray:
@@ -2329,46 +2466,70 @@ def build_core46(game) -> np.ndarray:
             # Unpromoted
             if not piece.is_promoted():
                 if is_curr:
-                    idx = game.OBS_CURR_PLAYER_UNPROMOTED_START + game.OBS_UNPROMOTED_ORDER.index(piece.piece_type)
+                    idx = (
+                        game.OBS_CURR_PLAYER_UNPROMOTED_START
+                        + game.OBS_UNPROMOTED_ORDER.index(piece.piece_type)
+                    )
                 else:
-                    idx = game.OBS_OPP_PLAYER_UNPROMOTED_START + game.OBS_UNPROMOTED_ORDER.index(piece.piece_type)
+                    idx = (
+                        game.OBS_OPP_PLAYER_UNPROMOTED_START
+                        + game.OBS_UNPROMOTED_ORDER.index(piece.piece_type)
+                    )
             else:
                 # Promoted
                 if is_curr:
-                    idx = game.OBS_CURR_PLAYER_PROMOTED_START + game.OBS_PROMOTED_ORDER.index(piece.piece_type)
+                    idx = (
+                        game.OBS_CURR_PLAYER_PROMOTED_START
+                        + game.OBS_PROMOTED_ORDER.index(piece.piece_type)
+                    )
                 else:
-                    idx = game.OBS_OPP_PLAYER_PROMOTED_START + game.OBS_PROMOTED_ORDER.index(piece.piece_type)
+                    idx = (
+                        game.OBS_OPP_PLAYER_PROMOTED_START
+                        + game.OBS_PROMOTED_ORDER.index(piece.piece_type)
+                    )
             obs[idx, r, c] = 1.0
     # --- Hand pieces ---
     for i, pt in enumerate(game.OBS_UNPROMOTED_ORDER):
-        obs[game.OBS_CURR_PLAYER_HAND_START + i, :, :] = game.hands[game.current_player].get(pt, 0)
-        opp = game.current_player.opponent() if hasattr(game.current_player, 'opponent') else (1 - game.current_player)
+        obs[game.OBS_CURR_PLAYER_HAND_START + i, :, :] = game.hands[
+            game.current_player
+        ].get(pt, 0)
+        opp = (
+            game.current_player.opponent()
+            if hasattr(game.current_player, "opponent")
+            else (1 - game.current_player)
+        )
         obs[game.OBS_OPP_PLAYER_HAND_START + i, :, :] = game.hands[opp].get(pt, 0)
     # --- Meta planes ---
-    obs[game.OBS_CURR_PLAYER_INDICATOR, :, :] = 1.0 if game.current_player == game.Color.BLACK else 0.0
+    obs[game.OBS_CURR_PLAYER_INDICATOR, :, :] = (
+        1.0 if game.current_player == game.Color.BLACK else 0.0
+    )
     obs[game.OBS_MOVE_COUNT, :, :] = game.move_count / 512.0  # Normalize by max moves
     obs[game.OBS_RESERVED_1, :, :] = 0.0  # Always zero-filled
     obs[game.OBS_RESERVED_2, :, :] = 0.0  # Always zero-filled
     return obs
 
+
 # --- Optional Feature Planes (T-2, refactored) ---
+
 
 def add_check_plane(obs: np.ndarray, game, base_planes=46) -> None:
     idx = base_planes + EXTRA_PLANES["check"]
-    if hasattr(game, 'is_in_check'):
+    if hasattr(game, "is_in_check"):
         obs[idx, :, :] = 1.0 if game.is_in_check(game.current_player) else 0.0
     else:
         obs[idx, :, :] = 0.0
 
+
 def add_repetition_plane(obs: np.ndarray, game, base_planes=46) -> None:
     idx = base_planes + EXTRA_PLANES["repetition"]
     # If game has a repetition count or sennichite detection, use it; else zeros
-    if hasattr(game, 'repetition_count'):
+    if hasattr(game, "repetition_count"):
         obs[idx, :, :] = min(game.repetition_count / 4.0, 1.0)  # Normalize to [0,1]
-    elif hasattr(game, 'is_sennichite') and game.is_sennichite():
+    elif hasattr(game, "is_sennichite") and game.is_sennichite():
         obs[idx, :, :] = 1.0
     else:
         obs[idx, :, :] = 0.0
+
 
 def add_prom_zone_plane(obs: np.ndarray, game, base_planes=46) -> None:
     idx = base_planes + EXTRA_PLANES["prom_zone"]
@@ -2377,12 +2538,13 @@ def add_prom_zone_plane(obs: np.ndarray, game, base_planes=46) -> None:
     for r in zone_rows:
         obs[idx, r, :] = 1.0
 
+
 def add_last2ply_plane(obs: np.ndarray, game, base_planes=46) -> None:
     idx = base_planes + EXTRA_PLANES["last2ply"]
     # Mark the destination squares of the last two moves (if available)
-    if hasattr(game, 'move_history') and len(game.move_history) >= 1:
+    if hasattr(game, "move_history") and len(game.move_history) >= 1:
         for move in game.move_history[-2:]:
-            if hasattr(move, 'to_square'):
+            if hasattr(move, "to_square"):
                 r, c = move.to_square
                 obs[idx, r, c] = 1.0
 
@@ -2394,6 +2556,7 @@ def add_hand_onehot_plane(obs: np.ndarray, game, base_planes=46) -> None:
         if game.hands[game.current_player].get(pt, 0) > 0:
             obs[idx, 0, 0] = 1.0
             break
+
 
 @register_feature("core46+all")
 def build_core46_all(game) -> np.ndarray:
@@ -2407,6 +2570,7 @@ def build_core46_all(game) -> np.ndarray:
     add_hand_onehot_plane(obs, game, base_planes)
     return obs
 
+
 # Register FeatureSpec for all feature sets
 CORE46_SPEC = FeatureSpec("core46", build_core46, 46)
 CORE46_ALL_SPEC = FeatureSpec("core46+all", build_core46_all, 51)
@@ -2414,14 +2578,14 @@ CORE46_ALL_SPEC = FeatureSpec("core46+all", build_core46_all, 51)
 # Dummy specs for testing
 DUMMY_FEATS_SPEC = FeatureSpec("dummyfeats", build_core46, 46)
 TEST_FEATS_SPEC = FeatureSpec("testfeats", build_core46, 46)
-RESUME_FEATS_SPEC = FeatureSpec("resumefeats", build_core46, 46) # Add resumefeats
+RESUME_FEATS_SPEC = FeatureSpec("resumefeats", build_core46, 46)  # Add resumefeats
 
 FEATURE_SPECS = {
     "core46": CORE46_SPEC,
     "core46+all": CORE46_ALL_SPEC,
     "dummyfeats": DUMMY_FEATS_SPEC,
     "testfeats": TEST_FEATS_SPEC,
-    "resumefeats": RESUME_FEATS_SPEC, # Add resumefeats
+    "resumefeats": RESUME_FEATS_SPEC,  # Add resumefeats
 }
 
 ]]></file>
@@ -5597,7 +5761,9 @@ class PPOAgent:
         self.minibatch_size = config.training.minibatch_size
 
         self.last_kl_div = 0.0  # Initialize KL divergence tracker
-        self.gradient_clip_max_norm = config.training.gradient_clip_max_norm # Added from config
+        self.gradient_clip_max_norm = (
+            config.training.gradient_clip_max_norm
+        )  # Added from config
 
     def select_action(
         self,
@@ -5780,7 +5946,8 @@ class PPOAgent:
                 self.optimizer.zero_grad()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(), max_norm=self.gradient_clip_max_norm # Use config value
+                    self.model.parameters(),
+                    max_norm=self.gradient_clip_max_norm,  # Use config value
                 )  # Optional: gradient clipping
                 self.optimizer.step()
 
@@ -6374,7 +6541,9 @@ def load_config(
 
 
 if TYPE_CHECKING:
-    from keisei.config_schema import AppConfig  # Keep this for type hinting if used elsewhere
+    from keisei.config_schema import (
+        AppConfig,
+    )  # Keep this for type hinting if used elsewhere
     from keisei.shogi.shogi_core_definitions import MoveTuple
     from keisei.shogi.shogi_game import ShogiGame  # Added for type hinting
 
@@ -6806,11 +6975,16 @@ def generate_run_name(config: "AppConfig", run_name: Optional[str] = None) -> st
 """
 checkpoint.py: Model checkpoint migration and compatibility utilities for Keisei Shogi.
 """
+
+from typing import Any, Dict
+
 import torch
 import torch.nn as nn
-from typing import Dict, Any
 
-def load_checkpoint_with_padding(model: nn.Module, checkpoint: Dict[str, Any], input_channels: int) -> None:
+
+def load_checkpoint_with_padding(
+    model: nn.Module, checkpoint: Dict[str, Any], input_channels: int
+) -> None:
     """
     Loads a checkpoint into the model, zero-padding the first conv layer if input channels have increased.
     Args:
@@ -6818,7 +6992,11 @@ def load_checkpoint_with_padding(model: nn.Module, checkpoint: Dict[str, Any], i
         checkpoint: The loaded state_dict (from torch.load(...)).
         input_channels: The number of input channels expected by the current model.
     """
-    state_dict = checkpoint["model_state_dict"] if "model_state_dict" in checkpoint else checkpoint
+    state_dict = (
+        checkpoint["model_state_dict"]
+        if "model_state_dict" in checkpoint
+        else checkpoint
+    )
     model_state = model.state_dict()
     # Handle first conv layer (stem)
     stem_key = None
@@ -6832,14 +7010,19 @@ def load_checkpoint_with_padding(model: nn.Module, checkpoint: Dict[str, Any], i
         if old_weight.shape[1] < new_weight.shape[1]:
             # Zero-pad input channels
             pad = torch.zeros(
-                (old_weight.shape[0], new_weight.shape[1] - old_weight.shape[1], *old_weight.shape[2:]),
-                dtype=old_weight.dtype, device=old_weight.device
+                (
+                    old_weight.shape[0],
+                    new_weight.shape[1] - old_weight.shape[1],
+                    *old_weight.shape[2:],
+                ),
+                dtype=old_weight.dtype,
+                device=old_weight.device,
             )
             padded_weight = torch.cat([old_weight, pad], dim=1)
             state_dict[stem_key] = padded_weight
         elif old_weight.shape[1] > new_weight.shape[1]:
             # Truncate input channels
-            state_dict[stem_key] = old_weight[:, :new_weight.shape[1], :, :]
+            state_dict[stem_key] = old_weight[:, : new_weight.shape[1], :, :]
     # Load all other layers strictly
     model.load_state_dict(state_dict, strict=False)
 

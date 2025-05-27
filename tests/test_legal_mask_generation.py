@@ -87,11 +87,6 @@ class TestLegalMaskGeneration:  # pylint: disable=too-many-public-methods
         mapper = PolicyOutputMapper()
 
         assert game.current_player == Color.BLACK
-        # print(f"DEBUG Checkmate: SFEN={sfen_checkmate}, Player={game.current_player}, Board=\\n{game.get_board_str()}")
-        # print(f"DEBUG Checkmate: Is Black in check? {game.is_in_check(Color.BLACK)}")
-        # legal_moves_for_checkmate = game.get_legal_moves()
-        # print(f"DEBUG Checkmate: Legal moves for black: {legal_moves_for_checkmate}")
-
         assert (
             game.is_in_check(Color.BLACK) is True
         ), "Black should be in check in this position."

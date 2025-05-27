@@ -1132,13 +1132,7 @@ def test_game_termination_sennichite(
                 )
 
             current_sfen_before_move = game.to_sfen_string()
-            print(
-                f"DEBUG_TEST_SENNICHITE: About to get legal moves. Current player: {game.current_player}, SFEN: {current_sfen_before_move}"
-            )  # DEBUG PRINT
             legal_moves = game.get_legal_moves()
-            print(
-                f"DEBUG_TEST_SENNICHITE: Move to check: {move_tuple} by player {game.current_player}. Legal moves generated: {legal_moves}"
-            )  # DEBUG PRINT
             if move_tuple not in legal_moves:
                 pytest.fail(
                     f"Sennichite setup: Move {move_tuple} by {game.current_player} not legal. Legal: {legal_moves}. SFEN: {current_sfen_before_move}"

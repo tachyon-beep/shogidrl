@@ -90,9 +90,7 @@ def test_model_save_and_load(tmp_path):
     else:
         # If neither conv nor policy_head with weights are found, skip this specific modification part of the test
         # or raise an error if this modification is critical for the test's intent.
-        print(
-            "Warning: Could not find a suitable layer to modify for testing model loading into a modified agent."
-        )
+        pass
 
     third_agent.load_model(model_path)
     # Corrected to use third_agent.model
