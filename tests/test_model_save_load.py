@@ -40,7 +40,7 @@ def test_model_save_and_load(tmp_path):
 
     policy_output_mapper = PolicyOutputMapper()
     device = config.env.device
-    agent = PPOAgent(input_channels, policy_output_mapper, device=device)
+    agent = PPOAgent(config=config, device=torch.device(device))
     # Corrected to use agent.model instead of agent.policy
     original_model_state_dict = {
         k: v.cpu() for k, v in agent.model.state_dict().items()
@@ -53,7 +53,7 @@ def test_model_save_and_load(tmp_path):
     assert os.path.exists(model_path)
 
     # Create a new agent and load the model
-    new_agent = PPOAgent(input_channels, policy_output_mapper, device=device)
+    new_agent = PPOAgent(config=config, device=torch.device(device))
     new_agent.load_model(model_path)
     # Corrected to use new_agent.model
     loaded_model_state_dict = {
@@ -67,7 +67,7 @@ def test_model_save_and_load(tmp_path):
         ), f"Model parameter mismatch for key: {key}"
 
     # Test loading into an agent with a different network instance but same architecture
-    third_agent = PPOAgent(input_channels, policy_output_mapper, device=device)
+    third_agent = PPOAgent(config=config, device=torch.device(device))
     # Access a specific layer's weights, e.g., the first conv layer's weights
     # This depends on the structure of your ActorCritic model in neural_network.py
     # Assuming self.model.conv is the first convolutional layer

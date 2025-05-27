@@ -8,7 +8,8 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Any
 
 import numpy as np
 import torch
-import torch.nn.functional as F  # For F.softmax
+import torch.nn.functional as F
+from keisei.config_schema import AppConfig
 
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.neural_network import ActorCritic
@@ -23,42 +24,40 @@ class PPOAgent:
 
     def __init__(
         self,
-        input_channels: int,
-        policy_output_mapper: PolicyOutputMapper,
-        learning_rate: float = 3e-4,
-        gamma: float = 0.99,
-        clip_epsilon: float = 0.2,
-        ppo_epochs: int = 10,
-        minibatch_size: int = 64,
-        value_loss_coeff: float = 0.5,
-        entropy_coef: float = 0.01,
-        device: str = "cpu",
-        name: str = "PPOAgent",  # Added name parameter
+        config: AppConfig,
+        device: torch.device,
+        name: str = "PPOAgent",
     ):
         """
         Initialize the PPOAgent with model, optimizer, and PPO hyperparameters.
         """
-        self.device = torch.device(device)
+        self.config = config
+        self.device = device
+        self.name = name
+
+        input_channels = config.env.input_channels
+        policy_output_mapper = PolicyOutputMapper()
+
         self.policy_output_mapper = policy_output_mapper
         self.num_actions_total = self.policy_output_mapper.get_total_actions()
         self.model = ActorCritic(input_channels, self.num_actions_total).to(self.device)
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
-        self.gamma = gamma
-        self.clip_epsilon = clip_epsilon
-        self.value_loss_coeff = value_loss_coeff
-        self.entropy_coef = entropy_coef
-        self.ppo_epochs = ppo_epochs
-        self.minibatch_size = minibatch_size
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=config.training.learning_rate)
+
+        # PPO hyperparameters
+        self.gamma = config.training.gamma
+        self.clip_epsilon = config.training.clip_epsilon
+        self.value_loss_coeff = config.training.value_loss_coeff
+        self.entropy_coef = config.training.entropy_coef
+        self.ppo_epochs = config.training.ppo_epochs
+        self.minibatch_size = config.training.minibatch_size
+
         self.last_kl_div = 0.0  # Initialize KL divergence tracker
-        self.name = name  # Initialize name attribute
 
     def select_action(
         self,
         obs: np.ndarray,
-        legal_shogi_moves: List[
-            "MoveTuple"
-        ],  # Still useful for policy_index_to_shogi_move
         legal_mask: torch.Tensor,
+        *,  # Force is_training to be keyword-only
         is_training: bool = True,
     ) -> Tuple[
         Optional["MoveTuple"],

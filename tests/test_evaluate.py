@@ -34,25 +34,16 @@ INPUT_CHANNELS = 46  # Use the default from config for tests
 
 # A mock PPOAgent for testing purposes
 # Inherit from PPOAgent to satisfy type hints for run_evaluation_loop, and BaseOpponent for other uses.
-class MockPPOAgent(PPOAgent, BaseOpponent):  # Inherit from PPOAgent and BaseOpponent
+class MockPPOAgent(PPOAgent, BaseOpponent):
     def __init__(
         self,
-        input_channels,
-        policy_output_mapper,
-        device_str,
+        config,
+        device,
         name="MockPPOAgentForTest",
     ):
-        # Initialize PPOAgent part, passing the name.
-        # PPOAgent's __init__ calls BaseOpponent.__init__(name=name).
-        PPOAgent.__init__(
-            self,
-            input_channels=input_channels,
-            policy_output_mapper=policy_output_mapper,
-            device=device_str,
-            name=name,
-        )
-        BaseOpponent.__init__(self, name=name)  # Ensure BaseOpponent is initialized
-        self.model = MagicMock()  # Mock the underlying torch model after PPOAgent init
+        PPOAgent.__init__(self, config=config, device=device, name=name)
+        BaseOpponent.__init__(self, name=name)
+        self.model = MagicMock()
         self._is_ppo_agent_mock = True  # Flag to identify this mock
         # self.name is set by PPOAgent's __init__ via BaseOpponent
 
@@ -65,18 +56,14 @@ class MockPPOAgent(PPOAgent, BaseOpponent):  # Inherit from PPOAgent and BaseOpp
     def select_action(
         self,
         obs: np.ndarray,
-        legal_shogi_moves: list[MoveTuple],
         legal_mask: torch.Tensor,
-        is_training=False,
-    ) -> Tuple[
-        Optional[MoveTuple], int, float, float
-    ]:  # Matched all parameter names and types with PPOAgent
-        if not legal_shogi_moves:
-            # This case should be handled by the game loop checking game_over or no legal_moves
-            raise ValueError("MockPPOAgent.select_action: No legal moves provided.")
-        selected_move: Optional[MoveTuple] = random.choice(legal_shogi_moves)
-        # PPOAgent.select_action returns: (move_tuple, policy_idx, log_prob, value)
-        return selected_move, 0, 0.0, 0.0
+        *,
+        is_training: bool = True,
+    ):
+        # For test compatibility, always return a dummy move and values
+        # Assume legal_mask is a tensor of bools, pick the first True index
+        idx = int((legal_mask == True).nonzero(as_tuple=True)[0][0]) if legal_mask.any() else 0
+        return (None, idx, 0.0, 0.0)
 
     def get_value(
         self, obs_np: np.ndarray
@@ -99,7 +86,7 @@ class MockPPOAgent(PPOAgent, BaseOpponent):  # Inherit from PPOAgent and BaseOpp
             spec=torch.Tensor
         )  # Dummy mask, spec for type hint
         action_result = self.select_action(
-            obs_np, legal_moves, legal_mask_tensor, is_training=False
+            obs_np, legal_mask_tensor, is_training=False
         )
         selected_move = action_result[0]
         if selected_move is None:
@@ -174,7 +161,9 @@ def test_initialize_opponent_types(policy_mapper):
 def test_initialize_opponent_ppo(mock_load_agent, policy_mapper):
     """Test that initialize_opponent returns a PPOAgent when type is 'ppo' and path is provided."""
     mock_ppo_instance = MockPPOAgent(
-        INPUT_CHANNELS, policy_mapper, "cpu", name="MockPPOAgentForTest"
+        config=make_test_config("cpu", INPUT_CHANNELS, PolicyOutputMapper()),
+        device=torch.device("cpu"),
+        name="MockPPOAgentForTest"
     )
     mock_load_agent.return_value = mock_ppo_instance
 
@@ -198,10 +187,8 @@ def test_initialize_opponent_ppo(mock_load_agent, policy_mapper):
 def test_load_evaluation_agent_mocked(MockPPOAgentClass, policy_mapper):
     mock_agent_instance = MagicMock(
         spec=PPOAgent
-    )  # Create a MagicMock that mimics PPOAgent
-    mock_agent_instance.model = (
-        MagicMock()
-    )  # Ensure the instance has a .model attribute that is also a mock
+    )
+    mock_agent_instance.model = MagicMock()
     MockPPOAgentClass.return_value = mock_agent_instance
 
     agent = load_evaluation_agent(
@@ -209,7 +196,8 @@ def test_load_evaluation_agent_mocked(MockPPOAgentClass, policy_mapper):
     )
 
     MockPPOAgentClass.assert_called_once_with(
-        input_channels=INPUT_CHANNELS, policy_output_mapper=policy_mapper, device="cpu"
+        config=make_test_config("cpu", INPUT_CHANNELS, PolicyOutputMapper()),
+        device=torch.device("cpu")
     )
     mock_agent_instance.load_model.assert_called_once_with("dummy_checkpoint.pth")
     mock_agent_instance.model.eval.assert_called_once()
@@ -224,7 +212,9 @@ def test_run_evaluation_loop_basic(policy_mapper, eval_logger_setup):
     logger, log_file_path = eval_logger_setup
 
     agent_to_eval = MockPPOAgent(
-        INPUT_CHANNELS, policy_mapper, "cpu", name="AgentToEval"
+        config=make_test_config("cpu", INPUT_CHANNELS, PolicyOutputMapper()),
+        device=torch.device("cpu"),
+        name="PPOAgentToEvaluate"
     )
     opponent = SimpleRandomOpponent(name="TestRandomOpponent")
 
@@ -311,7 +301,9 @@ def test_execute_full_evaluation_run_basic_random(  # MODIFIED: Renamed and refa
     policy_mapper_instance = PolicyOutputMapper()
 
     mock_agent_instance = MockPPOAgent(  # Using the test utility MockPPOAgent
-        INPUT_CHANNELS, policy_mapper_instance, "cpu", name="LoadedEvalAgent"
+        config=make_test_config("cpu", INPUT_CHANNELS, PolicyOutputMapper()),
+        device=torch.device("cpu"),
+        name="LoadedEvalAgent"
     )
     mock_load_agent.return_value = mock_agent_instance
 
@@ -409,9 +401,8 @@ def test_execute_full_evaluation_run_heuristic_opponent_with_wandb(  # MODIFIED:
     # MockPolicyOutputMapperClass.return_value = policy_mapper_instance # Not needed if we pass the instance
 
     mock_agent_instance = MockPPOAgent(
-        INPUT_CHANNELS,
-        policy_mapper_instance,
-        "cpu",
+        config=make_test_config("cpu", INPUT_CHANNELS, PolicyOutputMapper()),
+        device=torch.device("cpu"),
         name="LoadedMainAgentWandb",
     )
     mock_load_agent.return_value = mock_agent_instance
@@ -559,10 +550,14 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(  # MODIFIED: Renamed
     # MockPolicyOutputMapperClass.return_value = policy_mapper_instance # Not needed
 
     mock_agent_to_eval = MockPPOAgent(
-        INPUT_CHANNELS, policy_mapper_instance, "cpu", name="PPOAgentToEvaluate"
+        config=make_test_config("cpu", INPUT_CHANNELS, PolicyOutputMapper()),
+        device=torch.device("cpu"),
+        name="PPOAgentToEvaluate"
     )
     mock_opponent_agent = MockPPOAgent(
-        INPUT_CHANNELS, policy_mapper_instance, "cpu", name="PPOAgentOpponent"
+        config=make_test_config("cpu", INPUT_CHANNELS, PolicyOutputMapper()),
+        device=torch.device("cpu"),
+        name="PPOAgentOpponent"
     )
 
     agent_eval_path = "./agent_to_eval.pth"
@@ -721,7 +716,9 @@ def test_execute_full_evaluation_run_with_seed(  # MODIFIED: Renamed and refacto
     policy_mapper_instance = PolicyOutputMapper()
 
     mock_agent_instance = MockPPOAgent(
-        INPUT_CHANNELS, policy_mapper_instance, "cpu", name="AgentForSeedTest"
+        config=make_test_config("cpu", INPUT_CHANNELS, PolicyOutputMapper()),
+        device=torch.device("cpu"),
+        name="AgentForSeedTest"
     )
     mock_load_agent.return_value = mock_agent_instance
 
@@ -793,11 +790,13 @@ def test_evaluator_class_basic(monkeypatch, tmp_path, policy_mapper):
     # Patch load_evaluation_agent and initialize_opponent to return mocks
     class DummyAgent(PPOAgent):
         def __init__(self):
-            super().__init__(input_channels=INPUT_CHANNELS, policy_output_mapper=policy_mapper, device="cpu", name="DummyAgent")
+            config = make_test_config("cpu", INPUT_CHANNELS, PolicyOutputMapper())
+            super().__init__(config=config, device=torch.device("cpu"), name="DummyAgent")
             self.model = MagicMock()
-        def select_action(self, obs, legal_shogi_moves, legal_mask, is_training=False):
+        def select_action(self, obs, legal_mask, *, is_training=True):
             # Always pick the first legal move, index 0, dummy log_prob and value
-            return legal_shogi_moves[0], 0, 0.0, 0.0
+            idx = int((legal_mask == True).nonzero(as_tuple=True)[0][0]) if legal_mask.any() else 0
+            return None, idx, 0.0, 0.0
     class DummyOpponent(BaseOpponent):
         def __init__(self):
             super().__init__(name="DummyOpponent")
@@ -830,3 +829,34 @@ def test_evaluator_class_basic(monkeypatch, tmp_path, policy_mapper):
         log_content = f.read()
     assert "Starting Shogi Agent Evaluation" in log_content
     assert "Evaluation finished. Results:" in log_content
+
+
+# Helper to create a minimal AppConfig for test agents
+from keisei.config_schema import AppConfig, EnvConfig, TrainingConfig, EvaluationConfig, LoggingConfig, WandBConfig, DemoConfig
+
+def make_test_config(device_str, input_channels, policy_mapper):
+    # If policy_mapper is a pytest fixture function, raise an error to prevent direct calls
+    if hasattr(policy_mapper, '_pytestfixturefunction'):
+        raise RuntimeError("policy_mapper fixture was passed directly; pass an instance instead.")
+    try:
+        num_actions_total = policy_mapper.get_total_actions()
+    except Exception:
+        num_actions_total = 13527  # Default fallback for mocks or MagicMock
+    return AppConfig(
+        env=EnvConfig(device=device_str, input_channels=input_channels, num_actions_total=num_actions_total, seed=42),
+        training=TrainingConfig(
+            total_timesteps=1,
+            steps_per_epoch=1,
+            ppo_epochs=1,
+            minibatch_size=1,
+            learning_rate=1e-3,
+            gamma=0.99,
+            clip_epsilon=0.2,
+            value_loss_coeff=0.5,
+            entropy_coef=0.01,
+        ),
+        evaluation=EvaluationConfig(num_games=1, opponent_type="random"),
+        logging=LoggingConfig(log_file="/tmp/eval.log", model_dir="/tmp/"),
+        wandb=WandBConfig(enabled=False, project="eval", entity=None),
+        demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
+    )

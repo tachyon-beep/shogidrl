@@ -1,7 +1,6 @@
 # Thin wrapper for keisei.evaluation.evaluate and core utilities for test patching/mocking
 from keisei.evaluation import evaluate as _evaluate_mod
-from keisei.utils import PolicyOutputMapper, TrainingLogger, EvaluationLogger, BaseOpponent
-from keisei.core.ppo_agent import PPOAgent
+from keisei.evaluation.evaluate import main as evaluate_main
 
 # Assign API symbols for patching/mocking in tests
 load_evaluation_agent = _evaluate_mod.load_evaluation_agent
@@ -13,3 +12,6 @@ execute_full_evaluation_run = _evaluate_mod.execute_full_evaluation_run
 
 # CLI main
 main = _evaluate_mod.main
+
+if __name__ == "__main__":
+    evaluate_main()

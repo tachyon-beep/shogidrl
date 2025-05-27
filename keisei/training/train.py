@@ -2,21 +2,14 @@
 Main training script for Keisei Shogi RL agent.
 Refactored to use the Trainer class for better modularity.
 """
-import os
-import sys
-import json
 import argparse
 import multiprocessing
-from types import SimpleNamespace
+import sys
 from datetime import datetime
-from typing import List, Dict, Any, Optional
 
 # Import config module and related components
 from keisei.utils import load_config
 from keisei.config_schema import AppConfig
-from keisei.core.ppo_agent import PPOAgent
-from keisei.core.experience_buffer import ExperienceBuffer
-from keisei.core.neural_network import ActorCritic
 from .trainer import Trainer
 
 

@@ -22,11 +22,28 @@ from keisei.utils import PolicyOutputMapper
 def test_ppo_agent_init_and_select_action():
     """Test PPOAgent initializes and select_action returns a valid index."""
     mapper = PolicyOutputMapper()
-    agent = PPOAgent(input_channels=INPUT_CHANNELS, policy_output_mapper=mapper)
-    obs = np.random.rand(INPUT_CHANNELS, 9, 9).astype(
-        np.float32
-    )  # Ensure correct dtype for tensor conversion
-    game = ShogiGame(max_moves_per_game=512)  # Added max_moves_per_game
+    from keisei.config_schema import AppConfig, EnvConfig, TrainingConfig, EvaluationConfig, LoggingConfig, WandBConfig, DemoConfig
+    config = AppConfig(
+        env=EnvConfig(device="cpu", input_channels=INPUT_CHANNELS, num_actions_total=mapper.get_total_actions(), seed=42),
+        training=TrainingConfig(
+            total_timesteps=1000,
+            steps_per_epoch=32,
+            ppo_epochs=1,
+            minibatch_size=2,
+            learning_rate=1e-3,
+            gamma=0.99,
+            clip_epsilon=0.2,
+            value_loss_coeff=0.5,
+            entropy_coef=0.01,
+        ),
+        evaluation=EvaluationConfig(num_games=1, opponent_type="random"),
+        logging=LoggingConfig(log_file="/tmp/test.log", model_dir="/tmp/"),
+        wandb=WandBConfig(enabled=False, project="test", entity=None),
+        demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
+    )
+    agent = PPOAgent(config=config, device=torch.device("cpu"))
+    obs = np.random.rand(INPUT_CHANNELS, 9, 9).astype(np.float32)
+    game = ShogiGame(max_moves_per_game=512)
     legal_moves: List[MoveTuple] = game.get_legal_moves()
 
     # Ensure there's at least one legal move for the test to proceed
@@ -59,8 +76,10 @@ def test_ppo_agent_init_and_select_action():
         idx,
         log_prob,
         value,
-    ) = agent.select_action(  # Removed legal_mask_returned
-        obs, legal_shogi_moves=legal_moves, legal_mask=legal_mask
+    ) = agent.select_action(
+        obs,
+        legal_mask,
+        is_training=True,
     )
     assert isinstance(idx, int)
     assert 0 <= idx < agent.num_actions_total
@@ -80,12 +99,26 @@ def test_ppo_agent_init_and_select_action():
 def test_ppo_agent_learn():
     """Test PPOAgent's learn method with dummy data from an ExperienceBuffer."""
     mapper = PolicyOutputMapper()
-    agent = PPOAgent(
-        input_channels=INPUT_CHANNELS,
-        policy_output_mapper=mapper,
-        ppo_epochs=1,  # Keep epochs low for faster test
-        minibatch_size=2,  # Keep minibatch size low
+    from keisei.config_schema import AppConfig, EnvConfig, TrainingConfig, EvaluationConfig, LoggingConfig, WandBConfig, DemoConfig
+    config = AppConfig(
+        env=EnvConfig(device="cpu", input_channels=INPUT_CHANNELS, num_actions_total=mapper.get_total_actions(), seed=42),
+        training=TrainingConfig(
+            total_timesteps=1000,
+            steps_per_epoch=32,
+            ppo_epochs=1,
+            minibatch_size=2,
+            learning_rate=1e-3,
+            gamma=0.99,
+            clip_epsilon=0.2,
+            value_loss_coeff=0.5,
+            entropy_coef=0.01,
+        ),
+        evaluation=EvaluationConfig(num_games=1, opponent_type="random"),
+        logging=LoggingConfig(log_file="/tmp/test.log", model_dir="/tmp/"),
+        wandb=WandBConfig(enabled=False, project="test", entity=None),
+        demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
     )
+    agent = PPOAgent(config=config, device=torch.device("cpu"))
 
     buffer_size = 4  # Small buffer for testing
     experience_buffer = ExperienceBuffer(

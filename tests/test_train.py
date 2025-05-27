@@ -6,6 +6,11 @@ import json as pyjson
 import os
 import subprocess
 import sys
+import torch
+
+from keisei.config_schema import AppConfig, EnvConfig, TrainingConfig, EvaluationConfig, LoggingConfig, WandBConfig, DemoConfig
+from keisei.core.ppo_agent import PPOAgent
+from keisei.utils import PolicyOutputMapper
 
 # Local config constants for test compatibility with new config system
 INPUT_CHANNELS = 46
@@ -17,9 +22,6 @@ MINIBATCH_SIZE = 64
 VALUE_LOSS_COEFF = 0.5
 ENTROPY_COEFF = 0.01
 DEVICE = "cpu"
-
-from keisei.core.ppo_agent import PPOAgent  # Add back PPOAgent import
-from keisei.utils import PolicyOutputMapper  # Add back PolicyOutputMapper import
 
 TRAIN_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "train.py"))
 
@@ -44,18 +46,25 @@ def test_train_resume_autodetect(tmp_path):
     run_dir.mkdir()
     fake_ckpt = run_dir / "checkpoint_ts1.pth"  # Corrected filename pattern
     policy_mapper = PolicyOutputMapper()
-    agent = PPOAgent(
-        input_channels=INPUT_CHANNELS,
-        policy_output_mapper=policy_mapper,
-        learning_rate=LEARNING_RATE,
-        gamma=GAMMA,
-        clip_epsilon=CLIP_EPSILON,
-        ppo_epochs=PPO_EPOCHS,
-        minibatch_size=MINIBATCH_SIZE,
-        value_loss_coeff=VALUE_LOSS_COEFF,
-        entropy_coef=ENTROPY_COEFF,
-        device=DEVICE,
+    config = AppConfig(
+        env=EnvConfig(device=DEVICE, input_channels=INPUT_CHANNELS, num_actions_total=policy_mapper.get_total_actions(), seed=42),
+        training=TrainingConfig(
+            total_timesteps=1000,
+            steps_per_epoch=32,
+            ppo_epochs=1,
+            minibatch_size=2,
+            learning_rate=LEARNING_RATE,
+            gamma=GAMMA,
+            clip_epsilon=CLIP_EPSILON,
+            value_loss_coeff=VALUE_LOSS_COEFF,
+            entropy_coef=ENTROPY_COEFF,
+        ),
+        evaluation=EvaluationConfig(num_games=1, opponent_type="random"),
+        logging=LoggingConfig(log_file="/tmp/test.log", model_dir="/tmp/"),
+        wandb=WandBConfig(enabled=False, project="test", entity=None),
+        demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
     )
+    agent = PPOAgent(config=config, device=torch.device(DEVICE))
     agent.save_model(str(fake_ckpt))
     result = subprocess.run(
         [
@@ -178,18 +187,25 @@ def test_train_explicit_resume(tmp_path):
     )  # Corrected filename pattern
     # Create a minimal valid PPOAgent and save its checkpoint
     policy_mapper = PolicyOutputMapper()
-    agent = PPOAgent(
-        input_channels=INPUT_CHANNELS,
-        policy_output_mapper=policy_mapper,
-        learning_rate=LEARNING_RATE,
-        gamma=GAMMA,
-        clip_epsilon=CLIP_EPSILON,
-        ppo_epochs=PPO_EPOCHS,
-        minibatch_size=MINIBATCH_SIZE,
-        value_loss_coeff=VALUE_LOSS_COEFF,
-        entropy_coef=ENTROPY_COEFF,
-        device=DEVICE,
+    config = AppConfig(
+        env=EnvConfig(device=DEVICE, input_channels=INPUT_CHANNELS, num_actions_total=policy_mapper.get_total_actions(), seed=42),
+        training=TrainingConfig(
+            total_timesteps=1000,
+            steps_per_epoch=32,
+            ppo_epochs=1,
+            minibatch_size=2,
+            learning_rate=LEARNING_RATE,
+            gamma=GAMMA,
+            clip_epsilon=CLIP_EPSILON,
+            value_loss_coeff=VALUE_LOSS_COEFF,
+            entropy_coef=ENTROPY_COEFF,
+        ),
+        evaluation=EvaluationConfig(num_games=1, opponent_type="random"),
+        logging=LoggingConfig(log_file="/tmp/test.log", model_dir="/tmp/"),
+        wandb=WandBConfig(enabled=False, project="test", entity=None),
+        demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
     )
+    agent = PPOAgent(config=config, device=torch.device(DEVICE))
     agent.save_model(str(ckpt_path), global_timestep=100, total_episodes_completed=10)
     result = subprocess.run(
         [

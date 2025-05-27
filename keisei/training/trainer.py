@@ -8,14 +8,11 @@ import glob
 import time
 import random
 from datetime import datetime
-from types import SimpleNamespace
-from typing import Any, Dict, List, Optional  # Removed Tuple
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import torch
 import wandb
-
-# Rich imports for TUI
 from rich.console import Console, Group
 from rich.live import Live
 from rich.progress import (
@@ -30,8 +27,6 @@ from rich.progress import (
 from rich.text import Text
 from rich.panel import Panel
 from rich.layout import Layout
-
-# Keisei imports
 from keisei.core.ppo_agent import PPOAgent
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.neural_network import ActorCritic
@@ -222,16 +217,8 @@ class Trainer:
         """Initialize PPO agent and experience buffer."""
         # Use nested config structure
         self.agent = PPOAgent(
-            input_channels=self.config.env.input_channels,
-            policy_output_mapper=self.policy_output_mapper,
-            learning_rate=self.config.training.learning_rate,
-            gamma=self.config.training.gamma,
-            clip_epsilon=self.config.training.clip_epsilon,
-            ppo_epochs=self.config.training.ppo_epochs,
-            minibatch_size=self.config.training.minibatch_size,
-            value_loss_coeff=self.config.training.value_loss_coeff,
-            entropy_coef=self.config.training.entropy_coef,
-            device=self.config.env.device,
+            config=self.config,
+            device=torch.device(self.config.env.device),
         )
         self.experience_buffer = ExperienceBuffer(
             buffer_size=self.config.training.steps_per_epoch,
@@ -466,7 +453,7 @@ class Trainer:
         
         # Agent action selection
         selected_shogi_move, policy_index, log_prob, value_pred = self.agent.select_action(
-            current_obs_np, legal_shogi_moves, legal_mask_tensor, is_training=True
+            current_obs_np, legal_mask_tensor, is_training=True
         )
         
         if selected_shogi_move is None:

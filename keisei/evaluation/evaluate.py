@@ -129,13 +129,27 @@ def load_evaluation_agent(
     input_channels: int,
 ) -> PPOAgent:
     """Loads a PPOAgent from a checkpoint for evaluation."""
-    agent = PPOAgent(
-        input_channels=input_channels,
-        policy_output_mapper=policy_mapper,
-        device=device_str,
-        # Other PPO params like lr, gamma, etc., are not strictly needed for eval-only model,
-        # but PPOAgent constructor might require them. For now, assume defaults are fine.
+    from keisei.config_schema import AppConfig, EnvConfig, TrainingConfig, EvaluationConfig, LoggingConfig, WandBConfig, DemoConfig
+    # Use minimal config for evaluation
+    config = AppConfig(
+        env=EnvConfig(device=device_str, input_channels=input_channels, num_actions_total=policy_mapper.get_total_actions(), seed=42),
+        training=TrainingConfig(
+            total_timesteps=1,
+            steps_per_epoch=1,
+            ppo_epochs=1,
+            minibatch_size=1,
+            learning_rate=1e-3,
+            gamma=0.99,
+            clip_epsilon=0.2,
+            value_loss_coeff=0.5,
+            entropy_coef=0.01,
+        ),
+        evaluation=EvaluationConfig(num_games=1, opponent_type="random"),
+        logging=LoggingConfig(log_file="/tmp/eval.log", model_dir="/tmp/"),
+        wandb=WandBConfig(enabled=False, project="eval", entity=None),
+        demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
     )
+    agent = PPOAgent(config=config, device=torch.device(device_str))
     agent.load_model(checkpoint_path)
     agent.model.eval()  # Set the model to evaluation mode
     print(f"Loaded agent from {checkpoint_path} on device {device_str} for evaluation.")
@@ -238,7 +252,9 @@ def run_evaluation_loop(
                     # PPOAgent.select_action should handle this.
                     selected_shogi_move, action_idx, log_prob, value = (
                         active_agent.select_action(
-                            obs_np, legal_moves, legal_mask, is_training=False
+                            obs_np,
+                            legal_mask,
+                            is_training=False
                         )
                     )
                     selected_move = (
@@ -247,7 +263,9 @@ def run_evaluation_loop(
                 else:
                     selected_shogi_move, action_idx, log_prob, value = (
                         active_agent.select_action(
-                            obs_np, legal_moves, legal_mask, is_training=False
+                            obs_np,
+                            legal_mask,
+                            is_training=False
                         )
                     )
                     selected_move = (

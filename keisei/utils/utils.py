@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import datetime
 import sys
+import os
+import json
 from abc import ABC, abstractmethod
 from typing import (
     TYPE_CHECKING,
@@ -16,18 +18,16 @@ from typing import (
     Optional,
     Any,
     cast,
-)  # MODIFIED: Added cast
+)
 
 import torch
 from rich.console import Console
 from rich.text import Text
-
-# --- Config Loader Utility ---
 import yaml
-import json
-from typing import Any, Dict, Optional
 from pydantic import ValidationError
 from keisei.config_schema import AppConfig
+
+# --- Config Loader Utility ---
 
 # Mapping of flat override keys to nested config paths
 FLAT_KEY_TO_NESTED = {
@@ -67,18 +67,17 @@ def load_config(config_path: Optional[str] = None, cli_overrides: Optional[Dict[
     Loads configuration from a YAML or JSON file and applies CLI overrides.
     Always loads default_config.yaml as the base, then merges in overrides from config_path (if present), then CLI overrides.
     """
-    import os
     # Always load the base config first
     base_config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "default_config.yaml")
-    with open(base_config_path, 'r') as f:
+    with open(base_config_path, 'r', encoding="utf-8") as f:
         config_data = yaml.safe_load(f)
     # If config_path is provided and is not the default, treat as override file (JSON or YAML)
     if config_path and os.path.abspath(config_path) != os.path.abspath(base_config_path):
         if config_path.endswith(('.yaml', '.yml')):
-            with open(config_path, 'r') as f:
+            with open(config_path, 'r', encoding="utf-8") as f:
                 override_data = yaml.safe_load(f)
         elif config_path.endswith('.json'):
-            with open(config_path, 'r') as f:
+            with open(config_path, 'r', encoding="utf-8") as f:
                 override_data = json.load(f)
         else:
             raise ValueError(f"Unsupported config file type: {config_path}")
