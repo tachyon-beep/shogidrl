@@ -1,0 +1,92 @@
+import torch
+import torch.nn.functional as F
+import numpy as np
+from typing import Optional # Add this import
+from keisei.shogi.features import FEATURE_SPECS
+from keisei.training.models import model_factory
+
+class Trainer:
+    def __init__(self, config):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # Build feature extractor from registry
+        self.feature_spec = FEATURE_SPECS[config.input_features]
+        self.obs_shape = (self.feature_spec.num_planes, 9, 9)
+        # Build model from config
+        self.model = model_factory(
+            model_type=config.model_type,
+            obs_shape=self.obs_shape,
+            tower_depth=config.tower_depth,
+            tower_width=config.tower_width,
+            se_ratio=config.se_ratio,
+            # ...other model params as needed...
+        ).to(self.device)
+        if config.mixed_precision and self.device.type == 'cuda':
+            self.scaler = torch.cuda.amp.GradScaler()
+        else:
+            self.scaler = None
+        
+        # PPO hyperparameters (consider moving to config)
+        self.ppo_clip_eps = 0.2
+        self.value_loss_coef = 0.5
+        self.entropy_coef = 0.01
+
+    def train_step(self, batch: dict, optimizer: torch.optim.Optimizer, clip_grad: Optional[float] = None):
+        optimizer.zero_grad(set_to_none=True)
+
+        # Prepare observations
+        # Ensure ShogiGame objects are handled correctly if they are part of the batch
+        # For now, assuming batch['games'] contains data that feature_spec.build can process
+        obs_list = [self.feature_spec.build(g) for g in batch['games']]
+        obs = torch.from_numpy(np.stack(obs_list, axis=0)).to(self.device, non_blocking=True)
+
+        # Move other batch tensors to device
+        actions = batch['actions'].to(self.device, non_blocking=True)
+        advantages = batch['advantages'].to(self.device, non_blocking=True)
+        returns = batch['returns'].to(self.device, non_blocking=True)
+        old_logp = batch['old_logp'].to(self.device, non_blocking=True)
+
+        # Ensure actions are long type for gather
+        if actions.dtype != torch.long:
+            actions = actions.long()
+
+        def forward_loss():
+            policy_logits, value = self.model(obs) # value shape: (B, 1) -> squeeze for loss
+            
+            logp = F.log_softmax(policy_logits, dim=-1)
+            entropy = -(logp.exp() * logp).sum(dim=-1) # (B,)
+
+            # Gather log-prob of played actions
+            # actions shape: (B,) -> unsqueeze to (B,1) for gather
+            new_logp = logp.gather(1, actions.unsqueeze(-1)).squeeze(-1) # (B,)
+
+            ratio = (new_logp - old_logp).exp() # (B,)
+            
+            surr1 = ratio * advantages # (B,)
+            surr2 = ratio.clamp(1.0 - self.ppo_clip_eps, 1.0 + self.ppo_clip_eps) * advantages # (B,)
+            
+            policy_loss = -torch.min(surr1, surr2).mean() # scalar
+
+            # Value loss
+            value = value.squeeze(-1) # Ensure value is (B,) for mse_loss with returns (B,)
+            value_loss = F.mse_loss(value, returns) # scalar
+            
+            loss = policy_loss + self.value_loss_coef * value_loss - self.entropy_coef * entropy.mean() # scalar
+            return loss
+
+        if self.scaler: # Mixed precision
+            with torch.cuda.amp.autocast():
+                loss = forward_loss()
+            self.scaler.scale(loss).backward()
+            if clip_grad:
+                self.scaler.unscale_(optimizer) # Unscale before clipping
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), clip_grad)
+            self.scaler.step(optimizer)
+            self.scaler.update()
+        else: # FP32
+            loss = forward_loss()
+            loss.backward()
+            if clip_grad:
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), clip_grad)
+            optimizer.step()
+
+        return loss.detach()

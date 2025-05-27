@@ -30,9 +30,15 @@ This plan details the steps to modernize the Keisei DRL Shogi model pipeline, en
 - [!] Note: No backwards compatibility with pre-modernization checkpoints is provided, as this is a pre-alpha codebase.
 
 ### T-5: Trainer/Runner Config Integration
-- [ ] Update `keisei/training/runner.py` and Trainer to use new config fields (`input_features`, `tower_depth`, `tower_width`, `se_ratio`).
-- [ ] Autopopulate `obs_shape` from feature builder.
-- [ ] Add CLI flags: `--model=resnet`, `--mixed_precision`, `--ddp`.
+- [x] Update `keisei/config_schema.py` with new fields (`input_features`, `tower_depth`, `tower_width`, `se_ratio`, `model_type`, `mixed_precision`, `ddp`, `gradient_clip_max_norm`, `lambda_gae`).
+- [x] Integrate new config fields into `keisei/training/trainer.py`.
+- [x] Implement model factory in `keisei/training/models/__init__.py` and integrate with Trainer.
+- [x] Autopopulate `obs_shape` from feature builder in Trainer.
+- [x] Add CLI flags for new training parameters to `keisei/training/train.py`.
+- [x] Ensure Trainer uses the correct model and feature builder based on config.
+- [x] Update `keisei/training/runner.py` (Note: `runner.py` not substantially used yet, focus on `trainer.py` and `train.py` for now).
+- [x] Tests for config/CLI overrides and model/feature instantiation in `tests/test_trainer_config.py`.
+- [~] Address remaining test failures in `tests/test_train.py` (`subprocess.CalledProcessError`).
 
 ### T-6: Mixed-Precision Training
 - [ ] Add mixed-precision context (`torch.cuda.amp.autocast`, `GradScaler`) to Trainer.
@@ -46,7 +52,9 @@ This plan details the steps to modernize the Keisei DRL Shogi model pipeline, en
 ### T-8: Unit Tests
 - [x] Parametric tests for feature sets and model forward pass.
 - [x] SE block tested in isolation.
-- [x] All new/updated tests pass.
+- [x] Checkpoint migration tests.
+- [x] Trainer config integration tests.
+- [~] All new/updated tests pass (pending `test_train.py` fix).
 
 ### T-9: Benchmark Script
 - [ ] Create `scripts/benchmark.py` to measure games/sec, VRAM, and Elo vs depth-2 bot.
@@ -67,7 +75,7 @@ This plan details the steps to modernize the Keisei DRL Shogi model pipeline, en
 1. T-1, T-2: Feature builder and registry. **[DONE]**
 2. T-3: ResNet model and SE block. **[DONE]**
 3. T-4: Checkpoint migration. **[DONE]**
-4. T-5: Trainer/config integration. **[PENDING]**
+4. T-5: Trainer/config integration. **[IN PROGRESS]**
 5. T-6: Mixed-precision. **[PENDING]**
 6. T-7: DDP (optional, can be last). **[PENDING]**
 7. T-8: Unit tests. **[DONE]**
@@ -85,8 +93,20 @@ This plan details the steps to modernize the Keisei DRL Shogi model pipeline, en
 **Progress as of 2025-05-27:**
 - Feature extraction, registry, and all optional planes are complete and tested.
 - ResNet model (with SE, late flatten, slim heads) is implemented and tested.
-- Unit tests for all new features and model logic are passing.
-- Next: implement checkpoint migration logic, trainer/config integration, mixed-precision, DDP, and benchmarking.
+- Unit tests for features, model, and checkpoint migration are passing.
+- Trainer/config integration (T-5) is largely complete:
+    - Pydantic config schema (`keisei/config_schema.py`) updated and is the single source of truth.
+    - `Trainer` in `keisei/training/trainer.py` uses new config fields.
+    - Model factory created and integrated.
+    - CLI arguments in `keisei/training/train.py` reflect new config options.
+    - `tests/test_trainer_config.py` updated and all tests pass.
+- PPO-specific logic (loss calculation, GAE) integrated into `Trainer.train_step`.
+- Next:
+    - **CURRENT FOCUS:** Resolve `subprocess.CalledProcessError` in `tests/test_train.py`.
+    - Implement mixed-precision training (T-6).
+    - Implement DDP for self-play (T-7).
+    - Create benchmark script (T-9).
+    - Further PPO enhancements (experience buffer, hyperparameter consolidation).
 
 ---
 
@@ -99,33 +119,38 @@ Integrate the new feature builder, model, and configuration options into the tra
 
 1. **Config Schema Updates**
    - File: `keisei/config_schema.py`
-   - Add fields to `AppConfig`/`TrainingConfig` for:
+   - [x] Add fields to `AppConfig`/`TrainingConfig` for:
      - `input_features` (str, e.g. "core46", "core46+all")
      - `tower_depth`, `tower_width`, `se_ratio` (int/float, for ResNet)
      - `model_type` (str, e.g. "resnet")
      - `mixed_precision` (bool)
      - `ddp` (bool)
+     - `gradient_clip_max_norm` (float)
+     - `lambda_gae` (float)
+     - `evaluation_interval_timesteps` (int, moved to `EvaluationConfig`)
 
 2. **Trainer/Runner Integration**
-   - Files: `keisei/training/trainer.py`, `keisei/training/runner.py`
-   - Read new config fields and pass them to model/feature builder.
-   - Use the feature registry to build observations: `features.FEATURE_SPECS[config.input_features].build(game)`
-   - Instantiate the model with config-driven parameters.
-   - Autopopulate `obs_shape` from the feature builder.
-   - Add CLI flags for `--model`, `--input_features`, `--tower_depth`, `--tower_width`, `--se_ratio`, `--mixed_precision`, `--ddp`.
-   - Ensure Trainer uses the correct model and feature builder based on config.
+   - Files: `keisei/training/trainer.py`, `keisei/training/train.py` (runner.py less critical for now)
+   - [x] Read new config fields and pass them to model/feature builder in `Trainer`.
+   - [x] Use the feature registry to build observations: `features.FEATURE_SPECS[config.training.input_features].build(game_or_state)`
+   - [x] Instantiate the model with config-driven parameters in `Trainer`.
+   - [x] Autopopulate `obs_shape` from the feature builder in `Trainer`.
+   - [x] Add CLI flags for relevant new parameters in `keisei/training/train.py`.
+   - [x] Ensure Trainer uses the correct model and feature builder based on config.
 
 3. **Model Factory**
-   - File: `keisei/training/models/__init__.py` (or in `trainer.py`)
-   - Add a factory function to instantiate the correct model class based on `model_type` and config.
+   - File: `keisei/training/models/__init__.py`
+   - [x] Add a factory function (`model_factory`) to instantiate the correct model class based on `model_type` and config.
+   - [x] Integrate `model_factory` into `Trainer`.
 
 4. **Tests/Validation**
-   - Files: `tests/` (existing or new)
-   - Add/extend tests to check that Trainer and Runner correctly instantiate the model and feature builder from config/CLI.
-   - Test that invalid config values raise clear errors.
+   - Files: `tests/test_trainer_config.py`, `tests/test_train.py`
+   - [x] Add/extend tests in `test_trainer_config.py` to check that Trainer correctly instantiates the model and feature builder from config/CLI.
+   - [x] Test that invalid config values raise clear errors.
+   - [~] Fix `subprocess.CalledProcessError` in `tests/test_train.py` (Current Focus).
 
 ### Implementation Notes
-- All new config fields should have sensible defaults to preserve backward compatibility.
-- The Trainer should log the selected feature set, model type, and all relevant hyperparameters at startup.
-- CLI flags should override config file values as before.
-- The integration should be modular to allow easy addition of new feature sets or model types in the future.
+- [x] All new config fields have sensible defaults.
+- [x] The Trainer logs the selected feature set, model type, and all relevant hyperparameters at startup.
+- [x] CLI flags override config file values.
+- [x] The integration is modular.

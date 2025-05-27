@@ -51,6 +51,35 @@ class Trainer:
         self.draws = 0
         self.resumed_from_checkpoint: Optional[str] = None
 
+        # --- Model/feature config integration ---
+        self.input_features = getattr(args, 'input_features', None) or config.training.input_features
+        self.model_type = getattr(args, 'model', None) or config.training.model_type
+        self.tower_depth = getattr(args, 'tower_depth', None) or config.training.tower_depth
+        self.tower_width = getattr(args, 'tower_width', None) or config.training.tower_width
+        self.se_ratio = getattr(args, 'se_ratio', None) or config.training.se_ratio
+        self.mixed_precision = getattr(args, 'mixed_precision', None) or config.training.mixed_precision
+        self.ddp = getattr(args, 'ddp', None) or config.training.ddp
+        # Feature builder
+        from keisei.shogi import features
+        self.feature_spec = features.FEATURE_SPECS[self.input_features]
+        self.obs_shape = (self.feature_spec.num_planes, 9, 9)
+        # Model factory
+        from keisei.training.models import model_factory # Corrected import
+        # from keisei.training.models.resnet_tower import ActorCriticResTower # Old direct import
+        # if self.model_type == "resnet": # Old direct instantiation
+        self.model = model_factory(
+            model_type=self.model_type,
+            obs_shape=self.obs_shape, 
+            num_actions=config.env.num_actions_total, # Added num_actions
+            tower_depth=self.tower_depth,
+            tower_width=self.tower_width,
+            se_ratio=self.se_ratio if self.se_ratio > 0 else None,
+            # Add any other kwargs your model_factory or models might need, e.g.:
+            # num_actions_total=config.env.num_actions_total # Already passed as num_actions
+        )
+        # else:
+        #     raise ValueError(f"Unknown model_type: {self.model_type}")
+
         # Setup directories
         dirs = utils.setup_directories(self.config, self.run_name)
         self.run_artifact_dir = dirs["run_artifact_dir"]
@@ -94,11 +123,9 @@ class Trainer:
         # Display and callbacks
         self.display = display.TrainingDisplay(self.config, self, self.rich_console)
         eval_cfg = getattr(self.config, "evaluation", None)
-        checkpoint_interval = getattr(
-            self.config.training, "checkpoint_interval_timesteps", 10000
-        )
+        checkpoint_interval = self.config.training.checkpoint_interval_timesteps # Use config value
         eval_interval = (
-            getattr(eval_cfg, "evaluation_interval_timesteps", 50000) if eval_cfg else 50000
+            eval_cfg.evaluation_interval_timesteps if eval_cfg else self.config.training.evaluation_interval_timesteps # Use config value
         )
         self.callbacks = [
             callbacks.CheckpointCallback(checkpoint_interval, self.model_dir),
@@ -129,7 +156,7 @@ class Trainer:
         self.experience_buffer = ExperienceBuffer(
             buffer_size=self.config.training.steps_per_epoch,
             gamma=self.config.training.gamma,
-            lambda_gae=getattr(self.config.training, "lambda_gae", 0.95),
+            lambda_gae=self.config.training.lambda_gae, # Use config value
             device=self.config.env.device,
         )
 
@@ -622,9 +649,7 @@ class Trainer:
             )
 
         # Always save a final checkpoint if one was not just saved at the last step
-        checkpoint_interval = getattr(
-            self.config.training, "checkpoint_interval_timesteps", 10000
-        )
+        checkpoint_interval = self.config.training.checkpoint_interval_timesteps # Use config value
         last_ckpt_filename = os.path.join(
             self.model_dir, f"checkpoint_ts{self.global_timestep}.pth"
         )

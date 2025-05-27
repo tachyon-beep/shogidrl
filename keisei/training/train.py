@@ -42,6 +42,14 @@ def main():
     parser.add_argument(
         "--seed", type=int, default=None, help="Random seed for reproducibility."
     )
+    # --- Model/feature CLI flags ---
+    parser.add_argument("--model", type=str, default=None, help="Model type (e.g. 'resnet').")
+    parser.add_argument("--input_features", type=str, default=None, help="Feature set for observation builder.")
+    parser.add_argument("--tower_depth", type=int, default=None, help="ResNet tower depth.")
+    parser.add_argument("--tower_width", type=int, default=None, help="ResNet tower width.")
+    parser.add_argument("--se_ratio", type=float, default=None, help="SE block squeeze ratio.")
+    parser.add_argument("--mixed_precision", action="store_true", help="Enable mixed-precision training.")
+    parser.add_argument("--ddp", action="store_true", help="Enable DistributedDataParallel training.")
     parser.add_argument(
         "--device",
         type=str,

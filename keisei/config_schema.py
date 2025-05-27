@@ -40,6 +40,18 @@ class TrainingConfig(BaseModel):
     enable_spinner: bool = Field(
         True, description="Enable spinner column in progress bar (looks cool!)."
     )
+    # --- Model/feature config additions ---
+    input_features: str = Field("core46", description="Feature set for observation builder (e.g. 'core46', 'core46+all').")
+    tower_depth: int = Field(9, description="Number of residual blocks in ResNet tower.")
+    tower_width: int = Field(256, description="Width (channels) of ResNet tower.")
+    se_ratio: float = Field(0.25, description="SE block squeeze ratio (0 disables SE blocks).")
+    model_type: str = Field("resnet", description="Model type to use (e.g. 'resnet').")
+    mixed_precision: bool = Field(False, description="Enable mixed-precision training.")
+    ddp: bool = Field(False, description="Enable DistributedDataParallel training.")
+    gradient_clip_max_norm: float = Field(0.5, description="Maximum norm for gradient clipping.")
+    lambda_gae: float = Field(0.95, description="Lambda for Generalized Advantage Estimation (GAE).")
+    checkpoint_interval_timesteps: int = Field(10000, description="Save a model checkpoint every N timesteps.")
+    evaluation_interval_timesteps: int = Field(50000, description="Run evaluation every N timesteps.")
 
     @validator("learning_rate")
     # pylint: disable=no-self-argument
@@ -54,6 +66,7 @@ class EvaluationConfig(BaseModel):
     opponent_type: str = Field(
         "random", description="Type of opponent: 'random', 'heuristic', etc."
     )
+    evaluation_interval_timesteps: int = Field(50000, description="Run evaluation every N timesteps.")
 
 
 class LoggingConfig(BaseModel):
