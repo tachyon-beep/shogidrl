@@ -79,3 +79,6 @@ Thumbs.db
 
 # Weights & Biases
 wandb/
+
+# SonarLint
+.sonarlint

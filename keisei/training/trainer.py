@@ -9,7 +9,7 @@ import random
 import sys
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import torch
@@ -20,6 +20,7 @@ from rich.panel import Panel
 from rich.progress import (
     BarColumn,
     Progress,
+    ProgressColumn,  # Added ProgressColumn
     SpinnerColumn,
     TaskProgressColumn,
     TextColumn,
@@ -53,6 +54,7 @@ def find_latest_checkpoint(model_dir_path):
         checkpoints.sort(key=os.path.getmtime, reverse=True)
         return checkpoints[0]
     except (OSError, FileNotFoundError) as e:
+        # Note: This print statement is outside Live context, so it's okay
         print(f"Error in find_latest_checkpoint: {e}", file=sys.stderr)
         return None
 
@@ -85,6 +87,7 @@ def serialize_config(config_obj: Any) -> str:
     try:
         return json.dumps(conf_dict, indent=4, sort_keys=True)
     except TypeError as e:
+        # Note: This print statement is outside Live context, so it's okay
         print(f"Error serializing config: {e}", file=sys.stderr)
         return "{}"
 
@@ -130,6 +133,9 @@ class Trainer:
         # Initialize Rich TUI
         self.rich_console = Console(file=sys.stderr, record=True)
         self.rich_log_messages: List[Text] = []
+        
+        # WP-2: Store pending progress bar updates to consolidate them
+        self.pending_progress_updates: Dict[str, Any] = {}
 
         # Initialize WandB
         self.is_train_wandb_active = self._setup_wandb()
@@ -168,6 +174,7 @@ class Trainer:
             with open(config_path, "w", encoding="utf-8") as f:
                 f.write(effective_config_str)
         except (OSError, TypeError) as e:
+            # Note: This print statement is outside Live context, so it's okay
             print(f"Error saving effective_config.json: {e}", file=sys.stderr)
 
     def _setup_seeding(self):
@@ -251,6 +258,7 @@ class Trainer:
                 self.agent.load_model(latest_ckpt)
                 self.resumed_from_checkpoint = latest_ckpt
                 msg = f"Resumed training from checkpoint: {latest_ckpt}"
+                # Note: This print statement is outside Live context, so it's okay
                 print(msg, file=sys.stderr)
                 if hasattr(self, "rich_console"):
                     self.rich_console.print(f"[yellow]{msg}[/yellow]")
@@ -260,6 +268,7 @@ class Trainer:
             self.agent.load_model(resume_path)
             self.resumed_from_checkpoint = resume_path
             msg = f"Resumed training from checkpoint: {resume_path}"
+            # Note: This print statement is outside Live context, so it's okay
             print(msg, file=sys.stderr)
             if hasattr(self, "rich_console"):
                 self.rich_console.print(f"[yellow]{msg}[/yellow]")
@@ -315,9 +324,8 @@ class Trainer:
                 with Live(
                     layout,
                     console=self.rich_console,
-                    refresh_per_second=10,  # Default refresh rate
+                    refresh_per_second=self.config.training.refresh_per_second,
                     transient=False,
-                    vertical_overflow="visible",
                 ) as _:
                     while self.global_timestep < self.config.training.total_timesteps:
                         # Training step
@@ -337,27 +345,48 @@ class Trainer:
                             _,
                         )
 
-                        # Update progress and display
-                        self._update_progress_display(
-                            progress_bar, training_task, log_panel
-                        )
-
                         # Update step counters
                         self.global_timestep += 1
                         steps_since_last_time += 1
 
-                        # Update speed calculation
-                        current_time = time.time()
-                        time_delta = current_time - last_time
-                        if time_delta > 1:
-                            current_speed = steps_since_last_time / time_delta
-                            last_time = current_time
-                            steps_since_last_time = 0
-                            if training_task is not None:
-                                progress_bar.update(training_task, speed=current_speed)
+                        # All progress bar updates consolidated into one call every step
+                        if training_task is not None:
+                            # Calculate current speed
+                            current_time = time.time()
+                            time_delta = current_time - last_time
+                            current_speed = steps_since_last_time / time_delta if time_delta > 0 else 0.0
+                            
+                            # Only reset timing counters when we have a meaningful time delta
+                            if time_delta > 0.1:  # Update speed roughly every 100ms
+                                last_time = current_time
+                                steps_since_last_time = 0
+                            
+                            # Prepare all update data in one call
+                            update_data = {
+                                "completed": self.global_timestep,
+                                "speed": current_speed
+                            }
+                            
+                            # Merge any pending progress updates (episode metrics, PPO metrics, etc.)
+                            update_data.update(self.pending_progress_updates)
+                            
+                            # Single progress bar update with all data
+                            progress_bar.update(training_task, **update_data)
+                            
+                            # Clear pending updates after applying them
+                            self.pending_progress_updates.clear()
+
+                        # Update log panel display
+                        if (self.global_timestep % self.config.training.render_every_steps) == 0:
+                            # WP-4: Auto-size log pane capacity based on terminal height
+                            visible_rows = max(0, self.rich_console.size.height - 6)  # 4 rows bar + 2 borders
+                            if self.rich_log_messages:
+                                display_messages = self.rich_log_messages[-visible_rows:]
+                                updated_panel = Group(*display_messages) if display_messages else Text("")
+                                log_panel.renderable = updated_panel
 
                 # End of training loop
-                self._finalize_training(log_both, progress_bar, training_task)
+                self._finalize_training(log_both)
 
             except RuntimeError as e:
                 log_both(f"CRITICAL: Error in training loop: {e}", also_to_wandb=True)
@@ -399,8 +428,10 @@ class Trainer:
 
     def _setup_rich_progress_display(self):
         """Setup Rich progress bar and layout."""
-        progress_bar = Progress(
-            SpinnerColumn(),
+        progress_columns: List[Union[str, ProgressColumn]]
+        
+        # Base columns for the progress bar
+        base_columns: List[Union[str, ProgressColumn]] = [
             "[progress.description]{task.description}",
             BarColumn(),
             TaskProgressColumn(),
@@ -421,6 +452,17 @@ class Trainer:
                 "• Rates B:{task.fields[black_win_rate]:.1%} W:{task.fields[white_win_rate]:.1%} D:{task.fields[draw_rate]:.1%}",
                 style="bright_blue",
             ),
+        ]
+        
+        # Add spinner only if enabled (default: enabled for cool factor!)
+        enable_spinner = getattr(self.config.training, "enable_spinner", True)
+        if enable_spinner:
+            progress_columns = [SpinnerColumn()] + base_columns
+        else:
+            progress_columns = base_columns
+        
+        progress_bar = Progress(
+            *progress_columns, 
             console=self.rich_console,
             transient=False,
         )
@@ -623,7 +665,7 @@ class Trainer:
                 and self.experience_buffer.ptr == self.config.training.steps_per_epoch
             ):
                 self._perform_ppo_update(
-                    current_obs_np, log_both, progress_bar, training_task
+                    current_obs_np, log_both
                 )
 
             # Checkpointing (add to config_schema if not present)
@@ -719,18 +761,16 @@ class Trainer:
             else 0.0
         )
 
-        # Update progress bar
-        progress_bar.update(
-            training_task,
-            advance=0,
-            ep_metrics=ep_metrics_str,
-            black_wins_cum=self.black_wins,
-            white_wins_cum=self.white_wins,
-            draws_cum=self.draws,
-            black_win_rate=current_black_win_rate,
-            white_win_rate=current_white_win_rate,
-            draw_rate=current_draw_rate,
-        )
+        # Store episode metrics for next throttled update (WP-2)
+        self.pending_progress_updates.update({
+            "ep_metrics": ep_metrics_str,
+            "black_wins_cum": self.black_wins,
+            "white_wins_cum": self.white_wins,
+            "draws_cum": self.draws,
+            "black_win_rate": current_black_win_rate,
+            "white_win_rate": current_white_win_rate,
+            "draw_rate": current_draw_rate,
+        })
 
         # Log episode completion
         log_both(
@@ -770,7 +810,7 @@ class Trainer:
         return current_obs_np, current_obs_tensor, 0.0, 0
 
     def _perform_ppo_update(
-        self, current_obs_np, log_both, progress_bar, training_task
+        self, current_obs_np, log_both
     ):
         """Perform a PPO update."""
         with torch.no_grad():
@@ -794,25 +834,14 @@ class Trainer:
             ppo_metrics_str_parts.append(f"Ent:{learn_metrics['ppo/entropy']:.4f}")
 
         ppo_metrics_display = " ".join(ppo_metrics_str_parts)
-        progress_bar.update(training_task, advance=0, ppo_metrics=ppo_metrics_display)
+        # Store PPO metrics for next throttled update (WP-2)
+        self.pending_progress_updates["ppo_metrics"] = ppo_metrics_display
 
         log_both(
             f"PPO Update @ ts {self.global_timestep+1}. Metrics: {json.dumps({k: f'{v:.4f}' for k,v in learn_metrics.items()})}",
             also_to_wandb=True,
             wandb_data=learn_metrics,
         )
-
-    def _update_progress_display(self, progress_bar, training_task, log_panel):
-        """Update the Rich progress display."""
-        if training_task is not None:
-            progress_bar.update(training_task, completed=self.global_timestep)
-
-        # Use a default for max log messages
-        max_log_messages = 50
-        if self.rich_log_messages:
-            display_messages = self.rich_log_messages[-max_log_messages:]
-            updated_panel = Group(*display_messages) if display_messages else Text("")
-            log_panel.renderable = updated_panel
 
     def _save_checkpoint(self, log_both):
         """Save a training checkpoint."""
@@ -889,13 +918,8 @@ class Trainer:
             ),
         )
 
-    def _finalize_training(self, log_both, progress_bar, training_task):
+    def _finalize_training(self, log_both):
         """Finalize training and save final model."""
-        if training_task is not None:
-            progress_bar.update(
-                training_task, completed=self.config.training.total_timesteps
-            )
-
         log_both(
             f"Training loop finished at timestep {self.global_timestep}. Total episodes: {self.total_episodes_completed}.",
             also_to_wandb=True,

@@ -66,6 +66,12 @@ def main():
         default=[],
         help="Override config values via KEY.SUBKEY=VALUE format.",
     )
+    parser.add_argument(
+        "--render-every",
+        type=int,
+        default=None,
+        help="Update display every N steps to reduce flicker. Overrides config value.",
+    )
     args = parser.parse_args()
 
     # Build CLI overrides dict (dot notation)
@@ -84,6 +90,8 @@ def main():
         cli_overrides["training.total_timesteps"] = args.total_timesteps
     if args.savedir is not None:
         cli_overrides["logging.model_dir"] = args.savedir
+    if args.render_every is not None:
+        cli_overrides["training.render_every_steps"] = args.render_every
 
     # Load config (YAML/JSON + CLI overrides)
     config: AppConfig = load_config(args.config, cli_overrides)

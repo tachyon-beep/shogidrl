@@ -31,6 +31,15 @@ class TrainingConfig(BaseModel):
     clip_epsilon: float = Field(0.2, description="PPO clip epsilon.")
     value_loss_coeff: float = Field(0.5, description="Value loss coefficient.")
     entropy_coef: float = Field(0.01, description="Entropy regularization coefficient.")
+    render_every_steps: int = Field(
+        1, description="Update expensive display elements (metrics, logs) every N steps to reduce flicker."
+    )
+    refresh_per_second: int = Field(
+        4, description="Rich Live refresh rate per second."
+    )
+    enable_spinner: bool = Field(
+        True, description="Enable spinner column in progress bar (looks cool!)."
+    )
 
     @validator("learning_rate")
     # pylint: disable=no-self-argument
