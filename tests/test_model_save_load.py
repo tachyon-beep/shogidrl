@@ -7,7 +7,7 @@ import os
 import torch
 
 from keisei.config_schema import AppConfig, EnvConfig, TrainingConfig, EvaluationConfig, LoggingConfig, WandBConfig, DemoConfig
-from keisei.ppo_agent import PPOAgent
+from keisei.core.ppo_agent import PPOAgent
 from keisei.shogi.shogi_game import ShogiGame
 from keisei.utils import PolicyOutputMapper
 

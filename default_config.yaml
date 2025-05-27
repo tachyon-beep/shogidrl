@@ -25,7 +25,7 @@ evaluation:
   wandb_log_eval: false
 logging:
   model_dir: "models"
-  log_file: "train.log"
+  log_file: "training_log.txt"
 wandb:
   enabled: false
   project: "keisei-shogi"

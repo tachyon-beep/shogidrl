@@ -4,7 +4,7 @@ Unit tests for ExperienceBuffer in experience_buffer.py
 
 import torch
 
-from keisei.experience_buffer import ExperienceBuffer
+from keisei.core.experience_buffer import ExperienceBuffer
 
 
 def test_experience_buffer_add_and_len():

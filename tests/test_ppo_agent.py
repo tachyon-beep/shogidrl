@@ -10,8 +10,8 @@ import numpy as np
 import pytest
 import torch
 
-from keisei.experience_buffer import ExperienceBuffer  # Added import
-from keisei.ppo_agent import PPOAgent
+from keisei.core.experience_buffer import ExperienceBuffer  # Added import
+from keisei.core.ppo_agent import PPOAgent
 from keisei.shogi import ShogiGame  # Corrected import for ShogiGame
 from keisei.shogi.shogi_core_definitions import (  # Ensure MoveTuple is imported
     MoveTuple,

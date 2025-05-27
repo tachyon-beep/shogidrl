@@ -14,6 +14,9 @@ from typing import List, Dict, Any, Optional
 # Import config module and related components
 from keisei.utils import load_config
 from keisei.config_schema import AppConfig
+from keisei.core.ppo_agent import PPOAgent
+from keisei.core.experience_buffer import ExperienceBuffer
+from keisei.core.neural_network import ActorCritic
 from .trainer import Trainer
 
 

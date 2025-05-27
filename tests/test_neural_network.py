@@ -5,7 +5,7 @@ Unit tests for ActorCritic in neural_network.py
 import torch
 from keisei.config_schema import AppConfig, EnvConfig, TrainingConfig, EvaluationConfig, LoggingConfig, WandBConfig, DemoConfig
 
-from keisei.neural_network import ActorCritic
+from keisei.core.neural_network import ActorCritic
 
 
 def test_actor_critic_init_and_forward():

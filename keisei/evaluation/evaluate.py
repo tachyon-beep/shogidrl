@@ -4,13 +4,13 @@ evaluate.py: Main script for evaluating PPO Shogi agents.
 """
 import os
 import random
-from typing import Optional, List, TYPE_CHECKING, Union, Any
+from typing import Optional, List, TYPE_CHECKING, Union, Any, Dict
 from dotenv import load_dotenv
 import numpy as np
 import torch
 import wandb
 
-from keisei.ppo_agent import PPOAgent
+from keisei.core.ppo_agent import PPOAgent
 from keisei.utils import PolicyOutputMapper, TrainingLogger, EvaluationLogger, BaseOpponent
 from keisei.shogi.shogi_game import ShogiGame
 from keisei.shogi.shogi_core_definitions import (
@@ -349,6 +349,175 @@ def run_evaluation_loop(
     return results
 
 
+class Evaluator:
+    """
+    Evaluator class encapsulates the evaluation logic for PPO Shogi agents.
+    It manages agent/opponent loading, logging, W&B integration, and runs the evaluation loop.
+    """
+
+    def __init__(
+        self,
+        agent_checkpoint_path: str,
+        opponent_type: str,
+        opponent_checkpoint_path: Optional[str],
+        num_games: int,
+        max_moves_per_game: int,
+        device_str: str,
+        log_file_path_eval: str,
+        policy_mapper: PolicyOutputMapper,
+        seed: Optional[int] = None,
+        wandb_log_eval: bool = False,
+        wandb_project_eval: Optional[str] = None,
+        wandb_entity_eval: Optional[str] = None,
+        wandb_run_name_eval: Optional[str] = None,
+        logger_also_stdout: bool = True,
+        wandb_extra_config: Optional[dict] = None,
+        wandb_reinit: Optional[bool] = None,
+        wandb_group: Optional[str] = None,
+    ):
+        """
+        Initialize the Evaluator with all configuration and dependencies.
+        """
+        self.agent_checkpoint_path = agent_checkpoint_path
+        self.opponent_type = opponent_type
+        self.opponent_checkpoint_path = opponent_checkpoint_path
+        self.num_games = num_games
+        self.max_moves_per_game = max_moves_per_game
+        self.device_str = device_str
+        self.log_file_path_eval = log_file_path_eval
+        self.policy_mapper = policy_mapper
+        self.seed = seed
+        self.wandb_log_eval = wandb_log_eval
+        self.wandb_project_eval = wandb_project_eval
+        self.wandb_entity_eval = wandb_entity_eval
+        self.wandb_run_name_eval = wandb_run_name_eval
+        self.logger_also_stdout = logger_also_stdout
+        self.wandb_extra_config = wandb_extra_config
+        self.wandb_reinit = wandb_reinit
+        self.wandb_group = wandb_group
+        self._wandb_active: bool = False
+        self._wandb_run: Optional[Any] = None
+        self._logger: Optional[EvaluationLogger] = None
+        self._agent: Optional[PPOAgent] = None
+        self._opponent: Optional[Union[PPOAgent, BaseOpponent]] = None
+
+    def _setup(self) -> None:
+        """
+        Set up seeds, W&B, logger, agent, and opponent.
+        Raises RuntimeError if any required component fails to initialize.
+        """
+        if self.seed is not None:
+            random.seed(self.seed)
+            torch.manual_seed(self.seed)
+            np.random.seed(self.seed)
+            if self.device_str == "cuda":
+                torch.cuda.manual_seed_all(self.seed)
+            print(f"[Evaluator] Set random seed to: {self.seed}")
+
+        # W&B Initialization
+        if self.wandb_log_eval:
+            try:
+                wandb_config = {
+                    "agent_checkpoint": self.agent_checkpoint_path,
+                    "opponent_type": self.opponent_type,
+                    "opponent_checkpoint": self.opponent_checkpoint_path,
+                    "num_games": self.num_games,
+                    "max_moves_per_game": self.max_moves_per_game,
+                    "device": self.device_str,
+                    "seed": self.seed,
+                }
+                if self.wandb_extra_config:
+                    wandb_config.update(self.wandb_extra_config)
+                wandb_kwargs: Dict[str, Any] = {
+                    "project": self.wandb_project_eval or "keisei-evaluation-runs",
+                    "entity": self.wandb_entity_eval,
+                    "name": self.wandb_run_name_eval,
+                    "config": wandb_config,
+                }
+                if self.wandb_reinit is not None:
+                    wandb_kwargs["reinit"] = self.wandb_reinit
+                if self.wandb_group is not None:
+                    wandb_kwargs["group"] = self.wandb_group
+                try:
+                    self._wandb_run = wandb.init(**wandb_kwargs)
+                    print(f"[Evaluator] W&B logging enabled: {self._wandb_run.name if self._wandb_run else ''}")
+                    self._wandb_active = True
+                except (OSError, RuntimeError, ValueError) as e:
+                    print(f"[Evaluator] Error initializing W&B: {e}. W&B logging disabled.")
+                    self._wandb_active = False
+            except Exception as e:
+                print(f"[Evaluator] Unexpected error during W&B initialization: {e}")
+                self._wandb_active = False
+
+        # Ensure log directory exists
+        log_dir_eval = os.path.dirname(self.log_file_path_eval)
+        if log_dir_eval and not os.path.exists(log_dir_eval):
+            os.makedirs(log_dir_eval)
+
+        # Logger
+        self._logger = EvaluationLogger(self.log_file_path_eval, also_stdout=self.logger_also_stdout)
+        # Agent and opponent
+        # Use the correct input_channels from self.policy_mapper if available, else default to 46
+        input_channels = getattr(self.policy_mapper, 'input_channels', 46)
+        self._agent = load_evaluation_agent(
+            self.agent_checkpoint_path, self.device_str, self.policy_mapper, input_channels
+        )
+        self._opponent = initialize_opponent(
+            self.opponent_type, self.opponent_checkpoint_path, self.device_str, self.policy_mapper, input_channels
+        )
+        if self._logger is None or self._agent is None or self._opponent is None:
+            raise RuntimeError("Evaluator setup failed: logger, agent, or opponent is None.")
+
+    def evaluate(self) -> Optional[dict]:
+        """
+        Run the evaluation and return the results dictionary.
+        """
+        self._setup()
+        results_summary = None
+        if self._logger is None or self._agent is None or self._opponent is None:
+            raise RuntimeError("Evaluator not properly initialized.")
+        try:
+            with self._logger as logger:
+                logger.log("Starting Shogi Agent Evaluation (Evaluator class call).")
+                logger.log(
+                    f"Parameters: agent_ckpt='{self.agent_checkpoint_path}', opponent='{self.opponent_type}', num_games={self.num_games}"
+                )
+                results_summary = run_evaluation_loop(
+                    self._agent,
+                    self._opponent,
+                    self.num_games,
+                    logger,
+                    self.policy_mapper,
+                    self.max_moves_per_game,
+                    self.device_str,
+                    wandb_enabled=self._wandb_active,
+                )
+                logger.log(f"[Evaluator] Evaluation Summary: {results_summary}")
+        except (RuntimeError, ValueError, OSError) as e:
+            print(f"[Evaluator] Error during evaluation run: {e}")
+            results_summary = None
+        # Final W&B logging
+        if self._wandb_active and results_summary is not None:
+            try:
+                wandb.log({
+                    "eval/final_win_rate": results_summary["win_rate"],
+                    "eval/final_loss_rate": results_summary["loss_rate"],
+                    "eval/final_draw_rate": results_summary["draw_rate"],
+                    "eval/final_avg_game_length": results_summary["avg_game_length"],
+                })
+                print("[Evaluator] Final W&B metrics logged.")
+            except (OSError, RuntimeError, ValueError) as e:
+                print(f"[Evaluator] Error logging final metrics to W&B: {e}")
+        if self._wandb_active:
+            try:
+                wandb.finish()
+                print("[Evaluator] W&B run finished.")
+            except (OSError, RuntimeError, ValueError) as e:
+                print(f"[Evaluator] Error finishing W&B run: {e}")
+        return results_summary
+
+
+# --- Backward-compatible wrapper function ---
 def execute_full_evaluation_run(
     agent_checkpoint_path: str,
     opponent_type: str,
@@ -356,148 +525,90 @@ def execute_full_evaluation_run(
     num_games: int,
     max_moves_per_game: int,
     device_str: str,
-    log_file_path_eval: str,  # Specific log file for this evaluation run
-    policy_mapper: PolicyOutputMapper,  # Pass existing instance
+    log_file_path_eval: str,
+    policy_mapper: PolicyOutputMapper,
     seed: Optional[int] = None,
-    # W&B specific parameters for this evaluation run
     wandb_log_eval: bool = False,
     wandb_project_eval: Optional[str] = None,
     wandb_entity_eval: Optional[str] = None,
     wandb_run_name_eval: Optional[str] = None,
-    logger_also_stdout: bool = True,  # <--- MODIFIED DEFAULT TO TRUE
-    wandb_extra_config: Optional[dict] = None,  # <--- NEW PARAM for extra CLI args
-    wandb_reinit: Optional[bool] = None,  # <--- Only pass if not None
-    wandb_group: Optional[str] = None,  # <--- Only pass if not None
-    _called_from_cli: bool = False,  # <--- NEW PARAM
-) -> Optional[dict]:  # Return summary metrics dict or None if error
+    logger_also_stdout: bool = True,
+    wandb_extra_config: Optional[dict] = None,
+    wandb_reinit: Optional[bool] = None,
+    wandb_group: Optional[str] = None,
+    _called_from_cli: bool = False,
+) -> Optional[dict]:
     """
-    Performs a complete evaluation run programmatically.
-    Initializes agents, logger, W&B (if enabled), runs games, and logs results.
+    Backward-compatible wrapper for programmatic evaluation. Calls the Evaluator class.
     """
-    if seed is not None:
-        random.seed(seed)
-        torch.manual_seed(seed)
-        np.random.seed(seed)
-        if device_str == "cuda":  # Assuming torch is imported
-            torch.cuda.manual_seed_all(seed)
-        print(f"[Eval Function] Set random seed to: {seed}")
+    evaluator = Evaluator(
+        agent_checkpoint_path=agent_checkpoint_path,
+        opponent_type=opponent_type,
+        opponent_checkpoint_path=opponent_checkpoint_path,
+        num_games=num_games,
+        max_moves_per_game=max_moves_per_game,
+        device_str=device_str,
+        log_file_path_eval=log_file_path_eval,
+        policy_mapper=policy_mapper,
+        seed=seed,
+        wandb_log_eval=wandb_log_eval,
+        wandb_project_eval=wandb_project_eval,
+        wandb_entity_eval=wandb_entity_eval,
+        wandb_run_name_eval=wandb_run_name_eval,
+        logger_also_stdout=logger_also_stdout,
+        wandb_extra_config=wandb_extra_config,
+        wandb_reinit=wandb_reinit,
+        wandb_group=wandb_group,
+    )
+    return evaluator.evaluate()
 
-    # W&B Initialization for this specific evaluation run
-    is_eval_wandb_active = False
-    if wandb_log_eval:
-        try:
-            current_wandb_run_name = wandb_run_name_eval
-            # Build config dict with all CLI args if provided
-            wandb_config = {
-                "agent_checkpoint": agent_checkpoint_path,
-                "opponent_type": opponent_type,
-                "opponent_checkpoint": opponent_checkpoint_path,
-                "num_games": num_games,
-                "max_moves_per_game": max_moves_per_game,
-                "device": device_str,
-                "seed": seed,
-            }
-            if wandb_extra_config:
-                wandb_config.update(wandb_extra_config)
-            wandb_kwargs: dict[str, Any] = {  # MODIFIED: Added type hint
-                "project": wandb_project_eval or "keisei-evaluation-runs",
-                "entity": wandb_entity_eval,  # Always include, even if None
-                "name": current_wandb_run_name,  # Always include, even if None
-                "config": wandb_config,
-            }
-            if wandb_reinit is not None:
-                wandb_kwargs["reinit"] = wandb_reinit
-            if wandb_group is not None:
-                wandb_kwargs["group"] = wandb_group
-            wandb.init(**wandb_kwargs)
-            print(
-                f"[Eval Function] Weights & Biases logging enabled for this evaluation run: {current_wandb_run_name}"
-            )
-            is_eval_wandb_active = True
-        except (
-            Exception
-        ) as e:  # MODIFIED: Catch specific exception if possible, or at least use 'as e'
-            print(
-                f"[Eval Function] Error initializing W&B for evaluation: {e}. W&B logging for this eval run disabled."
-            )  # Removed file=sys.stderr
-            is_eval_wandb_active = False
 
-    # Ensure log directory for this specific evaluation log exists
-    log_dir_eval = os.path.dirname(log_file_path_eval)
-    if log_dir_eval and not os.path.exists(log_dir_eval):
-        os.makedirs(log_dir_eval)
+# --- CLI entry point ---
+def main():
+    """
+    CLI entry point for evaluation. Parses arguments and runs evaluation using Evaluator.
+    """
+    import argparse
+    parser = argparse.ArgumentParser(description="Evaluate a PPO Shogi agent.")
+    parser.add_argument("--agent_checkpoint", type=str, required=True, help="Path to agent checkpoint file.")
+    parser.add_argument("--opponent_type", type=str, required=True, choices=["random", "heuristic", "ppo"], help="Type of opponent.")
+    parser.add_argument("--opponent_checkpoint", type=str, default=None, help="Path to opponent checkpoint (if PPO).")
+    parser.add_argument("--num_games", type=int, default=10, help="Number of games to play.")
+    parser.add_argument("--max_moves_per_game", type=int, default=200, help="Maximum moves per game.")
+    parser.add_argument("--device", type=str, default="cpu", help="Device for evaluation (cpu/cuda).")
+    parser.add_argument("--log_file", type=str, default="eval_log.txt", help="Path to evaluation log file.")
+    parser.add_argument("--seed", type=int, default=None, help="Random seed.")
+    parser.add_argument("--wandb_log_eval", action="store_true", help="Enable W&B logging.")
+    parser.add_argument("--wandb_project_eval", type=str, default=None, help="W&B project name.")
+    parser.add_argument("--wandb_entity_eval", type=str, default=None, help="W&B entity.")
+    parser.add_argument("--wandb_run_name_eval", type=str, default=None, help="W&B run name.")
+    parser.add_argument("--wandb_group", type=str, default=None, help="W&B group name.")
+    parser.add_argument("--wandb_reinit", action="store_true", help="W&B reinit flag.")
+    args = parser.parse_args()
 
-    results_summary = None
-    try:
-        # MODIFIED: Removed run_name_for_log logic as it's not a parameter for EvaluationLogger
-        with EvaluationLogger(
-            log_file_path_eval, also_stdout=logger_also_stdout
-        ) as logger:
-            logger.log(
-                "Starting Shogi Agent Evaluation (Programmatic Call)."
-            )  # MODIFIED: Changed to logger.log
-            logger.log(
-                f"Parameters: agent_ckpt='{agent_checkpoint_path}', opponent='{opponent_type}', num_games={num_games}"
-            )  # MODIFIED: Changed to logger.log
+    policy_mapper = PolicyOutputMapper()
+    evaluator = Evaluator(
+        agent_checkpoint_path=args.agent_checkpoint,
+        opponent_type=args.opponent_type,
+        opponent_checkpoint_path=args.opponent_checkpoint,
+        num_games=args.num_games,
+        max_moves_per_game=args.max_moves_per_game,
+        device_str=args.device,
+        log_file_path_eval=args.log_file,
+        policy_mapper=policy_mapper,
+        seed=args.seed,
+        wandb_log_eval=args.wandb_log_eval,
+        wandb_project_eval=args.wandb_project_eval,
+        wandb_entity_eval=args.wandb_entity_eval,
+        wandb_run_name_eval=args.wandb_run_name_eval,
+        logger_also_stdout=True,
+        wandb_extra_config=None,
+        wandb_reinit=args.wandb_reinit,
+        wandb_group=args.wandb_group,
+    )
+    results = evaluator.evaluate()
+    print("Evaluation Results:")
+    print(results)
 
-            agent_to_eval = load_evaluation_agent(
-                agent_checkpoint_path, device_str, policy_mapper, PolicyOutputMapper().get_total_actions()
-            )
-            opponent = initialize_opponent(
-                opponent_type,
-                opponent_checkpoint_path,
-                device_str,
-                policy_mapper,
-                PolicyOutputMapper().get_total_actions(),
-            )
-
-            results_summary = run_evaluation_loop(
-                agent_to_eval,
-                opponent,
-                num_games,
-                logger,
-                policy_mapper,
-                max_moves_per_game,
-                device_str,
-                wandb_enabled=is_eval_wandb_active,  # Pass the status
-            )
-
-            logger.log(  # MODIFIED: Changed to logger.log
-                f"[Eval Function] Evaluation Summary: {results_summary}"
-            )
-
-    except (
-        Exception
-    ) as e:  # MODIFIED: Catch specific exception if possible, or at least use 'as e'
-        print(
-            f"[Eval Function] Error during evaluation run: {e}"
-        )  # Removed file=sys.stderr
-        results_summary = None
-
-    # Final W&B logging to ensure all metrics are captured
-    if is_eval_wandb_active and results_summary is not None:
-        try:
-            wandb.log(
-                {
-                    "eval/final_win_rate": results_summary["win_rate"],
-                    "eval/final_loss_rate": results_summary["loss_rate"],
-                    "eval/final_draw_rate": results_summary["draw_rate"],
-                    "eval/final_avg_game_length": results_summary["avg_game_length"],
-                }
-            )
-            print("[Eval Function] Final W&B metrics logged.")
-        except Exception as e:
-            print(
-                f"[Eval Function] Error logging final metrics to W&B: {e}"
-            )  # Removed file=sys.stderr
-
-    if is_eval_wandb_active:  # ADDED: Call wandb.finish() if W&B was active
-        try:
-            wandb.finish()
-            print("[Eval Function] W&B run finished.")
-        except Exception as e:
-            print(
-                f"[Eval Function] Error finishing W&B run: {e}"
-            )  # Removed file=sys.stderr
-
-    return results_summary
+if __name__ == "__main__":
+    main()

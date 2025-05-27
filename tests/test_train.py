@@ -18,7 +18,7 @@ VALUE_LOSS_COEFF = 0.5
 ENTROPY_COEFF = 0.01
 DEVICE = "cpu"
 
-from keisei.ppo_agent import PPOAgent  # Add back PPOAgent import
+from keisei.core.ppo_agent import PPOAgent  # Add back PPOAgent import
 from keisei.utils import PolicyOutputMapper  # Add back PolicyOutputMapper import
 
 TRAIN_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "train.py"))
@@ -139,8 +139,9 @@ def test_train_config_override(tmp_path):
     assert eff_cfg.exists()
     with open(eff_cfg, encoding="utf-8") as f:
         eff = pyjson.load(f)
-    assert eff["TOTAL_TIMESTEPS"] == 2
-    assert abs(eff["LEARNING_RATE"] - 0.12345) < 1e-6
+    # Check nested config structure
+    assert eff["training"]["total_timesteps"] == 2
+    assert abs(eff["training"]["learning_rate"] - 0.12345) < 1e-6
 
 
 def test_train_run_name_and_savedir(tmp_path):

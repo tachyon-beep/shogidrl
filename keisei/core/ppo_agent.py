@@ -10,8 +10,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F  # For F.softmax
 
-from keisei.experience_buffer import ExperienceBuffer
-from keisei.neural_network import ActorCritic
+from keisei.core.experience_buffer import ExperienceBuffer
+from keisei.core.neural_network import ActorCritic
 from keisei.utils import PolicyOutputMapper
 
 if TYPE_CHECKING:

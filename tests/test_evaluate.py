@@ -11,7 +11,7 @@ import pytest
 import torch  # Re-add torch import
 
 # Functions and classes to test from evaluate.py
-from keisei.evaluate import (  # MODIFIED: Updated import path
+from keisei.evaluation.evaluate import (
     SimpleHeuristicOpponent,
     SimpleRandomOpponent,
     initialize_opponent,
@@ -23,7 +23,7 @@ from keisei.evaluate import (  # MODIFIED: Updated import path
 # from evaluate import main as evaluate_main # MODIFIED: Removed, main() was removed from evaluate.py
 
 # Imports from the project
-from keisei.ppo_agent import PPOAgent  # Actual PPOAgent for type hints and structure
+from keisei.core.ppo_agent import PPOAgent  # Actual PPOAgent for type hints and structure
 from keisei.shogi.shogi_core_definitions import MoveTuple
 from keisei.shogi.shogi_game import ShogiGame
 from keisei.utils import PolicyOutputMapper, BaseOpponent, TrainingLogger, EvaluationLogger
@@ -169,7 +169,7 @@ def test_initialize_opponent_types(policy_mapper):
 
 
 @patch(
-    "keisei.evaluate.load_evaluation_agent"  # MODIFIED: Updated import path
+    "keisei.evaluation.evaluate.load_evaluation_agent"  # Patch where used, not just re-exported
 )  # Mock load_evaluation_agent within evaluate.py
 def test_initialize_opponent_ppo(mock_load_agent, policy_mapper):
     """Test that initialize_opponent returns a PPOAgent when type is 'ppo' and path is provided."""
@@ -193,7 +193,7 @@ def test_initialize_opponent_ppo(mock_load_agent, policy_mapper):
 
 
 @patch(
-    "keisei.evaluate.PPOAgent"
+    "keisei.evaluation.evaluate.PPOAgent"
 )  # MODIFIED: Updated import path # Mock PPOAgent class within evaluate.py
 def test_load_evaluation_agent_mocked(MockPPOAgentClass, policy_mapper):
     mock_agent_instance = MagicMock(
@@ -265,11 +265,11 @@ def test_run_evaluation_loop_basic(policy_mapper, eval_logger_setup):
 
 # Helper for common main test mocks
 COMMON_MAIN_MOCKS = [
-    patch("keisei.evaluate.PolicyOutputMapper"),  # MODIFIED: Updated import path
-    patch("keisei.evaluate.load_evaluation_agent"),  # MODIFIED: Updated import path
-    patch("keisei.evaluate.initialize_opponent"),  # MODIFIED: Updated import path
-    patch("keisei.evaluate.run_evaluation_loop"),  # MODIFIED: Updated import path
-    patch("keisei.evaluate.EvaluationLogger"),  # MODIFIED: Updated import path
+    patch("keisei.evaluation.evaluate.PolicyOutputMapper"),  # MODIFIED: Updated import path
+    patch("keisei.evaluation.evaluate.load_evaluation_agent"),  # MODIFIED: Updated import path
+    patch("keisei.evaluation.evaluate.initialize_opponent"),  # MODIFIED: Updated import path
+    patch("keisei.evaluation.evaluate.run_evaluation_loop"),  # MODIFIED: Updated import path
+    patch("keisei.evaluation.evaluate.EvaluationLogger"),  # MODIFIED: Updated import path
     patch("wandb.init"),
     patch("wandb.log"),
     patch("wandb.finish"),
@@ -803,8 +803,8 @@ def test_evaluator_class_basic(monkeypatch, tmp_path, policy_mapper):
             super().__init__(name="DummyOpponent")
         def select_move(self, game_instance):
             return game_instance.get_legal_moves()[0]
-    monkeypatch.setattr("keisei.evaluate.load_evaluation_agent", lambda *a, **kw: DummyAgent())
-    monkeypatch.setattr("keisei.evaluate.initialize_opponent", lambda *a, **kw: DummyOpponent())
+    monkeypatch.setattr("keisei.evaluation.evaluate.load_evaluation_agent", lambda *a, **kw: DummyAgent())
+    monkeypatch.setattr("keisei.evaluation.evaluate.initialize_opponent", lambda *a, **kw: DummyOpponent())
     log_file = tmp_path / "evaluator_test.log"
     evaluator = __import__("keisei.evaluate", fromlist=["Evaluator"]).Evaluator(
         agent_checkpoint_path="dummy_agent.pth",

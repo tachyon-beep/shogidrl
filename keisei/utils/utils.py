@@ -29,31 +29,90 @@ from typing import Any, Dict, Optional
 from pydantic import ValidationError
 from keisei.config_schema import AppConfig
 
+# Mapping of flat override keys to nested config paths
+FLAT_KEY_TO_NESTED = {
+    # Env
+    "SEED": "env.seed",
+    "DEVICE": "env.device",
+    "INPUT_CHANNELS": "env.input_channels",
+    # Training
+    "TOTAL_TIMESTEPS": "training.total_timesteps",
+    "LEARNING_RATE": "training.learning_rate",
+    "PPO_EPOCHS": "training.ppo_epochs",
+    "MINIBATCH_SIZE": "training.minibatch_size",
+    "GAMMA": "training.gamma",
+    "CLIP_EPSILON": "training.clip_epsilon",
+    "VALUE_LOSS_COEFF": "training.value_loss_coeff",
+    "ENTROPY_COEFF": "training.entropy_coef",
+    "STEPS_PER_EPOCH": "training.steps_per_epoch",
+    "CHECKPOINT_INTERVAL_TIMESTEPS": "training.checkpoint_interval_timesteps",
+    # Logging
+    "MODEL_DIR": "logging.model_dir",
+    "LOG_FILE": "logging.log_file",
+    # Evaluation
+    "NUM_GAMES": "evaluation.num_games",
+    "OPPONENT_TYPE": "evaluation.opponent_type",
+    # WandB
+    "WANDB_ENABLED": "wandb.enabled",
+    "WANDB_PROJECT": "wandb.project",
+    "WANDB_ENTITY": "wandb.entity",
+    # Demo
+    "ENABLE_DEMO_MODE": "demo.enable_demo_mode",
+    "DEMO_MODE_DELAY": "demo.demo_mode_delay",
+}
+
 
 def load_config(config_path: Optional[str] = None, cli_overrides: Optional[Dict[str, Any]] = None) -> AppConfig:
     """
     Loads configuration from a YAML or JSON file and applies CLI overrides.
-    If no config_path is provided, uses default_config.yaml as the default.
-    Raises ValidationError if config is invalid or unknown fields are present.
+    Always loads default_config.yaml as the base, then merges in overrides from config_path (if present), then CLI overrides.
     """
     import os
-    base_config_path = config_path
-    if base_config_path is None:
-        # Use default_config.yaml in the project root as the default
-        base_config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "default_config.yaml")
-    config_data = {}
-    if base_config_path:
-        if base_config_path.endswith(('.yaml', '.yml')):
-            with open(base_config_path, 'r') as f:
-                config_data = yaml.safe_load(f)
-        elif base_config_path.endswith('.json'):
-            with open(base_config_path, 'r') as f:
-                config_data = json.load(f)
+    # Always load the base config first
+    base_config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "default_config.yaml")
+    with open(base_config_path, 'r') as f:
+        config_data = yaml.safe_load(f)
+    # If config_path is provided and is not the default, treat as override file (JSON or YAML)
+    if config_path and os.path.abspath(config_path) != os.path.abspath(base_config_path):
+        if config_path.endswith(('.yaml', '.yml')):
+            with open(config_path, 'r') as f:
+                override_data = yaml.safe_load(f)
+        elif config_path.endswith('.json'):
+            with open(config_path, 'r') as f:
+                override_data = json.load(f)
         else:
-            raise ValueError(f"Unsupported config file type: {base_config_path}")
+            raise ValueError(f"Unsupported config file type: {config_path}")
+        # If the override file is a partial dict (not a full config), treat as overrides
+        top_keys = {"env", "training", "evaluation", "logging", "wandb", "demo"}
+        if not (isinstance(override_data, dict) and top_keys & set(override_data.keys())):
+            # It's a flat override dict, not a full config
+            mapped_overrides = {}
+            for k, v in override_data.items():
+                if k.isupper() and k in FLAT_KEY_TO_NESTED:
+                    mapped_overrides[FLAT_KEY_TO_NESTED[k]] = v
+                else:
+                    mapped_overrides[k] = v
+            for k, v in mapped_overrides.items():
+                parts = k.split('.')
+                d = config_data
+                for p in parts[:-1]:
+                    if p not in d or not isinstance(d[p], dict):
+                        d[p] = {}
+                    d = d[p]
+                d[parts[-1]] = v
+        else:
+            # It's a full config, merge top-level keys
+            for k, v in override_data.items():
+                config_data[k] = v
     # Merge CLI overrides (flat dict with dot notation keys)
     if cli_overrides:
+        mapped_overrides = {}
         for k, v in cli_overrides.items():
+            if k.isupper() and k in FLAT_KEY_TO_NESTED:
+                mapped_overrides[FLAT_KEY_TO_NESTED[k]] = v
+            else:
+                mapped_overrides[k] = v
+        for k, v in mapped_overrides.items():
             parts = k.split('.')
             d = config_data
             for p in parts[:-1]:

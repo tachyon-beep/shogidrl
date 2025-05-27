@@ -32,11 +32,12 @@ from rich.panel import Panel
 from rich.layout import Layout
 
 # Keisei imports
-from .ppo_agent import PPOAgent
-from .experience_buffer import ExperienceBuffer
-from .utils import TrainingLogger, PolicyOutputMapper
-from .shogi import ShogiGame, Color
-from .evaluate import execute_full_evaluation_run
+from keisei.core.ppo_agent import PPOAgent
+from keisei.core.experience_buffer import ExperienceBuffer
+from keisei.core.neural_network import ActorCritic
+from keisei.utils import TrainingLogger, PolicyOutputMapper, format_move_with_description_enhanced
+from keisei.shogi import ShogiGame, Color
+from keisei.evaluation.evaluate import execute_full_evaluation_run
 from keisei.config_schema import AppConfig
 
 
@@ -57,29 +58,30 @@ def find_latest_checkpoint(model_dir_path):
 
 
 def serialize_config(config_obj: Any) -> str:
-    """Serialize a config object (SimpleNamespace or class instance) to a JSON string."""
-    conf_dict = {}
-    if hasattr(config_obj, "__dict__"):
-        # For SimpleNamespace or class instances
-        source_dict = config_obj.__dict__
-    elif isinstance(config_obj, dict):
-        source_dict = config_obj
+    """Serialize a config object (AppConfig or similar) to a JSON string with nested structure."""
+    # If it's a Pydantic BaseModel (AppConfig), use .dict()
+    if hasattr(config_obj, 'dict'):
+        conf_dict = config_obj.dict()
     else:
-        # Fallback for module-like objects (less common for dynamic cfg)
-        source_dict = {
-            key: getattr(config_obj, key)
-            for key in dir(config_obj)
-            if not key.startswith("__") and not callable(getattr(config_obj, key))
-        }
-
-    # Filter out non-JSON serializable types or convert them
-    for k, v in source_dict.items():
-        if isinstance(v, (int, float, str, bool, list, dict, tuple)) or v is None:
-            conf_dict[k] = v
-        elif isinstance(v, SimpleNamespace):  # Recursively serialize SimpleNamespace
-            conf_dict[k] = json.loads(serialize_config(v))  # Store as dict
-        # Skip non-serializable types
-
+        # Fallback: try to serialize as before
+        conf_dict = {}
+        if hasattr(config_obj, "__dict__"):
+            source_dict = config_obj.__dict__
+        elif isinstance(config_obj, dict):
+            source_dict = config_obj
+        else:
+            source_dict = {
+                key: getattr(config_obj, key)
+                for key in dir(config_obj)
+                if not key.startswith("__") and not callable(getattr(config_obj, key))
+            }
+        for k, v in source_dict.items():
+            if isinstance(v, (int, float, str, bool, list, dict, tuple)) or v is None:
+                conf_dict[k] = v
+            elif hasattr(v, 'dict'):
+                conf_dict[k] = v.dict()
+            elif hasattr(v, "__dict__"):
+                conf_dict[k] = json.loads(serialize_config(v))
     try:
         return json.dumps(conf_dict, indent=4, sort_keys=True)
     except TypeError as e:
@@ -87,7 +89,6 @@ def serialize_config(config_obj: Any) -> str:
         return "{}"
 
 # Move formatting utilities are now in keisei.move_formatting
-from .move_formatting import format_move_with_description_enhanced
 
 
 class Trainer:
@@ -146,7 +147,8 @@ class Trainer:
         # Use new config structure
         model_dir = self.config.logging.model_dir
         log_file = self.config.logging.log_file
-        self.run_artifact_dir = os.path.join(model_dir.strip("/"), self.run_name)
+        # Always join model_dir and run_name, even if model_dir is an absolute path
+        self.run_artifact_dir = os.path.join(model_dir, self.run_name)
         self.model_dir = self.run_artifact_dir
         self.log_file_path = os.path.join(self.run_artifact_dir, os.path.basename(log_file))
         # Setup evaluation log path
@@ -239,59 +241,29 @@ class Trainer:
         )
 
     def _handle_checkpoint_resume(self):
-        """Handle checkpoint resuming logic."""
-        potential_resume_path = None
-        attempt_resume = False
-        
-        if self.args.resume:
-            attempt_resume = True
-            if self.args.resume == "latest":
-                potential_resume_path = find_latest_checkpoint(self.model_dir)
-                if potential_resume_path:
-                    self.rich_console.print(
-                        f"Found latest checkpoint via --resume latest: {potential_resume_path}"
-                    )
-                else:
-                    self.rich_console.print(
-                        f"[yellow]'--resume latest' specified, but no checkpoint found in {self.model_dir}. Starting fresh.[/yellow]"
-                    )
+        """Handle resuming from checkpoint if specified or auto-detected."""
+        resume_path = self.args.resume
+        if resume_path == "latest" or resume_path is None:
+            # Auto-detect latest checkpoint in model_dir
+            latest_ckpt = find_latest_checkpoint(self.model_dir)
+            if latest_ckpt:
+                self.agent.load_model(latest_ckpt)
+                self.resumed_from_checkpoint = latest_ckpt
+                msg = f"Resumed training from checkpoint: {latest_ckpt}"
+                print(msg, file=sys.stderr)
+                if hasattr(self, 'rich_console'):
+                    self.rich_console.print(f"[yellow]{msg}[/yellow]")
             else:
-                potential_resume_path = self.args.resume
-                if not (potential_resume_path and os.path.exists(potential_resume_path)):
-                    self.rich_console.print(
-                        f"[bold red]Specified resume checkpoint {potential_resume_path} not found. Starting fresh.[/bold red]"
-                    )
-                    potential_resume_path = None
+                self.resumed_from_checkpoint = None
+        elif resume_path:
+            self.agent.load_model(resume_path)
+            self.resumed_from_checkpoint = resume_path
+            msg = f"Resumed training from checkpoint: {resume_path}"
+            print(msg, file=sys.stderr)
+            if hasattr(self, 'rich_console'):
+                self.rich_console.print(f"[yellow]{msg}[/yellow]")
         else:
-            attempt_resume = True
-            potential_resume_path = find_latest_checkpoint(self.model_dir)
-            if potential_resume_path:
-                self.rich_console.print(
-                    f"Auto-detected checkpoint: {potential_resume_path}. Attempting to resume."
-                )
-            else:
-                attempt_resume = False
-        if attempt_resume and potential_resume_path and os.path.exists(potential_resume_path):
-            try:
-                checkpoint_data = self.agent.load_model(potential_resume_path)
-                self.global_timestep = checkpoint_data.get("global_timestep", 0)
-                self.total_episodes_completed = checkpoint_data.get("total_episodes_completed", 0)
-                self.black_wins = checkpoint_data.get("black_wins", 0)
-                self.white_wins = checkpoint_data.get("white_wins", 0)
-                self.draws = checkpoint_data.get("draws", 0)
-                self.resumed_from_checkpoint = potential_resume_path
-                self.rich_console.print(
-                    f"[green]Resumed training from checkpoint: {potential_resume_path} at timestep {self.global_timestep}[/green]"
-                )
-            except (OSError, RuntimeError, ValueError) as e:
-                self.rich_console.print(
-                    f"[bold red]Error loading checkpoint {potential_resume_path}: {e}. Starting fresh.[/bold red]"
-                )
-                self.global_timestep = 0
-                self.total_episodes_completed = 0
-                self.black_wins = 0
-                self.white_wins = 0
-                self.draws = 0
+            self.resumed_from_checkpoint = None
 
     def run_training_loop(self):
         """Executes the main training loop."""
@@ -828,3 +800,21 @@ class Trainer:
         self.rich_console.rule("[bold green]Run Finished[/bold green]")
         self.rich_console.print(f"[bold green]Run '{self.run_name}' processing finished.[/bold green]")
         self.rich_console.print(f"Output and logs are in: {self.run_artifact_dir}")
+
+        # Save a final checkpoint if one was not just saved at the last step
+        checkpoint_interval = getattr(self.config.training, "checkpoint_interval_timesteps", 10000)
+        last_ckpt_timestep = ((self.global_timestep) // checkpoint_interval) * checkpoint_interval
+        last_ckpt_filename = os.path.join(self.model_dir, f"checkpoint_ts{self.global_timestep}.pth")
+        # If no checkpoint exists for the final timestep, save one
+        if self.global_timestep > 0 and not os.path.exists(last_ckpt_filename):
+            self.agent.save_model(
+                last_ckpt_filename,
+                self.global_timestep,
+                self.total_episodes_completed,
+                stats_to_save={
+                    "black_wins": self.black_wins,
+                    "white_wins": self.white_wins,
+                    "draws": self.draws,
+                },
+            )
+            log_both(f"Final checkpoint saved to {last_ckpt_filename}", also_to_wandb=True)

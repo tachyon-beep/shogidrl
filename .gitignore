@@ -68,6 +68,7 @@ coverage.xml
 # Model and log directories
 models/
 logs/
+tmp/
 
 # OS files
 .DS_Store
