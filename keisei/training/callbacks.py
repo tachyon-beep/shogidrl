@@ -1,19 +1,24 @@
 """
 training/callbacks.py: Periodic task callbacks for the Shogi RL trainer.
 """
+
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from .trainer import Trainer
+
 
 class Callback(ABC):
     def on_step_end(self, trainer: "Trainer"):
         pass
 
+
 class CheckpointCallback(Callback):
     def __init__(self, interval: int, model_dir: str):
         self.interval = interval
         self.model_dir = model_dir
+
     def on_step_end(self, trainer: "Trainer"):
         if (trainer.global_timestep + 1) % self.interval == 0:
             ckpt_save_path = os.path.join(
@@ -30,7 +35,9 @@ class CheckpointCallback(Callback):
                         "draws": trainer.draws,
                     },
                 )
-                trainer.log_both(f"Checkpoint saved to {ckpt_save_path}", also_to_wandb=True)
+                trainer.log_both(
+                    f"Checkpoint saved to {ckpt_save_path}", also_to_wandb=True
+                )
             except (OSError, RuntimeError) as e:
                 trainer.log_both(
                     f"Error saving checkpoint {ckpt_save_path}: {e}",
@@ -38,11 +45,15 @@ class CheckpointCallback(Callback):
                     also_to_wandb=True,
                 )
 
+
 import os
+
+
 class EvaluationCallback(Callback):
     def __init__(self, eval_cfg, interval: int):
         self.eval_cfg = eval_cfg
         self.interval = interval
+
     def on_step_end(self, trainer: "Trainer"):
         if not getattr(self.eval_cfg, "enable_periodic_evaluation", False):
             return
@@ -51,7 +62,9 @@ class EvaluationCallback(Callback):
                 trainer.model_dir, f"eval_checkpoint_ts{trainer.global_timestep+1}.pth"
             )
             trainer.agent.save_model(
-                eval_ckpt_path, trainer.global_timestep + 1, trainer.total_episodes_completed
+                eval_ckpt_path,
+                trainer.global_timestep + 1,
+                trainer.total_episodes_completed,
             )
             trainer.log_both(
                 f"Starting periodic evaluation at timestep {trainer.global_timestep + 1}...",
@@ -61,7 +74,9 @@ class EvaluationCallback(Callback):
             eval_results = trainer.execute_full_evaluation_run(
                 agent_checkpoint_path=eval_ckpt_path,
                 opponent_type=getattr(self.eval_cfg, "opponent_type", "random"),
-                opponent_checkpoint_path=getattr(self.eval_cfg, "opponent_checkpoint_path", None),
+                opponent_checkpoint_path=getattr(
+                    self.eval_cfg, "opponent_checkpoint_path", None
+                ),
                 num_games=getattr(self.eval_cfg, "num_games", 20),
                 max_moves_per_game=getattr(self.eval_cfg, "max_moves_per_game", 256),
                 device_str=trainer.config.env.device,
@@ -81,6 +96,8 @@ class EvaluationCallback(Callback):
                 f"Periodic evaluation finished. Results: {eval_results}",
                 also_to_wandb=True,
                 wandb_data=(
-                    eval_results if isinstance(eval_results, dict) else {"eval_summary": str(eval_results)}
+                    eval_results
+                    if isinstance(eval_results, dict)
+                    else {"eval_summary": str(eval_results)}
                 ),
             )

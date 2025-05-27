@@ -1,10 +1,14 @@
 """
 test_features.py: Unit tests for keisei/shogi/features.py
 """
-import numpy as np
+
 import types
+
+import numpy as np
 import pytest
+
 from keisei.shogi import features
+
 
 class DummyGame:
     # Minimal stub for testing feature extraction
@@ -20,17 +24,22 @@ class DummyGame:
         self.OBS_MOVE_COUNT = 43
         self.OBS_RESERVED_1 = 44
         self.OBS_RESERVED_2 = 45
-        self.OBS_UNPROMOTED_ORDER = ["P","L","N","S","G","B","R","K"]
-        self.OBS_PROMOTED_ORDER = ["+P","+L","+N","+S","+B","+R"]
-        self.hands = {0: {pt: 0 for pt in self.OBS_UNPROMOTED_ORDER}, 1: {pt: 0 for pt in self.OBS_UNPROMOTED_ORDER}}
+        self.OBS_UNPROMOTED_ORDER = ["P", "L", "N", "S", "G", "B", "R", "K"]
+        self.OBS_PROMOTED_ORDER = ["+P", "+L", "+N", "+S", "+B", "+R"]
+        self.hands = {
+            0: {pt: 0 for pt in self.OBS_UNPROMOTED_ORDER},
+            1: {pt: 0 for pt in self.OBS_UNPROMOTED_ORDER},
+        }
         self.current_player = 0
         self.Color = types.SimpleNamespace(BLACK=0, WHITE=1)
         self.move_count = 0
         self.repetition_count = 0
         self.is_sennichite = lambda: False
         self.move_history = []
+
     def opponent(self):
         return 1 - self.current_player
+
     def is_in_check(self, color) -> bool:
         # Always False by default; override in test subclasses
         return False
@@ -46,6 +55,7 @@ def test_core46_shape_and_zeros():
             assert np.allclose(obs[i], 1.0)
         else:
             assert np.allclose(obs[i], 0.0)
+
 
 def test_core46all_shape_and_zeros():
     game = DummyGame()
@@ -71,14 +81,17 @@ def test_core46all_shape_and_zeros():
     assert np.allclose(obs[idx_prom_zone, 0:3, :], 1.0)
     assert np.allclose(obs[idx_prom_zone, 3:, :], 0.0)
 
+
 def test_check_plane():
     class DummyGameCheck(DummyGame):
         def is_in_check(self, color) -> bool:
             return True
+
     game = DummyGameCheck()
     obs = features.build_core46_all(game)
     idx = 46 + features.EXTRA_PLANES["check"]
     assert np.allclose(obs[idx], 1.0)
+
 
 def test_repetition_plane():
     game = DummyGame()
@@ -86,6 +99,7 @@ def test_repetition_plane():
     obs = features.build_core46_all(game)
     idx = 46 + features.EXTRA_PLANES["repetition"]
     assert np.allclose(obs[idx], 1.0)
+
 
 def test_prom_zone_plane():
     game = DummyGame()
@@ -95,16 +109,20 @@ def test_prom_zone_plane():
     assert np.allclose(obs[idx, 0:3, :], 1.0)
     assert np.allclose(obs[idx, 3:, :], 0.0)
 
+
 def test_last2ply_plane():
     game = DummyGame()
+
     class Move:
         def __init__(self, to_square):
             self.to_square = to_square
-    game.move_history = [Move((1,2)), Move((3,4))]
+
+    game.move_history = [Move((1, 2)), Move((3, 4))]
     obs = features.build_core46_all(game)
     idx = 46 + features.EXTRA_PLANES["last2ply"]
     assert np.isclose(obs[idx, 1, 2], 1.0)
     assert np.isclose(obs[idx, 3, 4], 1.0)
+
 
 def test_hand_onehot_plane():
     game = DummyGame()
@@ -112,6 +130,7 @@ def test_hand_onehot_plane():
     obs = features.build_core46_all(game)
     idx = 46 + features.EXTRA_PLANES["hand_onehot"]
     assert np.isclose(obs[idx, 0, 0], 1.0)
+
 
 def test_registry_and_spec():
     assert "core46" in features.FEATURE_REGISTRY

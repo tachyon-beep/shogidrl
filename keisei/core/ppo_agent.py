@@ -54,7 +54,9 @@ class PPOAgent:
         self.minibatch_size = config.training.minibatch_size
 
         self.last_kl_div = 0.0  # Initialize KL divergence tracker
-        self.gradient_clip_max_norm = config.training.gradient_clip_max_norm # Added from config
+        self.gradient_clip_max_norm = (
+            config.training.gradient_clip_max_norm
+        )  # Added from config
 
     def select_action(
         self,
@@ -237,7 +239,8 @@ class PPOAgent:
                 self.optimizer.zero_grad()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(), max_norm=self.gradient_clip_max_norm # Use config value
+                    self.model.parameters(),
+                    max_norm=self.gradient_clip_max_norm,  # Use config value
                 )  # Optional: gradient clipping
                 self.optimizer.step()
 

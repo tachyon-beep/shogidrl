@@ -1,6 +1,9 @@
 """
 training/display.py: Rich UI management for the Shogi RL trainer.
 """
+
+from typing import Any, Dict, List, Union
+
 from rich.console import Console, Group
 from rich.layout import Layout
 from rich.live import Live
@@ -16,7 +19,7 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 from rich.text import Text
-from typing import Any, Dict, List, Union
+
 
 class TrainingDisplay:
     def __init__(self, config, trainer, rich_console: Console):
@@ -24,7 +27,9 @@ class TrainingDisplay:
         self.trainer = trainer
         self.rich_console = rich_console
         self.rich_log_messages = trainer.rich_log_messages
-        self.progress_bar, self.training_task, self.layout, self.log_panel = self._setup_rich_progress_display()
+        self.progress_bar, self.training_task, self.layout, self.log_panel = (
+            self._setup_rich_progress_display()
+        )
 
     def _setup_rich_progress_display(self):
         progress_columns: List[Union[str, ProgressColumn]]

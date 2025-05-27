@@ -1,20 +1,22 @@
 """
 test_trainer_config.py: Tests for Trainer/model/feature config integration in Keisei.
 """
-from typing import cast, Dict, Any  # Add Dict, Any
+
+from typing import Any, Dict, cast  # Add Dict, Any
+
 import pytest
 
 from keisei.config_schema import (
     AppConfig,
-    TrainingConfig,
+    DemoConfig,
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
+    TrainingConfig,
     WandBConfig,
-    DemoConfig,
 )
-from keisei.training.trainer import Trainer
 from keisei.training.models.resnet_tower import ActorCriticResTower, ResidualBlock
+from keisei.training.trainer import Trainer
 
 
 class DummyArgs:
@@ -101,7 +103,9 @@ def test_trainer_instantiates_resnet_and_features():
 
     # Check model config with explicit casting for type checker
     model = cast(ActorCriticResTower, trainer.model)
-    assert model.res_blocks[0].se is not None  # SE block should be enabled with se_ratio > 0
+    assert (
+        model.res_blocks[0].se is not None
+    )  # SE block should be enabled with se_ratio > 0
 
     first_res_block = cast(ResidualBlock, model.res_blocks[0])
     assert first_res_block.conv1.out_channels == trainer.tower_width
@@ -109,20 +113,26 @@ def test_trainer_instantiates_resnet_and_features():
 
 
 def test_trainer_invalid_feature_raises():
-    config, args = make_config_and_args(input_features="not_a_feature", model_type="resnet")
+    config, args = make_config_and_args(
+        input_features="not_a_feature", model_type="resnet"
+    )
     with pytest.raises(KeyError):
         Trainer(config, args)
 
 
 def test_trainer_invalid_model_raises():
-    config, args = make_config_and_args(input_features="core46", model_type="not_a_model")
+    config, args = make_config_and_args(
+        input_features="core46", model_type="not_a_model"
+    )
     with pytest.raises(ValueError):
         Trainer(config, args)
 
 
 def test_cli_overrides_config():
     # CLI args should override config
-    config, _ = make_config_and_args(input_features="core46", model_type="resnet", tower_depth=3)
+    config, _ = make_config_and_args(
+        input_features="core46", model_type="resnet", tower_depth=3
+    )
     args = DummyArgs(
         run_name="cli_override_test",
         input_features="core46+all",

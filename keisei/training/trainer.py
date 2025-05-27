@@ -7,14 +7,22 @@ import os
 import sys
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union # pylint: disable=unused-import
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Union,
+)  # pylint: disable=unused-import
 
 import numpy as np
-import torch # Add torch import
-import wandb
+import torch  # Add torch import
 from rich.console import Console, Text
-from torch.cuda.amp import GradScaler, autocast # For mixed precision
+from torch.cuda.amp import GradScaler, autocast  # For mixed precision
 
+import wandb
 from keisei.config_schema import AppConfig
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.ppo_agent import PPOAgent
@@ -25,8 +33,11 @@ from keisei.utils import (
     TrainingLogger,
     format_move_with_description_enhanced,
 )
-from keisei.utils.utils import generate_run_name # ADDED: Import generate_run_name from correct location
-from . import utils, display, callbacks
+from keisei.utils.utils import (
+    generate_run_name,
+)  # ADDED: Import generate_run_name from correct location
+
+from . import callbacks, display, utils
 
 
 class Trainer:
@@ -60,7 +71,11 @@ class Trainer:
         run_name = None
         if hasattr(args, "run_name") and args.run_name:
             run_name = args.run_name
-        elif hasattr(config, "logging") and hasattr(config.logging, "run_name") and config.logging.run_name:
+        elif (
+            hasattr(config, "logging")
+            and hasattr(config.logging, "run_name")
+            and config.logging.run_name
+        ):
             run_name = config.logging.run_name
         self.run_name = generate_run_name(config, run_name)
 
@@ -90,35 +105,47 @@ class Trainer:
         if self.use_mixed_precision:
             self.scaler = GradScaler()
             self.logger.log(
-                str(Text("Mixed precision training enabled (CUDA).", style="green")) # Convert Text to str
+                str(
+                    Text("Mixed precision training enabled (CUDA).", style="green")
+                )  # Convert Text to str
             )
         elif self.config.training.mixed_precision and self.device.type != "cuda":
             self.logger.log(
-                str(Text( # Convert Text to str
-                    "Mixed precision training requested but CUDA is not available/selected. Proceeding without mixed precision.",
-                    style="yellow",
-                ))
+                str(
+                    Text(  # Convert Text to str
+                        "Mixed precision training requested but CUDA is not available/selected. Proceeding without mixed precision.",
+                        style="yellow",
+                    )
+                )
             )
             self.use_mixed_precision = False
 
         # --- Model/feature config integration ---
-        self.input_features = getattr(args, 'input_features', None) or config.training.input_features
-        self.model_type = getattr(args, 'model', None) or config.training.model_type
-        self.tower_depth = getattr(args, 'tower_depth', None) or config.training.tower_depth
-        self.tower_width = getattr(args, 'tower_width', None) or config.training.tower_width
-        self.se_ratio = getattr(args, 'se_ratio', None) or config.training.se_ratio
+        self.input_features = (
+            getattr(args, "input_features", None) or config.training.input_features
+        )
+        self.model_type = getattr(args, "model", None) or config.training.model_type
+        self.tower_depth = (
+            getattr(args, "tower_depth", None) or config.training.tower_depth
+        )
+        self.tower_width = (
+            getattr(args, "tower_width", None) or config.training.tower_width
+        )
+        self.se_ratio = getattr(args, "se_ratio", None) or config.training.se_ratio
         # Feature builder
         from keisei.shogi import features
+
         self.feature_spec = features.FEATURE_SPECS[self.input_features]
         self.obs_shape = (self.feature_spec.num_planes, 9, 9)
         # Model factory
-        from keisei.training.models import model_factory # Corrected import
+        from keisei.training.models import model_factory  # Corrected import
+
         # from keisei.training.models.resnet_tower import ActorCriticResTower # Old direct import
         # if self.model_type == "resnet": # Old direct instantiation
         self.model = model_factory(
             model_type=self.model_type,
-            obs_shape=self.obs_shape, 
-            num_actions=config.env.num_actions_total, # Added num_actions
+            obs_shape=self.obs_shape,
+            num_actions=config.env.num_actions_total,  # Added num_actions
             tower_depth=self.tower_depth,
             tower_width=self.tower_width,
             se_ratio=self.se_ratio if self.se_ratio > 0 else None,
@@ -164,9 +191,13 @@ class Trainer:
         # Display and callbacks
         self.display = display.TrainingDisplay(self.config, self, self.rich_console)
         eval_cfg = getattr(self.config, "evaluation", None)
-        checkpoint_interval = self.config.training.checkpoint_interval_timesteps # Use config value
+        checkpoint_interval = (
+            self.config.training.checkpoint_interval_timesteps
+        )  # Use config value
         eval_interval = (
-            eval_cfg.evaluation_interval_timesteps if eval_cfg else self.config.training.evaluation_interval_timesteps # Use config value
+            eval_cfg.evaluation_interval_timesteps
+            if eval_cfg
+            else self.config.training.evaluation_interval_timesteps  # Use config value
         )
         self.callbacks = [
             callbacks.CheckpointCallback(checkpoint_interval, self.model_dir),
@@ -197,7 +228,7 @@ class Trainer:
         self.experience_buffer = ExperienceBuffer(
             buffer_size=self.config.training.steps_per_epoch,
             gamma=self.config.training.gamma,
-            lambda_gae=self.config.training.lambda_gae, # Use config value
+            lambda_gae=self.config.training.lambda_gae,  # Use config value
             device=self.config.env.device,
         )
 
@@ -215,9 +246,12 @@ class Trainer:
     def _handle_checkpoint_resume(self):
         """Handle resuming from checkpoint if specified or auto-detected."""
         import shutil
+
         resume_path = self.args.resume
+
         def find_ckpt_in_dir(directory):
             return utils.find_latest_checkpoint(directory)
+
         if resume_path == "latest" or resume_path is None:
             # Try to find latest checkpoint in the run's model_dir
             latest_ckpt = find_ckpt_in_dir(self.model_dir)
@@ -227,7 +261,9 @@ class Trainer:
                 parent_ckpt = find_ckpt_in_dir(parent_dir)
                 if parent_ckpt:
                     # Copy the checkpoint into the run's model_dir for consistency
-                    dest_ckpt = os.path.join(self.model_dir, os.path.basename(parent_ckpt))
+                    dest_ckpt = os.path.join(
+                        self.model_dir, os.path.basename(parent_ckpt)
+                    )
                     shutil.copy2(parent_ckpt, dest_ckpt)
                     latest_ckpt = dest_ckpt
             if latest_ckpt:
@@ -262,7 +298,9 @@ class Trainer:
         log_both(
             f"Effective config saved to: {os.path.join(self.run_artifact_dir, 'effective_config.json')}"
         )
-        self._log_event(f"Effective config saved to: {os.path.join(self.run_artifact_dir, 'effective_config.json')}")
+        self._log_event(
+            f"Effective config saved to: {os.path.join(self.run_artifact_dir, 'effective_config.json')}"
+        )
 
         if self.config.env.seed is not None:
             log_both(f"Random seed: {self.config.env.seed}")
@@ -284,7 +322,9 @@ class Trainer:
                 log_both(
                     f"[green]Resumed training from checkpoint: {self.resumed_from_checkpoint}[/green]"
                 )
-                self._log_event(f"Resumed training from checkpoint: {self.resumed_from_checkpoint}")
+                self._log_event(
+                    f"Resumed training from checkpoint: {self.resumed_from_checkpoint}"
+                )
             log_both(
                 f"Resuming from timestep {self.global_timestep}, {self.total_episodes_completed} episodes completed."
             )
@@ -441,9 +481,7 @@ class Trainer:
                 (self.global_timestep + 1) % self.config.training.steps_per_epoch == 0
                 and self.experience_buffer.ptr == self.config.training.steps_per_epoch
             ):
-                self._perform_ppo_update(
-                    current_obs_np, log_both
-                )
+                self._perform_ppo_update(current_obs_np, log_both)
 
         except ValueError as e:
             log_both(
@@ -570,9 +608,7 @@ class Trainer:
 
         return current_obs_np, current_obs_tensor, 0.0, 0
 
-    def _perform_ppo_update(
-        self, current_obs_np, log_both
-    ):
+    def _perform_ppo_update(self, current_obs_np, log_both):
         """Perform a PPO update."""
         with torch.no_grad():
             last_value_pred_for_gae = self.agent.get_value(current_obs_np)
@@ -640,7 +676,9 @@ class Trainer:
             )
 
         # Always save a final checkpoint if one was not just saved at the last step
-        checkpoint_interval = self.config.training.checkpoint_interval_timesteps # Use config value
+        checkpoint_interval = (
+            self.config.training.checkpoint_interval_timesteps
+        )  # Use config value
         last_ckpt_filename = os.path.join(
             self.model_dir, f"checkpoint_ts{self.global_timestep}.pth"
         )
@@ -685,7 +723,9 @@ class Trainer:
     def run_training_loop(self):
         """Executes the main training loop."""
         # Always log a session start event to ensure log file is created
-        self._log_event(f"--- SESSION START: {self.run_name} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---")
+        self._log_event(
+            f"--- SESSION START: {self.run_name} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---"
+        )
         # TrainingLogger context manager
         with TrainingLogger(
             self.log_file_path,
@@ -707,7 +747,9 @@ class Trainer:
                     wandb.log(log_payload, step=self.global_timestep)
 
             self.log_both = log_both  # Expose for callbacks
-            self.execute_full_evaluation_run = execute_full_evaluation_run  # Expose for callbacks
+            self.execute_full_evaluation_run = (
+                execute_full_evaluation_run  # Expose for callbacks
+            )
 
             # Log session start
             session_start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -747,12 +789,16 @@ class Trainer:
                     steps_since_last_time += 1
 
                     # Display updates
-                    if (self.global_timestep % self.config.training.render_every_steps) == 0:
+                    if (
+                        self.global_timestep % self.config.training.render_every_steps
+                    ) == 0:
                         self.display.update_log_panel(self)
 
                     current_time = time.time()
                     time_delta = current_time - last_time
-                    current_speed = steps_since_last_time / time_delta if time_delta > 0 else 0.0
+                    current_speed = (
+                        steps_since_last_time / time_delta if time_delta > 0 else 0.0
+                    )
 
                     if time_delta > 0.1:  # Update speed roughly every 100ms
                         last_time = current_time

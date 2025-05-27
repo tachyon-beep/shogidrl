@@ -32,26 +32,40 @@ class TrainingConfig(BaseModel):
     value_loss_coeff: float = Field(0.5, description="Value loss coefficient.")
     entropy_coef: float = Field(0.01, description="Entropy regularization coefficient.")
     render_every_steps: int = Field(
-        1, description="Update expensive display elements (metrics, logs) every N steps to reduce flicker."
+        1,
+        description="Update expensive display elements (metrics, logs) every N steps to reduce flicker.",
     )
-    refresh_per_second: int = Field(
-        4, description="Rich Live refresh rate per second."
-    )
+    refresh_per_second: int = Field(4, description="Rich Live refresh rate per second.")
     enable_spinner: bool = Field(
         True, description="Enable spinner column in progress bar (looks cool!)."
     )
     # --- Model/feature config additions ---
-    input_features: str = Field("core46", description="Feature set for observation builder (e.g. 'core46', 'core46+all').")
-    tower_depth: int = Field(9, description="Number of residual blocks in ResNet tower.")
+    input_features: str = Field(
+        "core46",
+        description="Feature set for observation builder (e.g. 'core46', 'core46+all').",
+    )
+    tower_depth: int = Field(
+        9, description="Number of residual blocks in ResNet tower."
+    )
     tower_width: int = Field(256, description="Width (channels) of ResNet tower.")
-    se_ratio: float = Field(0.25, description="SE block squeeze ratio (0 disables SE blocks).")
+    se_ratio: float = Field(
+        0.25, description="SE block squeeze ratio (0 disables SE blocks)."
+    )
     model_type: str = Field("resnet", description="Model type to use (e.g. 'resnet').")
     mixed_precision: bool = Field(False, description="Enable mixed-precision training.")
     ddp: bool = Field(False, description="Enable DistributedDataParallel training.")
-    gradient_clip_max_norm: float = Field(0.5, description="Maximum norm for gradient clipping.")
-    lambda_gae: float = Field(0.95, description="Lambda for Generalized Advantage Estimation (GAE).")
-    checkpoint_interval_timesteps: int = Field(10000, description="Save a model checkpoint every N timesteps.")
-    evaluation_interval_timesteps: int = Field(50000, description="Run evaluation every N timesteps.")
+    gradient_clip_max_norm: float = Field(
+        0.5, description="Maximum norm for gradient clipping."
+    )
+    lambda_gae: float = Field(
+        0.95, description="Lambda for Generalized Advantage Estimation (GAE)."
+    )
+    checkpoint_interval_timesteps: int = Field(
+        10000, description="Save a model checkpoint every N timesteps."
+    )
+    evaluation_interval_timesteps: int = Field(
+        50000, description="Run evaluation every N timesteps."
+    )
 
     @validator("learning_rate")
     # pylint: disable=no-self-argument
@@ -66,7 +80,9 @@ class EvaluationConfig(BaseModel):
     opponent_type: str = Field(
         "random", description="Type of opponent: 'random', 'heuristic', etc."
     )
-    evaluation_interval_timesteps: int = Field(50000, description="Run evaluation every N timesteps.")
+    evaluation_interval_timesteps: int = Field(
+        50000, description="Run evaluation every N timesteps."
+    )
 
 
 class LoggingConfig(BaseModel):
@@ -77,7 +93,8 @@ class LoggingConfig(BaseModel):
         "models/", description="Directory to save model checkpoints."
     )
     run_name: Optional[str] = Field(
-        None, description="Optional name for this run (overrides auto-generated name if set)."
+        None,
+        description="Optional name for this run (overrides auto-generated name if set).",
     )
 
 
@@ -85,9 +102,15 @@ class WandBConfig(BaseModel):
     enabled: bool = Field(True, description="Enable Weights & Biases logging.")
     project: Optional[str] = Field("keisei-shogi-rl", description="W&B project name.")
     entity: Optional[str] = Field(None, description="W&B entity (username or team).")
-    run_name_prefix: Optional[str] = Field("keisei", description="Prefix for W&B run names.")
-    watch_model: bool = Field(True, description="Use wandb.watch() to log model gradients and parameters.")
-    watch_log_freq: int = Field(1000, description="Frequency for wandb.watch() logging.")
+    run_name_prefix: Optional[str] = Field(
+        "keisei", description="Prefix for W&B run names."
+    )
+    watch_model: bool = Field(
+        True, description="Use wandb.watch() to log model gradients and parameters."
+    )
+    watch_log_freq: int = Field(
+        1000, description="Frequency for wandb.watch() logging."
+    )
     watch_log_type: Literal["gradients", "parameters", "all"] = Field(
         "all", description="Type of data to log with wandb.watch()."
     )

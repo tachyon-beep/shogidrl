@@ -1,15 +1,19 @@
 """
 training/utils.py: Helper functions for setup and configuration in the Shogi RL trainer.
 """
+
 import glob
 import json
 import os
 import random
 import sys
 from typing import Any
+
 import numpy as np
 import torch
+
 import wandb
+
 
 def find_latest_checkpoint(model_dir_path):
     try:
@@ -23,6 +27,7 @@ def find_latest_checkpoint(model_dir_path):
     except (OSError, FileNotFoundError) as e:
         print(f"Error in find_latest_checkpoint: {e}", file=sys.stderr)
         return None
+
 
 def serialize_config(config_obj: Any) -> str:
     if hasattr(config_obj, "dict"):
@@ -52,6 +57,7 @@ def serialize_config(config_obj: Any) -> str:
         print(f"Error serializing config: {e}", file=sys.stderr)
         return "{}"
 
+
 def setup_directories(config, run_name):
     model_dir = config.logging.model_dir
     log_file = config.logging.log_file
@@ -67,6 +73,7 @@ def setup_directories(config, run_name):
         "eval_log_file_path": eval_log_file_path,
     }
 
+
 def setup_seeding(config):
     seed = config.env.seed
     if seed is not None:
@@ -76,15 +83,14 @@ def setup_seeding(config):
         if torch.cuda.is_available():
             torch.cuda.manual_seed_all(seed)
 
+
 def setup_wandb(config, run_name, run_artifact_dir):
     wandb_cfg = config.wandb
     is_active = wandb_cfg.enabled
     if is_active:
         try:
             config_dict_for_wandb = (
-                json.loads(serialize_config(config))
-                if serialize_config(config)
-                else {}
+                json.loads(serialize_config(config)) if serialize_config(config) else {}
             )
             wandb.init(
                 project=wandb_cfg.project,
@@ -97,8 +103,13 @@ def setup_wandb(config, run_name, run_artifact_dir):
                 id=run_name,
             )
         except (TypeError, ValueError, OSError) as e:
-            print(f"Error initializing W&B: {e}. W&B logging disabled.", file=sys.stderr)
+            print(
+                f"Error initializing W&B: {e}. W&B logging disabled.", file=sys.stderr
+            )
             is_active = False
     if not is_active:
-        print("Weights & Biases logging is disabled or failed to initialize.", file=sys.stderr)
+        print(
+            "Weights & Biases logging is disabled or failed to initialize.",
+            file=sys.stderr,
+        )
     return is_active

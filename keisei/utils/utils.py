@@ -145,7 +145,9 @@ def load_config(
 
 
 if TYPE_CHECKING:
-    from keisei.config_schema import AppConfig  # Keep this for type hinting if used elsewhere
+    from keisei.config_schema import (
+        AppConfig,
+    )  # Keep this for type hinting if used elsewhere
     from keisei.shogi.shogi_core_definitions import MoveTuple
     from keisei.shogi.shogi_game import ShogiGame  # Added for type hinting
 

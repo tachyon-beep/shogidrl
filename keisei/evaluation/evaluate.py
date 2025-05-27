@@ -138,7 +138,7 @@ def load_evaluation_agent(
     policy_mapper: PolicyOutputMapper,
     input_channels: int,
     # Add input_features as an optional parameter with a default
-    input_features: Optional[str] = "core46", 
+    input_features: Optional[str] = "core46",
 ) -> PPOAgent:
     """Loads a PPOAgent from a checkpoint for evaluation. Raises FileNotFoundError if checkpoint does not exist."""
     if not os.path.isfile(checkpoint_path):
@@ -153,38 +153,40 @@ def load_evaluation_agent(
             seed=42,  # Default seed for eval agent loading
         ),
         training=TrainingConfig(  # Dummy TrainingConfig for PPOAgent
-            total_timesteps=1,      # Placeholder
-            steps_per_epoch=1,      # Placeholder
-            ppo_epochs=1,           # Placeholder
-            minibatch_size=1,       # Placeholder
-            learning_rate=1e-4,     # Placeholder
-            gamma=0.99,             # Placeholder
-            clip_epsilon=0.2,       # Placeholder
-            value_loss_coeff=0.5,   # Placeholder
-            entropy_coef=0.01,      # Placeholder
-            input_features=input_features if input_features else "core46", # Use provided or default
-            model_type="resnet",    # Default, actual arch baked into model
+            total_timesteps=1,  # Placeholder
+            steps_per_epoch=1,  # Placeholder
+            ppo_epochs=1,  # Placeholder
+            minibatch_size=1,  # Placeholder
+            learning_rate=1e-4,  # Placeholder
+            gamma=0.99,  # Placeholder
+            clip_epsilon=0.2,  # Placeholder
+            value_loss_coeff=0.5,  # Placeholder
+            entropy_coef=0.01,  # Placeholder
+            input_features=(
+                input_features if input_features else "core46"
+            ),  # Use provided or default
+            model_type="resnet",  # Default, actual arch baked into model
             mixed_precision=False,  # Not relevant for eval agent loading
-            ddp=False,              # Not relevant for eval agent loading
-            gradient_clip_max_norm=0.5, # Placeholder
-            lambda_gae=0.95,            # Placeholder
-            checkpoint_interval_timesteps=10000, # Placeholder
-            evaluation_interval_timesteps=50000, # Placeholder for TrainingConfig's own field
+            ddp=False,  # Not relevant for eval agent loading
+            gradient_clip_max_norm=0.5,  # Placeholder
+            lambda_gae=0.95,  # Placeholder
+            checkpoint_interval_timesteps=10000,  # Placeholder
+            evaluation_interval_timesteps=50000,  # Placeholder for TrainingConfig's own field
         ),
         evaluation=EvaluationConfig(
-            num_games=1, 
-            opponent_type="random", 
-            evaluation_interval_timesteps=50000 # Explicitly add, though it has a default
+            num_games=1,
+            opponent_type="random",
+            evaluation_interval_timesteps=50000,  # Explicitly add, though it has a default
         ),  # Minimal
         logging=LoggingConfig(log_file="/tmp/eval.log", model_dir="/tmp/"),
         wandb=WandBConfig(
-            enabled=False, 
-            project="eval", 
+            enabled=False,
+            project="eval",
             entity=None,
-            run_name_prefix="eval-run", # Added
-            watch_model=False,          # Added
-            watch_log_freq=1000,        # Added
-            watch_log_type="all"        # Added
+            run_name_prefix="eval-run",  # Added
+            watch_model=False,  # Added
+            watch_log_freq=1000,  # Added
+            watch_log_type="all",  # Added
         ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
     )
@@ -527,7 +529,9 @@ class Evaluator:
             raise RuntimeError(f"Failed to initialize EvaluationLogger: {e}") from e
         # Agent and opponent
         # Use the correct input_channels from self.policy_mapper if available, else default to 46
-        input_channels = getattr(self.policy_mapper, "input_channels", 46) # TODO: Remove this hardcoded value when possible, generate exception if not set
+        input_channels = getattr(
+            self.policy_mapper, "input_channels", 46
+        )  # TODO: Remove this hardcoded value when possible, generate exception if not set
 
         try:
             self._agent = load_evaluation_agent(
@@ -546,7 +550,7 @@ class Evaluator:
                 self.policy_mapper,
                 input_channels,
             )
-        except Exception as e: # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
             print(f"Error initializing opponent {opponent_type}: {e}")
             return None
         if self._logger is None or self._agent is None or self._opponent is None:
@@ -583,7 +587,7 @@ class Evaluator:
         except (RuntimeError, ValueError, OSError) as e:
             print(f"[Evaluator] Error during evaluation run: {e}")
             results_summary = None
-        except Exception as e: # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
             print(f"Error during evaluation run: {e}")
             results_summary = None
         # Final W&B logging
@@ -610,9 +614,10 @@ class Evaluator:
                 print("[Evaluator] W&B run finished.")
             except (OSError, RuntimeError, ValueError) as e:
                 print(f"[Evaluator] Error finishing W&B run: {e}")
-            except Exception as e: # pylint: disable=broad-except
+            except Exception as e:  # pylint: disable=broad-except
                 print(f"Error finalizing evaluation run: {e}")
         return results_summary
+
 
 # --- Backward-compatible wrapper function ---
 def execute_full_evaluation_run(
@@ -661,11 +666,11 @@ def execute_full_evaluation_run(
 
 
 # --- CLI entry point ---
-def main_cli(): # Renamed from main to main_cli to avoid conflict if this file is imported
+def main_cli():  # Renamed from main to main_cli to avoid conflict if this file is imported
     """
     CLI entry point for evaluation. Parses arguments and runs evaluation using Evaluator.
     """
-    import argparse # Moved import here
+    import argparse  # Moved import here
 
     parser = argparse.ArgumentParser(description="Evaluate a PPO Shogi agent.")
     parser.add_argument(
@@ -742,6 +747,7 @@ def main_cli(): # Renamed from main to main_cli to avoid conflict if this file i
     results = evaluator.evaluate()
     print("Evaluation Results:")
     print(results)
+
 
 if __name__ == "__main__":
     main_cli()

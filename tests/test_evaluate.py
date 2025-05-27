@@ -891,27 +891,38 @@ def make_test_config(device_str, input_channels, policy_mapper):
             seed=42,
         ),
         training=TrainingConfig(
-            total_timesteps=1, steps_per_epoch=1, ppo_epochs=1, minibatch_size=1,
-            learning_rate=1e-4, gamma=0.99, clip_epsilon=0.2, value_loss_coeff=0.5, entropy_coef=0.01,
-            input_features="core46", model_type="resnet", mixed_precision=False, ddp=False,
-            gradient_clip_max_norm=0.5, lambda_gae=0.95,
+            total_timesteps=1,
+            steps_per_epoch=1,
+            ppo_epochs=1,
+            minibatch_size=1,
+            learning_rate=1e-4,
+            gamma=0.99,
+            clip_epsilon=0.2,
+            value_loss_coeff=0.5,
+            entropy_coef=0.01,
+            input_features="core46",
+            model_type="resnet",
+            mixed_precision=False,
+            ddp=False,
+            gradient_clip_max_norm=0.5,
+            lambda_gae=0.95,
             checkpoint_interval_timesteps=10000,
-            evaluation_interval_timesteps=50000, # Placeholder for TrainingConfig's own field
+            evaluation_interval_timesteps=50000,  # Placeholder for TrainingConfig's own field
         ),
         evaluation=EvaluationConfig(
-            num_games=1, 
+            num_games=1,
             opponent_type="random",
-            evaluation_interval_timesteps=50000 # Explicitly add
+            evaluation_interval_timesteps=50000,  # Explicitly add
         ),
         logging=LoggingConfig(log_file="/tmp/eval.log", model_dir="/tmp/"),
         wandb=WandBConfig(
-            enabled=False, 
-            project="eval", 
+            enabled=False,
+            project="eval",
             entity=None,
-            run_name_prefix="test-eval-run", # Added
-            watch_model=False,               # Added
-            watch_log_freq=1000,             # Added
-            watch_log_type="all"             # Added
+            run_name_prefix="test-eval-run",  # Added
+            watch_model=False,  # Added
+            watch_log_freq=1000,  # Added
+            watch_log_type="all",  # Added
         ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
     )
