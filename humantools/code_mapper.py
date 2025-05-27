@@ -3,7 +3,7 @@
 Combine Python source files into a single XML document.
 
 Security-first refactor:
-- Sanitises all XML output via proper escaping rather than home-made tags.
+- Sanitises all XML output via proper escaping.
 - Skips the output file even if it lives inside the search tree.
 - Opt-in symlink traversal (`--follow-symlinks`).
 - Hard stops (or warnings) on excessive file count / output size.
@@ -16,12 +16,11 @@ Author: refactored 28 May 2025
 from __future__ import annotations
 
 import argparse
-import gzip
 import logging
 import os
 import sys
 from pathlib import Path
-from typing import Dict
+from typing import Dict, TextIO
 
 from xml.sax.saxutils import escape as xml_escape
 
@@ -36,6 +35,32 @@ logger = logging.getLogger("combiner")
 
 # ---------- Core logic ------------------------------------------------------------ #
 
+def _process_file(
+    file_path: Path,
+    start_dir: Path,
+    outfile: TextIO,
+    summary: Dict[str, int],
+    encoding: str,
+) -> None:
+    """Read a single Python file and write it to the XML output."""
+    try:
+        relative_path = file_path.relative_to(start_dir)
+        with open(file_path, "r", encoding=encoding, errors="replace") as fh:
+            content = fh.read()
+    except OSError as err:
+        logger.error("Error reading %s: %s", file_path, err)
+        summary["skipped_files"] += 1
+        return
+
+    # Write XML-escaped output with CDATA to preserve code
+    outfile.write(f'  <file path="{xml_escape(str(relative_path))}"><![CDATA[\n')
+    outfile.write(content)
+    outfile.write("\n]]></file>\n")
+
+    summary["processed_files"] += 1
+    summary["bytes_written"] += len(content.encode(encoding))
+
+
 def combine_python_files(
     start_dir: Path,
     output_path: Path,
@@ -43,11 +68,10 @@ def combine_python_files(
     follow_symlinks: bool = False,
     max_files: int | None = None,
     max_size_bytes: int | None = None,
-    compress: bool = False,
 ) -> Dict[str, int]:
     """
     Traverse `start_dir` and write every *.py file found into an XML document at
-    `output_path`.  Returns a summary dict.
+    `output_path`. Returns a summary dict.
     """
     summary = {
         "processed_files": 0,
@@ -56,23 +80,17 @@ def combine_python_files(
         "bytes_written": 0,
     }
 
-    # Ensure output directory exists
     output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Prepare writer (plain or gzip)
-    open_func = gzip.open if compress else open
-    mode = "wt" if compress else "w"
+    output_abs = output_path.resolve()
     encoding = "utf-8"
 
-    output_abs = output_path.resolve()
-
-    with open_func(output_path, mode, encoding=encoding) as outfile:
+    with open(output_path, "wt", encoding=encoding) as outfile:
         # Emit minimal root element
         outfile.write('<?xml version="1.0" encoding="UTF-8"?>\n')
         outfile.write("<codebase>\n")
 
         # Walk the tree
-        for dirpath, dirnames, filenames in os.walk(
+        for dirpath, _, filenames in os.walk(
             start_dir, followlinks=follow_symlinks
         ):
             summary["scanned_dirs"] += 1
@@ -83,39 +101,18 @@ def combine_python_files(
                     continue
 
                 file_path = current_dir / filename
-                # Skip the output file itself
                 if file_path.resolve() == output_abs:
                     continue
 
-                # Hard limit check
+                # Hard limit checks
                 if max_files is not None and summary["processed_files"] >= max_files:
                     logger.warning(
                         "Maximum file limit (%d) reached – further files skipped.",
                         max_files,
                     )
-                    summary["skipped_files"] += 1
-                    continue
+                    summary["skipped_files"] += len(filenames) - filenames.index(filename)
+                    break  # Stop processing this directory
 
-                try:
-                    relative_path = file_path.relative_to(start_dir)
-                    with open(file_path, "r", encoding=encoding, errors="replace") as fh:
-                        content = fh.read()
-                except Exception as err:  # broad so we still finish the job
-                    logger.error("Error reading %s: %s", file_path, err)
-                    summary["skipped_files"] += 1
-                    continue
-
-                # Write XML-escaped output with CDATA to preserve code
-                outfile.write(
-                    f'  <file path="{xml_escape(str(relative_path))}"><![CDATA[\n'
-                )
-                outfile.write(content)
-                outfile.write("\n]]></file>\n")
-
-                summary["processed_files"] += 1
-                summary["bytes_written"] += len(content.encode(encoding))
-
-                # Size guardrail
                 if (
                     max_size_bytes is not None
                     and summary["bytes_written"] >= max_size_bytes
@@ -124,7 +121,9 @@ def combine_python_files(
                         "Maximum size limit (%.2f MB) reached – stopping early.",
                         max_size_bytes / (1024 * 1024),
                     )
-                    break  # stop walking further
+                    break  # Stop processing this directory
+
+                _process_file(file_path, start_dir, outfile, summary, encoding)
             else:
                 # continue outer loop if inner not broken
                 continue
@@ -180,12 +179,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "-z",
-        "--compress",
-        action="store_true",
-        help="Write gzip-compressed output.",
-    )
-    parser.add_argument(
         "-v",
         "--verbose",
         action="count",
@@ -213,7 +206,7 @@ def main(argv: list[str] | None = None) -> None:
         sys.exit(1)
 
     logger.info("Scanning: %s", start_dir)
-    logger.info("Writing  : %s%s", output_path, " (gzip)" if args.compress else "")
+    logger.info("Writing  : %s", output_path)
 
     summary = combine_python_files(
         start_dir,
@@ -221,7 +214,6 @@ def main(argv: list[str] | None = None) -> None:
         follow_symlinks=args.follow_symlinks,
         max_files=args.max_files,
         max_size_bytes=args.max_size_mb * 1024 * 1024 if args.max_size_mb else None,
-        compress=args.compress,
     )
 
     # ----- Human-readable summary -------------------------------------------------- #

@@ -8,9 +8,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import numpy as np
 import torch
-from dotenv import load_dotenv
-
-import wandb
+from dotenv import load_dotenv # type: ignore
 from keisei.config_schema import (
     AppConfig,
     DemoConfig,
@@ -29,6 +27,7 @@ from keisei.shogi.shogi_core_definitions import (  # Added PieceType
 )
 from keisei.shogi.shogi_game import ShogiGame
 from keisei.utils import BaseOpponent, EvaluationLogger, PolicyOutputMapper
+import wandb  # Ensure wandb is imported for W&B logging
 
 if TYPE_CHECKING:
     pass  # torch already imported above
@@ -162,10 +161,16 @@ def load_evaluation_agent(
             clip_epsilon=0.2,  # Placeholder
             value_loss_coeff=0.5,  # Placeholder
             entropy_coef=0.01,  # Placeholder
+            render_every_steps=1,
+            refresh_per_second=4,
+            enable_spinner=True,
             input_features=(
                 input_features if input_features else "core46"
-            ),  # Use provided or default
-            model_type="resnet",  # Default, actual arch baked into model
+            ),
+            tower_depth=9,
+            tower_width=256,
+            se_ratio=0.25,
+            model_type="resnet",
             mixed_precision=False,  # Not relevant for eval agent loading
             ddp=False,  # Not relevant for eval agent loading
             gradient_clip_max_norm=0.5,  # Placeholder
@@ -176,9 +181,9 @@ def load_evaluation_agent(
         evaluation=EvaluationConfig(
             num_games=1,
             opponent_type="random",
-            evaluation_interval_timesteps=50000,  # Explicitly add, though it has a default
-        ),  # Minimal
-        logging=LoggingConfig(log_file="/tmp/eval.log", model_dir="/tmp/"),
+            evaluation_interval_timesteps=50000,
+        ),
+        logging=LoggingConfig(log_file="/tmp/eval.log", model_dir="/tmp/", run_name="eval-agent-load"),
         wandb=WandBConfig(
             enabled=False,
             project="eval",
@@ -245,7 +250,7 @@ def run_evaluation_loop(
         if isinstance(opponent, BaseOpponent)
         else opponent.__class__.__name__
     )
-    logger.log(  # MODIFIED: Changed to logger.log
+    logger.log(
         f"Starting evaluation: {agent_to_eval.name} vs {current_opponent_name}"
     )
 
@@ -259,7 +264,7 @@ def run_evaluation_loop(
         white_player = opponent if agent_is_black else agent_to_eval
 
         # Corrected log message format
-        logger.log(  # MODIFIED: Changed to logger.log
+        logger.log(
             f"Starting Game {game_num}/{num_games}. "
             f"Agent to eval ({agent_to_eval.name}) is {'Black' if agent_is_black else 'White'}. "
             f"Opponent ({current_opponent_name}) is {'White' if agent_is_black else 'Black'}."
@@ -284,7 +289,7 @@ def run_evaluation_loop(
                 legal_mask = policy_mapper.get_legal_mask(legal_moves, device)
 
                 if not legal_mask.any() and legal_moves:
-                    logger.log(  # MODIFIED: Changed to logger.log
+                    logger.log(
                         f"Error: Game {game_num}, Move {game.move_count + 1}: "
                         f"Agent {active_agent.name} ({game.current_player.name}) has legal moves, "
                         f"but legal_mask is all False. Legal moves: {legal_moves}. "
@@ -318,7 +323,7 @@ def run_evaluation_loop(
                 )
 
             if selected_move is None:
-                logger.log(  # MODIFIED: Changed to logger.log
+                logger.log(
                     f"Error: Game {game_num}, Move {game.move_count + 1}: Active agent {active_agent.name} failed to select a move despite legal moves being available."
                 )
                 # Decide how to handle this: break, assign loss, etc. For now, break.
@@ -383,7 +388,7 @@ def run_evaluation_loop(
         f"Evaluation finished. Results: {results}"
     )  # MODIFIED: Changed to logger.log
     if wandb_enabled:
-        wandb.log(
+        wandb.log( # type: ignore
             {
                 "eval/total_games": num_games,
                 "eval/wins": wins,
@@ -493,7 +498,7 @@ class Evaluator:
                 if self.wandb_group is not None:
                     wandb_kwargs["group"] = self.wandb_group
                 try:
-                    self._wandb_run = wandb.init(**wandb_kwargs)
+                    self._wandb_run = wandb.init(**wandb_kwargs) # type: ignore
                     print(
                         f"[Evaluator] W&B logging enabled: {self._wandb_run.name if self._wandb_run else ''}"
                     )
@@ -550,9 +555,16 @@ class Evaluator:
                 self.policy_mapper,
                 input_channels,
             )
-        except Exception as e:  # pylint: disable=broad-except
-            print(f"Error initializing opponent {opponent_type}: {e}")
+        except ValueError as e:
+            print(f"Error initializing opponent {self.opponent_type}: {e}")
             return None
+        except FileNotFoundError as e:
+            print(f"Error initializing PPO opponent: {e}")
+            return None
+        except Exception as e:  # pylint: disable=broad-except
+            print(f"Unexpected error initializing opponent {self.opponent_type}: {e}")
+            return None
+
         if self._logger is None or self._agent is None or self._opponent is None:
             raise RuntimeError(
                 "Evaluator setup failed: logger, agent, or opponent is None."
@@ -590,10 +602,10 @@ class Evaluator:
         except Exception as e:  # pylint: disable=broad-except
             print(f"Error during evaluation run: {e}")
             results_summary = None
-        # Final W&B logging
+
         if self._wandb_active and results_summary is not None:
             try:
-                wandb.log(
+                wandb.log( # type: ignore
                     {
                         "eval/final_win_rate": results_summary["win_rate"],
                         "eval/final_loss_rate": results_summary["loss_rate"],
@@ -603,23 +615,23 @@ class Evaluator:
                         ],
                     }
                 )
-                print("[Evaluator] Final W&B metrics logged.")
+
             except (OSError, RuntimeError, ValueError) as e:
-                print(f"[Evaluator] Error logging final metrics to W&B: {e}")
-            except Exception as e:
-                print(f"[Evaluator] Unhandled error logging to W&B: {e}")
-        if self._wandb_active:
+                print(f"[Evaluator] Error logging final W&B metrics: {e}") # Added print
+            except Exception as e: # pylint: disable=broad-except
+                print(f"[Evaluator] Unexpected error logging final W&B metrics: {e}") # Added print
+        if self._wandb_active and self._wandb_run:
             try:
-                wandb.finish()
-                print("[Evaluator] W&B run finished.")
+                self._wandb_run.finish()  # type: ignore
+                if hasattr(wandb, "finish"):
+                    wandb.finish()  # Also call global wandb.finish() for test mocks
             except (OSError, RuntimeError, ValueError) as e:
                 print(f"[Evaluator] Error finishing W&B run: {e}")
-            except Exception as e:  # pylint: disable=broad-except
-                print(f"Error finalizing evaluation run: {e}")
+            except Exception as e: # pylint: disable=broad-except
+                print(f"[Evaluator] Unexpected error finishing W&B run: {e}")
         return results_summary
 
 
-# --- Backward-compatible wrapper function ---
 def execute_full_evaluation_run(
     agent_checkpoint_path: str,
     opponent_type: str,
@@ -638,10 +650,9 @@ def execute_full_evaluation_run(
     wandb_extra_config: Optional[dict] = None,
     wandb_reinit: Optional[bool] = None,
     wandb_group: Optional[str] = None,
-    _called_from_cli: bool = False,
 ) -> Optional[dict]:
     """
-    Backward-compatible wrapper for programmatic evaluation. Calls the Evaluator class.
+    Legacy-compatible wrapper for Evaluator class. Runs a full evaluation and returns the results dict.
     """
     evaluator = Evaluator(
         agent_checkpoint_path=agent_checkpoint_path,
@@ -665,89 +676,48 @@ def execute_full_evaluation_run(
     return evaluator.evaluate()
 
 
-# --- CLI entry point ---
-def main_cli():  # Renamed from main to main_cli to avoid conflict if this file is imported
+def main_cli():
     """
-    CLI entry point for evaluation. Parses arguments and runs evaluation using Evaluator.
+    Entry point for CLI evaluation. This should parse arguments and call execute_full_evaluation_run.
     """
-    import argparse  # Moved import here
-
+    import argparse
     parser = argparse.ArgumentParser(description="Evaluate a PPO Shogi agent.")
-    parser.add_argument(
-        "--agent_checkpoint",
-        type=str,
-        required=True,
-        help="Path to agent checkpoint file.",
-    )
-    parser.add_argument(
-        "--opponent_type",
-        type=str,
-        required=True,
-        choices=["random", "heuristic", "ppo"],
-        help="Type of opponent.",
-    )
-    parser.add_argument(
-        "--opponent_checkpoint",
-        type=str,
-        default=None,
-        help="Path to opponent checkpoint (if PPO).",
-    )
-    parser.add_argument(
-        "--num_games", type=int, default=10, help="Number of games to play."
-    )
-    parser.add_argument(
-        "--max_moves_per_game", type=int, default=200, help="Maximum moves per game."
-    )
-    parser.add_argument(
-        "--device", type=str, default="cpu", help="Device for evaluation (cpu/cuda)."
-    )
-    parser.add_argument(
-        "--log_file",
-        type=str,
-        default="eval_log.txt",
-        help="Path to evaluation log file.",
-    )
-    parser.add_argument("--seed", type=int, default=None, help="Random seed.")
-    parser.add_argument(
-        "--wandb_log_eval", action="store_true", help="Enable W&B logging."
-    )
-    parser.add_argument(
-        "--wandb_project_eval", type=str, default=None, help="W&B project name."
-    )
-    parser.add_argument(
-        "--wandb_entity_eval", type=str, default=None, help="W&B entity."
-    )
-    parser.add_argument(
-        "--wandb_run_name_eval", type=str, default=None, help="W&B run name."
-    )
-    parser.add_argument("--wandb_group", type=str, default=None, help="W&B group name.")
-    parser.add_argument("--wandb_reinit", action="store_true", help="W&B reinit flag.")
+    parser.add_argument("--agent_checkpoint_path", required=True)
+    parser.add_argument("--opponent_type", required=True, choices=["random", "heuristic", "ppo"])
+    parser.add_argument("--opponent_checkpoint_path", default=None)
+    parser.add_argument("--num_games", type=int, default=10)
+    parser.add_argument("--max_moves_per_game", type=int, default=300)
+    parser.add_argument("--device_str", default="cpu")
+    parser.add_argument("--log_file_path_eval", default="eval.log")
+    parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--wandb_log_eval", action="store_true")
+    parser.add_argument("--wandb_project_eval", default=None)
+    parser.add_argument("--wandb_entity_eval", default=None)
+    parser.add_argument("--wandb_run_name_eval", default=None)
+    parser.add_argument("--logger_also_stdout", action="store_true")
+    parser.add_argument("--wandb_reinit", action="store_true")
+    parser.add_argument("--wandb_group", default=None)
     args = parser.parse_args()
 
+    # Minimal PolicyOutputMapper for CLI use
     policy_mapper = PolicyOutputMapper()
-    evaluator = Evaluator(
-        agent_checkpoint_path=args.agent_checkpoint,
+
+    results = execute_full_evaluation_run(
+        agent_checkpoint_path=args.agent_checkpoint_path,
         opponent_type=args.opponent_type,
-        opponent_checkpoint_path=args.opponent_checkpoint,
+        opponent_checkpoint_path=args.opponent_checkpoint_path,
         num_games=args.num_games,
         max_moves_per_game=args.max_moves_per_game,
-        device_str=args.device,
-        log_file_path_eval=args.log_file,
+        device_str=args.device_str,
+        log_file_path_eval=args.log_file_path_eval,
         policy_mapper=policy_mapper,
         seed=args.seed,
         wandb_log_eval=args.wandb_log_eval,
         wandb_project_eval=args.wandb_project_eval,
         wandb_entity_eval=args.wandb_entity_eval,
         wandb_run_name_eval=args.wandb_run_name_eval,
-        logger_also_stdout=True,
-        wandb_extra_config=None,
+        logger_also_stdout=args.logger_also_stdout,
         wandb_reinit=args.wandb_reinit,
         wandb_group=args.wandb_group,
     )
-    results = evaluator.evaluate()
-    print("Evaluation Results:")
-    print(results)
-
-
-if __name__ == "__main__":
-    main_cli()
+    print("Evaluation results:", results)
