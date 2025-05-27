@@ -12,7 +12,6 @@ import torch  # Re-add torch import
 
 # Functions and classes to test from evaluate.py
 from keisei.evaluate import (  # MODIFIED: Updated import path
-    INPUT_CHANNELS,
     SimpleHeuristicOpponent,
     SimpleRandomOpponent,
     initialize_opponent,
@@ -27,7 +26,10 @@ from keisei.evaluate import (  # MODIFIED: Updated import path
 from keisei.ppo_agent import PPOAgent  # Actual PPOAgent for type hints and structure
 from keisei.shogi.shogi_core_definitions import MoveTuple
 from keisei.shogi.shogi_game import ShogiGame
-from keisei.utils import BaseOpponent, EvaluationLogger, PolicyOutputMapper
+from keisei.utils import PolicyOutputMapper, BaseOpponent, TrainingLogger, EvaluationLogger
+
+
+INPUT_CHANNELS = 46  # Use the default from config for tests
 
 
 # A mock PPOAgent for testing purposes

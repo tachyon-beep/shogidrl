@@ -30,15 +30,16 @@ This guide explains how to run the DRL Shogi Client for training a Reinforcement
 
 ## 3. Configuration
 
-*   All main training parameters are located in `config.py` at the root of the project.
+*   All main training parameters are now set in a YAML or JSON config file (see `default_config.yaml`).
 *   Key parameters to review before a long training run:
-    *   `TOTAL_TIMESTEPS`: Total number of interactions with the environment.
-    *   `STEPS_PER_EPOCH`: Number of steps collected before each learning phase.
-    *   `LEARNING_RATE`: Learning rate for the optimizer.
-    *   `DEVICE`: Set to "cuda" for GPU training or "cpu".
-    *   `SAVE_FREQ_EPISODES`: How often to save model checkpoints (in episodes).
-    *   `MODEL_DIR`: Directory where models will be saved (default: `models/`).
-    *   `LOG_FILE`: Path to the training log file (default: `logs/shogi_training_log.txt`).
+    *   `training.total_timesteps`: Total number of interactions with the environment.
+    *   `training.steps_per_epoch`: Number of steps collected before each learning phase.
+    *   `training.learning_rate`: Learning rate for the optimizer.
+    *   `env.device`: Set to "cuda" for GPU training or "cpu".
+    *   `logging.model_dir`: Directory where models will be saved (default: `models/`).
+    *   `logging.log_file`: Path to the training log file (default: `logs/shogi_training_log.txt`).
+    *   `demo.enable_demo_mode`: If true, enables demo mode with per-move logging and delay for easier observation.
+    *   `demo.demo_mode_delay`: Delay in seconds between moves in demo mode (default: 0.5).
 *   The `keisei/shogi/shogi_engine.py` and related files define the game environment.
 *   The `keisei/neural_network.py` defines the `ActorCritic` model.
 *   The `keisei/ppo_agent.py` implements the PPO algorithm.
@@ -52,13 +53,18 @@ This guide explains how to run the DRL Shogi Client for training a Reinforcement
 
 2.  **Start the training process:**
     ```bash
-    python train.py
+    python train.py --config default_config.yaml
     ```
+    * To enable demo mode, set `demo.enable_demo_mode: true` in your config file, or override via CLI:
+      ```bash
+      python train.py --config default_config.yaml --override demo.enable_demo_mode=true
+      ```
 
 3.  **Monitoring Training:**
     *   Training progress, including episode rewards, losses, and evaluation results, will be printed to the console.
-    *   Detailed logs are saved to the file specified by `LOG_FILE` in `config.py` (default: `logs/shogi_training_log.txt`).
-    *   Model checkpoints will be saved periodically to the directory specified by `MODEL_DIR` (default: `models/`). The filename will indicate the episode number, e.g., `ppo_shogi_agent_episode_X.pth`.
+    *   If demo mode is enabled, each move will be logged with a delay for easier observation.
+    *   Detailed logs are saved to the file specified by `logging.log_file` (default: `logs/shogi_training_log.txt`).
+    *   Model checkpoints will be saved periodically to the directory specified by `logging.model_dir` (default: `models/`). The filename will indicate the episode number, e.g., `ppo_shogi_agent_episode_X.pth`.
 
 ## 5. Evaluation
 

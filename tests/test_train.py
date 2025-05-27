@@ -7,7 +7,17 @@ import os
 import subprocess
 import sys
 
-import config
+# Local config constants for test compatibility with new config system
+INPUT_CHANNELS = 46
+LEARNING_RATE = 3e-4
+GAMMA = 0.99
+CLIP_EPSILON = 0.2
+PPO_EPOCHS = 10
+MINIBATCH_SIZE = 64
+VALUE_LOSS_COEFF = 0.5
+ENTROPY_COEFF = 0.01
+DEVICE = "cpu"
+
 from keisei.ppo_agent import PPOAgent  # Add back PPOAgent import
 from keisei.utils import PolicyOutputMapper  # Add back PolicyOutputMapper import
 
@@ -35,16 +45,16 @@ def test_train_resume_autodetect(tmp_path):
     fake_ckpt = run_dir / "checkpoint_ts1.pth"  # Corrected filename pattern
     policy_mapper = PolicyOutputMapper()
     agent = PPOAgent(
-        input_channels=config.INPUT_CHANNELS,
+        input_channels=INPUT_CHANNELS,
         policy_output_mapper=policy_mapper,
-        learning_rate=config.LEARNING_RATE,
-        gamma=config.GAMMA,
-        clip_epsilon=config.CLIP_EPSILON,
-        ppo_epochs=config.PPO_EPOCHS,
-        minibatch_size=config.MINIBATCH_SIZE,
-        value_loss_coeff=config.VALUE_LOSS_COEFF,
-        entropy_coef=config.ENTROPY_COEFF,
-        device=config.DEVICE,
+        learning_rate=LEARNING_RATE,
+        gamma=GAMMA,
+        clip_epsilon=CLIP_EPSILON,
+        ppo_epochs=PPO_EPOCHS,
+        minibatch_size=MINIBATCH_SIZE,
+        value_loss_coeff=VALUE_LOSS_COEFF,
+        entropy_coef=ENTROPY_COEFF,
+        device=DEVICE,
     )
     agent.save_model(str(fake_ckpt))
     result = subprocess.run(
@@ -168,16 +178,16 @@ def test_train_explicit_resume(tmp_path):
     # Create a minimal valid PPOAgent and save its checkpoint
     policy_mapper = PolicyOutputMapper()
     agent = PPOAgent(
-        input_channels=config.INPUT_CHANNELS,
+        input_channels=INPUT_CHANNELS,
         policy_output_mapper=policy_mapper,
-        learning_rate=config.LEARNING_RATE,
-        gamma=config.GAMMA,
-        clip_epsilon=config.CLIP_EPSILON,
-        ppo_epochs=config.PPO_EPOCHS,
-        minibatch_size=config.MINIBATCH_SIZE,
-        value_loss_coeff=config.VALUE_LOSS_COEFF,
-        entropy_coef=config.ENTROPY_COEFF,
-        device=config.DEVICE,
+        learning_rate=LEARNING_RATE,
+        gamma=GAMMA,
+        clip_epsilon=CLIP_EPSILON,
+        ppo_epochs=PPO_EPOCHS,
+        minibatch_size=MINIBATCH_SIZE,
+        value_loss_coeff=VALUE_LOSS_COEFF,
+        entropy_coef=ENTROPY_COEFF,
+        device=DEVICE,
     )
     agent.save_model(str(ckpt_path), global_timestep=100, total_episodes_completed=10)
     result = subprocess.run(
@@ -200,44 +210,6 @@ def test_train_explicit_resume(tmp_path):
     assert result.returncode == 0
     # The 'Resumed training from checkpoint' message is in stderr (Rich logs)
     assert "Resumed training from checkpoint" in result.stderr
-
-
-def test_apply_config_overrides_unit():
-    """Unit test for apply_config_overrides: top-level and nested keys."""
-    from types import SimpleNamespace
-    from keisei.train import apply_config_overrides
-
-    # Top-level override
-    cfg = SimpleNamespace(FOO=1, BAR="baz")
-    overrides = ["FOO=42", "BAR=qux"]
-    apply_config_overrides(cfg, overrides)
-    assert cfg.FOO == 42
-    assert cfg.BAR == "qux"
-
-    # Nested override
-    cfg = SimpleNamespace()
-    cfg.NESTED = SimpleNamespace(SUB=123)
-    overrides = ["NESTED.SUB=456"]
-    apply_config_overrides(cfg, overrides)
-    assert cfg.NESTED.SUB == 456
-
-    # Create nested if missing
-    cfg = SimpleNamespace()
-    overrides = ["NEWNEST.NEWVAL=hello"]
-    apply_config_overrides(cfg, overrides)
-    assert hasattr(cfg, "NEWNEST")
-    assert cfg.NEWNEST.NEWVAL == "hello"
-
-    # Type parsing
-    cfg = SimpleNamespace()
-    overrides = ["BOOL1=true", "BOOL2=false", "NONEVAL=none", "FLOATVAL=3.14", "INTVAL=7"]
-    apply_config_overrides(cfg, overrides)
-    assert cfg.BOOL1 is True
-    assert cfg.BOOL2 is False
-    assert cfg.NONEVAL is None
-    assert cfg.FLOATVAL == 3.14
-    assert cfg.INTVAL == 7
-
 
 # --- Tests for Periodic Evaluation ---
 

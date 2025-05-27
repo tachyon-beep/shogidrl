@@ -6,7 +6,6 @@ Test for the observation plane constants defined in shogi_core_definitions.py
 # 'test_shogi_game_updated_with_mocks.py'. This file is retained for reference only.
 
 import numpy as np
-import config
 
 from keisei.shogi.shogi_core_definitions import (
     OBS_CURR_PLAYER_HAND_START,
@@ -23,6 +22,8 @@ from keisei.shogi.shogi_core_definitions import (
 )
 from keisei.shogi.shogi_game import ShogiGame
 from keisei.shogi.shogi_game_io import generate_neural_network_observation
+
+INPUT_CHANNELS = 46  # Use the default from config_schema for tests
 
 
 def test_observation_plane_constants_match_implementation():

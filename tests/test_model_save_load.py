@@ -6,7 +6,7 @@ import os
 
 import torch
 
-import config
+from keisei.config_schema import AppConfig, EnvConfig, TrainingConfig, EvaluationConfig, LoggingConfig, WandBConfig, DemoConfig
 from keisei.ppo_agent import PPOAgent
 from keisei.shogi.shogi_game import ShogiGame
 from keisei.utils import PolicyOutputMapper
@@ -15,15 +15,31 @@ from keisei.utils import PolicyOutputMapper
 def test_model_save_and_load(tmp_path):
     """Test saving and loading of the PPO agent's model."""
     # Setup dimensions and policy mapper
-    game_for_dims = ShogiGame(max_moves_per_game=config.MAX_MOVES_PER_GAME)
+    config = AppConfig(
+        env=EnvConfig(device="cpu", input_channels=46, num_actions_total=13527, seed=42),
+        training=TrainingConfig(
+            total_timesteps=500_000,
+            steps_per_epoch=2048,
+            ppo_epochs=10,
+            minibatch_size=64,
+            learning_rate=3e-4,
+            gamma=0.99,
+            clip_epsilon=0.2,
+            value_loss_coeff=0.5,
+            entropy_coef=0.01,
+        ),
+        evaluation=EvaluationConfig(num_games=20, opponent_type="random"),
+        logging=LoggingConfig(log_file="logs/training_log.txt", model_dir="models/"),
+        wandb=WandBConfig(enabled=True, project="keisei-shogi", entity=None),
+        demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5),
+    )
+    max_moves_per_game = 512  # Use a sensible default or pull from config if available
+    game_for_dims = ShogiGame(max_moves_per_game=max_moves_per_game)
     obs_sample = game_for_dims.get_observation()
-    input_channels = obs_sample.shape[0]  # Assuming shape is (channels, height, width)
+    input_channels = config.env.input_channels  # Use config schema
 
-    policy_output_mapper = (
-        PolicyOutputMapper()
-    )  # Corrected: No arguments for constructor
-
-    device = config.DEVICE
+    policy_output_mapper = PolicyOutputMapper()
+    device = config.env.device
     agent = PPOAgent(input_channels, policy_output_mapper, device=device)
     # Corrected to use agent.model instead of agent.policy
     original_model_state_dict = {

@@ -8,9 +8,10 @@ by testing its functionality in various scenarios.
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
-import config
 import numpy as np
 import pytest
+
+INPUT_CHANNELS = 46  # Use the default from config_schema for tests
 
 from keisei.shogi import Color, PieceType, ShogiGame
 from keisei.shogi.shogi_core_definitions import Piece
@@ -152,7 +153,7 @@ def test_game_reset(new_game):
     assert new_game.get_piece(5, 4) is None
 
     assert isinstance(observation, np.ndarray)
-    assert observation.shape == (config.INPUT_CHANNELS, 9, 9)
+    assert observation.shape == (INPUT_CHANNELS, 9, 9)
 
 
 # --- Test Board Manipulation ---

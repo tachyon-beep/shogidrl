@@ -10,9 +10,8 @@ import numpy as np
 import torch
 import wandb
 
-from config import NUM_ACTIONS_TOTAL, INPUT_CHANNELS  # Use values from config.py for consistency
 from keisei.ppo_agent import PPOAgent
-from keisei.utils import PolicyOutputMapper, EvaluationLogger, BaseOpponent
+from keisei.utils import PolicyOutputMapper, TrainingLogger, EvaluationLogger, BaseOpponent
 from keisei.shogi.shogi_game import ShogiGame
 from keisei.shogi.shogi_core_definitions import (
     MoveTuple,
@@ -442,14 +441,14 @@ def execute_full_evaluation_run(
             )  # MODIFIED: Changed to logger.log
 
             agent_to_eval = load_evaluation_agent(
-                agent_checkpoint_path, device_str, policy_mapper, INPUT_CHANNELS
+                agent_checkpoint_path, device_str, policy_mapper, PolicyOutputMapper().get_total_actions()
             )
             opponent = initialize_opponent(
                 opponent_type,
                 opponent_checkpoint_path,
                 device_str,
                 policy_mapper,
-                INPUT_CHANNELS,
+                PolicyOutputMapper().get_total_actions(),
             )
 
             results_summary = run_evaluation_loop(

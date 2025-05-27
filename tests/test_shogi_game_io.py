@@ -32,7 +32,8 @@ from keisei.shogi.shogi_game_io import (
     sfen_to_move_tuple,
 )
 from tests.mock_utilities import setup_pytorch_mock_environment
-import config
+
+INPUT_CHANNELS = 46  # Use the default from config_schema for tests
 
 
 @pytest.fixture
@@ -108,7 +109,7 @@ def test_generate_neural_network_observation_initial_state():
         game = ShogiGame()
         obs = generate_neural_network_observation(game)
 
-        assert obs.shape == (config.INPUT_CHANNELS, 9, 9), "Observation shape should be (46, 9, 9)"
+        assert obs.shape == (INPUT_CHANNELS, 9, 9), "Observation shape should be (46, 9, 9)"
         assert np.all(
             obs[OBS_CURR_PLAYER_INDICATOR] == 1
         ), "Current player indicator should be all 1's for Black's turn"

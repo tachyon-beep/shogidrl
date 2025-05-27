@@ -2,11 +2,16 @@
 
 import datetime  # For KIF Date header
 import re  # Import the re module
+import sys
+import os
+import importlib
+
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from ..utils import PolicyOutputMapper  # Assuming this path is correct
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+
 from .shogi_core_definitions import (  # Observation plane constants
     KIF_PIECE_SYMBOLS,
     OBS_CURR_PLAYER_HAND_START,
@@ -265,7 +270,6 @@ def game_to_kif(
         lines.append("moves")  # Start of the moves section
 
         # --- Moves ---
-        mapper = PolicyOutputMapper()
         for i, move_entry in enumerate(game.move_history):
             move_obj: Optional[MoveTuple] = move_entry.get(
                 "move"
@@ -273,7 +277,9 @@ def game_to_kif(
             if not move_obj:
                 continue
 
-            usi_move_str: str = mapper.shogi_move_to_usi(move_obj)
+            usi_move_str: str = f"{move_obj[0]+1}{chr(move_obj[1]+ord('a'))}{move_obj[2]+1}{chr(move_obj[3]+ord('a'))}"
+            if move_obj[4]:  # Promote flag
+                usi_move_str += "+"
             lines.append(f"{i+1} {usi_move_str}")
 
         # --- Game Termination ---

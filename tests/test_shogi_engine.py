@@ -6,11 +6,9 @@ Unit tests for the Piece class and ShogiGame move generation in shogi_engine.py
 import numpy as np
 import pytest
 
-from keisei.shogi.shogi_core_definitions import Color, Piece, PieceType
-import config
+INPUT_CHANNELS = 46  # Use the default from config_schema for tests
 
-# If OBS_UNPROMOTED_ORDER is used in get_observation, ensure it's imported
-# from keisei.shogi.shogi_core_definitions import OBS_UNPROMOTED_ORDER
+from keisei.shogi.shogi_core_definitions import Color, Piece, PieceType
 from keisei.shogi.shogi_game import ShogiGame
 
 # --- Tests for Piece Class ---
@@ -518,7 +516,7 @@ def test_shogigame_get_observation(
     obs = game.get_observation()
     assert isinstance(obs, np.ndarray)
     assert obs.shape == (
-        config.INPUT_CHANNELS,
+        INPUT_CHANNELS,
         9,
         9,
     )  # Ensure this shape is accurate for your implementation

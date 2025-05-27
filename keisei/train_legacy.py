@@ -39,10 +39,7 @@ from typing import List, Optional, Dict, Any, Tuple
 # Keisei imports
 from keisei.ppo_agent import PPOAgent
 from keisei.experience_buffer import ExperienceBuffer
-from keisei.utils import (
-    TrainingLogger,
-    PolicyOutputMapper,
-)  # Assuming these are correctly in utils
+from keisei.utils import PolicyOutputMapper, TrainingLogger
 
 # ShogiGame and Color are expected to be in keisei.shogi
 from keisei.shogi import (
@@ -50,10 +47,6 @@ from keisei.shogi import (
     Color,
 )  # Or from keisei.shogi.shogi_game import ShogiGame
 from keisei.evaluate import execute_full_evaluation_run
-
-# Import constants from config.py
-import config as config_module
-import multiprocessing
 
 
 # --- STUB IMPLEMENTATIONS for missing utility functions ---
@@ -88,7 +81,7 @@ def find_latest_checkpoint(model_dir_path: str) -> Optional[str]:
         checkpoints.sort(key=os.path.getmtime, reverse=True)
         # print(f"Found checkpoints: {checkpoints}, latest: {checkpoints[0]}", file=sys.stderr)
         return checkpoints[0]
-    except Exception as e:  # Corrected
+    except (OSError, FileNotFoundError) as e:
         print(f"Error in find_latest_checkpoint: {e}", file=sys.stderr)
         return None
 
@@ -124,15 +117,11 @@ def serialize_config(config_obj: Any) -> str:
 
     try:
         return json.dumps(conf_dict, indent=4, sort_keys=True)
-    except TypeError as e:  # Already correct
+    except TypeError as e:
         print(
             f"Error serializing config: {e}. Partial dict: {conf_dict}", file=sys.stderr
         )
-        # Return a minimal JSON string indicating an error
-        return json.dumps(
-            {"error": "Config object not fully serializable", "details": str(e)},
-            indent=4,
-        )
+        return "{}"
 
 
 def apply_config_overrides(config_obj: Any, overrides_list: List[str]) -> Any:
@@ -267,83 +256,55 @@ def setup_config() -> SimpleNamespace:
     """Creates a configuration object from config_module constants."""
     cfg = SimpleNamespace()
 
-    # Copy all uppercase constants from config_module to cfg
-    for key in dir(config_module):
-        if key.isupper():  # Standard convention for constants
-            setattr(cfg, key, getattr(config_module, key))
+    # --- Hardcoded defaults and schema values ---
+    # These replace the removed config_module imports
 
-    # Ensure some essential defaults if not in config_module (though they should be)
-    cfg.DEVICE = getattr(cfg, "DEVICE", "cpu")
-    cfg.TOTAL_TIMESTEPS = getattr(cfg, "TOTAL_TIMESTEPS", 500000)
-    cfg.STEPS_PER_EPOCH = getattr(cfg, "STEPS_PER_EPOCH", 2048)  # PPO buffer size
-    cfg.LEARNING_RATE = getattr(cfg, "LEARNING_RATE", 3e-4)
-    cfg.GAMMA = getattr(cfg, "GAMMA", 0.99)
-    cfg.LAMBDA_GAE = getattr(cfg, "LAMBDA_GAE", 0.95)
-    cfg.CLIP_EPSILON = getattr(cfg, "CLIP_EPSILON", 0.2)
-    cfg.PPO_EPOCHS = getattr(
-        cfg, "PPO_EPOCHS", 10
-    )  # Renamed from NUM_EPOCHS in PPOAgent context
-    cfg.MINIBATCH_SIZE = getattr(cfg, "MINIBATCH_SIZE", 64)
-    cfg.VALUE_LOSS_COEFF = getattr(cfg, "VALUE_LOSS_COEFF", 0.5)
-    cfg.ENTROPY_COEFF = getattr(cfg, "ENTROPY_COEFF", 0.01)
+    # General training settings
+    cfg.DEVICE = "cpu"  # Default device
+    cfg.TOTAL_TIMESTEPS = 500000  # Total timesteps for training
+    cfg.STEPS_PER_EPOCH = 2048  # PPO buffer size
+    cfg.LEARNING_RATE = 3e-4  # Learning rate for the optimizer
+    cfg.GAMMA = 0.99  # Discount factor for rewards
+    cfg.LAMBDA_GAE = 0.95  # GAE lambda for advantage computation
+    cfg.CLIP_EPSILON = 0.2  # PPO clip epsilon
+    cfg.PPO_EPOCHS = 10  # Number of PPO epochs per update
+    cfg.MINIBATCH_SIZE = 64  # Minibatch size for PPO
+    cfg.VALUE_LOSS_COEFF = 0.5  # Coefficient for value loss
+    cfg.ENTROPY_COEFF = 0.01  # Coefficient for entropy term
 
-    cfg.TRAIN_OUTPUT_DIR = getattr(
-        cfg, "TRAIN_OUTPUT_DIR", "training_output"
-    )  # Default if not in config
-    cfg.CHECKPOINT_INTERVAL_TIMESTEPS = getattr(
-        cfg, "CHECKPOINT_INTERVAL_TIMESTEPS", 50000
-    )  # Default
+    # Directories and file settings
+    cfg.TRAIN_OUTPUT_DIR = "training_output"  # Default output directory
+    cfg.CHECKPOINT_INTERVAL_TIMESTEPS = 50000  # Checkpointing interval
 
-    # W&B Defaults from config_module or hardcoded if missing
-    cfg.WANDB_PROJECT_TRAIN = getattr(cfg, "WANDB_PROJECT_TRAIN", "keisei-shogi-drl")
-    cfg.WANDB_ENTITY_TRAIN = getattr(
-        cfg, "WANDB_ENTITY_TRAIN", None
-    )  # None uses W&B default
-    cfg.WANDB_MODE = getattr(cfg, "WANDB_MODE", "online")
+    # W&B settings
+    cfg.WANDB_PROJECT_TRAIN = "keisei-shogi-drl"
+    cfg.WANDB_ENTITY_TRAIN = None  # None uses W&B default
+    cfg.WANDB_MODE = "online"
 
-    # Setup nested EVALUATION_CONFIG
+    # Evaluation config
     cfg.EVALUATION_CONFIG = SimpleNamespace()
-    cfg.EVALUATION_CONFIG.ENABLE_PERIODIC_EVALUATION = getattr(
-        cfg, "EVAL_DURING_TRAINING", True
-    )
-    # Assuming evaluation interval is tied to checkpointing for simplicity, or define EVAL_INTERVAL_TIMESTEPS
-    cfg.EVALUATION_CONFIG.EVALUATION_INTERVAL_TIMESTEPS = getattr(
-        cfg, "EVAL_INTERVAL_TIMESTEPS", cfg.CHECKPOINT_INTERVAL_TIMESTEPS
-    )
-    cfg.EVALUATION_CONFIG.NUM_GAMES = getattr(cfg, "EVAL_NUM_GAMES", 10)
-    cfg.EVALUATION_CONFIG.OPPONENT_TYPE = getattr(
-        cfg, "EVAL_OPPONENT_TYPE", "random"
-    )  # 'random', 'heuristic', 'self'
-    cfg.EVALUATION_CONFIG.MAX_MOVES_PER_GAME = getattr(
-        cfg, "MAX_MOVES_PER_GAME_EVAL", 256
-    )
-    cfg.EVALUATION_CONFIG.DEVICE = getattr(cfg, "EVAL_DEVICE", "cpu")
-    cfg.EVALUATION_CONFIG.OPPONENT_CHECKPOINT_PATH = getattr(
-        cfg, "EVAL_OPPONENT_CHECKPOINT_PATH", None
-    )
+    cfg.EVALUATION_CONFIG.ENABLE_PERIODIC_EVALUATION = True
+    cfg.EVALUATION_CONFIG.EVALUATION_INTERVAL_TIMESTEPS = cfg.CHECKPOINT_INTERVAL_TIMESTEPS
+    cfg.EVALUATION_CONFIG.NUM_GAMES = 10
+    cfg.EVALUATION_CONFIG.OPPONENT_TYPE = "random"  # 'random', 'heuristic', 'self'
+    cfg.EVALUATION_CONFIG.MAX_MOVES_PER_GAME = 256
+    cfg.EVALUATION_CONFIG.DEVICE = "cpu"
+    cfg.EVALUATION_CONFIG.OPPONENT_CHECKPOINT_PATH = None
 
-    cfg.EVALUATION_CONFIG.WANDB_LOG_EVAL = getattr(cfg, "EVAL_WANDB_LOG", True)
-    cfg.EVALUATION_CONFIG.WANDB_PROJECT_EVAL = getattr(
-        cfg, "EVAL_WANDB_PROJECT", "keisei-shogi-eval"
-    )
-    cfg.EVALUATION_CONFIG.WANDB_ENTITY_EVAL = getattr(
-        cfg, "EVAL_WANDB_ENTITY", cfg.WANDB_ENTITY_TRAIN
-    )  # Default to train entity
-    cfg.EVALUATION_CONFIG.WANDB_RUN_NAME_PREFIX = getattr(
-        cfg, "EVAL_WANDB_RUN_NAME_PREFIX", "eval_"
-    )
+    cfg.EVALUATION_CONFIG.WANDB_LOG_EVAL = True
+    cfg.EVALUATION_CONFIG.WANDB_PROJECT_EVAL = "keisei-shogi-eval"
+    cfg.EVALUATION_CONFIG.WANDB_ENTITY_EVAL = cfg.WANDB_ENTITY_TRAIN  # Default to train entity
+    cfg.EVALUATION_CONFIG.WANDB_RUN_NAME_PREFIX = "eval_"
 
     # Board dimensions (standard Shogi) - PPOAgent might need this if not inferred
-    cfg.BOARD_ROWS = getattr(cfg, "BOARD_ROWS", 9)
-    cfg.BOARD_COLS = getattr(cfg, "BOARD_COLS", 9)
-    cfg.INPUT_CHANNELS = getattr(cfg, "INPUT_CHANNELS", 46)  # From config.py
+    cfg.BOARD_ROWS = 9
+    cfg.BOARD_COLS = 9
+    cfg.INPUT_CHANNELS = 46  # From config.py
 
     # Rich TUI settings
-    cfg.RICH_MAX_LOG_MESSAGES = getattr(cfg, "RICH_MAX_LOG_MESSAGES", 100)
-    cfg.RICH_REFRESH_RATE = getattr(cfg, "RICH_REFRESH_RATE", 4)  # Hz
-    cfg.tui_max_log_messages = getattr(
-        cfg, "tui_max_log_messages", 100
-    )  # MODIFIED: Added separate setting for TUI log message limit
+    cfg.RICH_MAX_LOG_MESSAGES = 100
+    cfg.RICH_REFRESH_RATE = 4  # Hz
+    cfg.tui_max_log_messages = 100  # MODIFIED: Added separate setting for TUI log message limit
 
     return cfg
 
@@ -359,7 +320,7 @@ def main():
                 file_overrides = json.load(f)
             update_config_from_dict(cfg, file_overrides)  # Apply these overrides
             # print(f"Loaded config overrides from {args.config_file}", file=sys.stderr) # For debugging
-        except Exception as e:
+        except (OSError, FileNotFoundError, json.JSONDecodeError, TypeError, ValueError) as e:
             print(
                 f"Error loading config file {args.config_file}: {e}. Using defaults/CLI overrides only.",
                 file=sys.stderr,
@@ -455,7 +416,7 @@ def main():
                 resume="allow",
                 id=run_name,  # Use run_name for resumability
             )
-        except Exception as e:  # Already correct
+        except (OSError, RuntimeError, ValueError) as e:  # Already correct
             rich_console.print(
                 f"[bold red]Error initializing W&B: {e}. W&B logging disabled.[/bold red]"
             )
@@ -591,7 +552,7 @@ def main():
                 f"Resuming from checkpoint: {potential_resume_path} at timestep {global_timestep}",
                 file=sys.stderr,
             )
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError) as e:
             rich_console.print(
                 f"[bold red]Error loading checkpoint {potential_resume_path}: {e}. Starting fresh.[/bold red]"
             )
@@ -798,7 +759,7 @@ def main():
                 legal_shogi_moves = game.get_legal_moves()
                 if not legal_shogi_moves:
                     log_both(
-                        f"Warning: No legal moves available at timestep {global_timestep}. Game state: {game.get_board_state_summary() if hasattr(game, 'get_board_state_summary') else 'N/A'}",
+                        f"Warning: No legal moves available at timestep {global_timestep}.",
                         level="warning",
                     )
                     legal_mask_tensor = torch.zeros(
@@ -933,7 +894,7 @@ def main():
                             demo_delay = getattr(cfg, "DEMO_MODE_DELAY", 0.5)
                             if demo_delay > 0:
                                 time.sleep(demo_delay)
-                except Exception as e:
+                except (RuntimeError, ValueError, OSError) as e:
                     log_both(
                         f"CRITICAL: Error during game.make_move(): {e}. Move: {selected_shogi_move}. Aborting episode.",
                         level="error",
@@ -1393,16 +1354,15 @@ def _get_piece_name(piece_type, is_promoting=False):
     }
 
     # If promoting during this move, show the transformation
-    if is_promoting:
-        base_names = {
-            PieceType.PAWN: "Fuhyō (Pawn) → Tokin (Promoted Pawn)",
-            PieceType.LANCE: "Kyōsha (Lance) → Narikyo (Promoted Lance)",
-            PieceType.KNIGHT: "Keima (Knight) → Narikei (Promoted Knight)",
-            PieceType.SILVER: "Ginsho (Silver General) → Narigin (Promoted Silver)",
-            PieceType.BISHOP: "Kakugyō (Bishop) → Ryūma (Dragon Horse)",
-            PieceType.ROOK: "Hisha (Rook) → Ryūō (Dragon King)",
-        }
-        return base_names.get(piece_type, piece_names.get(piece_type, str(piece_type)))
+    base_names = {
+        PieceType.PAWN: "Fuhyō (Pawn) → Tokin (Promoted Pawn)",
+        PieceType.LANCE: "Kyōsha (Lance) → Narikyo (Promoted Lance)",
+        PieceType.KNIGHT: "Keima (Knight) → Narikei (Promoted Knight)",
+        PieceType.SILVER: "Ginsho (Silver General) → Narigin (Promoted Silver)",
+        PieceType.BISHOP: "Kakugyō (Bishop) → Ryūma (Dragon Horse)",
+        PieceType.ROOK: "Hisha (Rook) → Ryūō (Dragon King)",
+    }
+    return base_names.get(piece_type, piece_names.get(piece_type, str(piece_type)))
 
     return piece_names.get(piece_type, str(piece_type))
 

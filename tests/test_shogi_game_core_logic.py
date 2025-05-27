@@ -21,7 +21,8 @@ from keisei.shogi.shogi_core_definitions import (
     get_unpromoted_types,
 )
 from keisei.shogi.shogi_game import ShogiGame
-import config
+
+INPUT_CHANNELS = 46  # Use the default from config_schema for tests
 
 
 @dataclass
@@ -57,7 +58,7 @@ def test_get_observation_initial_state_dimensions(new_game: ShogiGame):
     obs = new_game.get_observation()
     assert isinstance(obs, np.ndarray), "Observation should be a numpy array"
     assert obs.shape == (
-        config.INPUT_CHANNELS,
+        INPUT_CHANNELS,
         9,
         9,
     ), "Observation shape is incorrect based on shogi_game_io.py"

@@ -22,6 +22,54 @@ import torch
 from rich.console import Console
 from rich.text import Text
 
+# --- Config Loader Utility ---
+import yaml
+import json
+from typing import Any, Dict, Optional
+from pydantic import ValidationError
+from keisei.config_schema import AppConfig
+
+
+def load_config(config_path: Optional[str] = None, cli_overrides: Optional[Dict[str, Any]] = None) -> AppConfig:
+    """
+    Loads configuration from a YAML or JSON file and applies CLI overrides.
+    If no config_path is provided, uses default_config.yaml as the default.
+    Raises ValidationError if config is invalid or unknown fields are present.
+    """
+    import os
+    base_config_path = config_path
+    if base_config_path is None:
+        # Use default_config.yaml in the project root as the default
+        base_config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "default_config.yaml")
+    config_data = {}
+    if base_config_path:
+        if base_config_path.endswith(('.yaml', '.yml')):
+            with open(base_config_path, 'r') as f:
+                config_data = yaml.safe_load(f)
+        elif base_config_path.endswith('.json'):
+            with open(base_config_path, 'r') as f:
+                config_data = json.load(f)
+        else:
+            raise ValueError(f"Unsupported config file type: {base_config_path}")
+    # Merge CLI overrides (flat dict with dot notation keys)
+    if cli_overrides:
+        for k, v in cli_overrides.items():
+            parts = k.split('.')
+            d = config_data
+            for p in parts[:-1]:
+                if p not in d or not isinstance(d[p], dict):
+                    d[p] = {}
+                d = d[p]
+            d[parts[-1]] = v
+    try:
+        config = AppConfig.parse_obj(config_data)
+    except ValidationError as e:
+        print("Configuration validation error:")
+        print(e)
+        raise
+    return config
+
+
 # Ensure these imports are correct based on your project structure
 from keisei.shogi.shogi_core_definitions import (  # Import the standalone function
     BoardMoveTuple,
@@ -29,6 +77,7 @@ from keisei.shogi.shogi_core_definitions import (  # Import the standalone funct
     PieceType,
     get_unpromoted_types,
 )
+
 
 if TYPE_CHECKING:
     from keisei.shogi.shogi_core_definitions import MoveTuple

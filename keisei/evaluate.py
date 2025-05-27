@@ -10,9 +10,8 @@ import numpy as np
 import torch
 import wandb
 
-from config import NUM_ACTIONS_TOTAL, INPUT_CHANNELS  # Use values from config.py for consistency
 from keisei.ppo_agent import PPOAgent
-from keisei.utils import PolicyOutputMapper, EvaluationLogger, BaseOpponent
+from keisei.utils import PolicyOutputMapper, TrainingLogger, EvaluationLogger, BaseOpponent
 from keisei.shogi.shogi_game import ShogiGame
 from keisei.shogi.shogi_core_definitions import (
     MoveTuple,
@@ -439,11 +438,15 @@ class Evaluator:
                     wandb_kwargs["reinit"] = self.wandb_reinit
                 if self.wandb_group is not None:
                     wandb_kwargs["group"] = self.wandb_group
-                self._wandb_run = wandb.init(**wandb_kwargs)
-                print(f"[Evaluator] W&B logging enabled: {self._wandb_run.name if self._wandb_run else ''}")
-                self._wandb_active = True
+                try:
+                    self._wandb_run = wandb.init(**wandb_kwargs)
+                    print(f"[Evaluator] W&B logging enabled: {self._wandb_run.name if self._wandb_run else ''}")
+                    self._wandb_active = True
+                except (OSError, RuntimeError, ValueError) as e:
+                    print(f"[Evaluator] Error initializing W&B: {e}. W&B logging disabled.")
+                    self._wandb_active = False
             except Exception as e:
-                print(f"[Evaluator] Error initializing W&B: {e}. W&B logging disabled.")
+                print(f"[Evaluator] Unexpected error during W&B initialization: {e}")
                 self._wandb_active = False
 
         # Ensure log directory exists
@@ -455,10 +458,10 @@ class Evaluator:
         self._logger = EvaluationLogger(self.log_file_path_eval, also_stdout=self.logger_also_stdout)
         # Agent and opponent
         self._agent = load_evaluation_agent(
-            self.agent_checkpoint_path, self.device_str, self.policy_mapper, INPUT_CHANNELS
+            self.agent_checkpoint_path, self.device_str, self.policy_mapper, 4
         )
         self._opponent = initialize_opponent(
-            self.opponent_type, self.opponent_checkpoint_path, self.device_str, self.policy_mapper, INPUT_CHANNELS
+            self.opponent_type, self.opponent_checkpoint_path, self.device_str, self.policy_mapper, 4
         )
         if self._logger is None or self._agent is None or self._opponent is None:
             raise RuntimeError("Evaluator setup failed: logger, agent, or opponent is None.")
@@ -488,7 +491,7 @@ class Evaluator:
                     wandb_enabled=self._wandb_active,
                 )
                 logger.log(f"[Evaluator] Evaluation Summary: {results_summary}")
-        except Exception as e:
+        except (RuntimeError, ValueError, OSError) as e:
             print(f"[Evaluator] Error during evaluation run: {e}")
             results_summary = None
         # Final W&B logging
@@ -501,13 +504,13 @@ class Evaluator:
                     "eval/final_avg_game_length": results_summary["avg_game_length"],
                 })
                 print("[Evaluator] Final W&B metrics logged.")
-            except Exception as e:
+            except (OSError, RuntimeError, ValueError) as e:
                 print(f"[Evaluator] Error logging final metrics to W&B: {e}")
         if self._wandb_active:
             try:
                 wandb.finish()
                 print("[Evaluator] W&B run finished.")
-            except Exception as e:
+            except (OSError, RuntimeError, ValueError) as e:
                 print(f"[Evaluator] Error finishing W&B run: {e}")
         return results_summary
 

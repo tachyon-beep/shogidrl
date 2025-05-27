@@ -4,7 +4,8 @@ Unit tests for PPOAgent in ppo_agent.py
 
 from typing import List  # Add this import
 
-import config
+INPUT_CHANNELS = 46  # Use the default from config_schema for tests
+
 import numpy as np
 import pytest
 import torch
@@ -21,8 +22,8 @@ from keisei.utils import PolicyOutputMapper
 def test_ppo_agent_init_and_select_action():
     """Test PPOAgent initializes and select_action returns a valid index."""
     mapper = PolicyOutputMapper()
-    agent = PPOAgent(input_channels=config.INPUT_CHANNELS, policy_output_mapper=mapper)
-    obs = np.random.rand(config.INPUT_CHANNELS, 9, 9).astype(
+    agent = PPOAgent(input_channels=INPUT_CHANNELS, policy_output_mapper=mapper)
+    obs = np.random.rand(INPUT_CHANNELS, 9, 9).astype(
         np.float32
     )  # Ensure correct dtype for tensor conversion
     game = ShogiGame(max_moves_per_game=512)  # Added max_moves_per_game
@@ -80,7 +81,7 @@ def test_ppo_agent_learn():
     """Test PPOAgent's learn method with dummy data from an ExperienceBuffer."""
     mapper = PolicyOutputMapper()
     agent = PPOAgent(
-        input_channels=config.INPUT_CHANNELS,
+        input_channels=INPUT_CHANNELS,
         policy_output_mapper=mapper,
         ppo_epochs=1,  # Keep epochs low for faster test
         minibatch_size=2,  # Keep minibatch size low
@@ -95,7 +96,7 @@ def test_ppo_agent_learn():
     )
 
     # Populate buffer with some dummy data
-    dummy_obs_np = np.random.rand(config.INPUT_CHANNELS, 9, 9).astype(np.float32)
+    dummy_obs_np = np.random.rand(INPUT_CHANNELS, 9, 9).astype(np.float32)
     dummy_obs_tensor = torch.from_numpy(dummy_obs_np).to(
         torch.device("cpu")
     )  # Convert to tensor on CPU
