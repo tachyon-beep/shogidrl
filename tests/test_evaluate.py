@@ -19,14 +19,13 @@ from keisei.config_schema import (
     TrainingConfig,
     WandBConfig,
 )
-
 from keisei.core.ppo_agent import (
     PPOAgent,
 )
 from keisei.evaluation.evaluate import (
-    execute_full_evaluation_run,
     SimpleHeuristicOpponent,
     SimpleRandomOpponent,
+    execute_full_evaluation_run,
     initialize_opponent,
     load_evaluation_agent,
     run_evaluation_loop,
@@ -38,7 +37,6 @@ from keisei.utils import (
     EvaluationLogger,
     PolicyOutputMapper,
 )
-
 
 INPUT_CHANNELS = 46  # Use the default from config for tests
 
@@ -73,11 +71,7 @@ class MockPPOAgent(PPOAgent, BaseOpponent):
     ):
         # For test compatibility, always return a dummy move and values
         # Assume legal_mask is a tensor of bools, pick the first True index
-        idx = (
-            int(legal_mask.nonzero(as_tuple=True)[0][0])
-            if legal_mask.any()
-            else 0
-        )
+        idx = int(legal_mask.nonzero(as_tuple=True)[0][0]) if legal_mask.any() else 0
         return (None, idx, 0.0, 0.0)
 
     def get_value(
@@ -207,9 +201,7 @@ def test_load_evaluation_agent_mocked(MockPPOAgentClass, policy_mapper, tmp_path
     dummy_ckpt = tmp_path / "dummy_checkpoint.pth"
     dummy_ckpt.write_bytes(b"dummy")
 
-    agent = load_evaluation_agent(
-        str(dummy_ckpt), "cpu", policy_mapper, INPUT_CHANNELS
-    )
+    agent = load_evaluation_agent(str(dummy_ckpt), "cpu", policy_mapper, INPUT_CHANNELS)
     assert agent == mock_agent_instance
 
 
@@ -832,9 +824,7 @@ def test_evaluator_class_basic(monkeypatch, tmp_path, policy_mapper):
         def select_action(self, obs, legal_mask, *, is_training=True):
             # Always pick the first legal move, index 0, dummy log_prob and value
             idx = (
-                int(legal_mask.nonzero(as_tuple=True)[0][0])
-                if legal_mask.any()
-                else 0
+                int(legal_mask.nonzero(as_tuple=True)[0][0]) if legal_mask.any() else 0
             )
             return None, idx, 0.0, 0.0
 
@@ -889,7 +879,9 @@ def make_test_config(device_str, input_channels, policy_mapper):
         )
     try:
         num_actions_total = policy_mapper.get_total_actions()
-    except Exception:  # pylint: disable=broad-except  # nosec: test utility, fallback is safe
+    except (
+        Exception
+    ):  # pylint: disable=broad-except  # nosec: test utility, fallback is safe
         num_actions_total = 13527  # Default fallback for mocks or MagicMock
     return AppConfig(
         env=EnvConfig(
@@ -927,9 +919,7 @@ def test_load_evaluation_agent_missing_checkpoint(policy_mapper):
     with tempfile.TemporaryDirectory() as tmpdir:
         missing_path = os.path.join(tmpdir, "nonexistent_checkpoint.pth")
         with pytest.raises(FileNotFoundError):
-            load_evaluation_agent(
-                missing_path, "cpu", policy_mapper, INPUT_CHANNELS
-            )
+            load_evaluation_agent(missing_path, "cpu", policy_mapper, INPUT_CHANNELS)
 
 
 def test_initialize_opponent_invalid_type(policy_mapper):

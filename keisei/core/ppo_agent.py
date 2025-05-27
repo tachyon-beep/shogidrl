@@ -339,7 +339,7 @@ class PPOAgent:
                 "draws": checkpoint.get("draws", 0),
                 # Include other potential data if needed in the future
             }
-        except Exception as e:
+        except (KeyError, RuntimeError, EOFError) as e:
             print(f"Error loading checkpoint from {file_path}: {e}", file=sys.stderr)
             # Return a dictionary indicating failure or default values
             return {

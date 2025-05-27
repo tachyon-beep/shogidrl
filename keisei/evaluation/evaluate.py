@@ -442,7 +442,7 @@ class Evaluator:
                     torch.cuda.manual_seed_all(self.seed)
                 print(f"[Evaluator] Set random seed to: {self.seed}")
             except Exception as e:
-                raise RuntimeError(f"Failed to set random seed: {e}")
+                raise RuntimeError("Failed to set random seed") from e
 
         # W&B Initialization
         if self.wandb_log_eval:
@@ -492,7 +492,9 @@ class Evaluator:
             try:
                 os.makedirs(log_dir_eval)
             except Exception as e:
-                raise RuntimeError(f"Failed to create log directory '{log_dir_eval}': {e}")
+                raise RuntimeError(
+                    f"Failed to create log directory '{log_dir_eval}': {e}"
+                ) from e
 
         # Logger
         try:
@@ -500,10 +502,11 @@ class Evaluator:
                 self.log_file_path_eval, also_stdout=self.logger_also_stdout
             )
         except Exception as e:
-            raise RuntimeError(f"Failed to initialize EvaluationLogger: {e}")
+            raise RuntimeError(f"Failed to initialize EvaluationLogger: {e}") from e
         # Agent and opponent
         # Use the correct input_channels from self.policy_mapper if available, else default to 46
-        input_channels = getattr(self.policy_mapper, "input_channels", 46)
+        input_channels = getattr(self.policy_mapper, "input_channels", 46) # TODO: Remove this hardcoded value when possible, generate exception if not set
+
         try:
             self._agent = load_evaluation_agent(
                 self.agent_checkpoint_path,
@@ -512,7 +515,7 @@ class Evaluator:
                 input_channels,
             )
         except Exception as e:
-            raise RuntimeError(f"Failed to load evaluation agent: {e}")
+            raise RuntimeError(f"Failed to load evaluation agent: {e}") from e
         try:
             self._opponent = initialize_opponent(
                 self.opponent_type,
@@ -522,7 +525,7 @@ class Evaluator:
                 input_channels,
             )
         except Exception as e:
-            raise RuntimeError(f"Failed to initialize opponent: {e}")
+            raise RuntimeError(f"Failed to initialize opponent: {e}") from e
         if self._logger is None or self._agent is None or self._opponent is None:
             raise RuntimeError(
                 "Evaluator setup failed: logger, agent, or opponent is None."

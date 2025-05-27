@@ -5,7 +5,9 @@ import os
 import re  # Import the re module
 import sys
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+
 import numpy as np
+
 from .shogi_core_definitions import (  # Observation plane constants
     KIF_PIECE_SYMBOLS,
     OBS_CURR_PLAYER_HAND_START,

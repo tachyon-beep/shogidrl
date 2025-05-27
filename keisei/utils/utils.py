@@ -34,7 +34,6 @@ from keisei.shogi.shogi_core_definitions import (
     get_unpromoted_types,
 )
 
-
 # --- Config Loader Utility ---
 
 # Mapping of flat override keys to nested config paths
