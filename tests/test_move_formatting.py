@@ -10,14 +10,14 @@ from types import SimpleNamespace
 
 import pytest
 
+from keisei.shogi.shogi_core_definitions import PieceType
 from keisei.utils import (
     PolicyOutputMapper,
+    _coords_to_square_name,
+    _get_piece_name,
     format_move_with_description,
     format_move_with_description_enhanced,
-    _get_piece_name,
-    _coords_to_square_name,
 )
-from keisei.shogi.shogi_core_definitions import PieceType
 
 
 class TestBasicMoveFormatting:

@@ -2,7 +2,7 @@
 Unit test for TrainingLogger in utils.py
 """
 
-from keisei.utils import TrainingLogger, EvaluationLogger
+from keisei.utils import EvaluationLogger, TrainingLogger
 
 
 def test_training_logger(tmp_path):

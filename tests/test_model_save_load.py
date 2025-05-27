@@ -6,7 +6,15 @@ import os
 
 import torch
 
-from keisei.config_schema import AppConfig, EnvConfig, TrainingConfig, EvaluationConfig, LoggingConfig, WandBConfig, DemoConfig
+from keisei.config_schema import (
+    AppConfig,
+    DemoConfig,
+    EnvConfig,
+    EvaluationConfig,
+    LoggingConfig,
+    TrainingConfig,
+    WandBConfig,
+)
 from keisei.core.ppo_agent import PPOAgent
 from keisei.shogi.shogi_game import ShogiGame
 from keisei.utils import PolicyOutputMapper
@@ -16,7 +24,9 @@ def test_model_save_and_load(tmp_path):
     """Test saving and loading of the PPO agent's model."""
     # Setup dimensions and policy mapper
     config = AppConfig(
-        env=EnvConfig(device="cpu", input_channels=46, num_actions_total=13527, seed=42),
+        env=EnvConfig(
+            device="cpu", input_channels=46, num_actions_total=13527, seed=42
+        ),
         training=TrainingConfig(
             total_timesteps=500_000,
             steps_per_epoch=2048,

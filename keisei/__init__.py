@@ -8,10 +8,11 @@ This package contains:
 - Training utilities
 """
 
+from .evaluation.evaluate import execute_full_evaluation_run
+
 # Re-export the main components for easy access
 from .shogi.shogi_core_definitions import Color, MoveTuple, Piece, PieceType
 from .shogi.shogi_game import ShogiGame
-from .evaluation.evaluate import execute_full_evaluation_run
 
 __all__ = [
     # Shogi core types

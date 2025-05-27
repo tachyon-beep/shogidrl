@@ -6,9 +6,18 @@ import json as pyjson
 import os
 import subprocess
 import sys
+
 import torch
 
-from keisei.config_schema import AppConfig, EnvConfig, TrainingConfig, EvaluationConfig, LoggingConfig, WandBConfig, DemoConfig
+from keisei.config_schema import (
+    AppConfig,
+    DemoConfig,
+    EnvConfig,
+    EvaluationConfig,
+    LoggingConfig,
+    TrainingConfig,
+    WandBConfig,
+)
 from keisei.core.ppo_agent import PPOAgent
 from keisei.utils import PolicyOutputMapper
 
@@ -47,7 +56,12 @@ def test_train_resume_autodetect(tmp_path):
     fake_ckpt = run_dir / "checkpoint_ts1.pth"  # Corrected filename pattern
     policy_mapper = PolicyOutputMapper()
     config = AppConfig(
-        env=EnvConfig(device=DEVICE, input_channels=INPUT_CHANNELS, num_actions_total=policy_mapper.get_total_actions(), seed=42),
+        env=EnvConfig(
+            device=DEVICE,
+            input_channels=INPUT_CHANNELS,
+            num_actions_total=policy_mapper.get_total_actions(),
+            seed=42,
+        ),
         training=TrainingConfig(
             total_timesteps=1000,
             steps_per_epoch=32,
@@ -188,7 +202,12 @@ def test_train_explicit_resume(tmp_path):
     # Create a minimal valid PPOAgent and save its checkpoint
     policy_mapper = PolicyOutputMapper()
     config = AppConfig(
-        env=EnvConfig(device=DEVICE, input_channels=INPUT_CHANNELS, num_actions_total=policy_mapper.get_total_actions(), seed=42),
+        env=EnvConfig(
+            device=DEVICE,
+            input_channels=INPUT_CHANNELS,
+            num_actions_total=policy_mapper.get_total_actions(),
+            seed=42,
+        ),
         training=TrainingConfig(
             total_timesteps=1000,
             steps_per_epoch=32,
@@ -227,6 +246,7 @@ def test_train_explicit_resume(tmp_path):
     assert result.returncode == 0
     # The 'Resumed training from checkpoint' message is in stderr (Rich logs)
     assert "Resumed training from checkpoint" in result.stderr
+
 
 # --- Tests for Periodic Evaluation ---
 

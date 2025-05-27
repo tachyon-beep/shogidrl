@@ -1,7 +1,8 @@
 """
 move_formatting.py: Contains utilities for formatting Shogi moves.
 """
-from typing import Optional, Any, Tuple
+
+from typing import Any, Optional, Tuple
 
 from keisei.shogi.shogi_core_definitions import PieceType
 

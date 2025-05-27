@@ -22,9 +22,23 @@ from keisei.utils import PolicyOutputMapper
 def test_ppo_agent_init_and_select_action():
     """Test PPOAgent initializes and select_action returns a valid index."""
     mapper = PolicyOutputMapper()
-    from keisei.config_schema import AppConfig, EnvConfig, TrainingConfig, EvaluationConfig, LoggingConfig, WandBConfig, DemoConfig
+    from keisei.config_schema import (
+        AppConfig,
+        DemoConfig,
+        EnvConfig,
+        EvaluationConfig,
+        LoggingConfig,
+        TrainingConfig,
+        WandBConfig,
+    )
+
     config = AppConfig(
-        env=EnvConfig(device="cpu", input_channels=INPUT_CHANNELS, num_actions_total=mapper.get_total_actions(), seed=42),
+        env=EnvConfig(
+            device="cpu",
+            input_channels=INPUT_CHANNELS,
+            num_actions_total=mapper.get_total_actions(),
+            seed=42,
+        ),
         training=TrainingConfig(
             total_timesteps=1000,
             steps_per_epoch=32,
@@ -99,9 +113,23 @@ def test_ppo_agent_init_and_select_action():
 def test_ppo_agent_learn():
     """Test PPOAgent's learn method with dummy data from an ExperienceBuffer."""
     mapper = PolicyOutputMapper()
-    from keisei.config_schema import AppConfig, EnvConfig, TrainingConfig, EvaluationConfig, LoggingConfig, WandBConfig, DemoConfig
+    from keisei.config_schema import (
+        AppConfig,
+        DemoConfig,
+        EnvConfig,
+        EvaluationConfig,
+        LoggingConfig,
+        TrainingConfig,
+        WandBConfig,
+    )
+
     config = AppConfig(
-        env=EnvConfig(device="cpu", input_channels=INPUT_CHANNELS, num_actions_total=mapper.get_total_actions(), seed=42),
+        env=EnvConfig(
+            device="cpu",
+            input_channels=INPUT_CHANNELS,
+            num_actions_total=mapper.get_total_actions(),
+            seed=42,
+        ),
         training=TrainingConfig(
             total_timesteps=1000,
             steps_per_epoch=32,

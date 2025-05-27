@@ -5,26 +5,27 @@ utils.py: Contains PolicyOutputMapper and TrainingLogger.
 from __future__ import annotations
 
 import datetime
-import sys
-import os
 import json
+import os
+import sys
 from abc import ABC, abstractmethod
 from typing import (
     TYPE_CHECKING,
+    Any,
     Dict,
     List,
+    Optional,
     Set,
     TextIO,
-    Optional,
-    Any,
     cast,
 )
 
 import torch
-from rich.console import Console
-from rich.text import Text
 import yaml
 from pydantic import ValidationError
+from rich.console import Console
+from rich.text import Text
+
 from keisei.config_schema import AppConfig
 
 # --- Config Loader Utility ---
@@ -62,28 +63,37 @@ FLAT_KEY_TO_NESTED = {
 }
 
 
-def load_config(config_path: Optional[str] = None, cli_overrides: Optional[Dict[str, Any]] = None) -> AppConfig:
+def load_config(
+    config_path: Optional[str] = None, cli_overrides: Optional[Dict[str, Any]] = None
+) -> AppConfig:
     """
     Loads configuration from a YAML or JSON file and applies CLI overrides.
     Always loads default_config.yaml as the base, then merges in overrides from config_path (if present), then CLI overrides.
     """
     # Always load the base config first
-    base_config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "default_config.yaml")
-    with open(base_config_path, 'r', encoding="utf-8") as f:
+    base_config_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        "default_config.yaml",
+    )
+    with open(base_config_path, "r", encoding="utf-8") as f:
         config_data = yaml.safe_load(f)
     # If config_path is provided and is not the default, treat as override file (JSON or YAML)
-    if config_path and os.path.abspath(config_path) != os.path.abspath(base_config_path):
-        if config_path.endswith(('.yaml', '.yml')):
-            with open(config_path, 'r', encoding="utf-8") as f:
+    if config_path and os.path.abspath(config_path) != os.path.abspath(
+        base_config_path
+    ):
+        if config_path.endswith((".yaml", ".yml")):
+            with open(config_path, "r", encoding="utf-8") as f:
                 override_data = yaml.safe_load(f)
-        elif config_path.endswith('.json'):
-            with open(config_path, 'r', encoding="utf-8") as f:
+        elif config_path.endswith(".json"):
+            with open(config_path, "r", encoding="utf-8") as f:
                 override_data = json.load(f)
         else:
             raise ValueError(f"Unsupported config file type: {config_path}")
         # If the override file is a partial dict (not a full config), treat as overrides
         top_keys = {"env", "training", "evaluation", "logging", "wandb", "demo"}
-        if not (isinstance(override_data, dict) and top_keys & set(override_data.keys())):
+        if not (
+            isinstance(override_data, dict) and top_keys & set(override_data.keys())
+        ):
             # It's a flat override dict, not a full config
             mapped_overrides = {}
             for k, v in override_data.items():
@@ -92,7 +102,7 @@ def load_config(config_path: Optional[str] = None, cli_overrides: Optional[Dict[
                 else:
                     mapped_overrides[k] = v
             for k, v in mapped_overrides.items():
-                parts = k.split('.')
+                parts = k.split(".")
                 d = config_data
                 for p in parts[:-1]:
                     if p not in d or not isinstance(d[p], dict):
@@ -112,7 +122,7 @@ def load_config(config_path: Optional[str] = None, cli_overrides: Optional[Dict[
             else:
                 mapped_overrides[k] = v
         for k, v in mapped_overrides.items():
-            parts = k.split('.')
+            parts = k.split(".")
             d = config_data
             for p in parts[:-1]:
                 if p not in d or not isinstance(d[p], dict):
@@ -135,7 +145,6 @@ from keisei.shogi.shogi_core_definitions import (  # Import the standalone funct
     PieceType,
     get_unpromoted_types,
 )
-
 
 if TYPE_CHECKING:
     from keisei.shogi.shogi_core_definitions import MoveTuple

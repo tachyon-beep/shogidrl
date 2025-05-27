@@ -4,13 +4,13 @@ Minimal PPOAgent for DRL Shogi Client.
 
 import os
 import sys  # For stderr
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Any
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
 import torch.nn.functional as F
-from keisei.config_schema import AppConfig
 
+from keisei.config_schema import AppConfig
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.neural_network import ActorCritic
 from keisei.utils import PolicyOutputMapper
@@ -41,7 +41,9 @@ class PPOAgent:
         self.policy_output_mapper = policy_output_mapper
         self.num_actions_total = self.policy_output_mapper.get_total_actions()
         self.model = ActorCritic(input_channels, self.num_actions_total).to(self.device)
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=config.training.learning_rate)
+        self.optimizer = torch.optim.Adam(
+            self.model.parameters(), lr=config.training.learning_rate
+        )
 
         # PPO hyperparameters
         self.gamma = config.training.gamma

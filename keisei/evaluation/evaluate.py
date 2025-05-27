@@ -1,24 +1,34 @@
-# filepath: /home/john/keisei/keisei/evaluate.py
 """
 evaluate.py: Main script for evaluating PPO Shogi agents.
 """
+
 import os
 import random
-from typing import Optional, List, TYPE_CHECKING, Union, Any, Dict
-from dotenv import load_dotenv
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+
 import numpy as np
 import torch
-import wandb
+from dotenv import load_dotenv
 
+import wandb
+from keisei.config_schema import (
+    AppConfig,
+    DemoConfig,
+    EnvConfig,
+    EvaluationConfig,
+    LoggingConfig,
+    TrainingConfig,
+    WandBConfig,
+)
 from keisei.core.ppo_agent import PPOAgent
-from keisei.utils import PolicyOutputMapper, TrainingLogger, EvaluationLogger, BaseOpponent
-from keisei.shogi.shogi_game import ShogiGame
-from keisei.shogi.shogi_core_definitions import (
-    MoveTuple,
-    Color,
-    PieceType,
-)  # Added PieceType
 from keisei.shogi import shogi_game_io  # For observations
+from keisei.shogi.shogi_core_definitions import (  # Added PieceType
+    Color,
+    MoveTuple,
+    PieceType,
+)
+from keisei.shogi.shogi_game import ShogiGame
+from keisei.utils import BaseOpponent, EvaluationLogger, PolicyOutputMapper
 
 if TYPE_CHECKING:
     pass  # torch already imported above
@@ -129,10 +139,14 @@ def load_evaluation_agent(
     input_channels: int,
 ) -> PPOAgent:
     """Loads a PPOAgent from a checkpoint for evaluation."""
-    from keisei.config_schema import AppConfig, EnvConfig, TrainingConfig, EvaluationConfig, LoggingConfig, WandBConfig, DemoConfig
     # Use minimal config for evaluation
     config = AppConfig(
-        env=EnvConfig(device=device_str, input_channels=input_channels, num_actions_total=policy_mapper.get_total_actions(), seed=42),
+        env=EnvConfig(
+            device=device_str,
+            input_channels=input_channels,
+            num_actions_total=policy_mapper.get_total_actions(),
+            seed=42,
+        ),
         training=TrainingConfig(
             total_timesteps=1,
             steps_per_epoch=1,
@@ -250,24 +264,16 @@ def run_evaluation_loop(
                         f"This indicates an issue with PolicyOutputMapper or move generation."
                     )
                     # PPOAgent.select_action should handle this.
-                    selected_shogi_move, action_idx, log_prob, value = (
-                        active_agent.select_action(
-                            obs_np,
-                            legal_mask,
-                            is_training=False
-                        )
-                    )
+                    selected_shogi_move = active_agent.select_action(
+                        obs_np, legal_mask, is_training=False
+                    )[0]
                     selected_move = (
                         selected_shogi_move  # MODIFIED: Assign to selected_move
                     )
                 else:
-                    selected_shogi_move, action_idx, log_prob, value = (
-                        active_agent.select_action(
-                            obs_np,
-                            legal_mask,
-                            is_training=False
-                        )
-                    )
+                    selected_shogi_move = active_agent.select_action(
+                        obs_np, legal_mask, is_training=False
+                    )[0]
                     selected_move = (
                         selected_shogi_move  # MODIFIED: Assign to selected_move
                     )
@@ -458,12 +464,16 @@ class Evaluator:
                     wandb_kwargs["group"] = self.wandb_group
                 try:
                     self._wandb_run = wandb.init(**wandb_kwargs)
-                    print(f"[Evaluator] W&B logging enabled: {self._wandb_run.name if self._wandb_run else ''}")
+                    print(
+                        f"[Evaluator] W&B logging enabled: {self._wandb_run.name if self._wandb_run else ''}"
+                    )
                     self._wandb_active = True
                 except (OSError, RuntimeError, ValueError) as e:
-                    print(f"[Evaluator] Error initializing W&B: {e}. W&B logging disabled.")
+                    print(
+                        f"[Evaluator] Error initializing W&B: {e}. W&B logging disabled."
+                    )
                     self._wandb_active = False
-            except Exception as e:
+            except (OSError, RuntimeError, ValueError) as e:
                 print(f"[Evaluator] Unexpected error during W&B initialization: {e}")
                 self._wandb_active = False
 
@@ -473,18 +483,29 @@ class Evaluator:
             os.makedirs(log_dir_eval)
 
         # Logger
-        self._logger = EvaluationLogger(self.log_file_path_eval, also_stdout=self.logger_also_stdout)
+        self._logger = EvaluationLogger(
+            self.log_file_path_eval, also_stdout=self.logger_also_stdout
+        )
         # Agent and opponent
         # Use the correct input_channels from self.policy_mapper if available, else default to 46
-        input_channels = getattr(self.policy_mapper, 'input_channels', 46)
+        input_channels = getattr(self.policy_mapper, "input_channels", 46)
         self._agent = load_evaluation_agent(
-            self.agent_checkpoint_path, self.device_str, self.policy_mapper, input_channels
+            self.agent_checkpoint_path,
+            self.device_str,
+            self.policy_mapper,
+            input_channels,
         )
         self._opponent = initialize_opponent(
-            self.opponent_type, self.opponent_checkpoint_path, self.device_str, self.policy_mapper, input_channels
+            self.opponent_type,
+            self.opponent_checkpoint_path,
+            self.device_str,
+            self.policy_mapper,
+            input_channels,
         )
         if self._logger is None or self._agent is None or self._opponent is None:
-            raise RuntimeError("Evaluator setup failed: logger, agent, or opponent is None.")
+            raise RuntimeError(
+                "Evaluator setup failed: logger, agent, or opponent is None."
+            )
 
     def evaluate(self) -> Optional[dict]:
         """
@@ -517,12 +538,16 @@ class Evaluator:
         # Final W&B logging
         if self._wandb_active and results_summary is not None:
             try:
-                wandb.log({
-                    "eval/final_win_rate": results_summary["win_rate"],
-                    "eval/final_loss_rate": results_summary["loss_rate"],
-                    "eval/final_draw_rate": results_summary["draw_rate"],
-                    "eval/final_avg_game_length": results_summary["avg_game_length"],
-                })
+                wandb.log(
+                    {
+                        "eval/final_win_rate": results_summary["win_rate"],
+                        "eval/final_loss_rate": results_summary["loss_rate"],
+                        "eval/final_draw_rate": results_summary["draw_rate"],
+                        "eval/final_avg_game_length": results_summary[
+                            "avg_game_length"
+                        ],
+                    }
+                )
                 print("[Evaluator] Final W&B metrics logged.")
             except (OSError, RuntimeError, ValueError) as e:
                 print(f"[Evaluator] Error logging final metrics to W&B: {e}")
@@ -587,19 +612,55 @@ def main():
     CLI entry point for evaluation. Parses arguments and runs evaluation using Evaluator.
     """
     import argparse
+
     parser = argparse.ArgumentParser(description="Evaluate a PPO Shogi agent.")
-    parser.add_argument("--agent_checkpoint", type=str, required=True, help="Path to agent checkpoint file.")
-    parser.add_argument("--opponent_type", type=str, required=True, choices=["random", "heuristic", "ppo"], help="Type of opponent.")
-    parser.add_argument("--opponent_checkpoint", type=str, default=None, help="Path to opponent checkpoint (if PPO).")
-    parser.add_argument("--num_games", type=int, default=10, help="Number of games to play.")
-    parser.add_argument("--max_moves_per_game", type=int, default=200, help="Maximum moves per game.")
-    parser.add_argument("--device", type=str, default="cpu", help="Device for evaluation (cpu/cuda).")
-    parser.add_argument("--log_file", type=str, default="eval_log.txt", help="Path to evaluation log file.")
+    parser.add_argument(
+        "--agent_checkpoint",
+        type=str,
+        required=True,
+        help="Path to agent checkpoint file.",
+    )
+    parser.add_argument(
+        "--opponent_type",
+        type=str,
+        required=True,
+        choices=["random", "heuristic", "ppo"],
+        help="Type of opponent.",
+    )
+    parser.add_argument(
+        "--opponent_checkpoint",
+        type=str,
+        default=None,
+        help="Path to opponent checkpoint (if PPO).",
+    )
+    parser.add_argument(
+        "--num_games", type=int, default=10, help="Number of games to play."
+    )
+    parser.add_argument(
+        "--max_moves_per_game", type=int, default=200, help="Maximum moves per game."
+    )
+    parser.add_argument(
+        "--device", type=str, default="cpu", help="Device for evaluation (cpu/cuda)."
+    )
+    parser.add_argument(
+        "--log_file",
+        type=str,
+        default="eval_log.txt",
+        help="Path to evaluation log file.",
+    )
     parser.add_argument("--seed", type=int, default=None, help="Random seed.")
-    parser.add_argument("--wandb_log_eval", action="store_true", help="Enable W&B logging.")
-    parser.add_argument("--wandb_project_eval", type=str, default=None, help="W&B project name.")
-    parser.add_argument("--wandb_entity_eval", type=str, default=None, help="W&B entity.")
-    parser.add_argument("--wandb_run_name_eval", type=str, default=None, help="W&B run name.")
+    parser.add_argument(
+        "--wandb_log_eval", action="store_true", help="Enable W&B logging."
+    )
+    parser.add_argument(
+        "--wandb_project_eval", type=str, default=None, help="W&B project name."
+    )
+    parser.add_argument(
+        "--wandb_entity_eval", type=str, default=None, help="W&B entity."
+    )
+    parser.add_argument(
+        "--wandb_run_name_eval", type=str, default=None, help="W&B run name."
+    )
     parser.add_argument("--wandb_group", type=str, default=None, help="W&B group name.")
     parser.add_argument("--wandb_reinit", action="store_true", help="W&B reinit flag.")
     args = parser.parse_args()
@@ -627,6 +688,7 @@ def main():
     results = evaluator.evaluate()
     print("Evaluation Results:")
     print(results)
+
 
 if __name__ == "__main__":
     main()

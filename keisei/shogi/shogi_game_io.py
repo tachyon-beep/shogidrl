@@ -1,10 +1,9 @@
 # shogi_game_io.py
 
 import datetime  # For KIF Date header
+import os
 import re  # Import the re module
 import sys
-import os
-
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -276,7 +275,9 @@ def game_to_kif(
             if not move_obj:
                 continue
 
-            usi_move_str: str = f"{move_obj[0]+1}{chr(move_obj[1]+ord('a'))}{move_obj[2]+1}{chr(move_obj[3]+ord('a'))}"
+            usi_move_str: str = (
+                f"{move_obj[0]+1}{chr(move_obj[1]+ord('a'))}{move_obj[2]+1}{chr(move_obj[3]+ord('a'))}"
+            )
             if move_obj[4]:  # Promote flag
                 usi_move_str += "+"
             lines.append(f"{i+1} {usi_move_str}")

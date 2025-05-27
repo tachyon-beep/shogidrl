@@ -10,23 +10,31 @@ import numpy as np
 import pytest
 import torch  # Re-add torch import
 
+# Imports from the project
+from keisei.core.ppo_agent import (  # Actual PPOAgent for type hints and structure
+    PPOAgent,
+)
+
 # Functions and classes to test from evaluate.py
+from keisei.evaluation.evaluate import execute_full_evaluation_run  # ADDED: Import the function under test
 from keisei.evaluation.evaluate import (
     SimpleHeuristicOpponent,
     SimpleRandomOpponent,
     initialize_opponent,
     load_evaluation_agent,
     run_evaluation_loop,
-    execute_full_evaluation_run,  # ADDED: Import the function under test
+)
+from keisei.shogi.shogi_core_definitions import MoveTuple
+from keisei.shogi.shogi_game import ShogiGame
+from keisei.utils import (
+    BaseOpponent,
+    EvaluationLogger,
+    PolicyOutputMapper,
+    TrainingLogger,
 )
 
 # from evaluate import main as evaluate_main # MODIFIED: Removed, main() was removed from evaluate.py
 
-# Imports from the project
-from keisei.core.ppo_agent import PPOAgent  # Actual PPOAgent for type hints and structure
-from keisei.shogi.shogi_core_definitions import MoveTuple
-from keisei.shogi.shogi_game import ShogiGame
-from keisei.utils import PolicyOutputMapper, BaseOpponent, TrainingLogger, EvaluationLogger
 
 
 INPUT_CHANNELS = 46  # Use the default from config for tests
@@ -62,7 +70,11 @@ class MockPPOAgent(PPOAgent, BaseOpponent):
     ):
         # For test compatibility, always return a dummy move and values
         # Assume legal_mask is a tensor of bools, pick the first True index
-        idx = int((legal_mask == True).nonzero(as_tuple=True)[0][0]) if legal_mask.any() else 0
+        idx = (
+            int((legal_mask == True).nonzero(as_tuple=True)[0][0])
+            if legal_mask.any()
+            else 0
+        )
         return (None, idx, 0.0, 0.0)
 
     def get_value(
@@ -85,9 +97,7 @@ class MockPPOAgent(PPOAgent, BaseOpponent):
         legal_mask_tensor = MagicMock(
             spec=torch.Tensor
         )  # Dummy mask, spec for type hint
-        action_result = self.select_action(
-            obs_np, legal_mask_tensor, is_training=False
-        )
+        action_result = self.select_action(obs_np, legal_mask_tensor, is_training=False)
         selected_move = action_result[0]
         if selected_move is None:
             # This should ideally not happen if legal_moves is not empty.
@@ -163,7 +173,7 @@ def test_initialize_opponent_ppo(mock_load_agent, policy_mapper):
     mock_ppo_instance = MockPPOAgent(
         config=make_test_config("cpu", INPUT_CHANNELS, PolicyOutputMapper()),
         device=torch.device("cpu"),
-        name="MockPPOAgentForTest"
+        name="MockPPOAgentForTest",
     )
     mock_load_agent.return_value = mock_ppo_instance
 
@@ -185,9 +195,7 @@ def test_initialize_opponent_ppo(mock_load_agent, policy_mapper):
     "keisei.evaluation.evaluate.PPOAgent"
 )  # MODIFIED: Updated import path # Mock PPOAgent class within evaluate.py
 def test_load_evaluation_agent_mocked(MockPPOAgentClass, policy_mapper):
-    mock_agent_instance = MagicMock(
-        spec=PPOAgent
-    )
+    mock_agent_instance = MagicMock(spec=PPOAgent)
     mock_agent_instance.model = MagicMock()
     MockPPOAgentClass.return_value = mock_agent_instance
 
@@ -197,7 +205,7 @@ def test_load_evaluation_agent_mocked(MockPPOAgentClass, policy_mapper):
 
     MockPPOAgentClass.assert_called_once_with(
         config=make_test_config("cpu", INPUT_CHANNELS, PolicyOutputMapper()),
-        device=torch.device("cpu")
+        device=torch.device("cpu"),
     )
     mock_agent_instance.load_model.assert_called_once_with("dummy_checkpoint.pth")
     mock_agent_instance.model.eval.assert_called_once()
@@ -214,7 +222,7 @@ def test_run_evaluation_loop_basic(policy_mapper, eval_logger_setup):
     agent_to_eval = MockPPOAgent(
         config=make_test_config("cpu", INPUT_CHANNELS, PolicyOutputMapper()),
         device=torch.device("cpu"),
-        name="PPOAgentToEvaluate"
+        name="PPOAgentToEvaluate",
     )
     opponent = SimpleRandomOpponent(name="TestRandomOpponent")
 
@@ -255,11 +263,21 @@ def test_run_evaluation_loop_basic(policy_mapper, eval_logger_setup):
 
 # Helper for common main test mocks
 COMMON_MAIN_MOCKS = [
-    patch("keisei.evaluation.evaluate.PolicyOutputMapper"),  # MODIFIED: Updated import path
-    patch("keisei.evaluation.evaluate.load_evaluation_agent"),  # MODIFIED: Updated import path
-    patch("keisei.evaluation.evaluate.initialize_opponent"),  # MODIFIED: Updated import path
-    patch("keisei.evaluation.evaluate.run_evaluation_loop"),  # MODIFIED: Updated import path
-    patch("keisei.evaluation.evaluate.EvaluationLogger"),  # MODIFIED: Updated import path
+    patch(
+        "keisei.evaluation.evaluate.PolicyOutputMapper"
+    ),  # MODIFIED: Updated import path
+    patch(
+        "keisei.evaluation.evaluate.load_evaluation_agent"
+    ),  # MODIFIED: Updated import path
+    patch(
+        "keisei.evaluation.evaluate.initialize_opponent"
+    ),  # MODIFIED: Updated import path
+    patch(
+        "keisei.evaluation.evaluate.run_evaluation_loop"
+    ),  # MODIFIED: Updated import path
+    patch(
+        "keisei.evaluation.evaluate.EvaluationLogger"
+    ),  # MODIFIED: Updated import path
     patch("wandb.init"),
     patch("wandb.log"),
     patch("wandb.finish"),
@@ -303,7 +321,7 @@ def test_execute_full_evaluation_run_basic_random(  # MODIFIED: Renamed and refa
     mock_agent_instance = MockPPOAgent(  # Using the test utility MockPPOAgent
         config=make_test_config("cpu", INPUT_CHANNELS, PolicyOutputMapper()),
         device=torch.device("cpu"),
-        name="LoadedEvalAgent"
+        name="LoadedEvalAgent",
     )
     mock_load_agent.return_value = mock_agent_instance
 
@@ -552,12 +570,12 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(  # MODIFIED: Renamed
     mock_agent_to_eval = MockPPOAgent(
         config=make_test_config("cpu", INPUT_CHANNELS, PolicyOutputMapper()),
         device=torch.device("cpu"),
-        name="PPOAgentToEvaluate"
+        name="PPOAgentToEvaluate",
     )
     mock_opponent_agent = MockPPOAgent(
         config=make_test_config("cpu", INPUT_CHANNELS, PolicyOutputMapper()),
         device=torch.device("cpu"),
-        name="PPOAgentOpponent"
+        name="PPOAgentOpponent",
     )
 
     agent_eval_path = "./agent_to_eval.pth"
@@ -718,7 +736,7 @@ def test_execute_full_evaluation_run_with_seed(  # MODIFIED: Renamed and refacto
     mock_agent_instance = MockPPOAgent(
         config=make_test_config("cpu", INPUT_CHANNELS, PolicyOutputMapper()),
         device=torch.device("cpu"),
-        name="AgentForSeedTest"
+        name="AgentForSeedTest",
     )
     mock_load_agent.return_value = mock_agent_instance
 
@@ -787,23 +805,40 @@ def test_evaluator_class_basic(monkeypatch, tmp_path, policy_mapper):
     """
     Integration test for the Evaluator class: random-vs-agent, no W&B, log to file.
     """
+
     # Patch load_evaluation_agent and initialize_opponent to return mocks
     class DummyAgent(PPOAgent):
         def __init__(self):
             config = make_test_config("cpu", INPUT_CHANNELS, PolicyOutputMapper())
-            super().__init__(config=config, device=torch.device("cpu"), name="DummyAgent")
+            super().__init__(
+                config=config, device=torch.device("cpu"), name="DummyAgent"
+            )
             self.model = MagicMock()
+
         def select_action(self, obs, legal_mask, *, is_training=True):
             # Always pick the first legal move, index 0, dummy log_prob and value
-            idx = int((legal_mask == True).nonzero(as_tuple=True)[0][0]) if legal_mask.any() else 0
+            idx = (
+                int((legal_mask == True).nonzero(as_tuple=True)[0][0])
+                if legal_mask.any()
+                else 0
+            )
             return None, idx, 0.0, 0.0
+
     class DummyOpponent(BaseOpponent):
         def __init__(self):
             super().__init__(name="DummyOpponent")
+
         def select_move(self, game_instance):
             return game_instance.get_legal_moves()[0]
-    monkeypatch.setattr("keisei.evaluation.evaluate.load_evaluation_agent", lambda *a, **kw: DummyAgent())
-    monkeypatch.setattr("keisei.evaluation.evaluate.initialize_opponent", lambda *a, **kw: DummyOpponent())
+
+    monkeypatch.setattr(
+        "keisei.evaluation.evaluate.load_evaluation_agent",
+        lambda *a, **kw: DummyAgent(),
+    )
+    monkeypatch.setattr(
+        "keisei.evaluation.evaluate.initialize_opponent",
+        lambda *a, **kw: DummyOpponent(),
+    )
     log_file = tmp_path / "evaluator_test.log"
     evaluator = __import__("keisei.evaluate", fromlist=["Evaluator"]).Evaluator(
         agent_checkpoint_path="dummy_agent.pth",
@@ -832,18 +867,34 @@ def test_evaluator_class_basic(monkeypatch, tmp_path, policy_mapper):
 
 
 # Helper to create a minimal AppConfig for test agents
-from keisei.config_schema import AppConfig, EnvConfig, TrainingConfig, EvaluationConfig, LoggingConfig, WandBConfig, DemoConfig
+from keisei.config_schema import (
+    AppConfig,
+    DemoConfig,
+    EnvConfig,
+    EvaluationConfig,
+    LoggingConfig,
+    TrainingConfig,
+    WandBConfig,
+)
+
 
 def make_test_config(device_str, input_channels, policy_mapper):
     # If policy_mapper is a pytest fixture function, raise an error to prevent direct calls
-    if hasattr(policy_mapper, '_pytestfixturefunction'):
-        raise RuntimeError("policy_mapper fixture was passed directly; pass an instance instead.")
+    if hasattr(policy_mapper, "_pytestfixturefunction"):
+        raise RuntimeError(
+            "policy_mapper fixture was passed directly; pass an instance instead."
+        )
     try:
         num_actions_total = policy_mapper.get_total_actions()
     except Exception:
         num_actions_total = 13527  # Default fallback for mocks or MagicMock
     return AppConfig(
-        env=EnvConfig(device=device_str, input_channels=input_channels, num_actions_total=num_actions_total, seed=42),
+        env=EnvConfig(
+            device=device_str,
+            input_channels=input_channels,
+            num_actions_total=num_actions_total,
+            seed=42,
+        ),
         training=TrainingConfig(
             total_timesteps=1,
             steps_per_epoch=1,

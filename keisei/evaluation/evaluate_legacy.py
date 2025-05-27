@@ -4,21 +4,27 @@ evaluate.py: Main script for evaluating PPO Shogi agents.
 """
 import os
 import random
-from typing import Optional, List, TYPE_CHECKING, Union, Any
-from dotenv import load_dotenv
+from typing import TYPE_CHECKING, Any, List, Optional, Union
+
 import numpy as np
 import torch
-import wandb
+from dotenv import load_dotenv
 
+import wandb
 from keisei.core.ppo_agent import PPOAgent
-from keisei.utils import PolicyOutputMapper, TrainingLogger, EvaluationLogger, BaseOpponent
-from keisei.shogi.shogi_game import ShogiGame
-from keisei.shogi.shogi_core_definitions import (
-    MoveTuple,
-    Color,
-    PieceType,
-)  # Added PieceType
 from keisei.shogi import shogi_game_io  # For observations
+from keisei.shogi.shogi_core_definitions import (  # Added PieceType
+    Color,
+    MoveTuple,
+    PieceType,
+)
+from keisei.shogi.shogi_game import ShogiGame
+from keisei.utils import (
+    BaseOpponent,
+    EvaluationLogger,
+    PolicyOutputMapper,
+    TrainingLogger,
+)
 
 if TYPE_CHECKING:
     pass  # torch already imported above
@@ -441,7 +447,10 @@ def execute_full_evaluation_run(
             )  # MODIFIED: Changed to logger.log
 
             agent_to_eval = load_evaluation_agent(
-                agent_checkpoint_path, device_str, policy_mapper, PolicyOutputMapper().get_total_actions()
+                agent_checkpoint_path,
+                device_str,
+                policy_mapper,
+                PolicyOutputMapper().get_total_actions(),
             )
             opponent = initialize_opponent(
                 opponent_type,

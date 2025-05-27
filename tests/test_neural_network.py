@@ -3,15 +3,25 @@ Unit tests for ActorCritic in neural_network.py
 """
 
 import torch
-from keisei.config_schema import AppConfig, EnvConfig, TrainingConfig, EvaluationConfig, LoggingConfig, WandBConfig, DemoConfig
 
+from keisei.config_schema import (
+    AppConfig,
+    DemoConfig,
+    EnvConfig,
+    EvaluationConfig,
+    LoggingConfig,
+    TrainingConfig,
+    WandBConfig,
+)
 from keisei.core.neural_network import ActorCritic
 
 
 def test_actor_critic_init_and_forward():
     """Test ActorCritic initializes and forward pass works with dummy input."""
     config = AppConfig(
-        env=EnvConfig(device="cpu", input_channels=46, num_actions_total=13527, seed=42),
+        env=EnvConfig(
+            device="cpu", input_channels=46, num_actions_total=13527, seed=42
+        ),
         training=TrainingConfig(
             total_timesteps=500_000,
             steps_per_epoch=2048,

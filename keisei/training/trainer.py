@@ -1,42 +1,48 @@
 """
 trainer.py: Contains the Trainer class for managing the Shogi RL training loop.
 """
-import os
-import sys
-import json
+
 import glob
-import time
+import json
+import os
 import random
+import sys
+import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import numpy as np
 import torch
-import wandb
 from rich.console import Console, Group
+from rich.layout import Layout
 from rich.live import Live
+from rich.panel import Panel
 from rich.progress import (
+    BarColumn,
     Progress,
     SpinnerColumn,
-    BarColumn,
-    TextColumn,
-    TimeRemainingColumn,
-    TimeElapsedColumn,
     TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
 )
 from rich.text import Text
-from rich.panel import Panel
-from rich.layout import Layout
-from keisei.core.ppo_agent import PPOAgent
+
+import wandb
+from keisei.config_schema import AppConfig
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.neural_network import ActorCritic
-from keisei.utils import TrainingLogger, PolicyOutputMapper, format_move_with_description_enhanced
-from keisei.shogi import ShogiGame, Color
+from keisei.core.ppo_agent import PPOAgent
 from keisei.evaluation.evaluate import execute_full_evaluation_run
-from keisei.config_schema import AppConfig
-
+from keisei.shogi import Color, ShogiGame
+from keisei.utils import (
+    PolicyOutputMapper,
+    TrainingLogger,
+    format_move_with_description_enhanced,
+)
 
 # --- Helper Functions ---
+
 
 def find_latest_checkpoint(model_dir_path):
     try:
@@ -55,7 +61,7 @@ def find_latest_checkpoint(model_dir_path):
 def serialize_config(config_obj: Any) -> str:
     """Serialize a config object (AppConfig or similar) to a JSON string with nested structure."""
     # If it's a Pydantic BaseModel (AppConfig), use .dict()
-    if hasattr(config_obj, 'dict'):
+    if hasattr(config_obj, "dict"):
         conf_dict = config_obj.dict()
     else:
         # Fallback: try to serialize as before
@@ -73,7 +79,7 @@ def serialize_config(config_obj: Any) -> str:
         for k, v in source_dict.items():
             if isinstance(v, (int, float, str, bool, list, dict, tuple)) or v is None:
                 conf_dict[k] = v
-            elif hasattr(v, 'dict'):
+            elif hasattr(v, "dict"):
                 conf_dict[k] = v.dict()
             elif hasattr(v, "__dict__"):
                 conf_dict[k] = json.loads(serialize_config(v))
@@ -82,6 +88,7 @@ def serialize_config(config_obj: Any) -> str:
     except TypeError as e:
         print(f"Error serializing config: {e}", file=sys.stderr)
         return "{}"
+
 
 # Move formatting utilities are now in keisei.move_formatting
 
@@ -102,7 +109,7 @@ class Trainer:
         """
         self.config = config
         self.args = args
-        
+
         # Initialize core attributes
         self.run_name = args.run_name
         self.global_timestep = 0
@@ -111,29 +118,29 @@ class Trainer:
         self.white_wins = 0
         self.draws = 0
         self.resumed_from_checkpoint: Optional[str] = None
-        
+
         # Setup directories
         self._setup_directories()
-        
+
         # Save effective config
         self._save_effective_config()
-        
+
         # Setup seeding
         self._setup_seeding()
-        
+
         # Initialize Rich TUI
         self.rich_console = Console(file=sys.stderr, record=True)
         self.rich_log_messages: List[Text] = []
-        
+
         # Initialize WandB
         self.is_train_wandb_active = self._setup_wandb()
-        
+
         # Initialize game and components
         self._setup_game_components()
-        
+
         # Setup training components
         self._setup_training_components()
-        
+
         # Handle checkpoint resuming
         self._handle_checkpoint_resume()
 
@@ -145,9 +152,13 @@ class Trainer:
         # Always join model_dir and run_name, even if model_dir is an absolute path
         self.run_artifact_dir = os.path.join(model_dir, self.run_name)
         self.model_dir = self.run_artifact_dir
-        self.log_file_path = os.path.join(self.run_artifact_dir, os.path.basename(log_file))
+        self.log_file_path = os.path.join(
+            self.run_artifact_dir, os.path.basename(log_file)
+        )
         # Setup evaluation log path
-        self.eval_log_file_path = os.path.join(self.run_artifact_dir, "rich_periodic_eval_log.txt")
+        self.eval_log_file_path = os.path.join(
+            self.run_artifact_dir, "rich_periodic_eval_log.txt"
+        )
         os.makedirs(self.run_artifact_dir, exist_ok=True)
 
     def _save_effective_config(self):
@@ -176,7 +187,11 @@ class Trainer:
         is_active = wandb_cfg.enabled
         if is_active:
             try:
-                config_dict_for_wandb = json.loads(serialize_config(self.config)) if serialize_config(self.config) else {}
+                config_dict_for_wandb = (
+                    json.loads(serialize_config(self.config))
+                    if serialize_config(self.config)
+                    else {}
+                )
                 wandb.init(
                     project=wandb_cfg.project,
                     entity=wandb_cfg.entity,
@@ -223,7 +238,7 @@ class Trainer:
         self.experience_buffer = ExperienceBuffer(
             buffer_size=self.config.training.steps_per_epoch,
             gamma=self.config.training.gamma,
-            lambda_gae=getattr(self.config.training, 'lambda_gae', 0.95),
+            lambda_gae=getattr(self.config.training, "lambda_gae", 0.95),
             device=self.config.env.device,
         )
 
@@ -238,7 +253,7 @@ class Trainer:
                 self.resumed_from_checkpoint = latest_ckpt
                 msg = f"Resumed training from checkpoint: {latest_ckpt}"
                 print(msg, file=sys.stderr)
-                if hasattr(self, 'rich_console'):
+                if hasattr(self, "rich_console"):
                     self.rich_console.print(f"[yellow]{msg}[/yellow]")
             else:
                 self.resumed_from_checkpoint = None
@@ -247,7 +262,7 @@ class Trainer:
             self.resumed_from_checkpoint = resume_path
             msg = f"Resumed training from checkpoint: {resume_path}"
             print(msg, file=sys.stderr)
-            if hasattr(self, 'rich_console'):
+            if hasattr(self, "rich_console"):
                 self.rich_console.print(f"[yellow]{msg}[/yellow]")
         else:
             self.resumed_from_checkpoint = None
@@ -256,9 +271,11 @@ class Trainer:
         """Executes the main training loop."""
         # TrainingLogger context manager
         with TrainingLogger(
-            self.log_file_path, rich_console=self.rich_console, rich_log_panel=self.rich_log_messages
+            self.log_file_path,
+            rich_console=self.rich_console,
+            rich_log_panel=self.rich_log_messages,
         ) as logger:
-            
+
             def log_both(
                 message: str,
                 also_to_wandb: bool = False,
@@ -270,25 +287,29 @@ class Trainer:
                     if wandb_data:
                         log_payload.update(wandb_data)
                     wandb.log(log_payload, step=self.global_timestep)
-            
+
             # Log session start
             session_start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             log_both(f"--- SESSION START: {self.run_name} at {session_start_time} ---")
-            
+
             # Setup run information logging
             self._log_run_info(log_both)
-            
+
             # Setup Rich progress bar and layout
-            progress_bar, training_task, layout, log_panel = self._setup_rich_progress_display()
-            
+            progress_bar, training_task, layout, log_panel = (
+                self._setup_rich_progress_display()
+            )
+
             # Main training loop
             try:
                 current_obs_np = self._initialize_game_state(log_both)
                 current_episode_reward = 0.0
                 current_episode_length = 0
-                
+
                 current_obs_tensor = torch.tensor(
-                    current_obs_np, dtype=torch.float32, device=torch.device(self.config.env.device)
+                    current_obs_np,
+                    dtype=torch.float32,
+                    device=torch.device(self.config.env.device),
                 ).unsqueeze(0)
                 last_time = time.time()
                 steps_since_last_time = 0
@@ -301,20 +322,31 @@ class Trainer:
                 ) as _:
                     while self.global_timestep < self.config.training.total_timesteps:
                         # Training step
-                        current_obs_np, current_obs_tensor, current_episode_reward, current_episode_length = (
-                            self._execute_training_step(
-                                current_obs_np, current_obs_tensor, current_episode_reward, 
-                                current_episode_length, log_both, progress_bar, training_task, _
-                            )
+                        (
+                            current_obs_np,
+                            current_obs_tensor,
+                            current_episode_reward,
+                            current_episode_length,
+                        ) = self._execute_training_step(
+                            current_obs_np,
+                            current_obs_tensor,
+                            current_episode_reward,
+                            current_episode_length,
+                            log_both,
+                            progress_bar,
+                            training_task,
+                            _,
                         )
-                        
+
                         # Update progress and display
-                        self._update_progress_display(progress_bar, training_task, log_panel)
-                        
+                        self._update_progress_display(
+                            progress_bar, training_task, log_panel
+                        )
+
                         # Update step counters
                         self.global_timestep += 1
                         steps_since_last_time += 1
-                        
+
                         # Update speed calculation
                         current_time = time.time()
                         time_delta = current_time - last_time
@@ -324,10 +356,10 @@ class Trainer:
                             steps_since_last_time = 0
                             if training_task is not None:
                                 progress_bar.update(training_task, speed=current_speed)
-                
+
                 # End of training loop
                 self._finalize_training(log_both, progress_bar, training_task)
-                
+
             except RuntimeError as e:
                 log_both(f"CRITICAL: Error in training loop: {e}", also_to_wandb=True)
                 raise
@@ -337,25 +369,33 @@ class Trainer:
         run_title = f"Keisei Training Run: {self.run_name}"
         if self.is_train_wandb_active and wandb.run and hasattr(wandb.run, "url"):
             run_title += f" (W&B: {wandb.run.url})"
-        
+
         log_both(run_title)
         log_both(f"Run directory: {self.run_artifact_dir}")
-        log_both(f"Effective config saved to: {os.path.join(self.run_artifact_dir, 'effective_config.json')}")
-        
+        log_both(
+            f"Effective config saved to: {os.path.join(self.run_artifact_dir, 'effective_config.json')}"
+        )
+
         if self.config.env.seed is not None:
             log_both(f"Random seed: {self.config.env.seed}")
-        
+
         log_both(f"Device: {self.config.env.device}")
         log_both(f"Agent: {type(self.agent).__name__} ({self.agent.name})")
-        log_both(f"Total timesteps: {self.config.training.total_timesteps}, Steps per PPO epoch: {self.config.training.steps_per_epoch}")
-        
+        log_both(
+            f"Total timesteps: {self.config.training.total_timesteps}, Steps per PPO epoch: {self.config.training.steps_per_epoch}"
+        )
+
         if self.global_timestep > 0:
             if self.resumed_from_checkpoint:
-                log_both(f"[green]Resumed training from checkpoint: {self.resumed_from_checkpoint}[/green]")
-            log_both(f"Resuming from timestep {self.global_timestep}, {self.total_episodes_completed} episodes completed.")
+                log_both(
+                    f"[green]Resumed training from checkpoint: {self.resumed_from_checkpoint}[/green]"
+                )
+            log_both(
+                f"Resuming from timestep {self.global_timestep}, {self.total_episodes_completed} episodes completed."
+            )
         else:
             log_both("Starting fresh training.")
-        
+
         log_both(f"Model Structure:\n{self.agent.model}", also_to_wandb=False)
 
     def _setup_rich_progress_display(self):
@@ -369,19 +409,39 @@ class Trainer:
             TimeElapsedColumn(),
             TextColumn("•"),
             TimeRemainingColumn(),
-            TextColumn("• Steps: {task.completed}/{task.total} ({task.fields[speed]:.1f} it/s)"),
+            TextColumn(
+                "• Steps: {task.completed}/{task.total} ({task.fields[speed]:.1f} it/s)"
+            ),
             TextColumn("• {task.fields[ep_metrics]}", style="bright_cyan"),
             TextColumn("• {task.fields[ppo_metrics]}", style="bright_yellow"),
-            TextColumn("• Wins B:{task.fields[black_wins_cum]} W:{task.fields[white_wins_cum]} D:{task.fields[draws_cum]}", style="bright_green"),
-            TextColumn("• Rates B:{task.fields[black_win_rate]:.1%} W:{task.fields[white_win_rate]:.1%} D:{task.fields[draw_rate]:.1%}", style="bright_blue"),
+            TextColumn(
+                "• Wins B:{task.fields[black_wins_cum]} W:{task.fields[white_wins_cum]} D:{task.fields[draws_cum]}",
+                style="bright_green",
+            ),
+            TextColumn(
+                "• Rates B:{task.fields[black_win_rate]:.1%} W:{task.fields[white_win_rate]:.1%} D:{task.fields[draw_rate]:.1%}",
+                style="bright_blue",
+            ),
             console=self.rich_console,
             transient=False,
         )
-        
-        initial_black_win_rate = self.black_wins / self.total_episodes_completed if self.total_episodes_completed > 0 else 0.0
-        initial_white_win_rate = self.white_wins / self.total_episodes_completed if self.total_episodes_completed > 0 else 0.0
-        initial_draw_rate = self.draws / self.total_episodes_completed if self.total_episodes_completed > 0 else 0.0
-        
+
+        initial_black_win_rate = (
+            self.black_wins / self.total_episodes_completed
+            if self.total_episodes_completed > 0
+            else 0.0
+        )
+        initial_white_win_rate = (
+            self.white_wins / self.total_episodes_completed
+            if self.total_episodes_completed > 0
+            else 0.0
+        )
+        initial_draw_rate = (
+            self.draws / self.total_episodes_completed
+            if self.total_episodes_completed > 0
+            else 0.0
+        )
+
         training_task = progress_bar.add_task(
             "Training",
             total=self.config.training.total_timesteps,
@@ -397,14 +457,14 @@ class Trainer:
             speed=0.0,
             start=(self.global_timestep < self.config.training.total_timesteps),
         )
-        
+
         log_panel = Panel(
             Text(""),
             title="[b]Live Training Log[/b]",
             border_style="bright_green",
             expand=True,
         )
-        
+
         layout = Layout(name="root")
         layout.split_column(
             Layout(name="main_log", ratio=1),
@@ -412,7 +472,7 @@ class Trainer:
         )
         layout["main_log"].update(log_panel)
         layout["progress_display"].update(progress_bar)
-        
+
         return progress_bar, training_task, layout, log_panel
 
     def _initialize_game_state(self, log_both):
@@ -433,38 +493,63 @@ class Trainer:
                 wandb.finish(exit_code=1)
             raise RuntimeError(f"Game initialization error: {e}") from e
 
-    def _execute_training_step(self, current_obs_np, current_obs_tensor, current_episode_reward, 
-                             current_episode_length, log_both, progress_bar, training_task, _):
+    def _execute_training_step(
+        self,
+        current_obs_np,
+        current_obs_tensor,
+        current_episode_reward,
+        current_episode_length,
+        log_both,
+        progress_bar,
+        training_task,
+        _,
+    ):
         """Execute a single training step."""
         # Get legal moves
         legal_shogi_moves = self.game.get_legal_moves()
-        legal_mask_tensor = self.policy_output_mapper.get_legal_mask(legal_shogi_moves, device=torch.device(self.config.env.device))
-        
+        legal_mask_tensor = self.policy_output_mapper.get_legal_mask(
+            legal_shogi_moves, device=torch.device(self.config.env.device)
+        )
+
         # For demo mode - capture piece info before the move
         piece_info_for_demo = None
-        if self.config.demo.enable_demo_mode and len(legal_shogi_moves) > 0 and legal_shogi_moves[0] is not None:
+        if (
+            self.config.demo.enable_demo_mode
+            and len(legal_shogi_moves) > 0
+            and legal_shogi_moves[0] is not None
+        ):
             try:
                 sample_move = legal_shogi_moves[0]
-                if len(sample_move) == 5 and sample_move[0] is not None and sample_move[1] is not None:
+                if (
+                    len(sample_move) == 5
+                    and sample_move[0] is not None
+                    and sample_move[1] is not None
+                ):
                     from_r, from_c = sample_move[0], sample_move[1]
                     piece_info_for_demo = self.game.get_piece(from_r, from_c)
             except (AttributeError, IndexError, ValueError):
                 pass  # Silently ignore errors in demo mode preparation
-        
+
         # Agent action selection
-        selected_shogi_move, policy_index, log_prob, value_pred = self.agent.select_action(
-            current_obs_np, legal_mask_tensor, is_training=True
+        selected_shogi_move, policy_index, log_prob, value_pred = (
+            self.agent.select_action(
+                current_obs_np, legal_mask_tensor, is_training=True
+            )
         )
-        
+
         if selected_shogi_move is None:
             log_both(
                 f"CRITICAL: Agent failed to select a move at timestep {self.global_timestep}. Resetting episode.",
                 also_to_wandb=True,
             )
             current_obs_np = self.game.reset()
-            current_obs_tensor = torch.tensor(current_obs_np, dtype=torch.float32, device=torch.device(self.config.env.device)).unsqueeze(0)
+            current_obs_tensor = torch.tensor(
+                current_obs_np,
+                dtype=torch.float32,
+                device=torch.device(self.config.env.device),
+            ).unsqueeze(0)
             return current_obs_np, current_obs_tensor, 0.0, 0
-        
+
         # Demo mode per-move logging and delay
         if self.config.demo.enable_demo_mode:
             current_player_name = (
@@ -489,8 +574,9 @@ class Trainer:
             demo_delay = self.config.demo.demo_mode_delay
             if demo_delay > 0:
                 import time
+
                 time.sleep(demo_delay)
-        
+
         # Environment step
         try:
             move_result = self.game.make_move(selected_shogi_move)
@@ -499,7 +585,7 @@ class Trainer:
             next_obs_np, reward, done, info = move_result
             current_episode_reward += reward
             current_episode_length += 1
-            
+
             # Add experience to buffer
             self.experience_buffer.add(
                 current_obs_tensor.squeeze(0),
@@ -510,58 +596,93 @@ class Trainer:
                 done,
                 legal_mask_tensor,
             )
-            
+
             # Update observations
             current_obs_np = next_obs_np
-            current_obs_tensor = torch.tensor(current_obs_np, dtype=torch.float32, device=torch.device(self.config.env.device)).unsqueeze(0)
-            
+            current_obs_tensor = torch.tensor(
+                current_obs_np,
+                dtype=torch.float32,
+                device=torch.device(self.config.env.device),
+            ).unsqueeze(0)
+
             if done:
-                current_obs_np, current_obs_tensor, current_episode_reward, current_episode_length = (
-                    self._handle_episode_end(
-                        current_episode_reward, current_episode_length, 
-                        info, log_both, progress_bar, training_task
-                    )
+                (
+                    current_obs_np,
+                    current_obs_tensor,
+                    current_episode_reward,
+                    current_episode_length,
+                ) = self._handle_episode_end(
+                    current_episode_reward,
+                    current_episode_length,
+                    info,
+                    log_both,
+                    progress_bar,
+                    training_task,
                 )
-            
+
             # PPO Update
-            if ((self.global_timestep + 1) % self.config.training.steps_per_epoch == 0 and 
-                self.experience_buffer.ptr == self.config.training.steps_per_epoch):
-                self._perform_ppo_update(current_obs_np, log_both, progress_bar, training_task)
-            
+            if (
+                (self.global_timestep + 1) % self.config.training.steps_per_epoch == 0
+                and self.experience_buffer.ptr == self.config.training.steps_per_epoch
+            ):
+                self._perform_ppo_update(
+                    current_obs_np, log_both, progress_bar, training_task
+                )
+
             # Checkpointing (add to config_schema if not present)
-            checkpoint_interval = getattr(self.config.training, "checkpoint_interval_timesteps", 10000)
+            checkpoint_interval = getattr(
+                self.config.training, "checkpoint_interval_timesteps", 10000
+            )
             if (self.global_timestep + 1) % checkpoint_interval == 0:
                 self._save_checkpoint(log_both)
-            
+
             # Periodic Evaluation (add to config_schema if not present)
             eval_cfg = getattr(self.config, "evaluation", None)
-            enable_periodic_eval = getattr(eval_cfg, "enable_periodic_evaluation", False)
+            enable_periodic_eval = getattr(
+                eval_cfg, "enable_periodic_evaluation", False
+            )
             eval_interval = getattr(eval_cfg, "evaluation_interval_timesteps", 50000)
             if enable_periodic_eval and (self.global_timestep + 1) % eval_interval == 0:
                 self._run_evaluation(log_both)
-            
+
         except ValueError as e:
             log_both(
                 f"CRITICAL: Error during training step: {e}. Resetting episode.",
                 also_to_wandb=True,
             )
             current_obs_np = self.game.reset()
-            current_obs_tensor = torch.tensor(current_obs_np, dtype=torch.float32, device=torch.device(self.config.env.device)).unsqueeze(0)
+            current_obs_tensor = torch.tensor(
+                current_obs_np,
+                dtype=torch.float32,
+                device=torch.device(self.config.env.device),
+            ).unsqueeze(0)
             current_episode_reward = 0.0
             current_episode_length = 0
-        
-        return current_obs_np, current_obs_tensor, current_episode_reward, current_episode_length
 
-    def _handle_episode_end(self, current_episode_reward, current_episode_length, 
-                          info, log_both, progress_bar, training_task):
+        return (
+            current_obs_np,
+            current_obs_tensor,
+            current_episode_reward,
+            current_episode_length,
+        )
+
+    def _handle_episode_end(
+        self,
+        current_episode_reward,
+        current_episode_length,
+        info,
+        log_both,
+        progress_bar,
+        training_task,
+    ):
         """Handle the end of an episode."""
         self.total_episodes_completed += 1
         ep_metrics_str = f"Ep L:{current_episode_length} R:{current_episode_reward:.2f}"
-        
+
         # Determine game outcome
         game_outcome_message = "Game outcome: Unknown"
         winner_color = None
-        
+
         if "winner" in info:
             winner = info["winner"]
             if winner is not None:
@@ -575,7 +696,7 @@ class Trainer:
             winner_color = winner
         elif self.game.game_over and self.game.winner is None:
             game_outcome_message = "Game outcome: Draw (max moves or stalemate)."
-        
+
         # Update win/loss/draw counts
         if winner_color == Color.BLACK:
             self.black_wins += 1
@@ -583,12 +704,24 @@ class Trainer:
             self.white_wins += 1
         else:
             self.draws += 1
-        
+
         # Calculate rates
-        current_black_win_rate = self.black_wins / self.total_episodes_completed if self.total_episodes_completed > 0 else 0.0
-        current_white_win_rate = self.white_wins / self.total_episodes_completed if self.total_episodes_completed > 0 else 0.0
-        current_draw_rate = self.draws / self.total_episodes_completed if self.total_episodes_completed > 0 else 0.0
-        
+        current_black_win_rate = (
+            self.black_wins / self.total_episodes_completed
+            if self.total_episodes_completed > 0
+            else 0.0
+        )
+        current_white_win_rate = (
+            self.white_wins / self.total_episodes_completed
+            if self.total_episodes_completed > 0
+            else 0.0
+        )
+        current_draw_rate = (
+            self.draws / self.total_episodes_completed
+            if self.total_episodes_completed > 0
+            else 0.0
+        )
+
         # Update progress bar
         progress_bar.update(
             training_task,
@@ -601,7 +734,7 @@ class Trainer:
             white_win_rate=current_white_win_rate,
             draw_rate=current_draw_rate,
         )
-        
+
         # Log episode completion
         log_both(
             f"Episode {self.total_episodes_completed} finished. Length: {current_episode_length}, Reward: {current_episode_reward:.2f}. {game_outcome_message}",
@@ -618,7 +751,7 @@ class Trainer:
                 "draw_rate": current_draw_rate,
             },
         )
-        
+
         # Reset game
         reset_result = self.game.reset()
         if not isinstance(reset_result, np.ndarray):
@@ -629,35 +762,43 @@ class Trainer:
             if self.is_train_wandb_active and wandb.run:
                 wandb.finish(exit_code=1)
             raise RuntimeError("Game reset failed after episode end")
-        
+
         current_obs_np = reset_result
-        current_obs_tensor = torch.tensor(current_obs_np, dtype=torch.float32, device=torch.device(self.config.env.device)).unsqueeze(0)
-        
+        current_obs_tensor = torch.tensor(
+            current_obs_np,
+            dtype=torch.float32,
+            device=torch.device(self.config.env.device),
+        ).unsqueeze(0)
+
         return current_obs_np, current_obs_tensor, 0.0, 0
 
-    def _perform_ppo_update(self, current_obs_np, log_both, progress_bar, training_task):
+    def _perform_ppo_update(
+        self, current_obs_np, log_both, progress_bar, training_task
+    ):
         """Perform a PPO update."""
         with torch.no_grad():
             last_value_pred_for_gae = self.agent.get_value(current_obs_np)
-        
+
         self.experience_buffer.compute_advantages_and_returns(last_value_pred_for_gae)
         learn_metrics = self.agent.learn(self.experience_buffer)
         self.experience_buffer.clear()
-        
+
         # Format PPO metrics for display
         ppo_metrics_str_parts = []
         if "ppo/kl_divergence_approx" in learn_metrics:
-            ppo_metrics_str_parts.append(f"KL:{learn_metrics['ppo/kl_divergence_approx']:.4f}")
+            ppo_metrics_str_parts.append(
+                f"KL:{learn_metrics['ppo/kl_divergence_approx']:.4f}"
+            )
         if "ppo/policy_loss" in learn_metrics:
             ppo_metrics_str_parts.append(f"PolL:{learn_metrics['ppo/policy_loss']:.4f}")
         if "ppo/value_loss" in learn_metrics:
             ppo_metrics_str_parts.append(f"ValL:{learn_metrics['ppo/value_loss']:.4f}")
         if "ppo/entropy" in learn_metrics:
             ppo_metrics_str_parts.append(f"Ent:{learn_metrics['ppo/entropy']:.4f}")
-        
+
         ppo_metrics_display = " ".join(ppo_metrics_str_parts)
         progress_bar.update(training_task, advance=0, ppo_metrics=ppo_metrics_display)
-        
+
         log_both(
             f"PPO Update @ ts {self.global_timestep+1}. Metrics: {json.dumps({k: f'{v:.4f}' for k,v in learn_metrics.items()})}",
             also_to_wandb=True,
@@ -668,7 +809,7 @@ class Trainer:
         """Update the Rich progress display."""
         if training_task is not None:
             progress_bar.update(training_task, completed=self.global_timestep)
-        
+
         # Use a default for max log messages
         max_log_messages = 50
         if self.rich_log_messages:
@@ -678,7 +819,9 @@ class Trainer:
 
     def _save_checkpoint(self, log_both):
         """Save a training checkpoint."""
-        ckpt_save_path = os.path.join(self.model_dir, f"checkpoint_ts{self.global_timestep+1}.pth")
+        ckpt_save_path = os.path.join(
+            self.model_dir, f"checkpoint_ts{self.global_timestep+1}.pth"
+        )
         try:
             self.agent.save_model(
                 ckpt_save_path,
@@ -701,18 +844,27 @@ class Trainer:
     def _run_evaluation(self, log_both):
         """Run periodic evaluation."""
         eval_cfg = getattr(self.config, "evaluation", None)
-        eval_ckpt_path = os.path.join(self.model_dir, f"eval_checkpoint_ts{self.global_timestep+1}.pth")
-        self.agent.save_model(eval_ckpt_path, self.global_timestep + 1, self.total_episodes_completed)
-        
-        log_both(f"Starting periodic evaluation at timestep {self.global_timestep + 1}...", also_to_wandb=True)
-        
+        eval_ckpt_path = os.path.join(
+            self.model_dir, f"eval_checkpoint_ts{self.global_timestep+1}.pth"
+        )
+        self.agent.save_model(
+            eval_ckpt_path, self.global_timestep + 1, self.total_episodes_completed
+        )
+
+        log_both(
+            f"Starting periodic evaluation at timestep {self.global_timestep + 1}...",
+            also_to_wandb=True,
+        )
+
         self.agent.model.eval()
-        
+
         log_file_path_eval = getattr(eval_cfg, "log_file_path_eval", "")
         eval_results = execute_full_evaluation_run(
             agent_checkpoint_path=eval_ckpt_path,
             opponent_type=getattr(eval_cfg, "opponent_type", "random"),
-            opponent_checkpoint_path=getattr(eval_cfg, "opponent_checkpoint_path", None),
+            opponent_checkpoint_path=getattr(
+                eval_cfg, "opponent_checkpoint_path", None
+            ),
             num_games=getattr(eval_cfg, "num_games", 20),
             max_moves_per_game=getattr(eval_cfg, "max_moves_per_game", 256),
             device_str=self.config.env.device,
@@ -727,14 +879,15 @@ class Trainer:
             wandb_reinit=True,
             logger_also_stdout=False,
         )
-        
+
         self.agent.model.train()
-        
+
         log_both(
             f"Periodic evaluation finished. Results: {eval_results}",
             also_to_wandb=True,
             wandb_data=(
-                eval_results if isinstance(eval_results, dict) 
+                eval_results
+                if isinstance(eval_results, dict)
                 else {"eval_summary": str(eval_results)}
             ),
         )
@@ -742,7 +895,9 @@ class Trainer:
     def _finalize_training(self, log_both, progress_bar, training_task):
         """Finalize training and save final model."""
         if training_task is not None:
-            progress_bar.update(training_task, completed=self.config.training.total_timesteps)
+            progress_bar.update(
+                training_task, completed=self.config.training.total_timesteps
+            )
 
         log_both(
             f"Training loop finished at timestep {self.global_timestep}. Total episodes: {self.total_episodes_completed}.",
@@ -750,10 +905,16 @@ class Trainer:
         )
 
         if self.global_timestep >= self.config.training.total_timesteps:
-            log_both("Training successfully completed all timesteps.", also_to_wandb=True)
+            log_both(
+                "Training successfully completed all timesteps.", also_to_wandb=True
+            )
             final_model_path = os.path.join(self.model_dir, "final_model.pth")
             try:
-                self.agent.save_model(final_model_path, self.global_timestep, self.total_episodes_completed)
+                self.agent.save_model(
+                    final_model_path,
+                    self.global_timestep,
+                    self.total_episodes_completed,
+                )
                 log_both(f"Final model saved to {final_model_path}", also_to_wandb=True)
 
                 if self.is_train_wandb_active and wandb.run:
@@ -776,22 +937,34 @@ class Trainer:
             log_both("Weights & Biases run finished.")
 
         # Save the full console log from Rich
-        console_log_path = os.path.join(self.run_artifact_dir, "full_console_output_rich.html")
+        console_log_path = os.path.join(
+            self.run_artifact_dir, "full_console_output_rich.html"
+        )
         try:
             self.rich_console.save_html(console_log_path)
-            print(f"Full Rich console output saved to {console_log_path}", file=sys.stderr)
+            print(
+                f"Full Rich console output saved to {console_log_path}", file=sys.stderr
+            )
         except OSError as e:
             print(f"Error saving Rich console log: {e}", file=sys.stderr)
 
         # Final messages
         self.rich_console.rule("[bold green]Run Finished[/bold green]")
-        self.rich_console.print(f"[bold green]Run '{self.run_name}' processing finished.[/bold green]")
+        self.rich_console.print(
+            f"[bold green]Run '{self.run_name}' processing finished.[/bold green]"
+        )
         self.rich_console.print(f"Output and logs are in: {self.run_artifact_dir}")
 
         # Save a final checkpoint if one was not just saved at the last step
-        checkpoint_interval = getattr(self.config.training, "checkpoint_interval_timesteps", 10000)
-        last_ckpt_timestep = ((self.global_timestep) // checkpoint_interval) * checkpoint_interval
-        last_ckpt_filename = os.path.join(self.model_dir, f"checkpoint_ts{self.global_timestep}.pth")
+        checkpoint_interval = getattr(
+            self.config.training, "checkpoint_interval_timesteps", 10000
+        )
+        last_ckpt_timestep = (
+            (self.global_timestep) // checkpoint_interval
+        ) * checkpoint_interval
+        last_ckpt_filename = os.path.join(
+            self.model_dir, f"checkpoint_ts{self.global_timestep}.pth"
+        )
         # If no checkpoint exists for the final timestep, save one
         if self.global_timestep > 0 and not os.path.exists(last_ckpt_filename):
             self.agent.save_model(
@@ -804,4 +977,6 @@ class Trainer:
                     "draws": self.draws,
                 },
             )
-            log_both(f"Final checkpoint saved to {last_ckpt_filename}", also_to_wandb=True)
+            log_both(
+                f"Final checkpoint saved to {last_ckpt_filename}", also_to_wandb=True
+            )
