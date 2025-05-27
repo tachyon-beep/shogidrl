@@ -5,11 +5,7 @@ import os
 import re  # Import the re module
 import sys
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
-
 import numpy as np
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
-
 from .shogi_core_definitions import (  # Observation plane constants
     KIF_PIECE_SYMBOLS,
     OBS_CURR_PLAYER_HAND_START,
@@ -30,6 +26,8 @@ from .shogi_core_definitions import (  # Observation plane constants
     TerminationReason,
     get_unpromoted_types,
 )
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 if TYPE_CHECKING:
     from .shogi_game import ShogiGame  # For type hinting the 'game' parameter
@@ -274,7 +272,14 @@ def game_to_kif(
             )  # Your internal move object/tuple
             if not move_obj:
                 continue
-
+            # Defensive: ensure all indices are not None
+            if (
+                move_obj[0] is None
+                or move_obj[1] is None
+                or move_obj[2] is None
+                or move_obj[3] is None
+            ):
+                continue  # Skip malformed move
             usi_move_str: str = (
                 f"{move_obj[0]+1}{chr(move_obj[1]+ord('a'))}{move_obj[2]+1}{chr(move_obj[3]+ord('a'))}"
             )

@@ -2,21 +2,26 @@
 Unit and integration tests for the evaluate.py script.
 """
 
-import random
-from typing import Optional, Tuple  # Ensure Tuple and Optional are imported
 from unittest.mock import MagicMock, PropertyMock, patch  # Added PropertyMock
 
 import numpy as np
 import pytest
 import torch  # Re-add torch import
 
-# Imports from the project
-from keisei.core.ppo_agent import (  # Actual PPOAgent for type hints and structure
-    PPOAgent,
+from keisei.config_schema import (
+    AppConfig,
+    DemoConfig,
+    EnvConfig,
+    EvaluationConfig,
+    LoggingConfig,
+    TrainingConfig,
+    WandBConfig,
 )
 
-# Functions and classes to test from evaluate.py
-from keisei.evaluation.evaluate import execute_full_evaluation_run  # ADDED: Import the function under test
+from keisei.core.ppo_agent import (
+    PPOAgent,
+)
+from keisei.evaluation.evaluate import execute_full_evaluation_run
 from keisei.evaluation.evaluate import (
     SimpleHeuristicOpponent,
     SimpleRandomOpponent,
@@ -30,11 +35,7 @@ from keisei.utils import (
     BaseOpponent,
     EvaluationLogger,
     PolicyOutputMapper,
-    TrainingLogger,
 )
-
-# from evaluate import main as evaluate_main # MODIFIED: Removed, main() was removed from evaluate.py
-
 
 
 INPUT_CHANNELS = 46  # Use the default from config for tests
@@ -71,7 +72,7 @@ class MockPPOAgent(PPOAgent, BaseOpponent):
         # For test compatibility, always return a dummy move and values
         # Assume legal_mask is a tensor of bools, pick the first True index
         idx = (
-            int((legal_mask == True).nonzero(as_tuple=True)[0][0])
+            int(legal_mask.nonzero(as_tuple=True)[0][0])
             if legal_mask.any()
             else 0
         )
@@ -818,7 +819,7 @@ def test_evaluator_class_basic(monkeypatch, tmp_path, policy_mapper):
         def select_action(self, obs, legal_mask, *, is_training=True):
             # Always pick the first legal move, index 0, dummy log_prob and value
             idx = (
-                int((legal_mask == True).nonzero(as_tuple=True)[0][0])
+                int(legal_mask.nonzero(as_tuple=True)[0][0])
                 if legal_mask.any()
                 else 0
             )
@@ -867,17 +868,6 @@ def test_evaluator_class_basic(monkeypatch, tmp_path, policy_mapper):
 
 
 # Helper to create a minimal AppConfig for test agents
-from keisei.config_schema import (
-    AppConfig,
-    DemoConfig,
-    EnvConfig,
-    EvaluationConfig,
-    LoggingConfig,
-    TrainingConfig,
-    WandBConfig,
-)
-
-
 def make_test_config(device_str, input_channels, policy_mapper):
     # If policy_mapper is a pytest fixture function, raise an error to prevent direct calls
     if hasattr(policy_mapper, "_pytestfixturefunction"):
@@ -886,7 +876,7 @@ def make_test_config(device_str, input_channels, policy_mapper):
         )
     try:
         num_actions_total = policy_mapper.get_total_actions()
-    except Exception:
+    except Exception:  # nosec: test utility, fallback is safe
         num_actions_total = 13527  # Default fallback for mocks or MagicMock
     return AppConfig(
         env=EnvConfig(

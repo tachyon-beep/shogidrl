@@ -27,6 +27,13 @@ from rich.console import Console
 from rich.text import Text
 
 from keisei.config_schema import AppConfig
+from keisei.shogi.shogi_core_definitions import (
+    BoardMoveTuple,
+    DropMoveTuple,
+    PieceType,
+    get_unpromoted_types,
+)
+
 
 # --- Config Loader Utility ---
 
@@ -138,14 +145,6 @@ def load_config(
     return config
 
 
-# Ensure these imports are correct based on your project structure
-from keisei.shogi.shogi_core_definitions import (  # Import the standalone function
-    BoardMoveTuple,
-    DropMoveTuple,
-    PieceType,
-    get_unpromoted_types,
-)
-
 if TYPE_CHECKING:
     from keisei.shogi.shogi_core_definitions import MoveTuple
     from keisei.shogi.shogi_game import ShogiGame  # Added for type hinting
@@ -168,7 +167,6 @@ class BaseOpponent(ABC):
         Returns:
             A MoveTuple representing the selected move.
         """
-        pass
 
 
 class PolicyOutputMapper:
@@ -346,9 +344,6 @@ class PolicyOutputMapper:
         if not (0 <= action_idx < len(self.idx_to_move)):
             # Log distinct unrecognized moves only a few times to avoid flooding logs
             log_message = f"Action index {action_idx} is out of bounds for idx_to_move (size {len(self.idx_to_move)})."
-            # ... (rest of the existing error handling for action_idx_to_shogi_move)
-            # This part seems to be from a different method or needs to be adapted.
-            # For now, raising an IndexError is appropriate if the index is truly out of bounds.
             raise IndexError(log_message)
         return self.idx_to_move[action_idx]
 
@@ -455,7 +450,7 @@ class PolicyOutputMapper:
             # MODIFIED: Correctly instantiate BoardMoveTuple
             return (from_r, from_c, to_r, to_c, promote)
 
-    def action_idx_to_usi_move(self, action_idx: int, board: Any) -> str:
+    def action_idx_to_usi_move(self, action_idx: int, _board=None) -> str:
         """Converts an action index to its USI move string representation."""
         shogi_move = self.action_idx_to_shogi_move(action_idx)
         return self.shogi_move_to_usi(shogi_move)
@@ -470,7 +465,7 @@ class TrainingLogger:
         rich_console: Optional[Console] = None,
         rich_log_panel: Optional[List[Text]] = None,
         also_stdout: Optional[bool] = None,  # Added also_stdout argument
-        **kwargs: Any,  # Added to accept arbitrary keyword arguments
+        **_kwargs: Any,  # Added to accept arbitrary keyword arguments
     ):
         """
         Initializes the TrainingLogger.
@@ -526,7 +521,7 @@ class TrainingLogger:
 class EvaluationLogger:
     """Handles logging of evaluation results to a file and optionally to stdout."""
 
-    def __init__(self, log_file_path: str, also_stdout: bool = True, **kwargs: Any):
+    def __init__(self, log_file_path: str, also_stdout: bool = True, **_kwargs: Any):
         """
         Initializes the EvaluationLogger.
 

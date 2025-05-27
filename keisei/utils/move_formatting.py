@@ -2,8 +2,6 @@
 move_formatting.py: Contains utilities for formatting Shogi moves.
 """
 
-from typing import Any, Optional, Tuple
-
 from keisei.shogi.shogi_core_definitions import PieceType
 
 
@@ -46,7 +44,7 @@ def format_move_with_description(selected_shogi_move, policy_output_mapper, game
                     piece = game.get_piece(from_r, from_c)
                     if piece is not None:
                         piece_name = _get_piece_name(piece.type, promote_flag)
-                except:
+                except (AttributeError, KeyError, TypeError):
                     pass  # Fall back to generic "piece"
             else:
                 # Without game context, assume it's a piece that can promote if promote_flag is True
@@ -57,7 +55,7 @@ def format_move_with_description(selected_shogi_move, policy_output_mapper, game
 
         return f"{usi_notation} - {description}."
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         # Fallback to string representation if formatting fails
         return f"{str(selected_shogi_move)} (format error: {e})"
 
@@ -101,14 +99,14 @@ def format_move_with_description_enhanced(
             if piece_info is not None:
                 try:
                     piece_name = _get_piece_name(piece_info.type, promote_flag)
-                except:
+                except (AttributeError, KeyError, TypeError):
                     piece_name = "piece"  # Fall back to generic "piece"
 
             description = f"{piece_name} moving from {from_square} to {to_square}"
 
         return f"{usi_notation} - {description}."
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         # Fallback to string representation if formatting fails
         return f"{str(selected_shogi_move)} (format error: {e})"
 

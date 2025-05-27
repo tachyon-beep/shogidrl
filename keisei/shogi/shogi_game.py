@@ -540,11 +540,10 @@ class ShogiGame:
                         )
                     piece_color = Color.BLACK if char_sfen.isupper() else Color.WHITE
                     final_piece_type = base_piece_type
-                    is_actually_promoted = False
                     if promoted_flag_active:
                         if base_piece_type in BASE_TO_PROMOTED_TYPE:
                             final_piece_type = BASE_TO_PROMOTED_TYPE[base_piece_type]
-                            is_actually_promoted = True
+                            # Removed unused variable 'is_actually_promoted'
                         elif base_piece_type in PROMOTED_TYPES_SET:
                             raise ValueError(
                                 f"Invalid promotion: SFEN token '+' applied to non-promotable piece type {base_piece_type.name}"
@@ -1030,6 +1029,7 @@ class ShogiGame:
             return -1.0  # Loss
         return 0.0  # Draw or game not over from this perspective
 
-    def seed(self, seed_value=None):
+    def seed(self, _seed_value=None):
         """Seed the game environment for reproducibility (no-op for standard Shogi)."""
-        pass
+        # No operation needed for standard Shogi
+        return

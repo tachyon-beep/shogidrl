@@ -31,7 +31,6 @@ from rich.text import Text
 import wandb
 from keisei.config_schema import AppConfig
 from keisei.core.experience_buffer import ExperienceBuffer
-from keisei.core.neural_network import ActorCritic
 from keisei.core.ppo_agent import PPOAgent
 from keisei.evaluation.evaluate import execute_full_evaluation_run
 from keisei.shogi import Color, ShogiGame
@@ -573,8 +572,6 @@ class Trainer:
             # Add delay for easier observation
             demo_delay = self.config.demo.demo_mode_delay
             if demo_delay > 0:
-                import time
-
                 time.sleep(demo_delay)
 
         # Environment step
@@ -959,9 +956,6 @@ class Trainer:
         checkpoint_interval = getattr(
             self.config.training, "checkpoint_interval_timesteps", 10000
         )
-        last_ckpt_timestep = (
-            (self.global_timestep) // checkpoint_interval
-        ) * checkpoint_interval
         last_ckpt_filename = os.path.join(
             self.model_dir, f"checkpoint_ts{self.global_timestep}.pth"
         )

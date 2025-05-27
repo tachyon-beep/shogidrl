@@ -4,7 +4,7 @@ Minimal PPOAgent for DRL Shogi Client.
 
 import os
 import sys  # For stderr
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
 import numpy as np
 import torch
@@ -86,7 +86,7 @@ class PPOAgent:
             # neural_network.py's get_action_and_value attempts to handle this.
             # If this path is hit, it implies the caller might not have checked for no legal moves.
             # The train.py logic should ideally prevent calling select_action if no legal_moves.
-            pass  # Let it proceed, model.get_action_and_value will use the all-false mask.
+            # Let it proceed, model.get_action_and_value will use the all-false mask.
 
         # Get action, log_prob, and value from the ActorCritic model
         # Pass deterministic based on not is_training
