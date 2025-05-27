@@ -73,28 +73,33 @@ def test_train_resume_autodetect(tmp_path):
             value_loss_coeff=VALUE_LOSS_COEFF,
             entropy_coef=ENTROPY_COEFF,
         ),
-        evaluation=EvaluationConfig(num_games=1, opponent_type="random"),
+        evaluation=EvaluationConfig(num_games=1, opponent_type="random", evaluation_interval_timesteps=1000), # Added evaluation_interval_timesteps
         logging=LoggingConfig(log_file="/tmp/test.log", model_dir="/tmp/"),
         wandb=WandBConfig(enabled=False, project="test", entity=None),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
     )
     agent = PPOAgent(config=config, device=torch.device(DEVICE))
     agent.save_model(str(fake_ckpt))
-    result = subprocess.run(
-        [
-            sys.executable,
-            TRAIN_PATH,
-            "--savedir",
-            str(tmp_path),
-            "--run_name",
-            "run",
-            "--total-timesteps",
-            "1",
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                TRAIN_PATH,
+                "--savedir",
+                str(tmp_path),
+                "--run_name",
+                "run",
+                "--total-timesteps",
+                "1",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as e:
+        print("STDERR from train.py:")
+        print(e.stderr)
+        raise
     assert result.returncode == 0
     # The 'Resumed training from checkpoint' message is in stderr (Rich logs)
     assert "Resumed training from checkpoint" in result.stderr
@@ -219,7 +224,7 @@ def test_train_explicit_resume(tmp_path):
             value_loss_coeff=VALUE_LOSS_COEFF,
             entropy_coef=ENTROPY_COEFF,
         ),
-        evaluation=EvaluationConfig(num_games=1, opponent_type="random"),
+        evaluation=EvaluationConfig(num_games=1, opponent_type="random", evaluation_interval_timesteps=1000), # Added evaluation_interval_timesteps
         logging=LoggingConfig(log_file="/tmp/test.log", model_dir="/tmp/"),
         wandb=WandBConfig(enabled=False, project="test", entity=None),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
