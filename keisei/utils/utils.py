@@ -114,10 +114,14 @@ def load_config(
     )
     config_data = _load_yaml_or_json(base_config_path)
     # If config_path is provided and is not the default, treat as override file (JSON or YAML)
-    if config_path and os.path.abspath(config_path) != os.path.abspath(base_config_path):
+    if config_path and os.path.abspath(config_path) != os.path.abspath(
+        base_config_path
+    ):
         override_data = _load_yaml_or_json(config_path)
         top_keys = {"env", "training", "evaluation", "logging", "wandb", "demo"}
-        if not (isinstance(override_data, dict) and top_keys & set(override_data.keys())):
+        if not (
+            isinstance(override_data, dict) and top_keys & set(override_data.keys())
+        ):
             mapped_overrides = _map_flat_overrides(override_data)
             _merge_overrides(config_data, mapped_overrides)
         else:

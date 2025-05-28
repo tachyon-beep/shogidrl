@@ -96,7 +96,7 @@ class EvaluationCallback(Callback):
                 f"Periodic evaluation finished. Results: {eval_results}",
                 also_to_wandb=True,
                 wandb_data=(
-                    eval_results
+                    dict(eval_results)
                     if isinstance(eval_results, dict)
                     else {"eval_summary": str(eval_results)}
                 ),

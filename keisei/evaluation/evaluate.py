@@ -2,15 +2,16 @@
 evaluate.py: Main script for evaluating PPO Shogi agents.
 """
 
+import argparse
 import os
 import random
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
-import argparse
 import numpy as np
 import torch
+from dotenv import load_dotenv  # type: ignore
 
-from dotenv import load_dotenv # type: ignore
+import wandb  # Ensure wandb is imported for W&B logging
 from keisei.config_schema import (
     AppConfig,
     DemoConfig,
@@ -29,380 +30,12 @@ from keisei.shogi.shogi_core_definitions import (  # Added PieceType
 )
 from keisei.shogi.shogi_game import ShogiGame
 from keisei.utils import BaseOpponent, EvaluationLogger, PolicyOutputMapper
-import wandb  # Ensure wandb is imported for W&B logging
+from keisei.evaluation.loop import ResultsDict
 
 if TYPE_CHECKING:
     pass  # torch already imported above
 
 load_dotenv()  # Load environment variables from .env file
-
-
-class SimpleRandomOpponent(BaseOpponent):
-    """An opponent that selects a random legal move."""
-
-    def __init__(self, name: str = "SimpleRandomOpponent"):
-        super().__init__(name)
-
-    def select_move(self, game_instance: ShogiGame) -> MoveTuple:
-        """Selects a random move from the list of legal moves."""
-        legal_moves = game_instance.get_legal_moves()  # Removed current_player argument
-        if not legal_moves:
-            # This case should ideally be handled by the game loop checking for game_over
-            raise ValueError(
-                "No legal moves available for SimpleRandomOpponent, game should be over."
-            )
-        return random.choice(legal_moves)
-
-
-class SimpleHeuristicOpponent(BaseOpponent):
-    """An opponent that uses simple heuristics to select a move."""
-
-    def __init__(self, name: str = "SimpleHeuristicOpponent"):
-        super().__init__(name)
-
-    def select_move(self, game_instance: ShogiGame) -> MoveTuple:
-        """Selects a move based on simple heuristics."""
-        legal_moves = game_instance.get_legal_moves()
-        if not legal_moves:
-            raise ValueError(
-                "No legal moves available for SimpleHeuristicOpponent, game should be over."
-            )
-
-        capturing_moves: List[MoveTuple] = []
-        non_promoting_pawn_moves: List[MoveTuple] = []
-        other_moves: List[MoveTuple] = []
-
-        for move_tuple in legal_moves:
-            is_capture = False
-            is_pawn_move_no_promo = False
-
-            # Check if it's a BoardMoveTuple: (int, int, int, int, bool)
-            if (
-                isinstance(move_tuple[0], int)
-                and isinstance(move_tuple[1], int)
-                and isinstance(move_tuple[2], int)
-                and isinstance(move_tuple[3], int)
-                and isinstance(move_tuple[4], bool)
-            ):
-
-                from_r: int = move_tuple[0]
-                from_c: int = move_tuple[1]
-                to_r: int = move_tuple[2]
-                to_c: int = move_tuple[3]
-                promote: bool = move_tuple[4]
-
-                # Heuristic 1: Check for capturing moves.
-                destination_piece = game_instance.board[to_r][to_c]
-                if (
-                    destination_piece is not None
-                    and destination_piece.color != game_instance.current_player
-                ):
-                    is_capture = True  # MODIFIED: Set is_capture to True
-
-                # Heuristic 2: Check for non-promoting pawn moves (only if not a capture).
-                if not is_capture:
-                    source_piece = game_instance.board[from_r][
-                        from_c
-                    ]  # MODIFIED: Get source piece
-                    if (
-                        source_piece
-                        and source_piece.type == PieceType.PAWN
-                        and not promote
-                    ):  # MODIFIED: Check if pawn and not promoting
-                        is_pawn_move_no_promo = (
-                            True  # MODIFIED: Set is_pawn_move_no_promo to True
-                        )
-            # Drop moves (Tuple[None, None, int, int, PieceType]) and other types of moves
-            # will not pass the isinstance checks above.
-
-            if is_capture:
-                capturing_moves.append(move_tuple)
-            if is_pawn_move_no_promo:  # Changed to if
-                non_promoting_pawn_moves.append(move_tuple)
-            else:
-                other_moves.append(move_tuple)
-
-        if capturing_moves:
-            return random.choice(capturing_moves)
-        if non_promoting_pawn_moves:  # Changed to if
-            return random.choice(non_promoting_pawn_moves)
-        if other_moves:
-            return random.choice(other_moves)
-
-        # Fallback, should ideally not be reached if legal_moves is not empty.
-        return random.choice(legal_moves)
-
-
-def load_evaluation_agent(
-    checkpoint_path: str,
-    device_str: str,
-    policy_mapper: PolicyOutputMapper,
-    input_channels: int,
-    # Add input_features as an optional parameter with a default
-    input_features: Optional[str] = "core46",
-) -> PPOAgent:
-    """Loads a PPOAgent from a checkpoint for evaluation. Raises FileNotFoundError if checkpoint does not exist."""
-    if not os.path.isfile(checkpoint_path):
-        print(f"Error: Checkpoint file {checkpoint_path} not found.")
-        raise FileNotFoundError(f"Checkpoint file {checkpoint_path} not found.")
-    # Use minimal config for evaluation
-    config = AppConfig(
-        env=EnvConfig(
-            device=device_str,
-            input_channels=input_channels,
-            num_actions_total=policy_mapper.get_total_actions(),
-            seed=42,  # Default seed for eval agent loading
-        ),
-        training=TrainingConfig(  # Dummy TrainingConfig for PPOAgent
-            total_timesteps=1,  # Placeholder
-            steps_per_epoch=1,  # Placeholder
-            ppo_epochs=1,  # Placeholder
-            minibatch_size=1,  # Placeholder
-            learning_rate=1e-4,  # Placeholder
-            gamma=0.99,  # Placeholder
-            clip_epsilon=0.2,  # Placeholder
-            value_loss_coeff=0.5,  # Placeholder
-            entropy_coef=0.01,  # Placeholder
-            render_every_steps=1,
-            refresh_per_second=4,
-            enable_spinner=True,
-            input_features=(
-                input_features if input_features else "core46"
-            ),
-            tower_depth=9,
-            tower_width=256,
-            se_ratio=0.25,
-            model_type="resnet",
-            mixed_precision=False,  # Not relevant for eval agent loading
-            ddp=False,  # Not relevant for eval agent loading
-            gradient_clip_max_norm=0.5,  # Placeholder
-            lambda_gae=0.95,  # Placeholder
-            checkpoint_interval_timesteps=10000,  # Placeholder
-            evaluation_interval_timesteps=50000,  # Placeholder for TrainingConfig's own field
-            weight_decay=0.0,  # Added for optimizer compatibility
-        ),
-        evaluation=EvaluationConfig(
-            num_games=1,
-            opponent_type="random",
-            evaluation_interval_timesteps=50000,
-        ),
-        logging=LoggingConfig(log_file="/tmp/eval.log", model_dir="/tmp/", run_name="eval-agent-load"),
-        wandb=WandBConfig(
-            enabled=False,
-            project="eval",
-            entity=None,
-            run_name_prefix="eval-run",  # Added
-            watch_model=False,  # Added
-            watch_log_freq=1000,  # Added
-            watch_log_type="all",  # Added
-        ),
-        demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
-    )
-    agent = PPOAgent(config=config, device=torch.device(device_str))
-    agent.load_model(checkpoint_path)
-    agent.model.eval()  # Set the model to evaluation mode
-    print(f"Loaded agent from {checkpoint_path} on device {device_str} for evaluation.")
-    return agent
-
-
-def initialize_opponent(
-    opponent_type: str,
-    opponent_path: Optional[str],
-    device_str: str,
-    policy_mapper: PolicyOutputMapper,
-    input_channels: int,
-) -> Union[PPOAgent, BaseOpponent]:  # Adjusted return type
-    """Initializes the opponent based on type."""
-    if opponent_type == "random":
-        print("Initializing SimpleRandomOpponent.")
-        return SimpleRandomOpponent()
-    elif opponent_type == "heuristic":
-        print("Initializing SimpleHeuristicOpponent.")
-        return SimpleHeuristicOpponent()
-    elif opponent_type == "ppo":
-        if not opponent_path:
-            raise ValueError("Opponent path must be provided for PPO opponent type.")
-        print(f"Initializing PPO opponent from {opponent_path}.")
-        return load_evaluation_agent(
-            opponent_path, device_str, policy_mapper, input_channels
-        )
-    else:
-        raise ValueError(f"Unknown opponent type: {opponent_type}")
-
-
-def run_evaluation_loop(
-    agent_to_eval: PPOAgent,
-    opponent: Union[PPOAgent, BaseOpponent],  # Adjusted opponent type
-    num_games: int,
-    logger: EvaluationLogger,
-    policy_mapper: PolicyOutputMapper,
-    max_moves_per_game: int,
-    device_str: str,
-    wandb_enabled: bool = False,  # Added for W&B
-) -> dict:
-    """Runs the evaluation loop for a set number of games."""
-    wins = 0
-    losses = 0
-    draws = 0
-    total_game_length = 0
-    device = torch.device(device_str)
-
-    # Determine opponent name for logging
-    current_opponent_name = (
-        opponent.name
-        if isinstance(opponent, BaseOpponent)
-        else opponent.__class__.__name__
-    )
-    logger.log(
-        f"Starting evaluation: {agent_to_eval.name} vs {current_opponent_name}"
-    )
-
-    for game_num in range(1, num_games + 1):
-        game = ShogiGame(max_moves_per_game=max_moves_per_game)
-        # Alternate starting player: agent_to_eval is Black (Sente) in odd games, White (Gote) in even games
-        agent_is_black = game_num % 2 == 1
-
-        # Determine who is playing which color for this game
-        black_player = agent_to_eval if agent_is_black else opponent
-        white_player = opponent if agent_is_black else agent_to_eval
-
-        # Corrected log message format
-        logger.log(
-            f"Starting Game {game_num}/{num_games}. "
-            f"Agent to eval ({agent_to_eval.name}) is {'Black' if agent_is_black else 'White'}. "
-            f"Opponent ({current_opponent_name}) is {'White' if agent_is_black else 'Black'}."
-        )
-
-        while not game.game_over:
-            # Determine whose turn it is based on game.current_player
-            active_agent = (
-                black_player if game.current_player == Color.BLACK else white_player
-            )
-
-            legal_moves = game.get_legal_moves()
-            if not legal_moves:
-                break
-
-            selected_move: Optional[MoveTuple] = None
-            if isinstance(active_agent, PPOAgent):
-                obs_np = shogi_game_io.generate_neural_network_observation(game)
-                legal_mask = policy_mapper.get_legal_mask(legal_moves, device)
-
-                if not legal_mask.any() and legal_moves:
-                    logger.log(
-                        f"Error: Game {game_num}, Move {game.move_count + 1}: "
-                        f"Agent {active_agent.name} ({game.current_player.name}) has legal moves, "
-                        f"but legal_mask is all False. Legal moves: {legal_moves}. "
-                        f"This indicates an issue with PolicyOutputMapper or move generation."
-                    )
-                    # PPOAgent.select_action should handle this.
-                    selected_shogi_move = active_agent.select_action(
-                        obs_np, legal_mask, is_training=False
-                    )[0]
-                    selected_move = (
-                        selected_shogi_move  # MODIFIED: Assign to selected_move
-                    )
-                else:
-                    selected_shogi_move = active_agent.select_action(
-                        obs_np, legal_mask, is_training=False
-                    )[0]
-                    selected_move = (
-                        selected_shogi_move  # MODIFIED: Assign to selected_move
-                    )
-            elif isinstance(
-                active_agent, BaseOpponent
-            ):  # Opponent is a BaseOpponent (Random, Heuristic)
-                selected_move = active_agent.select_move(game)
-            else:
-                # This case should not be reached if opponent types are correctly handled
-                logger.log(
-                    f"CRITICAL: Unsupported agent type for active_agent: {type(active_agent)}"
-                )  # MODIFIED: Added log and changed to raise TypeError
-                raise TypeError(
-                    f"Unsupported agent type for active_agent: {type(active_agent)}"
-                )
-
-            if selected_move is None:
-                logger.log(
-                    f"Error: Game {game_num}, Move {game.move_count + 1}: Active agent {active_agent.name} failed to select a move despite legal moves being available."
-                )
-                # Decide how to handle this: break, assign loss, etc. For now, break.
-                break
-
-            game.make_move(selected_move)
-            # logger.log_custom_message(f"Game {game_num}, Move {game.move_count}: {active_agent.name} ({game.current_player.name}) played {selected_move}")
-
-        # Game ended
-        game_length = game.move_count
-        total_game_length += game_length
-        winner = game.winner
-
-        outcome_str = "Draw"
-        if winner is not None:
-            if (winner == Color.BLACK and agent_is_black) or (
-                winner == Color.WHITE and not agent_is_black
-            ):
-                wins += 1
-                outcome_str = f"{agent_to_eval.name} (Agent) wins"
-            else:
-                losses += 1
-                outcome_str = f"{current_opponent_name} (Opponent) wins"
-        else:  # Draw
-            draws += 1
-
-        # Log main evaluation results
-        # MODIFIED: Changed to logger.log and formatted the message
-        logger.log(
-            f"Game {game_num} Result: Opponent: {current_opponent_name}, "
-            f"WinRate(cum): {wins / game_num if game_num > 0 else 0:.2f}, "
-            f"AvgGameLen(cum): {(total_game_length / game_num if game_num > 0 else 0):.1f}, "
-            f"Outcome: {outcome_str}"
-        )
-        # Log additional custom metrics for this game
-        logger.log(  # MODIFIED: Changed to logger.log
-            f"Game {game_num} Details: Length: {game_length}, Outcome: {outcome_str}, Agent Eval Color: {'Black' if agent_is_black else 'White'}"
-        )
-        logger.log(  # MODIFIED: Changed to logger.log
-            f"Game {game_num} ended. Winner: {winner if winner else 'Draw'}"
-        )
-
-    avg_game_length = total_game_length / num_games if num_games > 0 else 0
-    win_rate = wins / num_games if num_games > 0 else 0
-    loss_rate = losses / num_games if num_games > 0 else 0
-    draw_rate = draws / num_games if num_games > 0 else 0
-
-    results = {
-        "num_games": num_games,
-        "wins": wins,
-        "losses": losses,
-        "draws": draws,
-        "win_rate": win_rate,
-        "loss_rate": loss_rate,
-        "draw_rate": draw_rate,
-        "avg_game_length": avg_game_length,
-        "opponent_name": current_opponent_name,
-        "agent_name": agent_to_eval.name,
-    }
-
-    logger.log(
-        f"Evaluation finished. Results: {results}"
-    )  # MODIFIED: Changed to logger.log
-    if wandb_enabled:
-        wandb.log( # type: ignore
-            {
-                "eval/total_games": num_games,
-                "eval/wins": wins,
-                "eval/losses": losses,
-                "eval/draws": draws,
-                "eval/win_rate": win_rate,
-                "eval/loss_rate": loss_rate,
-                "eval/draw_rate": draw_rate,
-                "eval/avg_game_length": avg_game_length,
-                # Log opponent name if needed, though it's in config
-            }
-        )
-
-    return results
 
 
 class Evaluator:
@@ -498,7 +131,7 @@ class Evaluator:
                 if self.wandb_group is not None:
                     wandb_kwargs["group"] = self.wandb_group
                 try:
-                    self._wandb_run = wandb.init(**wandb_kwargs) # type: ignore
+                    self._wandb_run = wandb.init(**wandb_kwargs)  # type: ignore
                     print(
                         f"[Evaluator] W&B logging enabled: {self._wandb_run.name if self._wandb_run else ''}"
                     )
@@ -535,8 +168,14 @@ class Evaluator:
         # Agent and opponent
         # Load input_channels from config
         from keisei.utils.utils import load_config
+
         config = load_config()
         input_channels = config.env.input_channels
+
+        from keisei.utils.agent_loading import (
+            initialize_opponent,
+            load_evaluation_agent,
+        )
 
         try:
             self._agent = load_evaluation_agent(
@@ -570,7 +209,7 @@ class Evaluator:
                 "Evaluator setup failed: logger, agent, or opponent is None."
             )
 
-    def evaluate(self) -> Optional[dict]:
+    def evaluate(self) -> Optional[ResultsDict]:
         """
         Run the evaluation and return the results dictionary.
         Raises RuntimeError if the Evaluator is not properly initialized or if evaluation fails.
@@ -585,15 +224,14 @@ class Evaluator:
                 logger.log(
                     f"Parameters: agent_ckpt='{self.agent_checkpoint_path}', opponent='{self.opponent_type}', num_games={self.num_games}"
                 )
+                from keisei.evaluation.loop import run_evaluation_loop
+
                 results_summary = run_evaluation_loop(
                     self._agent,
                     self._opponent,
                     self.num_games,
                     logger,
-                    self.policy_mapper,
                     self.max_moves_per_game,
-                    self.device_str,
-                    wandb_enabled=self._wandb_active,
                 )
                 logger.log(f"[Evaluator] Evaluation Summary: {results_summary}")
         except (RuntimeError, ValueError, OSError) as e:
@@ -605,7 +243,7 @@ class Evaluator:
 
         if self._wandb_active and results_summary is not None:
             try:
-                wandb.log( # type: ignore
+                wandb.log(  # type: ignore
                     {
                         "eval/final_win_rate": results_summary["win_rate"],
                         "eval/final_loss_rate": results_summary["loss_rate"],
@@ -617,9 +255,13 @@ class Evaluator:
                 )
 
             except (OSError, RuntimeError, ValueError) as e:
-                print(f"[Evaluator] Error logging final W&B metrics: {e}") # Added print
-            except Exception as e: # pylint: disable=broad-except
-                print(f"[Evaluator] Unexpected error logging final W&B metrics: {e}") # Added print
+                print(
+                    f"[Evaluator] Error logging final W&B metrics: {e}"
+                )  # Added print
+            except Exception as e:  # pylint: disable=broad-except
+                print(
+                    f"[Evaluator] Unexpected error logging final W&B metrics: {e}"
+                )  # Added print
         if self._wandb_active and self._wandb_run:
             try:
                 self._wandb_run.finish()  # type: ignore
@@ -627,7 +269,7 @@ class Evaluator:
                     wandb.finish()  # Also call global wandb.finish() for test mocks
             except (OSError, RuntimeError, ValueError) as e:
                 print(f"[Evaluator] Error finishing W&B run: {e}")
-            except Exception as e: # pylint: disable=broad-except
+            except Exception as e:  # pylint: disable=broad-except
                 print(f"[Evaluator] Unexpected error finishing W&B run: {e}")
         return results_summary
 
@@ -650,7 +292,7 @@ def execute_full_evaluation_run(
     wandb_extra_config: Optional[dict] = None,
     wandb_reinit: Optional[bool] = None,
     wandb_group: Optional[str] = None,
-) -> Optional[dict]:
+) -> Optional[ResultsDict]:
     """
     Legacy-compatible wrapper for Evaluator class. Runs a full evaluation and returns the results dict.
     """
@@ -682,7 +324,9 @@ def main_cli():
     """
     parser = argparse.ArgumentParser(description="Evaluate a PPO Shogi agent.")
     parser.add_argument("--agent_checkpoint_path", required=True)
-    parser.add_argument("--opponent_type", required=True, choices=["random", "heuristic", "ppo"])
+    parser.add_argument(
+        "--opponent_type", required=True, choices=["random", "heuristic", "ppo"]
+    )
     parser.add_argument("--opponent_checkpoint_path", default=None)
     parser.add_argument("--num_games", type=int, default=10)
     parser.add_argument("--max_moves_per_game", type=int, default=300)

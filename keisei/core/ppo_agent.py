@@ -44,7 +44,9 @@ class PPOAgent:
         # Add weight_decay from config if present, else default to 0.0
         weight_decay = getattr(config.training, "weight_decay", 0.0)
         self.optimizer = torch.optim.Adam(
-            self.model.parameters(), lr=config.training.learning_rate, weight_decay=weight_decay
+            self.model.parameters(),
+            lr=config.training.learning_rate,
+            weight_decay=weight_decay,
         )
 
         # PPO hyperparameters

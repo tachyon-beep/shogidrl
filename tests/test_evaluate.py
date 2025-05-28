@@ -23,14 +23,10 @@ from keisei.core.ppo_agent import (
     PPOAgent,
 )
 from keisei.evaluation.evaluate import (
-    SimpleHeuristicOpponent,
-    SimpleRandomOpponent,
+    Evaluator,
     execute_full_evaluation_run,
-    initialize_opponent,
-    load_evaluation_agent,
-    run_evaluation_loop,
 )
-from keisei.evaluation.evaluate import Evaluator
+from keisei.evaluation.loop import run_evaluation_loop  # Updated import
 from keisei.shogi.shogi_core_definitions import MoveTuple
 from keisei.shogi.shogi_game import ShogiGame
 from keisei.utils import (
@@ -38,6 +34,11 @@ from keisei.utils import (
     EvaluationLogger,
     PolicyOutputMapper,
 )
+from keisei.utils.agent_loading import (
+    initialize_opponent,
+    load_evaluation_agent,
+)  # Updated import
+from keisei.utils.opponents import SimpleHeuristicOpponent, SimpleRandomOpponent
 
 INPUT_CHANNELS = 46  # Use the default from config for tests
 
@@ -164,7 +165,7 @@ def test_initialize_opponent_types(policy_mapper):
 
 
 @patch(
-    "keisei.evaluation.evaluate.load_evaluation_agent"  # Patch where used, not just re-exported
+    "keisei.utils.agent_loading.load_evaluation_agent"  # Corrected patch target
 )  # Mock load_evaluation_agent within evaluate.py
 def test_initialize_opponent_ppo(mock_load_agent, policy_mapper):
     """Test that initialize_opponent returns a PPOAgent when type is 'ppo' and path is provided."""
@@ -190,26 +191,29 @@ def test_initialize_opponent_ppo(mock_load_agent, policy_mapper):
 
 
 @patch(
-    "keisei.evaluation.evaluate.PPOAgent"
-)  # MODIFIED: Updated import path # Mock PPOAgent class within evaluate.py
+    "keisei.core.ppo_agent.PPOAgent"  # Corrected patch target - patch at the definition site
+)
 def test_load_evaluation_agent_mocked(mock_ppo_agent_class, policy_mapper, tmp_path):
     """Test that load_evaluation_agent returns a PPOAgent instance when checkpoint exists."""
-    mock_agent_instance = MagicMock(spec=PPOAgent)
-    mock_agent_instance.model = MagicMock()
-    mock_ppo_agent_class.return_value = mock_agent_instance
+    # Mock the PPOAgent constructor to return a specific mock instance,
+    # and then mock the load_model method on that instance.
+    mock_created_agent_instance = MagicMock()  # No spec constraint
+    mock_created_agent_instance.load_model.return_value = {}  # Mock load_model behavior
+    mock_ppo_agent_class.return_value = mock_created_agent_instance  # Ensure PPOAgent() returns our mock
 
-    # Create a dummy checkpoint file
+    # Create a dummy checkpoint file (must exist for pre-load checks)
     dummy_ckpt = tmp_path / "dummy_checkpoint.pth"
-    dummy_ckpt.write_bytes(b"dummy")
+    dummy_ckpt.write_bytes(b"dummy_pytorch_model_data")
 
     agent = load_evaluation_agent(str(dummy_ckpt), "cpu", policy_mapper, INPUT_CHANNELS)
-    assert agent == mock_agent_instance
+    assert agent == mock_created_agent_instance
+    mock_created_agent_instance.load_model.assert_called_once_with(str(dummy_ckpt))
 
 
 # --- Test for Core Evaluation Loop ---
 
 
-def test_run_evaluation_loop_basic(policy_mapper, eval_logger_setup):
+def test_run_evaluation_loop_basic(eval_logger_setup): # Removed policy_mapper
     """Test that run_evaluation_loop runs games and logs results correctly."""
     logger, log_file_path = eval_logger_setup
 
@@ -224,33 +228,25 @@ def test_run_evaluation_loop_basic(policy_mapper, eval_logger_setup):
     max_moves = 5  # Keep games short for testing
 
     results = run_evaluation_loop(
-        agent_to_eval, opponent, num_games, logger, policy_mapper, max_moves, "cpu"
+        agent_to_eval, opponent, num_games, logger, max_moves
     )
 
-    assert results["num_games"] == num_games
-    assert "wins" in results
-    assert "losses" in results
+    assert results["games_played"] == num_games
+    assert "agent_wins" in results
+    assert "opponent_wins" in results
     assert "draws" in results
-    assert results["wins"] + results["losses"] + results["draws"] == num_games
+    assert results["agent_wins"] + results["opponent_wins"] + results["draws"] == num_games
     assert "avg_game_length" in results
     assert results["avg_game_length"] <= max_moves  # Can be less if game ends early
 
     with open(log_file_path, "r", encoding="utf-8") as f:
         log_content = f.read()
-    assert (
-        f"Starting evaluation: {agent_to_eval.name} vs {opponent.name}" in log_content
-    )
-    assert f"Starting Game 1/{num_games}" in log_content
-    assert f"Starting Game 2/{num_games}" in log_content
-    assert "Game 1 ended" in log_content
-    assert "Game 2 ended" in log_content
-    assert "Evaluation finished. Results:" in log_content
-    assert (
-        f"Agent to eval ({agent_to_eval.name}) is Black" in log_content
-    )  # Game 1, updated assertion
-    assert (
-        f"Agent to eval ({agent_to_eval.name}) is White" in log_content
-    )  # Game 2, updated assertion
+    # The following log is not produced by run_evaluation_loop directly:
+    # f"Starting evaluation: {agent_to_eval.name} vs {opponent.name}"
+    assert f"Starting evaluation game 1/{num_games}" in log_content
+    assert f"Starting evaluation game 2/{num_games}" in log_content
+    assert "Agent wins game 1" in log_content or "Opponent wins game 1" in log_content or "Game 1 is a draw" in log_content
+    assert "Agent wins game 2" in log_content or "Opponent wins game 2" in log_content or "Game 2 is a draw" in log_content
 
 
 # --- Tests for Main Script Execution (now execute_full_evaluation_run) ---
@@ -258,20 +254,20 @@ def test_run_evaluation_loop_basic(policy_mapper, eval_logger_setup):
 # Helper for common main test mocks
 COMMON_MAIN_MOCKS = [
     patch(
-        "keisei.evaluation.evaluate.PolicyOutputMapper"
-    ),  # MODIFIED: Updated import path
+        "keisei.evaluation.evaluate.PolicyOutputMapper" # This is used by Evaluator, imported into evaluate.py
+    ),
     patch(
-        "keisei.evaluation.evaluate.load_evaluation_agent"
-    ),  # MODIFIED: Updated import path
+        "keisei.utils.agent_loading.load_evaluation_agent"  # Corrected: Patched where Evaluator finds it
+    ),
     patch(
-        "keisei.evaluation.evaluate.initialize_opponent"
-    ),  # MODIFIED: Updated import path
+        "keisei.utils.agent_loading.initialize_opponent"  # Corrected: Patched where Evaluator finds it
+    ),
     patch(
-        "keisei.evaluation.evaluate.run_evaluation_loop"
-    ),  # MODIFIED: Updated import path
+        "keisei.evaluation.loop.run_evaluation_loop"  # Corrected: Patched where Evaluator finds it
+    ),
     patch(
-        "keisei.evaluation.evaluate.EvaluationLogger"
-    ),  # MODIFIED: Updated import path
+        "keisei.evaluation.evaluate.EvaluationLogger" # This is used by Evaluator, imported into evaluate.py
+    ),
     patch("wandb.init"),
     patch("wandb.log"),
     patch("wandb.finish"),
@@ -326,16 +322,17 @@ def test_execute_full_evaluation_run_basic_random(
     mock_eval_logger_class.return_value.__enter__.return_value = mock_logger_instance
 
     expected_run_loop_results = {
-        "num_games": 1,
-        "wins": 1,
-        "losses": 0,
+        "games_played": 1,  # Changed from num_games
+        "agent_wins": 1,    # Changed from wins
+        "opponent_wins": 0, # Changed from losses
         "draws": 0,
+        "game_results": [], # Added
         "win_rate": 1.0,
         "loss_rate": 0.0,
         "draw_rate": 0.0,
         "avg_game_length": 10.0,
-        "opponent_name": "EvalRandomOpponent",
-        "agent_name": "LoadedEvalAgent",  # Added agent_name
+        # "opponent_name": "EvalRandomOpponent", # Removed
+        # "agent_name": "LoadedEvalAgent",  # Removed
     }
     mock_run_loop.return_value = expected_run_loop_results
 
@@ -378,10 +375,11 @@ def test_execute_full_evaluation_run_basic_random(
     assert pos_args[1] == mock_opponent_instance  # opponent
     assert pos_args[2] == num_games_to_run  # num_games
     assert pos_args[3] == mock_logger_instance  # logger
-    assert pos_args[4] == policy_mapper_instance  # policy_mapper
-    assert pos_args[5] == max_moves_for_game  # max_moves
-    assert pos_args[6] == "cpu"  # device_str
-    assert kw_args.get("wandb_enabled") is False  # wandb_enabled in run_evaluation_loop
+    # The run_evaluation_loop function expects 5 positional arguments.
+    # The call from execute_full_evaluation_run passes:
+    # agent, opponent, num_games, logger, max_moves_per_game
+    assert pos_args[4] == max_moves_for_game # max_moves_per_game
+    assert not kw_args # No keyword arguments expected
 
     mock_wandb_init.assert_not_called()
     mock_wandb_log.assert_not_called()
@@ -424,16 +422,17 @@ def test_execute_full_evaluation_run_heuristic_opponent_with_wandb(
     mock_eval_logger_class.return_value.__enter__.return_value = mock_logger_instance
 
     expected_run_loop_results = {
-        "num_games": 2,
-        "wins": 1,
-        "losses": 1,
+        "games_played": 2,  # Changed
+        "agent_wins": 1,    # Changed
+        "opponent_wins": 1, # Changed
         "draws": 0,
+        "game_results": [], # Added
         "win_rate": 0.5,
         "loss_rate": 0.5,
         "draw_rate": 0.0,
         "avg_game_length": 20.0,
-        "opponent_name": "MainHeuristicOpponent",
-        "agent_name": "LoadedMainAgentWandb",  # Added agent_name
+        # "opponent_name": "MainHeuristicOpponent", # Removed
+        # "agent_name": "LoadedMainAgentWandb",  # Removed
     }
     mock_run_loop.return_value = expected_run_loop_results
 
@@ -495,10 +494,8 @@ def test_execute_full_evaluation_run_heuristic_opponent_with_wandb(
     assert _run_loop_pos_args[1] == mock_opponent_instance
     assert _run_loop_pos_args[2] == num_games_to_run
     assert _run_loop_pos_args[3] == mock_logger_instance
-    assert _run_loop_pos_args[4] == policy_mapper_instance
-    assert _run_loop_pos_args[5] == max_moves_for_game
-    assert _run_loop_pos_args[6] == "cpu"
-    assert run_loop_kwargs.get("wandb_enabled") is True
+    assert _run_loop_pos_args[4] == max_moves_for_game
+    assert not run_loop_kwargs
 
     expected_wandb_config = {
         "agent_checkpoint": agent_ckpt_path,
@@ -572,7 +569,7 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(
     agent_opponent_path = "./agent_opponent.pth"
 
     # load_evaluation_agent will be called twice: once directly by execute_full_evaluation_run for the agent_to_eval,
-    # and once by initialize_opponent (which is called by execute_full_evaluation_run) for the PPO opponent.
+    # and once by initialize_opponent (which is called by execute_full_eevaluation_run) for the PPO opponent.
     def load_agent_side_effect(checkpoint_path, device, pol_mapper, in_channels):
         if checkpoint_path == agent_eval_path:
             return mock_agent_to_eval
@@ -609,16 +606,17 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(
     mock_eval_logger_class.return_value.__enter__.return_value = mock_logger_instance
 
     expected_results = {
-        "num_games": 1,
-        "wins": 0,
-        "losses": 1,
+        "games_played": 1,  # Changed
+        "agent_wins": 0,    # Changed
+        "opponent_wins": 1, # Changed
         "draws": 0,
+        "game_results": [], # Added
         "win_rate": 0.0,
         "loss_rate": 1.0,
         "draw_rate": 0.0,
         "avg_game_length": 15.0,
-        "opponent_name": "PPOAgentOpponent",  # Name of the opponent agent
-        "agent_name": "PPOAgentToEvaluate",  # Name of the agent being evaluated
+        # "opponent_name": "PPOAgentOpponent", # Removed
+        # "agent_name": "PPOAgentToEvaluate",  # Removed
     }
     mock_run_loop.return_value = expected_results
 
@@ -669,7 +667,10 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(
     assert (
         run_loop_pos_args[1] == mock_opponent_agent
     )  # This should be the PPO opponent instance
-    assert run_loop_kwargs.get("wandb_enabled") is True
+    assert run_loop_pos_args[2] == num_games_val # num_games
+    assert run_loop_pos_args[3] == mock_logger_instance # logger
+    assert run_loop_pos_args[4] == max_moves_val # max_moves_per_game
+    assert not run_loop_kwargs # No keyword arguments expected
 
     expected_wandb_config = {
         "agent_checkpoint": agent_eval_path,
@@ -737,16 +738,17 @@ def test_execute_full_evaluation_run_with_seed(  # MODIFIED: Renamed and refacto
     mock_eval_logger_class.return_value.__enter__.return_value = mock_logger_instance
 
     mock_run_loop.return_value = {  # Dummy results
-        "num_games": 1,
-        "wins": 1,
-        "losses": 0,
+        "games_played": 1,  # Changed
+        "agent_wins": 1,    # Changed
+        "opponent_wins": 0, # Changed
         "draws": 0,
+        "game_results": [], # Added
         "win_rate": 1.0,
         "loss_rate": 0.0,
         "draw_rate": 0.0,
         "avg_game_length": 5.0,
-        "opponent_name": "RandomOpponentForSeedTest",
-        "agent_name": "AgentForSeedTest",
+        # "opponent_name": "RandomOpponentForSeedTest", # Removed
+        # "agent_name": "AgentForSeedTest", # Removed
     }
 
     log_file_path = tmp_path / "eval_seed_test.log"  # MODIFIED: Renamed variable
@@ -833,11 +835,11 @@ def test_evaluator_class_basic(monkeypatch, tmp_path, policy_mapper):
             return game_instance.get_legal_moves()[0]
 
     monkeypatch.setattr(
-        "keisei.evaluation.evaluate.load_evaluation_agent",
+        "keisei.utils.agent_loading.load_evaluation_agent",  # Corrected target
         lambda *a, **kw: DummyAgent(),
     )
     monkeypatch.setattr(
-        "keisei.evaluation.evaluate.initialize_opponent",
+        "keisei.utils.agent_loading.initialize_opponent",  # Corrected target
         lambda *a, **kw: DummyOpponent(),
     )
     log_file = tmp_path / "evaluator_test.log"
@@ -860,12 +862,13 @@ def test_evaluator_class_basic(monkeypatch, tmp_path, policy_mapper):
     )
     results = evaluator.evaluate()
     assert isinstance(results, dict)
-    assert results["num_games"] == 1
-    assert "wins" in results and "losses" in results and "draws" in results
+    assert results["games_played"] == 1
+    assert "agent_wins" in results and "opponent_wins" in results and "draws" in results
     with open(log_file, encoding="utf-8") as f:
         log_content = f.read()
     assert "Starting Shogi Agent Evaluation" in log_content
-    assert "Evaluation finished. Results:" in log_content
+    # The exact log message has changed - check for the evaluation summary being logged instead
+    assert "[Evaluator] Evaluation Summary:" in log_content
 
 
 # Helper to create a minimal AppConfig for test agents

@@ -27,6 +27,7 @@ from .shogi_core_definitions import (
     get_unpromoted_types,
 )
 
+
 class ShogiGame:
     """
     Represents the Shogi game state, board, and operations.
