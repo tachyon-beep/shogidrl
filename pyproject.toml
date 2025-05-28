@@ -16,18 +16,21 @@ dependencies = [
     "torch",
     "numpy",
     "python-dotenv",
-    "wandb" # wandb will pull in its own dependencies like GitPython, pydantic, sentry-sdk, setproctitle
+    "wandb", # wandb will pull in its own dependencies like GitPython, pydantic, sentry-sdk, setproctitle
+    "pydantic>=2.0,<3.0" # Explicitly add Pydantic as it's used in config_schema.py
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest",
     "pytest-pylint",
-    "black==25.1.0", # Updated to version from requirements-dev.txt
-    "matplotlib", # Moved from core dependencies
+    "black==25.1.0",
+    "matplotlib",
     "pylint",
     "mypy",
     "isort",
+    "types-PyYAML", # Added for mypy to understand PyYAML types
+    "pydantic[mypy]", # Ensures pydantic and its mypy plugin are available for dev
     "annotated-types==0.7.0",
     "astroid==3.3.10",
     "coverage==7.8.0",
@@ -44,10 +47,10 @@ dev = [
     "pathspec==0.12.1",
     "platformdirs==4.3.8",
     "pluggy==1.6.0",
-    "protobuf==6.31.0", # Consider if this is truly dev-only
+    "protobuf==6.31.0", # Consider if this is truly dev-only; wandb might use it
     "psutil==7.0.0",
     "pycodestyle==2.13.0",
-    "pydantic_core==2.33.2",
+    "pydantic_core==2.33.2", # pydantic[mypy] should manage this, but keeping if specific version needed
     "pyflakes==3.3.2",
     "pytest-cov==6.1.1",
     "PyYAML==6.0.2",
@@ -55,11 +58,19 @@ dev = [
     "tomlkit==0.13.2",
     "typing-inspection==0.4.0",
     "typing_extensions==4.13.2",
-    "deptry", # Added deptry
+    "deptry",
 ]
 
-[tool.setuptools.packages.find]
-where = ["keisei"]
+# Specifies that the 'keisei' package is found directly in the project root
+# (i.e., where pyproject.toml is located).
+[tool.setuptools]
+packages = ["keisei"]
+
+# If you prefer using find (e.g., if you add more packages later at the root):
+# [tool.setuptools.packages.find]
+# where = ["."]  # Look in the current directory (project root)
+# include = ["keisei*"] # Include the keisei package (and any future keisei_extra packages)
+# exclude = ["tests*"] # Exclude the tests directory from being treated as a package to install
 
 [pytest]
 addopts = "--pylint"
@@ -69,9 +80,19 @@ disable = "redefined-outer-name"
 
 [tool.mypy]
 check_untyped_defs = true
-mypy_path = "."
+mypy_path = "." # Look for modules/stubs starting in the project root
 packages = ["keisei", "tests"]
-exclude = ["env"]
+exclude = ["env", "venv", ".venv"] # Added common venv names
+plugins = "pydantic.mypy" # Enable Pydantic plugin
+
+# Per-module overrides:
+[[tool.mypy.overrides]]
+module = "dotenv"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "wandb.*" # For wandb and its submodules
+ignore_missing_imports = true
 
 [tool.flake8]
 exclude = [
@@ -79,12 +100,13 @@ exclude = [
     "__pycache__",
     "env",
     "venv",
+    ".venv", # Added common venv name
     ".tox",
     ".eggs",
     "*.egg-info"
 ]
 max-line-length = 120
-extend-ignore = "E203"
+extend-ignore = "E203" # Compatible with Black
 
 [tool.isort]
 profile = "black"

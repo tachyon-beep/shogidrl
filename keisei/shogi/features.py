@@ -2,7 +2,7 @@
 features.py: FeatureSpec registry and core46 observation builder for Keisei Shogi.
 """
 
-from typing import Callable, Dict, List
+from typing import Callable, Dict
 
 import numpy as np
 

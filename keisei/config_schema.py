@@ -66,6 +66,9 @@ class TrainingConfig(BaseModel):
     evaluation_interval_timesteps: int = Field(
         50000, description="Run evaluation every N timesteps."
     )
+    weight_decay: float = Field(
+        0.0, description="Weight decay (L2 regularization) for optimizer."
+    )
 
     @validator("learning_rate")
     # pylint: disable=no-self-argument

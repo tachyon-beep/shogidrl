@@ -844,7 +844,8 @@ def test_evaluator_class_basic(monkeypatch, tmp_path, policy_mapper):
         lambda *a, **kw: DummyOpponent(),
     )
     log_file = tmp_path / "evaluator_test.log"
-    evaluator = __import__("keisei.evaluate", fromlist=["Evaluator"]).Evaluator(
+    from keisei.evaluation.evaluate import Evaluator
+    evaluator = Evaluator(
         agent_checkpoint_path="dummy_agent.pth",
         opponent_type="random",
         opponent_checkpoint_path=None,

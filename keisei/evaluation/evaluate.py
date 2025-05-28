@@ -6,8 +6,10 @@ import os
 import random
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
+import argparse
 import numpy as np
 import torch
+
 from dotenv import load_dotenv # type: ignore
 from keisei.config_schema import (
     AppConfig,
@@ -177,6 +179,7 @@ def load_evaluation_agent(
             lambda_gae=0.95,  # Placeholder
             checkpoint_interval_timesteps=10000,  # Placeholder
             evaluation_interval_timesteps=50000,  # Placeholder for TrainingConfig's own field
+            weight_decay=0.0,  # Added for optimizer compatibility
         ),
         evaluation=EvaluationConfig(
             num_games=1,
@@ -680,7 +683,6 @@ def main_cli():
     """
     Entry point for CLI evaluation. This should parse arguments and call execute_full_evaluation_run.
     """
-    import argparse
     parser = argparse.ArgumentParser(description="Evaluate a PPO Shogi agent.")
     parser.add_argument("--agent_checkpoint_path", required=True)
     parser.add_argument("--opponent_type", required=True, choices=["random", "heuristic", "ppo"])

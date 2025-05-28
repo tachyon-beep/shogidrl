@@ -41,8 +41,10 @@ class PPOAgent:
         self.policy_output_mapper = policy_output_mapper
         self.num_actions_total = self.policy_output_mapper.get_total_actions()
         self.model = ActorCritic(input_channels, self.num_actions_total).to(self.device)
+        # Add weight_decay from config if present, else default to 0.0
+        weight_decay = getattr(config.training, "weight_decay", 0.0)
         self.optimizer = torch.optim.Adam(
-            self.model.parameters(), lr=config.training.learning_rate
+            self.model.parameters(), lr=config.training.learning_rate, weight_decay=weight_decay
         )
 
         # PPO hyperparameters
@@ -57,6 +59,9 @@ class PPOAgent:
         self.gradient_clip_max_norm = (
             config.training.gradient_clip_max_norm
         )  # Added from config
+
+        # Use a numpy Generator for shuffling
+        self._rng = np.random.default_rng(getattr(config.env, "seed", None))
 
     def select_action(
         self,
@@ -189,7 +194,7 @@ class PPOAgent:
         num_updates = 0
 
         for _ in range(self.ppo_epochs):
-            np.random.shuffle(indices)
+            self._rng.shuffle(indices)
             for start_idx in range(0, num_samples, self.minibatch_size):
                 end_idx = start_idx + self.minibatch_size
                 minibatch_indices = indices[start_idx:end_idx]
