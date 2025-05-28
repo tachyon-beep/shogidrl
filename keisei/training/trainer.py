@@ -4,12 +4,14 @@ trainer.py: Contains the Trainer class for managing the Shogi RL training loop (
 
 import json
 import os
+import shutil
 import sys
 import time
 from datetime import datetime
 from typing import (  # pylint: disable=unused-import
     TYPE_CHECKING,
     Any,
+    Callable,
     Dict,
     List,
     Optional,
@@ -17,7 +19,6 @@ from typing import (  # pylint: disable=unused-import
     Union,
 )
 
-import numpy as np
 import torch  # Add torch import
 from rich.console import Console, Text
 from torch.cuda.amp import GradScaler  # For mixed precision
@@ -27,14 +28,10 @@ from keisei.config_schema import AppConfig
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.ppo_agent import PPOAgent
 from keisei.evaluation.evaluate import execute_full_evaluation_run
-from keisei.shogi import Color, ShogiGame
+from keisei.shogi import ShogiGame
 from keisei.utils import (
     PolicyOutputMapper,
     TrainingLogger,
-    format_move_with_description_enhanced,
-)
-from keisei.utils.utils import (  # ADDED: Import generate_run_name from correct location
-    generate_run_name,
 )
 
 from . import callbacks, display, utils
@@ -69,6 +66,10 @@ class Trainer:
         """
         self.config = config
         self.args = args
+        
+        # Initialize attributes that will be set later (to avoid pylint errors)
+        self.log_both: Optional[Callable] = None
+        self.execute_full_evaluation_run: Optional[Callable] = None
         
         # Initialize session manager for session-level concerns
         self.session_manager = SessionManager(config, args)
@@ -237,8 +238,6 @@ class Trainer:
 
     def _handle_checkpoint_resume(self):
         """Handle resuming from checkpoint if specified or auto-detected."""
-        import shutil
-
         resume_path = self.args.resume
 
         def find_ckpt_in_dir(directory):
@@ -285,8 +284,11 @@ class Trainer:
             "name": self.agent.name
         }
         
+        def log_wrapper(msg):
+            log_both(msg)
+        
         self.session_manager.log_session_info(
-            logger_func=lambda msg: log_both(msg),
+            logger_func=log_wrapper,
             agent_info=agent_info,
             resumed_from_checkpoint=getattr(self, 'resumed_from_checkpoint', None),
             global_timestep=self.global_timestep,
@@ -622,7 +624,7 @@ class Trainer:
                 message: str,
                 also_to_wandb: bool = False,
                 wandb_data: Optional[Dict] = None,
-                log_level: str = "info",
+                log_level: str = "info",  # pylint: disable=unused-argument
             ):
                 # Note: log_level parameter is available for future use if needed
                 logger.log(message)
@@ -646,27 +648,12 @@ class Trainer:
 
             last_time = time.time()
             steps_since_last_time = 0
-            current_obs_np = self._initialize_game_state(log_both)
-            current_episode_reward = 0.0
-            current_episode_length = 0
+            episode_state = self._initialize_game_state(log_both)
 
-            current_obs_tensor = torch.tensor(
-                current_obs_np,
-                dtype=torch.float32,
-                device=torch.device(self.config.env.device),
-            ).unsqueeze(0)
             with self.display.start() as _:
                 while self.global_timestep < self.config.training.total_timesteps:
-                    (
-                        current_obs_np,
-                        current_obs_tensor,
-                        current_episode_reward,
-                        current_episode_length,
-                    ) = self._execute_training_step(
-                        current_obs_np,
-                        current_obs_tensor,
-                        current_episode_reward,
-                        current_episode_length,
+                    episode_state = self._execute_training_step(
+                        episode_state,
                         log_both,
                     )
 

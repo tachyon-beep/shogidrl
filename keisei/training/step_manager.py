@@ -249,7 +249,7 @@ class StepManager:
         step_result: StepResult,
         game_stats: Dict[str, int],  # black_wins, white_wins, draws
         total_episodes_completed: int,
-        logger_func: Callable[[str, bool, Optional[Dict], str], None]
+        logger_func: Callable[..., None]
     ) -> EpisodeState:
         """
         Handle the end of an episode and prepare for the next one.
@@ -304,8 +304,8 @@ class StepManager:
         logger_func(
             f"Episode {total_episodes_completed + 1} finished. Length: {episode_state.episode_length}, "
             f"Reward: {episode_state.episode_reward:.2f}. {game_outcome_message}",
-            True,  # also_to_wandb
-            {
+            also_to_wandb=True,
+            wandb_data={
                 "episode_reward": episode_state.episode_reward,
                 "episode_length": episode_state.episode_length,
                 "game_outcome": game_outcome_color,
@@ -314,7 +314,7 @@ class StepManager:
                 "white_win_rate": current_white_win_rate,
                 "draw_rate": current_draw_rate,
             },
-            "info"  # log_level
+            log_level="info"
         )
 
         # Reset game for next episode

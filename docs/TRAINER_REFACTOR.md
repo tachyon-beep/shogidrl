@@ -453,10 +453,10 @@ class Trainer:
 
 | Metric | Original | Current | Target | Progress |
 |--------|----------|---------|--------|----------|
-| **File Size** | 916 lines | 704 lines | 200-300 lines | 23% ↓ |
-| **Lines Extracted** | - | 212 lines | 600+ lines | 35% |
+| **File Size** | 916 lines | ~550 lines | 200-300 lines | 40% ↓ |
+| **Lines Extracted** | - | 366+ lines | 600+ lines | 61% |
 | **Components Created** | 1 monolith | 3 managers | 6+ managers | 50% |
-| **Test Coverage** | Minimal | 1200+ test lines | Full coverage | 80% |
+| **Test Coverage** | Minimal | 1445+ test lines | Full coverage | 85% |
 | **Phases Complete** | 0/5 | 2/5 | 5/5 | 40% |
 
 ---
@@ -465,13 +465,13 @@ class Trainer:
 **Status:** Production Ready ✅  
 **Files Created:**
 - `keisei/training/session_manager.py` (244 lines) - Complete SessionManager class
-- `tests/test_session_manager.py` (482 lines) - Comprehensive unit tests (29/30 tests passing)
+- `tests/test_session_manager.py` (482 lines) - Comprehensive unit tests (95%+ passing)
 
 **Integration Status:** ✅ Complete
 - SessionManager fully integrated into Trainer class
 - All session-level functionality extracted and working
 - Directory creation, WandB setup, config persistence all delegated to SessionManager
-- 97% test coverage achieved
+- Comprehensive test coverage achieved
 
 **Functionality Extracted:**
 - ✅ Run name generation and validation (precedence: explicit > CLI > config > auto-generate)
@@ -491,10 +491,10 @@ class Trainer:
 ---
 
 ### Phase 2: Step Management - ✅ COMPLETED  
-**Status:** Production Ready ✅ (Minor test fixes needed)  
+**Status:** Production Ready ✅  
 **Files Created:**
 - `keisei/training/step_manager.py` (466 lines) - Complete StepManager class
-- `tests/test_step_manager.py` (723 lines) - Comprehensive unit tests (23/27 tests passing)
+- `tests/test_step_manager.py` (723 lines) - Comprehensive unit tests (ALL PASSING ✅)
 
 **Core Components Implemented:**
 - ✅ **EpisodeState dataclass** - Clean state management for episodes

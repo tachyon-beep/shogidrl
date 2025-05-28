@@ -97,7 +97,7 @@ class SessionManager:
         """Check if WandB is active."""
         if self._is_wandb_active is None:
             raise RuntimeError("WandB not yet initialized. Call setup_wandb() first.")
-        return self._is_wandb_active
+        return bool(self._is_wandb_active)
 
     def setup_directories(self) -> Dict[str, str]:
         """
@@ -130,8 +130,8 @@ class SessionManager:
             self._is_wandb_active = utils.setup_wandb(
                 self.config, self._run_name, self._run_artifact_dir
             )
-            return self._is_wandb_active
-        except Exception as e:
+            return bool(self._is_wandb_active)
+        except Exception as e:  # Catch all exceptions for WandB setup
             print(f"Warning: WandB setup failed: {e}", file=sys.stderr)
             self._is_wandb_active = False
             return False
@@ -172,9 +172,13 @@ class SessionManager:
 
         logger_func(run_title)
         logger_func(f"Run directory: {self._run_artifact_dir}")
-        logger_func(
-            f"Effective config saved to: {os.path.join(self._run_artifact_dir, 'effective_config.json')}"
-        )
+        
+        # Ensure directory exists before constructing paths
+        if self._run_artifact_dir:
+            config_path = os.path.join(self._run_artifact_dir, 'effective_config.json')
+            logger_func(f"Effective config saved to: {config_path}")
+        else:
+            logger_func("Warning: Run artifact directory not set")
 
         # Configuration information
         if self.config.env.seed is not None:
@@ -218,7 +222,7 @@ class SessionManager:
         if self._is_wandb_active and wandb.run:
             try:
                 wandb.finish()
-            except Exception as e:
+            except Exception as e:  # Catch all exceptions for WandB finalization
                 print(f"Warning: WandB finalization failed: {e}", file=sys.stderr)
 
     def setup_seeding(self) -> None:
