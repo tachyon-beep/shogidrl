@@ -1,0 +1,57 @@
+{
+    "demo": {
+        "demo_mode_delay": 0.0,
+        "enable_demo_mode": false
+    },
+    "env": {
+        "device": "cpu",
+        "input_channels": 46,
+        "num_actions_total": 4158,
+        "seed": 42
+    },
+    "evaluation": {
+        "evaluation_interval_timesteps": 1000,
+        "num_games": 1,
+        "opponent_type": "random"
+    },
+    "logging": {
+        "log_file": "test_training.log",
+        "model_dir": "test_models",
+        "run_name": "test_run"
+    },
+    "training": {
+        "checkpoint_interval_timesteps": 500,
+        "clip_epsilon": 0.2,
+        "ddp": false,
+        "enable_spinner": false,
+        "entropy_coef": 0.01,
+        "evaluation_interval_timesteps": 1000,
+        "gamma": 0.99,
+        "gradient_clip_max_norm": 0.5,
+        "input_features": "core46",
+        "lambda_gae": 0.95,
+        "learning_rate": 0.0003,
+        "minibatch_size": 32,
+        "mixed_precision": false,
+        "model_type": "resnet",
+        "ppo_epochs": 2,
+        "refresh_per_second": 4,
+        "render_every_steps": 1,
+        "se_ratio": 0.0,
+        "steps_per_epoch": 64,
+        "total_timesteps": 1000,
+        "tower_depth": 5,
+        "tower_width": 64,
+        "value_loss_coeff": 0.5,
+        "weight_decay": 0.0
+    },
+    "wandb": {
+        "enabled": true,
+        "entity": null,
+        "project": "keisei-test",
+        "run_name_prefix": "test",
+        "watch_log_freq": 1000,
+        "watch_log_type": "all",
+        "watch_model": false
+    }
+}

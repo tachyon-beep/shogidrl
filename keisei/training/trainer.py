@@ -20,7 +20,7 @@ from typing import (  # pylint: disable=unused-import
 import numpy as np
 import torch  # Add torch import
 from rich.console import Console, Text
-from torch.cuda.amp import GradScaler, autocast  # For mixed precision
+from torch.cuda.amp import GradScaler  # For mixed precision
 
 import wandb
 from keisei.config_schema import AppConfig
@@ -239,7 +239,7 @@ class Trainer:
             with open(self.log_file_path, "a", encoding="utf-8") as f:
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 f.write(f"[{timestamp}] {message}\n")
-        except Exception as e:
+        except (OSError, IOError) as e:
             print(f"[Trainer] Failed to log event: {e}", file=sys.stderr)
         # No longer print to stderr for test compatibility
 
@@ -640,6 +640,66 @@ class Trainer:
             wandb_data=learn_metrics,
         )
 
+    def _create_model_artifact(
+        self,
+        model_path: str,
+        artifact_name: str,
+        artifact_type: str = "model",
+        description: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        aliases: Optional[List[str]] = None,
+        log_both = None,
+    ) -> bool:
+        """
+        Create and upload a W&B artifact for a model checkpoint.
+        
+        Args:
+            model_path: Path to the model file to upload
+            artifact_name: Name for the artifact (without run prefix)
+            artifact_type: Type of artifact (default: "model") 
+            description: Optional description for the artifact
+            metadata: Optional metadata dict to attach to the artifact
+            aliases: Optional list of aliases (e.g., ["latest", "best"])
+            log_both: Logging function to use
+            
+        Returns:
+            bool: True if artifact was created successfully, False otherwise
+        """
+        if not (self.is_train_wandb_active and wandb.run):
+            return False
+            
+        if not os.path.exists(model_path):
+            if log_both:
+                log_both(f"Warning: Model file {model_path} does not exist, skipping artifact creation.")
+            return False
+            
+        try:
+            # Create artifact with run name prefix for uniqueness
+            full_artifact_name = f"{self.run_name}-{artifact_name}"
+            artifact = wandb.Artifact(
+                name=full_artifact_name,
+                type=artifact_type,
+                description=description or f"Model checkpoint from run {self.run_name}",
+                metadata=metadata or {}
+            )
+            
+            # Add the model file
+            artifact.add_file(model_path)
+            
+            # Log the artifact with optional aliases
+            wandb.log_artifact(artifact, aliases=aliases)
+            
+            if log_both:
+                aliases_str = f" with aliases {aliases}" if aliases else ""
+                log_both(f"Model artifact '{full_artifact_name}' created and uploaded{aliases_str}")
+                
+            return True
+            
+        except (OSError, RuntimeError, TypeError, ValueError) as e:
+            if log_both:
+                log_both(f"Error creating W&B artifact for {model_path}: {e}", log_level="error")
+            return False
+
     def _finalize_training(self, log_both):
         """Finalize training and save final model."""
         log_both(
@@ -659,6 +719,26 @@ class Trainer:
                     self.total_episodes_completed,
                 )
                 log_both(f"Final model saved to {final_model_path}", also_to_wandb=True)
+                
+                # Create W&B artifact for final model
+                final_metadata = {
+                    "training_timesteps": self.global_timestep,
+                    "total_episodes": self.total_episodes_completed,
+                    "black_wins": self.black_wins,
+                    "white_wins": self.white_wins,
+                    "draws": self.draws,
+                    "training_completed": True,
+                    "model_type": getattr(self.config.training, "model_type", "resnet"),
+                    "feature_set": getattr(self.config.env, "feature_set", "core"),
+                }
+                self._create_model_artifact(
+                    model_path=final_model_path,
+                    artifact_name="final-model",
+                    description=f"Final trained model after {self.global_timestep} timesteps",
+                    metadata=final_metadata,
+                    aliases=["latest", "final"],
+                    log_both=log_both
+                )
 
                 if self.is_train_wandb_active and wandb.run:
                     wandb.finish()
@@ -676,9 +756,6 @@ class Trainer:
             )
 
         # Always save a final checkpoint if one was not just saved at the last step
-        checkpoint_interval = (
-            self.config.training.checkpoint_interval_timesteps
-        )  # Use config value
         last_ckpt_filename = os.path.join(
             self.model_dir, f"checkpoint_ts{self.global_timestep}.pth"
         )
@@ -695,6 +772,26 @@ class Trainer:
             )
             log_both(
                 f"Final checkpoint saved to {last_ckpt_filename}", also_to_wandb=True
+            )
+            
+            # Create W&B artifact for final checkpoint  
+            checkpoint_metadata = {
+                "training_timesteps": self.global_timestep,
+                "total_episodes": self.total_episodes_completed,
+                "black_wins": self.black_wins,
+                "white_wins": self.white_wins,
+                "draws": self.draws,
+                "checkpoint_type": "final",
+                "model_type": getattr(self.config.training, "model_type", "resnet"),
+                "feature_set": getattr(self.config.env, "feature_set", "core"),
+            }
+            self._create_model_artifact(
+                model_path=last_ckpt_filename,
+                artifact_name="final-checkpoint",
+                description=f"Final checkpoint at timestep {self.global_timestep}",
+                metadata=checkpoint_metadata,
+                aliases=["latest-checkpoint"],
+                log_both=log_both
             )
 
         if self.is_train_wandb_active and wandb.run:
@@ -739,6 +836,7 @@ class Trainer:
                 wandb_data: Optional[Dict] = None,
                 log_level: str = "info",
             ):
+                # Note: log_level parameter is available for future use if needed
                 logger.log(message)
                 if self.is_train_wandb_active and also_to_wandb and wandb.run:
                     log_payload = {"train_message": message}
@@ -769,7 +867,7 @@ class Trainer:
                 dtype=torch.float32,
                 device=torch.device(self.config.env.device),
             ).unsqueeze(0)
-            with self.display.start() as live:
+            with self.display.start() as _:
                 while self.global_timestep < self.config.training.total_timesteps:
                     (
                         current_obs_np,

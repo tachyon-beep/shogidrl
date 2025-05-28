@@ -8,6 +8,8 @@ import multiprocessing
 import sys
 from datetime import datetime
 
+import wandb  # Add wandb import for sweep support
+
 from keisei.config_schema import AppConfig
 
 # Import config module and related components
@@ -99,7 +101,49 @@ def main():
         default=None,
         help="Optional name for this run (overrides config and auto-generated name).",
     )
+    # --- W&B Sweep support flags ---
+    parser.add_argument(
+        "--wandb-enabled",
+        action="store_true",
+        help="Force enable W&B logging (useful for sweeps).",
+    )
     args = parser.parse_args()
+
+    # Check if we're running inside a W&B sweep
+    if wandb.run is not None:
+        # We're inside a W&B sweep, use sweep config to override parameters
+        sweep_config = wandb.config
+        print(f"Running W&B sweep with config: {dict(sweep_config)}")
+
+        # Convert W&B sweep config to CLI overrides
+        sweep_overrides = {}
+
+        # Map W&B sweep parameters to config paths
+        sweep_param_mapping = {
+            "learning_rate": "training.learning_rate",
+            "gamma": "training.gamma",
+            "clip_epsilon": "training.clip_epsilon",
+            "ppo_epochs": "training.ppo_epochs",
+            "minibatch_size": "training.minibatch_size",
+            "value_loss_coeff": "training.value_loss_coeff",
+            "entropy_coef": "training.entropy_coef",
+            "tower_depth": "training.tower_depth",
+            "tower_width": "training.tower_width",
+            "se_ratio": "training.se_ratio",
+            "steps_per_epoch": "training.steps_per_epoch",
+            "gradient_clip_max_norm": "training.gradient_clip_max_norm",
+            "lambda_gae": "training.lambda_gae",
+        }
+
+        # Apply sweep parameters as overrides
+        for sweep_key, config_path in sweep_param_mapping.items():
+            if hasattr(sweep_config, sweep_key):
+                sweep_overrides[config_path] = getattr(sweep_config, sweep_key)
+
+        # Force enable W&B for sweeps
+        sweep_overrides["wandb.enabled"] = True
+    else:
+        sweep_overrides = {}
 
     # Build CLI overrides dict (dot notation)
     cli_overrides = {}
@@ -119,10 +163,15 @@ def main():
         cli_overrides["logging.model_dir"] = args.savedir
     if args.render_every is not None:
         cli_overrides["training.render_every_steps"] = args.render_every
+    if args.wandb_enabled:
+        cli_overrides["wandb.enabled"] = True
     # Do NOT generate run_name here; let Trainer handle it for correct CLI/config/auto priority
 
-    # Load config (YAML/JSON + CLI overrides)
-    config: AppConfig = load_config(args.config, cli_overrides)
+    # Merge sweep overrides with CLI overrides (CLI takes precedence)
+    final_overrides = {**sweep_overrides, **cli_overrides}
+
+    # Load config (YAML/JSON + CLI overrides + sweep overrides)
+    config: AppConfig = load_config(args.config, final_overrides)
 
     # Initialize and run the trainer (Trainer will determine run_name)
     trainer = Trainer(config=config, args=args)

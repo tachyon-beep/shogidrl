@@ -2,7 +2,7 @@
 training/callbacks.py: Periodic task callbacks for the Shogi RL trainer.
 """
 
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 
 class Callback(ABC):
     def on_step_end(self, trainer: "Trainer"):
+        # Base implementation - subclasses override this method
         pass
 
 
@@ -37,6 +38,28 @@ class CheckpointCallback(Callback):
                 )
                 trainer.log_both(
                     f"Checkpoint saved to {ckpt_save_path}", also_to_wandb=True
+                )
+                
+                # Create W&B artifact for periodic checkpoint
+                checkpoint_metadata = {
+                    "training_timesteps": trainer.global_timestep + 1,
+                    "total_episodes": trainer.total_episodes_completed,
+                    "black_wins": trainer.black_wins,
+                    "white_wins": trainer.white_wins,
+                    "draws": trainer.draws,
+                    "checkpoint_type": "periodic",
+                    "checkpoint_interval": self.interval,
+                    "model_type": getattr(trainer.config.training, "model_type", "resnet"),
+                    "feature_set": getattr(trainer.config.env, "feature_set", "core"),
+                }
+                # pylint: disable=protected-access
+                trainer._create_model_artifact(
+                    model_path=ckpt_save_path,
+                    artifact_name=f"checkpoint-ts{trainer.global_timestep+1}",
+                    description=f"Periodic checkpoint at timestep {trainer.global_timestep+1}",
+                    metadata=checkpoint_metadata,
+                    aliases=["latest-periodic"],
+                    log_both=trainer.log_both
                 )
             except (OSError, RuntimeError) as e:
                 trainer.log_both(
