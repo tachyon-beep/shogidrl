@@ -38,6 +38,8 @@ from keisei.utils.utils import (  # ADDED: Import generate_run_name from correct
 )
 
 from . import callbacks, display, utils
+from .session_manager import SessionManager
+from .step_manager import StepManager, EpisodeState
 
 
 class Trainer:
@@ -67,17 +69,23 @@ class Trainer:
         """
         self.config = config
         self.args = args
-        # Determine run_name: CLI > config > auto-generate
-        run_name = None
-        if hasattr(args, "run_name") and args.run_name:
-            run_name = args.run_name
-        elif (
-            hasattr(config, "logging")
-            and hasattr(config.logging, "run_name")
-            and config.logging.run_name
-        ):
-            run_name = config.logging.run_name
-        self.run_name = generate_run_name(config, run_name)
+        
+        # Initialize session manager for session-level concerns
+        self.session_manager = SessionManager(config, args)
+        
+        # Setup session infrastructure
+        self.session_manager.setup_directories()
+        self.session_manager.setup_wandb()
+        self.session_manager.save_effective_config()
+        self.session_manager.setup_seeding()
+        
+        # Access session properties through manager
+        self.run_name = self.session_manager.run_name
+        self.run_artifact_dir = self.session_manager.run_artifact_dir
+        self.model_dir = self.session_manager.model_dir
+        self.log_file_path = self.session_manager.log_file_path
+        self.eval_log_file_path = self.session_manager.eval_log_file_path
+        self.is_train_wandb_active = self.session_manager.is_wandb_active
 
         # Initialize statistics
         self.global_timestep = 0
@@ -88,14 +96,6 @@ class Trainer:
 
         self.device = torch.device(config.env.device)
         self.console = Console()
-
-        # Setup directories
-        dirs = utils.setup_directories(self.config, self.run_name)
-        self.run_artifact_dir = dirs["run_artifact_dir"]
-        self.model_dir = dirs["model_dir"]
-        self.log_file_path = dirs["log_file_path"]
-        self.eval_log_file_path = dirs["eval_log_file_path"]
-
         self.logger = TrainingLogger(self.log_file_path, self.console)
 
         # Mixed Precision Setup
@@ -155,29 +155,12 @@ class Trainer:
         # else:
         #     raise ValueError(f"Unknown model_type: {self.model_type}")
 
-        # Save effective config
-        try:
-            effective_config_str = utils.serialize_config(self.config)
-            config_path = os.path.join(self.run_artifact_dir, "effective_config.json")
-            with open(config_path, "w", encoding="utf-8") as f:
-                f.write(effective_config_str)
-        except (OSError, TypeError) as e:
-            print(f"Error saving effective_config.json: {e}", file=sys.stderr)
-
-        # Setup seeding
-        utils.setup_seeding(self.config)
-
         # Initialize Rich TUI
         self.rich_console = Console(file=sys.stderr, record=True)
         self.rich_log_messages: List[Text] = []
 
         # WP-2: Store pending progress bar updates to consolidate them
         self.pending_progress_updates: Dict[str, Any] = {}
-
-        # Initialize WandB
-        self.is_train_wandb_active = utils.setup_wandb(
-            self.config, self.run_name, self.run_artifact_dir
-        )
 
         # Initialize game and components
         self._setup_game_components()
@@ -230,6 +213,15 @@ class Trainer:
             gamma=self.config.training.gamma,
             lambda_gae=self.config.training.lambda_gae,  # Use config value
             device=self.config.env.device,
+        )
+        
+        # Initialize StepManager for step execution and episode management
+        self.step_manager = StepManager(
+            config=self.config,
+            game=self.game,
+            agent=self.agent,
+            policy_mapper=self.policy_output_mapper,
+            experience_buffer=self.experience_buffer,
         )
 
     def _log_event(self, message: str):
@@ -287,66 +279,29 @@ class Trainer:
 
     def _log_run_info(self, log_both):
         """Log run information at the start of training."""
-        run_title = f"Keisei Training Run: {self.run_name}"
-        if self.is_train_wandb_active and wandb.run and hasattr(wandb.run, "url"):
-            run_title += f" (W&B: {wandb.run.url})"
-
-        log_both(run_title)
-        self._log_event(run_title)
-        log_both(f"Run directory: {self.run_artifact_dir}")
-        self._log_event(f"Run directory: {self.run_artifact_dir}")
-        log_both(
-            f"Effective config saved to: {os.path.join(self.run_artifact_dir, 'effective_config.json')}"
+        # Delegate session info logging to SessionManager
+        agent_info = {
+            "type": type(self.agent).__name__,
+            "name": self.agent.name
+        }
+        
+        self.session_manager.log_session_info(
+            logger_func=lambda msg: log_both(msg),
+            agent_info=agent_info,
+            resumed_from_checkpoint=getattr(self, 'resumed_from_checkpoint', None),
+            global_timestep=self.global_timestep,
+            total_episodes_completed=self.total_episodes_completed
         )
-        self._log_event(
-            f"Effective config saved to: {os.path.join(self.run_artifact_dir, 'effective_config.json')}"
-        )
-
-        if self.config.env.seed is not None:
-            log_both(f"Random seed: {self.config.env.seed}")
-            self._log_event(f"Random seed: {self.config.env.seed}")
-
-        log_both(f"Device: {self.config.env.device}")
-        self._log_event(f"Device: {self.config.env.device}")
-        log_both(f"Agent: {type(self.agent).__name__} ({self.agent.name})")
-        self._log_event(f"Agent: {type(self.agent).__name__} ({self.agent.name})")
-        log_both(
-            f"Total timesteps: {self.config.training.total_timesteps}, Steps per PPO epoch: {self.config.training.steps_per_epoch}"
-        )
-        self._log_event(
-            f"Total timesteps: {self.config.training.total_timesteps}, Steps per PPO epoch: {self.config.training.steps_per_epoch}"
-        )
-
-        if self.global_timestep > 0:
-            if self.resumed_from_checkpoint:
-                log_both(
-                    f"[green]Resumed training from checkpoint: {self.resumed_from_checkpoint}[/green]"
-                )
-                self._log_event(
-                    f"Resumed training from checkpoint: {self.resumed_from_checkpoint}"
-                )
-            log_both(
-                f"Resuming from timestep {self.global_timestep}, {self.total_episodes_completed} episodes completed."
-            )
-            self._log_event(
-                f"Resuming from timestep {self.global_timestep}, {self.total_episodes_completed} episodes completed."
-            )
-        else:
-            log_both("Starting fresh training.")
-            self._log_event("Starting fresh training.")
-
+        
+        # Log model structure (trainer-specific)
         log_both(f"Model Structure:\n{self.agent.model}", also_to_wandb=False)
         self._log_event(f"Model Structure:\n{self.agent.model}")
 
-    def _initialize_game_state(self, log_both):
+    def _initialize_game_state(self, log_both) -> EpisodeState:
         """Initialize the game state for training."""
         try:
-            reset_result = self.game.reset()
-            if not isinstance(reset_result, np.ndarray):
-                if self.is_train_wandb_active and wandb.run:
-                    wandb.finish(exit_code=1)
-                raise RuntimeError("Game reset failed")
-            return reset_result
+            episode_state = self.step_manager.reset_episode()
+            return episode_state
         except (RuntimeError, ValueError, OSError) as e:
             log_both(
                 f"CRITICAL: Error during initial game.reset(): {e}. Aborting.",
@@ -358,209 +313,70 @@ class Trainer:
 
     def _execute_training_step(
         self,
-        current_obs_np,
-        current_obs_tensor,
-        current_episode_reward,
-        current_episode_length,
+        episode_state: EpisodeState,
         log_both,
-    ):
-        """Execute a single training step."""
-        # Get legal moves
-        legal_shogi_moves = self.game.get_legal_moves()
-        legal_mask_tensor = self.policy_output_mapper.get_legal_mask(
-            legal_shogi_moves, device=torch.device(self.config.env.device)
+    ) -> EpisodeState:
+        """Execute a single training step using StepManager."""
+        # Execute the step using StepManager
+        step_result = self.step_manager.execute_step(
+            episode_state=episode_state,
+            global_timestep=self.global_timestep,
+            logger_func=log_both
         )
 
-        # For demo mode - capture piece info before the move
-        piece_info_for_demo = None
-        if (
-            self.config.demo.enable_demo_mode
-            and len(legal_shogi_moves) > 0
-            and legal_shogi_moves[0] is not None
-        ):
-            try:
-                sample_move = legal_shogi_moves[0]
-                if (
-                    len(sample_move) == 5
-                    and sample_move[0] is not None
-                    and sample_move[1] is not None
-                ):
-                    from_r, from_c = sample_move[0], sample_move[1]
-                    piece_info_for_demo = self.game.get_piece(from_r, from_c)
-            except (AttributeError, IndexError, ValueError):
-                pass  # Silently ignore errors in demo mode preparation
+        # Handle step failure by returning reset episode state
+        if not step_result.success:
+            return self.step_manager.reset_episode()
 
-        # Agent action selection
-        selected_shogi_move, policy_index, log_prob, value_pred = (
-            self.agent.select_action(
-                current_obs_np, legal_mask_tensor, is_training=True
-            )
+        # Update episode state with step results
+        updated_episode_state = self.step_manager.update_episode_state(
+            episode_state, step_result
         )
 
-        if selected_shogi_move is None:
-            log_both(
-                f"CRITICAL: Agent failed to select a move at timestep {self.global_timestep}. Resetting episode.",
-                also_to_wandb=True,
-            )
-            current_obs_np = self.game.reset()
-            current_obs_tensor = torch.tensor(
-                current_obs_np,
-                dtype=torch.float32,
-                device=torch.device(self.config.env.device),
-            ).unsqueeze(0)
-            return current_obs_np, current_obs_tensor, 0.0, 0
-
-        # Demo mode per-move logging and delay
-        if self.config.demo.enable_demo_mode:
-            current_player_name = (
-                getattr(
-                    self.game.current_player,
-                    "name",
-                    str(self.game.current_player),
-                )
-                if hasattr(self.game, "current_player")
-                else "Unknown"
-            )
-            move_str = format_move_with_description_enhanced(
-                selected_shogi_move,
-                self.policy_output_mapper,
-                piece_info_for_demo,
-            )
-            log_both(
-                f"Move {current_episode_length + 1}: {current_player_name} played {move_str}"
-            )
-
-            # Add delay for easier observation
-            demo_delay = self.config.demo.demo_mode_delay
-            if demo_delay > 0:
-                time.sleep(demo_delay)
-
-        # Environment step
-        try:
-            move_result = self.game.make_move(selected_shogi_move)
-            if not (isinstance(move_result, tuple) and len(move_result) == 4):
-                raise ValueError(f"Invalid move result: {type(move_result)}")
-            next_obs_np, reward, done, info = move_result
-            current_episode_reward += reward
-            current_episode_length += 1
-
-            # Add experience to buffer
-            self.experience_buffer.add(
-                current_obs_tensor.squeeze(0),
-                policy_index,
-                reward,
-                log_prob,
-                value_pred,
-                done,
-                legal_mask_tensor,
-            )
-
-            # Update observations
-            current_obs_np = next_obs_np
-            current_obs_tensor = torch.tensor(
-                current_obs_np,
-                dtype=torch.float32,
-                device=torch.device(self.config.env.device),
-            ).unsqueeze(0)
-
-            if done:
-                (
-                    current_obs_np,
-                    current_obs_tensor,
-                    current_episode_reward,
-                    current_episode_length,
-                ) = self._handle_episode_end(
-                    current_episode_reward,
-                    current_episode_length,
-                    info,
-                    log_both,
-                )
-
-            # PPO Update
-            if (
-                (self.global_timestep + 1) % self.config.training.steps_per_epoch == 0
-                and self.experience_buffer.ptr == self.config.training.steps_per_epoch
-            ):
-                self._perform_ppo_update(current_obs_np, log_both)
-
-        except ValueError as e:
-            log_both(
-                f"CRITICAL: Error during training step: {e}. Resetting episode.",
-                also_to_wandb=True,
-            )
-            current_obs_np = self.game.reset()
-            current_obs_tensor = torch.tensor(
-                current_obs_np,
-                dtype=torch.float32,
-                device=torch.device(self.config.env.device),
-            ).unsqueeze(0)
-            current_episode_reward = 0.0
-            current_episode_length = 0
-
-        return (
-            current_obs_np,
-            current_obs_tensor,
-            current_episode_reward,
-            current_episode_length,
-        )
-
-    def _handle_episode_end(
-        self,
-        current_episode_reward,
-        current_episode_length,
-        info,
-        log_both,
-    ):
-        """Handle the end of an episode."""
-        self.total_episodes_completed += 1
-        ep_metrics_str = f"Ep L:{current_episode_length} R:{current_episode_reward:.2f}"
-
-        # Determine game outcome
-        game_outcome_message = "Game outcome: Unknown"
-        winner_color = None
-
-        if "winner" in info:
-            winner = info["winner"]
-            if winner is not None:
-                game_outcome_message = f"Game outcome: {winner.name} won."
-                winner_color = winner
+        # Handle episode end
+        if step_result.done:
+            # Update game statistics based on outcome
+            if step_result.info and 'winner' in step_result.info:
+                winner = step_result.info['winner']
+                if winner == 'black':
+                    self.black_wins += 1
+                elif winner == 'white':
+                    self.white_wins += 1
+                else:
+                    self.draws += 1
             else:
-                game_outcome_message = "Game outcome: Draw."
-        elif self.game.winner is not None:
-            winner = self.game.winner
-            game_outcome_message = f"Game outcome: {winner.name} won."
-            winner_color = winner
-        elif self.game.game_over and self.game.winner is None:
-            game_outcome_message = "Game outcome: Draw (max moves or stalemate)."
+                self.draws += 1
 
-        # Update win/loss/draw counts
-        if winner_color == Color.BLACK:
-            self.black_wins += 1
-        elif winner_color == Color.WHITE:
-            self.white_wins += 1
-        else:
-            self.draws += 1
+            # Create game stats dict for StepManager
+            game_stats = {
+                'black_wins': self.black_wins,
+                'white_wins': self.white_wins,
+                'draws': self.draws
+            }
 
-        # Calculate rates
-        current_black_win_rate = (
-            self.black_wins / self.total_episodes_completed
-            if self.total_episodes_completed > 0
-            else 0.0
-        )
-        current_white_win_rate = (
-            self.white_wins / self.total_episodes_completed
-            if self.total_episodes_completed > 0
-            else 0.0
-        )
-        current_draw_rate = (
-            self.draws / self.total_episodes_completed
-            if self.total_episodes_completed > 0
-            else 0.0
-        )
+            # Handle episode end using StepManager
+            new_episode_state = self.step_manager.handle_episode_end(
+                updated_episode_state,
+                step_result,
+                game_stats,
+                self.total_episodes_completed,
+                log_both
+            )
 
-        # Store episode metrics for next throttled update (WP-2)
-        self.pending_progress_updates.update(
-            {
+            # Update trainer statistics
+            self.total_episodes_completed += 1
+
+            # Store pending progress updates for display
+            ep_metrics_str = f"L:{updated_episode_state.episode_length} R:{updated_episode_state.episode_reward:.2f}"
+            
+            # Calculate win rates for display
+            total_games = self.black_wins + self.white_wins + self.draws
+            current_black_win_rate = self.black_wins / total_games if total_games > 0 else 0.0
+            current_white_win_rate = self.white_wins / total_games if total_games > 0 else 0.0
+            current_draw_rate = self.draws / total_games if total_games > 0 else 0.0
+
+            # Store episode metrics for next throttled update (WP-2)
+            self.pending_progress_updates.update({
                 "ep_metrics": ep_metrics_str,
                 "black_wins_cum": self.black_wins,
                 "white_wins_cum": self.white_wins,
@@ -568,45 +384,18 @@ class Trainer:
                 "black_win_rate": current_black_win_rate,
                 "white_win_rate": current_white_win_rate,
                 "draw_rate": current_draw_rate,
-            }
-        )
+            })
 
-        # Log episode completion
-        log_both(
-            f"Episode {self.total_episodes_completed} finished. Length: {current_episode_length}, Reward: {current_episode_reward:.2f}. {game_outcome_message}",
-            also_to_wandb=True,
-            wandb_data={
-                "episode_reward": current_episode_reward,
-                "episode_length": current_episode_length,
-                "total_episodes": self.total_episodes_completed,
-                "black_wins_cumulative": self.black_wins,
-                "white_wins_cumulative": self.white_wins,
-                "draws_cumulative": self.draws,
-                "black_win_rate": current_black_win_rate,
-                "white_win_rate": current_white_win_rate,
-                "draw_rate": current_draw_rate,
-            },
-        )
+            return new_episode_state
+        
+        # PPO Update check
+        if (
+            (self.global_timestep + 1) % self.config.training.steps_per_epoch == 0
+            and self.experience_buffer.ptr == self.config.training.steps_per_epoch
+        ):
+            self._perform_ppo_update(updated_episode_state.current_obs, log_both)
 
-        # Reset game
-        reset_result = self.game.reset()
-        if not isinstance(reset_result, np.ndarray):
-            log_both(
-                f"CRITICAL: game.reset() after episode done did not return ndarray. Got {type(reset_result)}. Aborting.",
-                also_to_wandb=True,
-            )
-            if self.is_train_wandb_active and wandb.run:
-                wandb.finish(exit_code=1)
-            raise RuntimeError("Game reset failed after episode end")
-
-        current_obs_np = reset_result
-        current_obs_tensor = torch.tensor(
-            current_obs_np,
-            dtype=torch.float32,
-            device=torch.device(self.config.env.device),
-        ).unsqueeze(0)
-
-        return current_obs_np, current_obs_tensor, 0.0, 0
+        return updated_episode_state
 
     def _perform_ppo_update(self, current_obs_np, log_both):
         """Perform a PPO update."""
@@ -795,7 +584,7 @@ class Trainer:
             )
 
         if self.is_train_wandb_active and wandb.run:
-            wandb.finish()
+            self.session_manager.finalize_session()
             log_both("Weights & Biases run finished.")
 
         # Save the full console log from Rich
@@ -819,10 +608,9 @@ class Trainer:
 
     def run_training_loop(self):
         """Executes the main training loop."""
-        # Always log a session start event to ensure log file is created
-        self._log_event(
-            f"--- SESSION START: {self.run_name} at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---"
-        )
+        # Log session start using SessionManager
+        self.session_manager.log_session_start()
+        
         # TrainingLogger context manager
         with TrainingLogger(
             self.log_file_path,
