@@ -6,7 +6,7 @@ and that session management functionality works correctly end-to-end.
 """
 
 import tempfile
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch, mock_open
 import pytest
 
 from keisei.config_schema import AppConfig, EnvConfig, LoggingConfig, TrainingConfig, WandBConfig
@@ -63,7 +63,8 @@ def mock_config():
     logging_config = Mock(spec=LoggingConfig)
     logging_config.run_name = None
     logging_config.log_level = "INFO"
-    logging_config.model_dir = None
+    logging_config.log_file = "logs/training_log.txt"
+    logging_config.model_dir = "models/"
     logging_config.savedir = "/tmp/test_logs"
     config.logging = logging_config
     
@@ -72,6 +73,10 @@ def mock_config():
     wandb_config.enabled = False
     wandb_config.run_name_prefix = "test"
     wandb_config.project = "test-project"
+    wandb_config.entity = "test_entity"
+    wandb_config.watch_model = True
+    wandb_config.watch_log_freq = 10
+    wandb_config.watch_log_type = "all"
     config.wandb = wandb_config
     
     # Demo config
@@ -305,7 +310,8 @@ class TestTrainerSessionIntegration:
         mock_config.evaluation = eval_config
         
         # Mock session manager with specific property values
-        with patch('keisei.training.session_manager.SessionManager') as mock_session_manager_class:
+        with patch('keisei.training.trainer.SessionManager') as mock_session_manager_class, \
+             patch('builtins.open', mock_open()):
             mock_session_manager = Mock()
             mock_session_manager.run_name = "test_run_session"
             mock_session_manager.run_artifact_dir = f"{temp_dir}/artifacts"
@@ -313,6 +319,12 @@ class TestTrainerSessionIntegration:
             mock_session_manager.log_file_path = f"{temp_dir}/train.log"
             mock_session_manager.eval_log_file_path = f"{temp_dir}/eval.log"
             mock_session_manager.is_wandb_active = False
+            
+            # Mock setup methods
+            mock_session_manager.setup_directories = Mock()
+            mock_session_manager.setup_wandb = Mock()
+            mock_session_manager.save_effective_config = Mock()
+            mock_session_manager.setup_seeding = Mock()
             
             mock_session_manager_class.return_value = mock_session_manager
             
@@ -325,14 +337,27 @@ class TestTrainerSessionIntegration:
             assert trainer.model_dir == f"{temp_dir}/models"
             assert trainer.log_file_path == f"{temp_dir}/train.log"
             assert trainer.eval_log_file_path == f"{temp_dir}/eval.log"
-            assert trainer.is_train_wandb_active == False
+            assert trainer.is_train_wandb_active is False
 
     def test_session_manager_method_integration(self, mock_config, mock_args, temp_dir):
         """Test that session manager methods are properly integrated."""
-        with patch('keisei.training.session_manager.SessionManager') as mock_session_manager_class:
+        with patch('keisei.training.trainer.SessionManager') as mock_session_manager_class, \
+             patch('builtins.open', mock_open()):
             mock_session_manager = Mock()
             mock_session_manager.log_session_info = Mock()
             mock_session_manager.finalize_session = Mock()
+            mock_session_manager.setup_directories = Mock()
+            mock_session_manager.setup_wandb = Mock()
+            mock_session_manager.save_effective_config = Mock()
+            mock_session_manager.setup_seeding = Mock()
+            
+            # Add required properties
+            mock_session_manager.run_name = "test_session"
+            mock_session_manager.run_artifact_dir = f"{temp_dir}/artifacts"
+            mock_session_manager.model_dir = f"{temp_dir}/models"
+            mock_session_manager.log_file_path = f"{temp_dir}/training.log"
+            mock_session_manager.eval_log_file_path = f"{temp_dir}/eval.log"
+            mock_session_manager.is_wandb_active = False
             
             mock_session_manager_class.return_value = mock_session_manager
             
@@ -345,10 +370,11 @@ class TestTrainerSessionIntegration:
                 PolicyOutputMapper=Mock(),
                 PPOAgent=Mock(),
                 ExperienceBuffer=Mock(),
-                model_factory=Mock(),
                 display=Mock(),
                 callbacks=Mock()
             ), \
+            patch('keisei.training.models.model_factory'), \
+            patch('keisei.training.utils.find_latest_checkpoint', return_value=None), \
             patch('torch.device'), \
             patch('keisei.shogi.features.FEATURE_SPECS', {'core46': Mock(num_planes=46)}):
                 
@@ -358,8 +384,15 @@ class TestTrainerSessionIntegration:
                 mock_log_both = Mock()
                 trainer._log_run_info(mock_log_both)
                 
-                # Verify session manager's log_session_info was called
+                # Verify session manager's log_session_info was called with correct arguments
                 mock_session_manager.log_session_info.assert_called_once()
+                call_args = mock_session_manager.log_session_info.call_args
+                assert call_args is not None
+                # Verify keyword arguments were passed
+                assert 'logger_func' in call_args.kwargs
+                assert 'agent_info' in call_args.kwargs
+                assert 'global_timestep' in call_args.kwargs
+                assert 'total_episodes_completed' in call_args.kwargs
                 
                 # Test session finalization (would be called at end of training)
                 # This would typically be called in training loop completion

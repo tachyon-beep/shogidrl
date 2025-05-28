@@ -5,7 +5,7 @@ Tests that verify the SessionManager is properly integrated into the Trainer
 and that session management functionality works correctly end-to-end.
 """
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, mock_open
 import pytest
 
 from keisei.config_schema import AppConfig, EnvConfig, LoggingConfig, TrainingConfig, WandBConfig
@@ -66,12 +66,26 @@ def mock_config():
     # Logging config
     logging_config = Mock(spec=LoggingConfig)
     logging_config.run_name = None
+    logging_config.log_file = "logs/training_log.txt"
+    logging_config.model_dir = "models/"
     config.logging = logging_config
 
     # WandB config
     wandb_config = Mock(spec=WandBConfig)
     wandb_config.run_name_prefix = "test"
+    wandb_config.enabled = False
+    wandb_config.project = "test-project"
+    wandb_config.entity = None
+    wandb_config.watch_model = False
+    wandb_config.watch_log_freq = 1000
+    wandb_config.watch_log_type = "all"
     config.wandb = wandb_config
+
+    # Demo config
+    demo_config = Mock()
+    demo_config.enable_demo_mode = False
+    demo_config.demo_mode_delay = 0.5
+    config.demo = demo_config
 
     return config
 
@@ -88,9 +102,10 @@ class TestTrainerSessionIntegration:
     def test_trainer_initialization_with_session_manager(self, mock_config, mock_args):
         """Test that Trainer properly initializes SessionManager."""
         with patch('keisei.training.utils.setup_seeding'), \
-             patch('keisei.utils.serialize_config') as mock_serialize, \
+             patch('keisei.training.utils.serialize_config') as mock_serialize, \
              patch('keisei.training.utils.setup_directories') as mock_setup_dirs, \
              patch('keisei.training.utils.setup_wandb') as mock_setup_wandb, \
+             patch('builtins.open', mock_open()), \
              patch('keisei.shogi.ShogiGame') as mock_shogi_game, \
              patch('keisei.shogi.features.FEATURE_SPECS') as mock_feature_specs, \
              patch('keisei.utils.PolicyOutputMapper') as mock_policy_mapper, \
@@ -158,9 +173,10 @@ class TestTrainerSessionIntegration:
     def test_trainer_run_name_precedence(self, mock_config):
         """Test that run name precedence works correctly."""
         with patch('keisei.training.utils.setup_seeding'), \
-             patch('keisei.utils.serialize_config'), \
+             patch('keisei.training.utils.serialize_config'), \
              patch('keisei.training.utils.setup_directories') as mock_setup_dirs, \
              patch('keisei.training.utils.setup_wandb') as mock_setup_wandb, \
+             patch('builtins.open', mock_open()), \
              patch('keisei.shogi.ShogiGame'), \
              patch('keisei.shogi.features.FEATURE_SPECS') as mock_feature_specs, \
              patch('keisei.utils.PolicyOutputMapper'), \
@@ -189,9 +205,10 @@ class TestTrainerSessionIntegration:
     def test_session_manager_finalization(self, mock_config, mock_args):
         """Test that session finalization works correctly."""
         with patch('keisei.training.utils.setup_seeding'), \
-             patch('keisei.utils.serialize_config'), \
+             patch('keisei.training.utils.serialize_config'), \
              patch('keisei.training.utils.setup_directories') as mock_setup_dirs, \
              patch('keisei.training.utils.setup_wandb') as mock_setup_wandb, \
+             patch('builtins.open', mock_open()), \
              patch('keisei.shogi.ShogiGame'), \
              patch('keisei.shogi.features.FEATURE_SPECS') as mock_feature_specs, \
              patch('keisei.utils.PolicyOutputMapper'), \
@@ -222,7 +239,7 @@ class TestTrainerSessionIntegration:
     def test_session_manager_error_handling(self, mock_config, mock_args):
         """Test that SessionManager error handling works correctly."""
         with patch('keisei.training.utils.setup_seeding'), \
-             patch('keisei.utils.serialize_config'), \
+             patch('keisei.training.utils.serialize_config'), \
              patch('keisei.training.utils.setup_directories') as mock_setup_dirs, \
              patch('keisei.training.utils.setup_wandb'), \
              patch('keisei.training.models.model_factory'):
