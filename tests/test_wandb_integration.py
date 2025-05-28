@@ -19,13 +19,14 @@ from keisei.config_schema import (
     TrainingConfig,
     WandBConfig,
 )
-from keisei.training.trainer import Trainer
 from keisei.training.train_wandb_sweep import apply_wandb_sweep_config
+from keisei.training.trainer import Trainer
 from keisei.training.utils import setup_wandb
 
 
 class DummyArgs:
     """Mock args object for testing."""
+
     def __init__(self, **kwargs):
         self.run_name = "test_run"
         self.resume = None
@@ -72,15 +73,11 @@ def make_test_config(**overrides) -> AppConfig:
     env = EnvConfig(**env_data)
 
     evaluation = EvaluationConfig(
-        num_games=1,
-        opponent_type="random",
-        evaluation_interval_timesteps=1000
+        num_games=1, opponent_type="random", evaluation_interval_timesteps=1000
     )
 
     logging = LoggingConfig(
-        log_file="test_training.log",
-        model_dir="test_models",
-        run_name="test_run"
+        log_file="test_training.log", model_dir="test_models", run_name="test_run"
     )
 
     # W&B config with test-friendly defaults
@@ -92,7 +89,7 @@ def make_test_config(**overrides) -> AppConfig:
         run_name_prefix="test",
         watch_model=False,
         watch_log_freq=1000,
-        watch_log_type="all"
+        watch_log_type="all",
     )
 
     demo = DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0)
@@ -115,7 +112,7 @@ class TestWandBArtifacts:
         config = make_test_config(wandb_enabled=False)
         args = DummyArgs()
 
-        with patch('keisei.training.utils.setup_wandb', return_value=False):
+        with patch("keisei.training.utils.setup_wandb", return_value=False):
             trainer = Trainer(config=config, args=args)
             trainer.is_train_wandb_active = False
 
@@ -133,16 +130,18 @@ class TestWandBArtifacts:
                 description="Test model",
                 metadata={"test": True},
                 aliases=["latest"],
-                log_both=log_mock
+                log_both=log_mock,
             )
 
             assert result is False
             log_mock.assert_not_called()
 
-    @patch('wandb.run')
-    @patch('wandb.Artifact')
-    @patch('wandb.log_artifact')
-    def test_create_model_artifact_success(self, mock_log_artifact, mock_artifact_class, mock_wandb_run, tmp_path):
+    @patch("wandb.run")
+    @patch("wandb.Artifact")
+    @patch("wandb.log_artifact")
+    def test_create_model_artifact_success(
+        self, mock_log_artifact, mock_artifact_class, mock_wandb_run, tmp_path
+    ):
         """Test successful artifact creation when W&B is enabled."""
         config = make_test_config(wandb_enabled=True)
         args = DummyArgs()
@@ -152,7 +151,7 @@ class TestWandBArtifacts:
         mock_artifact_class.return_value = mock_artifact
         mock_wandb_run.return_value = True
 
-        with patch('keisei.training.utils.setup_wandb', return_value=True):
+        with patch("keisei.training.utils.setup_wandb", return_value=True):
             trainer = Trainer(config=config, args=args)
             trainer.is_train_wandb_active = True
             trainer.run_name = "test_run_123"
@@ -172,7 +171,7 @@ class TestWandBArtifacts:
                 description="Test model for unit testing",
                 metadata={"timesteps": 1000, "test": True},
                 aliases=["latest", "test"],
-                log_both=log_mock
+                log_both=log_mock,
             )
 
             # Verify result
@@ -183,14 +182,16 @@ class TestWandBArtifacts:
                 name="test_run_123-test-model",
                 type="model",
                 description="Test model for unit testing",
-                metadata={"timesteps": 1000, "test": True}
+                metadata={"timesteps": 1000, "test": True},
             )
 
             # Verify file was added to artifact
             mock_artifact.add_file.assert_called_once_with(str(model_path))
 
             # Verify artifact was logged with aliases
-            mock_log_artifact.assert_called_once_with(mock_artifact, aliases=["latest", "test"])
+            mock_log_artifact.assert_called_once_with(
+                mock_artifact, aliases=["latest", "test"]
+            )
 
             # Verify logging message
             log_mock.assert_called_once()
@@ -205,8 +206,10 @@ class TestWandBArtifacts:
         config = make_test_config(wandb_enabled=True)
         args = DummyArgs()
 
-        with patch('keisei.training.utils.setup_wandb', return_value=True), \
-             patch('wandb.run', return_value=True):
+        with (
+            patch("keisei.training.utils.setup_wandb", return_value=True),
+            patch("wandb.run", return_value=True),
+        ):
             trainer = Trainer(config=config, args=args)
             trainer.is_train_wandb_active = True
 
@@ -220,7 +223,7 @@ class TestWandBArtifacts:
             result = trainer._create_model_artifact(  # pylint: disable=protected-access
                 model_path=str(missing_path),
                 artifact_name="test-model",
-                log_both=log_mock
+                log_both=log_mock,
             )
 
             assert result is False
@@ -228,10 +231,12 @@ class TestWandBArtifacts:
             log_call_args = log_mock.call_args[0][0]
             assert "does not exist" in log_call_args
 
-    @patch('wandb.run')
-    @patch('wandb.Artifact')
-    @patch('wandb.log_artifact')
-    def test_create_model_artifact_wandb_error(self, mock_log_artifact, mock_artifact_class, mock_wandb_run, tmp_path):
+    @patch("wandb.run")
+    @patch("wandb.Artifact")
+    @patch("wandb.log_artifact")
+    def test_create_model_artifact_wandb_error(
+        self, mock_log_artifact, mock_artifact_class, mock_wandb_run, tmp_path
+    ):
         """Test artifact creation when W&B throws an error."""
         config = make_test_config(wandb_enabled=True)
         args = DummyArgs()
@@ -241,7 +246,7 @@ class TestWandBArtifacts:
         mock_artifact_class.return_value = Mock()
         mock_wandb_run.return_value = True
 
-        with patch('keisei.training.utils.setup_wandb', return_value=True):
+        with patch("keisei.training.utils.setup_wandb", return_value=True):
             trainer = Trainer(config=config, args=args)
             trainer.is_train_wandb_active = True
             trainer.run_name = "test_run_error"
@@ -257,7 +262,7 @@ class TestWandBArtifacts:
             result = trainer._create_model_artifact(  # pylint: disable=protected-access
                 model_path=str(model_path),
                 artifact_name="test-model",
-                log_both=log_mock
+                log_both=log_mock,
             )
 
             assert result is False
@@ -273,10 +278,12 @@ class TestWandBArtifacts:
         config = make_test_config(wandb_enabled=True)
         args = DummyArgs()
 
-        with patch('wandb.run', return_value=True), \
-             patch('wandb.Artifact') as mock_artifact_class, \
-             patch('wandb.log_artifact'), \
-             patch('keisei.training.utils.setup_wandb', return_value=True):
+        with (
+            patch("wandb.run", return_value=True),
+            patch("wandb.Artifact") as mock_artifact_class,
+            patch("wandb.log_artifact"),
+            patch("keisei.training.utils.setup_wandb", return_value=True),
+        ):
 
             trainer = Trainer(config=config, args=args)
             trainer.is_train_wandb_active = True
@@ -288,8 +295,7 @@ class TestWandBArtifacts:
 
             # Test with minimal parameters
             result = trainer._create_model_artifact(  # pylint: disable=protected-access
-                model_path=str(model_path),
-                artifact_name="minimal-model"
+                model_path=str(model_path), artifact_name="minimal-model"
             )
 
             assert result is True
@@ -299,7 +305,7 @@ class TestWandBArtifacts:
                 name="test_run_defaults-minimal-model",
                 type="model",  # default
                 description="Model checkpoint from run test_run_defaults",  # default
-                metadata={}  # default
+                metadata={},  # default
             )
 
 
@@ -317,7 +323,7 @@ class TestWandBSweepIntegration:
 
         # Mock the dict() conversion by implementing keys() method
         def mock_keys():
-            return ['learning_rate', 'gamma', 'ppo_epochs', 'tower_depth']
+            return ["learning_rate", "gamma", "ppo_epochs", "tower_depth"]
 
         mock_config.keys = mock_keys
 
@@ -325,29 +331,31 @@ class TestWandBSweepIntegration:
         def mock_dict_conversion(obj):
             if obj is mock_config:
                 return {
-                    'learning_rate': 1e-3,
-                    'gamma': 0.98,
-                    'ppo_epochs': 8,
-                    'tower_depth': 12
+                    "learning_rate": 1e-3,
+                    "gamma": 0.98,
+                    "ppo_epochs": 8,
+                    "tower_depth": 12,
                 }
             return {}
 
-        with patch('wandb.run', return_value=True), \
-             patch('wandb.config', mock_config), \
-             patch('builtins.dict', side_effect=mock_dict_conversion):
+        with (
+            patch("wandb.run", return_value=True),
+            patch("wandb.config", mock_config),
+            patch("builtins.dict", side_effect=mock_dict_conversion),
+        ):
 
             overrides = apply_wandb_sweep_config()
 
             # Verify sweep parameters are mapped to config paths
-            assert overrides['training.learning_rate'] == pytest.approx(1e-3)
-            assert overrides['training.gamma'] == pytest.approx(0.98)
-            assert overrides['training.ppo_epochs'] == 8
-            assert overrides['training.tower_depth'] == 12
-            assert overrides['wandb.enabled'] is True
+            assert overrides["training.learning_rate"] == pytest.approx(1e-3)
+            assert overrides["training.gamma"] == pytest.approx(0.98)
+            assert overrides["training.ppo_epochs"] == 8
+            assert overrides["training.tower_depth"] == 12
+            assert overrides["wandb.enabled"] is True
 
     def test_sweep_config_no_wandb_run(self):
         """Test sweep config when no W&B run is active."""
-        with patch('wandb.run', None):
+        with patch("wandb.run", None):
             overrides = apply_wandb_sweep_config()
             assert not overrides
 
@@ -359,30 +367,32 @@ class TestWandBSweepIntegration:
 
         # Mock the dict() conversion with only learning_rate
         def mock_keys():
-            return ['learning_rate']
+            return ["learning_rate"]
 
         mock_config.keys = mock_keys
 
         def mock_dict_conversion(obj):
             if obj is mock_config:
-                return {'learning_rate': 5e-4}
+                return {"learning_rate": 5e-4}
             return {}
 
         # Mock hasattr to return False for missing parameters
         def mock_hasattr(_obj, name):
-            return name == 'learning_rate'
+            return name == "learning_rate"
 
-        with patch('wandb.run', return_value=True), \
-             patch('wandb.config', mock_config), \
-             patch('builtins.dict', side_effect=mock_dict_conversion), \
-             patch('builtins.hasattr', side_effect=mock_hasattr):
+        with (
+            patch("wandb.run", return_value=True),
+            patch("wandb.config", mock_config),
+            patch("builtins.dict", side_effect=mock_dict_conversion),
+            patch("builtins.hasattr", side_effect=mock_hasattr),
+        ):
 
             overrides = apply_wandb_sweep_config()
 
             # Only learning_rate should be included
-            assert overrides['training.learning_rate'] == pytest.approx(5e-4)
-            assert overrides['wandb.enabled'] is True
-            assert len([k for k in overrides if k.startswith('training.')]) == 1
+            assert overrides["training.learning_rate"] == pytest.approx(5e-4)
+            assert overrides["wandb.enabled"] is True
+            assert len([k for k in overrides if k.startswith("training.")]) == 1
 
 
 class TestWandBUtilities:
@@ -396,7 +406,7 @@ class TestWandBUtilities:
 
         assert result is False
 
-    @patch('wandb.init')
+    @patch("wandb.init")
     def test_setup_wandb_success(self, mock_wandb_init):
         """Test successful W&B setup."""
         config = make_test_config(wandb_enabled=True)
@@ -408,12 +418,12 @@ class TestWandBUtilities:
 
         # Verify init was called with correct parameters
         call_kwargs = mock_wandb_init.call_args[1]
-        assert call_kwargs['project'] == "keisei-test"
-        assert call_kwargs['name'] == "test_run"
-        assert call_kwargs['mode'] == "online"
-        assert call_kwargs['id'] == "test_run"
+        assert call_kwargs["project"] == "keisei-test"
+        assert call_kwargs["name"] == "test_run"
+        assert call_kwargs["mode"] == "online"
+        assert call_kwargs["id"] == "test_run"
 
-    @patch('wandb.init')
+    @patch("wandb.init")
     def test_setup_wandb_init_error(self, mock_wandb_init):
         """Test W&B setup when init throws an error."""
         config = make_test_config(wandb_enabled=True)

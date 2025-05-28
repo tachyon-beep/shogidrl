@@ -8,43 +8,42 @@ import multiprocessing
 import sys
 
 import wandb
-
 from keisei.config_schema import AppConfig
-from keisei.utils import load_config
 from keisei.training.trainer import Trainer
+from keisei.utils import load_config
 
 
 def apply_wandb_sweep_config():
     """Apply W&B sweep configuration to override parameters."""
     if wandb.run is None:
         return {}
-    
+
     sweep_config = wandb.config
     print(f"Running W&B sweep with config: {dict(sweep_config)}")
-    
+
     # Map W&B sweep parameters to config paths
     sweep_param_mapping = {
-        'learning_rate': 'training.learning_rate',
-        'gamma': 'training.gamma', 
-        'clip_epsilon': 'training.clip_epsilon',
-        'ppo_epochs': 'training.ppo_epochs',
-        'minibatch_size': 'training.minibatch_size',
-        'value_loss_coeff': 'training.value_loss_coeff',
-        'entropy_coef': 'training.entropy_coef',
-        'tower_depth': 'training.tower_depth',
-        'tower_width': 'training.tower_width',
-        'se_ratio': 'training.se_ratio',
-        'steps_per_epoch': 'training.steps_per_epoch',
-        'gradient_clip_max_norm': 'training.gradient_clip_max_norm',
-        'lambda_gae': 'training.lambda_gae',
+        "learning_rate": "training.learning_rate",
+        "gamma": "training.gamma",
+        "clip_epsilon": "training.clip_epsilon",
+        "ppo_epochs": "training.ppo_epochs",
+        "minibatch_size": "training.minibatch_size",
+        "value_loss_coeff": "training.value_loss_coeff",
+        "entropy_coef": "training.entropy_coef",
+        "tower_depth": "training.tower_depth",
+        "tower_width": "training.tower_width",
+        "se_ratio": "training.se_ratio",
+        "steps_per_epoch": "training.steps_per_epoch",
+        "gradient_clip_max_norm": "training.gradient_clip_max_norm",
+        "lambda_gae": "training.lambda_gae",
     }
-    
+
     # Apply sweep parameters as overrides
-    sweep_overrides = {'wandb.enabled': True}  # Force enable W&B for sweeps
+    sweep_overrides = {"wandb.enabled": True}  # Force enable W&B for sweeps
     for sweep_key, config_path in sweep_param_mapping.items():
         if hasattr(sweep_config, sweep_key):
             sweep_overrides[config_path] = getattr(sweep_config, sweep_key)
-    
+
     return sweep_overrides
 
 
@@ -80,7 +79,7 @@ def main():
         default=None,
         help="Total timesteps to train for. Overrides config value.",
     )
-    
+
     args = parser.parse_args()
 
     # Get W&B sweep overrides if running in a sweep

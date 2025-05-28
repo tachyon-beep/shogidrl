@@ -2,10 +2,10 @@
 loop.py: Core evaluation loop for PPO Shogi agents.
 """
 
-from typing import Union, Optional, TypedDict
-from keisei.shogi.shogi_core_definitions import MoveTuple
+from typing import Optional, TypedDict, Union
 
 from keisei.core.ppo_agent import PPOAgent
+from keisei.shogi.shogi_core_definitions import MoveTuple
 from keisei.utils import BaseOpponent, EvaluationLogger
 
 
@@ -29,6 +29,7 @@ def run_evaluation_loop(
     max_moves_per_game: int,
 ) -> ResultsDict:
     import torch
+
     results: ResultsDict = {
         "games_played": 0,
         "agent_wins": 0,
@@ -62,7 +63,9 @@ def run_evaluation_loop(
                     is_training=False,
                 )
                 if move_tuple is not None:
-                    move = move_tuple[0] if isinstance(move_tuple, tuple) else move_tuple
+                    move = (
+                        move_tuple[0] if isinstance(move_tuple, tuple) else move_tuple
+                    )
             else:  # Gote (White) - opponent
                 if isinstance(opponent, BaseOpponent):
                     move = opponent.select_move(game)
@@ -73,7 +76,11 @@ def run_evaluation_loop(
                         is_training=False,
                     )
                     if move_tuple is not None:
-                        move = move_tuple[0] if isinstance(move_tuple, tuple) else move_tuple
+                        move = (
+                            move_tuple[0]
+                            if isinstance(move_tuple, tuple)
+                            else move_tuple
+                        )
             if move is None or move not in legal_moves:
                 logger.log(f"Illegal move selected: {move}. Skipping.")
                 game.game_over = True

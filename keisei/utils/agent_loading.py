@@ -20,9 +20,19 @@ def load_evaluation_agent(
     input_channels: int,
     input_features: Optional[str] = "core46",
 ) -> Any:
-    from keisei.core.ppo_agent import PPOAgent
-    from keisei.config_schema import AppConfig, EnvConfig, TrainingConfig, EvaluationConfig, LoggingConfig, WandBConfig, DemoConfig
     import torch
+
+    from keisei.config_schema import (
+        AppConfig,
+        DemoConfig,
+        EnvConfig,
+        EvaluationConfig,
+        LoggingConfig,
+        TrainingConfig,
+        WandBConfig,
+    )
+    from keisei.core.ppo_agent import PPOAgent
+
     if not os.path.isfile(checkpoint_path):
         print(f"Error: Checkpoint file {checkpoint_path} not found.")
         raise FileNotFoundError(f"Checkpoint file {checkpoint_path} not found.")
@@ -60,8 +70,12 @@ def load_evaluation_agent(
             evaluation_interval_timesteps=50000,
             weight_decay=0.0,
         ),
-        evaluation=EvaluationConfig(num_games=1, opponent_type="random", evaluation_interval_timesteps=50000),
-        logging=LoggingConfig(log_file="/tmp/eval.log", model_dir="/tmp/", run_name="eval-run"),
+        evaluation=EvaluationConfig(
+            num_games=1, opponent_type="random", evaluation_interval_timesteps=50000
+        ),
+        logging=LoggingConfig(
+            log_file="/tmp/eval.log", model_dir="/tmp/", run_name="eval-run"
+        ),
         wandb=WandBConfig(
             enabled=False,
             project="eval",
@@ -88,11 +102,14 @@ def initialize_opponent(
     input_channels: int,
 ) -> Any:
     from keisei.core.ppo_agent import PPOAgent
+
     if opponent_type == "random":
         from keisei.utils.opponents import SimpleRandomOpponent
+
         return SimpleRandomOpponent()
     elif opponent_type == "heuristic":
         from keisei.utils.opponents import SimpleHeuristicOpponent
+
         return SimpleHeuristicOpponent()
     elif opponent_type == "ppo":
         if not opponent_path:

@@ -39,7 +39,7 @@ class CheckpointCallback(Callback):
                 trainer.log_both(
                     f"Checkpoint saved to {ckpt_save_path}", also_to_wandb=True
                 )
-                
+
                 # Create W&B artifact for periodic checkpoint
                 checkpoint_metadata = {
                     "training_timesteps": trainer.global_timestep + 1,
@@ -49,7 +49,9 @@ class CheckpointCallback(Callback):
                     "draws": trainer.draws,
                     "checkpoint_type": "periodic",
                     "checkpoint_interval": self.interval,
-                    "model_type": getattr(trainer.config.training, "model_type", "resnet"),
+                    "model_type": getattr(
+                        trainer.config.training, "model_type", "resnet"
+                    ),
                     "feature_set": getattr(trainer.config.env, "feature_set", "core"),
                 }
                 # pylint: disable=protected-access
@@ -59,7 +61,7 @@ class CheckpointCallback(Callback):
                     description=f"Periodic checkpoint at timestep {trainer.global_timestep+1}",
                     metadata=checkpoint_metadata,
                     aliases=["latest-periodic"],
-                    log_both=trainer.log_both
+                    log_both=trainer.log_both,
                 )
             except (OSError, RuntimeError) as e:
                 trainer.log_both(

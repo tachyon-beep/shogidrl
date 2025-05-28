@@ -35,7 +35,7 @@ class SessionManager:
         """
         self.config = config
         self.args = args
-        
+
         # Determine run_name: explicit > CLI > config > auto-generate
         if run_name:
             self._run_name = run_name
@@ -55,7 +55,7 @@ class SessionManager:
         self._model_dir: Optional[str] = None
         self._log_file_path: Optional[str] = None
         self._eval_log_file_path: Optional[str] = None
-        
+
         # WandB state
         self._is_wandb_active: Optional[bool] = None
 
@@ -68,28 +68,36 @@ class SessionManager:
     def run_artifact_dir(self) -> str:
         """Get the run artifact directory path."""
         if self._run_artifact_dir is None:
-            raise RuntimeError("Directories not yet set up. Call setup_directories() first.")
+            raise RuntimeError(
+                "Directories not yet set up. Call setup_directories() first."
+            )
         return self._run_artifact_dir
 
     @property
     def model_dir(self) -> str:
         """Get the model directory path."""
         if self._model_dir is None:
-            raise RuntimeError("Directories not yet set up. Call setup_directories() first.")
+            raise RuntimeError(
+                "Directories not yet set up. Call setup_directories() first."
+            )
         return self._model_dir
 
     @property
     def log_file_path(self) -> str:
         """Get the log file path."""
         if self._log_file_path is None:
-            raise RuntimeError("Directories not yet set up. Call setup_directories() first.")
+            raise RuntimeError(
+                "Directories not yet set up. Call setup_directories() first."
+            )
         return self._log_file_path
 
     @property
     def eval_log_file_path(self) -> str:
         """Get the evaluation log file path."""
         if self._eval_log_file_path is None:
-            raise RuntimeError("Directories not yet set up. Call setup_directories() first.")
+            raise RuntimeError(
+                "Directories not yet set up. Call setup_directories() first."
+            )
         return self._eval_log_file_path
 
     @property
@@ -125,7 +133,7 @@ class SessionManager:
         """
         if self._run_artifact_dir is None:
             raise RuntimeError("Directories must be set up before initializing WandB.")
-        
+
         try:
             self._is_wandb_active = utils.setup_wandb(
                 self.config, self._run_name, self._run_artifact_dir
@@ -140,7 +148,7 @@ class SessionManager:
         """Save the effective configuration to a JSON file."""
         if self._run_artifact_dir is None:
             raise RuntimeError("Directories must be set up before saving config.")
-        
+
         try:
             effective_config_str = utils.serialize_config(self.config)
             config_path = os.path.join(self._run_artifact_dir, "effective_config.json")
@@ -150,11 +158,14 @@ class SessionManager:
             print(f"Error saving effective_config.json: {e}", file=sys.stderr)
             raise RuntimeError(f"Failed to save effective config: {e}") from e
 
-    def log_session_info(self, logger_func: Callable[[str], None], 
-                        agent_info: Optional[Dict[str, Any]] = None,
-                        resumed_from_checkpoint: Optional[str] = None,
-                        global_timestep: int = 0,
-                        total_episodes_completed: int = 0) -> None:
+    def log_session_info(
+        self,
+        logger_func: Callable[[str], None],
+        agent_info: Optional[Dict[str, Any]] = None,
+        resumed_from_checkpoint: Optional[str] = None,
+        global_timestep: int = 0,
+        total_episodes_completed: int = 0,
+    ) -> None:
         """
         Log comprehensive session information.
 
@@ -162,7 +173,7 @@ class SessionManager:
             logger_func: Function to call for logging messages
             agent_info: Optional agent information (name, type)
             resumed_from_checkpoint: Optional checkpoint path if resumed
-            global_timestep: Current global timestep 
+            global_timestep: Current global timestep
             total_episodes_completed: Total episodes completed so far
         """
         # Session title with optional WandB URL
@@ -172,10 +183,10 @@ class SessionManager:
 
         logger_func(run_title)
         logger_func(f"Run directory: {self._run_artifact_dir}")
-        
+
         # Ensure directory exists before constructing paths
         if self._run_artifact_dir:
-            config_path = os.path.join(self._run_artifact_dir, 'effective_config.json')
+            config_path = os.path.join(self._run_artifact_dir, "effective_config.json")
             logger_func(f"Effective config saved to: {config_path}")
         else:
             logger_func("Warning: Run artifact directory not set")
@@ -185,10 +196,12 @@ class SessionManager:
             logger_func(f"Random seed: {self.config.env.seed}")
 
         logger_func(f"Device: {self.config.env.device}")
-        
+
         # Agent information
         if agent_info:
-            logger_func(f"Agent: {agent_info.get('type', 'Unknown')} ({agent_info.get('name', 'Unknown')})")
+            logger_func(
+                f"Agent: {agent_info.get('type', 'Unknown')} ({agent_info.get('name', 'Unknown')})"
+            )
 
         logger_func(
             f"Total timesteps: {self.config.training.total_timesteps}, "
@@ -198,7 +211,9 @@ class SessionManager:
         # Resume information
         if global_timestep > 0:
             if resumed_from_checkpoint:
-                logger_func(f"Resumed training from checkpoint: {resumed_from_checkpoint}")
+                logger_func(
+                    f"Resumed training from checkpoint: {resumed_from_checkpoint}"
+                )
             logger_func(
                 f"Resuming from timestep {global_timestep}, {total_episodes_completed} episodes completed."
             )
@@ -208,8 +223,10 @@ class SessionManager:
     def log_session_start(self) -> None:
         """Log session start event to file."""
         if self._log_file_path is None:
-            raise RuntimeError("Directories must be set up before logging session start.")
-        
+            raise RuntimeError(
+                "Directories must be set up before logging session start."
+            )
+
         try:
             with open(self._log_file_path, "a", encoding="utf-8") as f:
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -243,5 +260,7 @@ class SessionManager:
             "log_file_path": self._log_file_path,
             "is_wandb_active": self._is_wandb_active,
             "seed": self.config.env.seed if hasattr(self.config.env, "seed") else None,
-            "device": self.config.env.device if hasattr(self.config.env, "device") else None,
+            "device": (
+                self.config.env.device if hasattr(self.config.env, "device") else None
+            ),
         }

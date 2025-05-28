@@ -36,7 +36,7 @@ from keisei.utils import (
 
 from . import callbacks, display, utils
 from .session_manager import SessionManager
-from .step_manager import StepManager, EpisodeState
+from .step_manager import EpisodeState, StepManager
 
 
 class Trainer:
@@ -66,20 +66,20 @@ class Trainer:
         """
         self.config = config
         self.args = args
-        
+
         # Initialize attributes that will be set later (to avoid pylint errors)
         self.log_both: Optional[Callable] = None
         self.execute_full_evaluation_run: Optional[Callable] = None
-        
+
         # Initialize session manager for session-level concerns
         self.session_manager = SessionManager(config, args)
-        
+
         # Setup session infrastructure
         self.session_manager.setup_directories()
         self.session_manager.setup_wandb()
         self.session_manager.save_effective_config()
         self.session_manager.setup_seeding()
-        
+
         # Access session properties through manager
         self.run_name = self.session_manager.run_name
         self.run_artifact_dir = self.session_manager.run_artifact_dir
@@ -215,7 +215,7 @@ class Trainer:
             lambda_gae=self.config.training.lambda_gae,  # Use config value
             device=self.config.env.device,
         )
-        
+
         # Initialize StepManager for step execution and episode management
         self.step_manager = StepManager(
             config=self.config,
@@ -279,22 +279,19 @@ class Trainer:
     def _log_run_info(self, log_both):
         """Log run information at the start of training."""
         # Delegate session info logging to SessionManager
-        agent_info = {
-            "type": type(self.agent).__name__,
-            "name": self.agent.name
-        }
-        
+        agent_info = {"type": type(self.agent).__name__, "name": self.agent.name}
+
         def log_wrapper(msg):
             log_both(msg)
-        
+
         self.session_manager.log_session_info(
             logger_func=log_wrapper,
             agent_info=agent_info,
-            resumed_from_checkpoint=getattr(self, 'resumed_from_checkpoint', None),
+            resumed_from_checkpoint=getattr(self, "resumed_from_checkpoint", None),
             global_timestep=self.global_timestep,
-            total_episodes_completed=self.total_episodes_completed
+            total_episodes_completed=self.total_episodes_completed,
         )
-        
+
         # Log model structure (trainer-specific)
         log_both(f"Model Structure:\n{self.agent.model}", also_to_wandb=False)
         self._log_event(f"Model Structure:\n{self.agent.model}")
@@ -323,7 +320,7 @@ class Trainer:
         step_result = self.step_manager.execute_step(
             episode_state=episode_state,
             global_timestep=self.global_timestep,
-            logger_func=log_both
+            logger_func=log_both,
         )
 
         # Handle step failure by returning reset episode state
@@ -338,11 +335,11 @@ class Trainer:
         # Handle episode end
         if step_result.done:
             # Update game statistics based on outcome
-            if step_result.info and 'winner' in step_result.info:
-                winner = step_result.info['winner']
-                if winner == 'black':
+            if step_result.info and "winner" in step_result.info:
+                winner = step_result.info["winner"]
+                if winner == "black":
                     self.black_wins += 1
-                elif winner == 'white':
+                elif winner == "white":
                     self.white_wins += 1
                 else:
                     self.draws += 1
@@ -351,9 +348,9 @@ class Trainer:
 
             # Create game stats dict for StepManager
             game_stats = {
-                'black_wins': self.black_wins,
-                'white_wins': self.white_wins,
-                'draws': self.draws
+                "black_wins": self.black_wins,
+                "white_wins": self.white_wins,
+                "draws": self.draws,
             }
 
             # Handle episode end using StepManager
@@ -362,7 +359,7 @@ class Trainer:
                 step_result,
                 game_stats,
                 self.total_episodes_completed,
-                log_both
+                log_both,
             )
 
             # Update trainer statistics
@@ -370,26 +367,32 @@ class Trainer:
 
             # Store pending progress updates for display
             ep_metrics_str = f"L:{updated_episode_state.episode_length} R:{updated_episode_state.episode_reward:.2f}"
-            
+
             # Calculate win rates for display
             total_games = self.black_wins + self.white_wins + self.draws
-            current_black_win_rate = self.black_wins / total_games if total_games > 0 else 0.0
-            current_white_win_rate = self.white_wins / total_games if total_games > 0 else 0.0
+            current_black_win_rate = (
+                self.black_wins / total_games if total_games > 0 else 0.0
+            )
+            current_white_win_rate = (
+                self.white_wins / total_games if total_games > 0 else 0.0
+            )
             current_draw_rate = self.draws / total_games if total_games > 0 else 0.0
 
             # Store episode metrics for next throttled update (WP-2)
-            self.pending_progress_updates.update({
-                "ep_metrics": ep_metrics_str,
-                "black_wins_cum": self.black_wins,
-                "white_wins_cum": self.white_wins,
-                "draws_cum": self.draws,
-                "black_win_rate": current_black_win_rate,
-                "white_win_rate": current_white_win_rate,
-                "draw_rate": current_draw_rate,
-            })
+            self.pending_progress_updates.update(
+                {
+                    "ep_metrics": ep_metrics_str,
+                    "black_wins_cum": self.black_wins,
+                    "white_wins_cum": self.white_wins,
+                    "draws_cum": self.draws,
+                    "black_win_rate": current_black_win_rate,
+                    "white_win_rate": current_white_win_rate,
+                    "draw_rate": current_draw_rate,
+                }
+            )
 
             return new_episode_state
-        
+
         # PPO Update check
         if (
             (self.global_timestep + 1) % self.config.training.steps_per_epoch == 0
@@ -439,31 +442,33 @@ class Trainer:
         description: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
         aliases: Optional[List[str]] = None,
-        log_both = None,
+        log_both=None,
     ) -> bool:
         """
         Create and upload a W&B artifact for a model checkpoint.
-        
+
         Args:
             model_path: Path to the model file to upload
             artifact_name: Name for the artifact (without run prefix)
-            artifact_type: Type of artifact (default: "model") 
+            artifact_type: Type of artifact (default: "model")
             description: Optional description for the artifact
             metadata: Optional metadata dict to attach to the artifact
             aliases: Optional list of aliases (e.g., ["latest", "best"])
             log_both: Logging function to use
-            
+
         Returns:
             bool: True if artifact was created successfully, False otherwise
         """
         if not (self.is_train_wandb_active and wandb.run):
             return False
-            
+
         if not os.path.exists(model_path):
             if log_both:
-                log_both(f"Warning: Model file {model_path} does not exist, skipping artifact creation.")
+                log_both(
+                    f"Warning: Model file {model_path} does not exist, skipping artifact creation."
+                )
             return False
-            
+
         try:
             # Create artifact with run name prefix for uniqueness
             full_artifact_name = f"{self.run_name}-{artifact_name}"
@@ -471,24 +476,29 @@ class Trainer:
                 name=full_artifact_name,
                 type=artifact_type,
                 description=description or f"Model checkpoint from run {self.run_name}",
-                metadata=metadata or {}
+                metadata=metadata or {},
             )
-            
+
             # Add the model file
             artifact.add_file(model_path)
-            
+
             # Log the artifact with optional aliases
             wandb.log_artifact(artifact, aliases=aliases)
-            
+
             if log_both:
                 aliases_str = f" with aliases {aliases}" if aliases else ""
-                log_both(f"Model artifact '{full_artifact_name}' created and uploaded{aliases_str}")
-                
+                log_both(
+                    f"Model artifact '{full_artifact_name}' created and uploaded{aliases_str}"
+                )
+
             return True
-            
+
         except (OSError, RuntimeError, TypeError, ValueError) as e:
             if log_both:
-                log_both(f"Error creating W&B artifact for {model_path}: {e}", log_level="error")
+                log_both(
+                    f"Error creating W&B artifact for {model_path}: {e}",
+                    log_level="error",
+                )
             return False
 
     def _finalize_training(self, log_both):
@@ -510,7 +520,7 @@ class Trainer:
                     self.total_episodes_completed,
                 )
                 log_both(f"Final model saved to {final_model_path}", also_to_wandb=True)
-                
+
                 # Create W&B artifact for final model
                 final_metadata = {
                     "training_timesteps": self.global_timestep,
@@ -528,7 +538,7 @@ class Trainer:
                     description=f"Final trained model after {self.global_timestep} timesteps",
                     metadata=final_metadata,
                     aliases=["latest", "final"],
-                    log_both=log_both
+                    log_both=log_both,
                 )
 
                 if self.is_train_wandb_active and wandb.run:
@@ -564,8 +574,8 @@ class Trainer:
             log_both(
                 f"Final checkpoint saved to {last_ckpt_filename}", also_to_wandb=True
             )
-            
-            # Create W&B artifact for final checkpoint  
+
+            # Create W&B artifact for final checkpoint
             checkpoint_metadata = {
                 "training_timesteps": self.global_timestep,
                 "total_episodes": self.total_episodes_completed,
@@ -582,7 +592,7 @@ class Trainer:
                 description=f"Final checkpoint at timestep {self.global_timestep}",
                 metadata=checkpoint_metadata,
                 aliases=["latest-checkpoint"],
-                log_both=log_both
+                log_both=log_both,
             )
 
         if self.is_train_wandb_active and wandb.run:
@@ -612,7 +622,7 @@ class Trainer:
         """Executes the main training loop."""
         # Log session start using SessionManager
         self.session_manager.log_session_start()
-        
+
         # TrainingLogger context manager
         with TrainingLogger(
             self.log_file_path,

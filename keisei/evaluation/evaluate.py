@@ -22,6 +22,7 @@ from keisei.config_schema import (
     WandBConfig,
 )
 from keisei.core.ppo_agent import PPOAgent
+from keisei.evaluation.loop import ResultsDict
 from keisei.shogi import shogi_game_io  # For observations
 from keisei.shogi.shogi_core_definitions import (  # Added PieceType
     Color,
@@ -30,7 +31,6 @@ from keisei.shogi.shogi_core_definitions import (  # Added PieceType
 )
 from keisei.shogi.shogi_game import ShogiGame
 from keisei.utils import BaseOpponent, EvaluationLogger, PolicyOutputMapper
-from keisei.evaluation.loop import ResultsDict
 
 if TYPE_CHECKING:
     pass  # torch already imported above

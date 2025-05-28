@@ -23,6 +23,7 @@ from keisei.utils import PolicyOutputMapper, format_move_with_description_enhanc
 @dataclass
 class EpisodeState:
     """Represents the current state of a training episode."""
+
     current_obs: np.ndarray
     current_obs_tensor: torch.Tensor
     episode_reward: float
@@ -32,6 +33,7 @@ class EpisodeState:
 @dataclass
 class StepResult:
     """Result of executing a single training step."""
+
     next_obs: np.ndarray
     next_obs_tensor: torch.Tensor
     reward: float
@@ -48,7 +50,7 @@ class StepResult:
 class StepManager:
     """
     Manages individual training step execution and episode lifecycle.
-    
+
     This class encapsulates the logic for:
     - Executing single training steps
     - Handling episode boundaries and resets
@@ -66,7 +68,7 @@ class StepManager:
     ):
         """
         Initialize the StepManager.
-        
+
         Args:
             config: Application configuration
             game: Shogi game environment
@@ -80,21 +82,21 @@ class StepManager:
         self.policy_mapper = policy_mapper
         self.experience_buffer = experience_buffer
         self.device = torch.device(config.env.device)
-    
+
     def execute_step(
-        self, 
-        episode_state: EpisodeState, 
+        self,
+        episode_state: EpisodeState,
         global_timestep: int,
-        logger_func: Callable[[str, bool, Optional[Dict], str], None]
+        logger_func: Callable[[str, bool, Optional[Dict], str], None],
     ) -> StepResult:
         """
         Execute a single training step.
-        
+
         Args:
             episode_state: Current state of the episode
             global_timestep: Current global training timestep
             logger_func: Function for logging messages
-            
+
         Returns:
             StepResult containing the outcome of the step
         """
@@ -119,14 +121,16 @@ class StepManager:
 
             # Check if agent failed to select a move
             if selected_shogi_move is None:
-                error_msg = f"Agent failed to select a move at timestep {global_timestep}"
+                error_msg = (
+                    f"Agent failed to select a move at timestep {global_timestep}"
+                )
                 logger_func(
                     f"CRITICAL: {error_msg}. Resetting episode.",
                     True,  # also_to_wandb
                     None,  # wandb_data
-                    "error"  # log_level
+                    "error",  # log_level
                 )
-                
+
                 # Reset game and return failure result
                 reset_obs = self.game.reset()
                 reset_tensor = torch.tensor(
@@ -134,7 +138,7 @@ class StepManager:
                     dtype=torch.float32,
                     device=self.device,
                 ).unsqueeze(0)
-                
+
                 return StepResult(
                     next_obs=reset_obs,
                     next_obs_tensor=reset_tensor,
@@ -146,23 +150,23 @@ class StepManager:
                     log_prob=0.0,
                     value_pred=0.0,
                     success=False,
-                    error_message=error_msg
+                    error_message=error_msg,
                 )
 
             # Handle demo mode logging and delay
             if self.config.demo.enable_demo_mode:
                 self._handle_demo_mode(
-                    selected_shogi_move, 
-                    episode_state.episode_length, 
+                    selected_shogi_move,
+                    episode_state.episode_length,
                     piece_info_for_demo,
-                    logger_func
+                    logger_func,
                 )
 
             # Execute the move in the environment
             move_result = self.game.make_move(selected_shogi_move)
             if not (isinstance(move_result, tuple) and len(move_result) == 4):
                 raise ValueError(f"Invalid move result: {type(move_result)}")
-            
+
             next_obs_np, reward, done, info = move_result
 
             # Add experience to buffer
@@ -193,7 +197,7 @@ class StepManager:
                 policy_index=policy_index,
                 log_prob=log_prob,
                 value_pred=value_pred,
-                success=True
+                success=True,
             )
 
         except ValueError as e:
@@ -202,9 +206,9 @@ class StepManager:
                 f"CRITICAL: {error_msg}. Resetting episode.",
                 True,  # also_to_wandb
                 None,  # wandb_data
-                "error"  # log_level
+                "error",  # log_level
             )
-            
+
             # Reset game and return failure result
             try:
                 reset_obs = self.game.reset()
@@ -213,7 +217,7 @@ class StepManager:
                     dtype=torch.float32,
                     device=self.device,
                 ).unsqueeze(0)
-                
+
                 return StepResult(
                     next_obs=reset_obs,
                     next_obs_tensor=reset_tensor,
@@ -225,7 +229,7 @@ class StepManager:
                     log_prob=0.0,
                     value_pred=0.0,
                     success=False,
-                    error_message=error_msg
+                    error_message=error_msg,
                 )
             except Exception as reset_error:
                 # If reset also fails, return a minimal failure result
@@ -240,7 +244,7 @@ class StepManager:
                     log_prob=0.0,
                     value_pred=0.0,
                     success=False,
-                    error_message=f"{error_msg}; Reset also failed: {reset_error}"
+                    error_message=f"{error_msg}; Reset also failed: {reset_error}",
                 )
 
     def handle_episode_end(
@@ -249,25 +253,25 @@ class StepManager:
         step_result: StepResult,
         game_stats: Dict[str, int],  # black_wins, white_wins, draws
         total_episodes_completed: int,
-        logger_func: Callable[..., None]
+        logger_func: Callable[..., None],
     ) -> EpisodeState:
         """
         Handle the end of an episode and prepare for the next one.
-        
+
         Args:
             episode_state: Current episode state
             step_result: Result from the final step of the episode
             game_stats: Running game statistics (wins/draws)
             total_episodes_completed: Total episodes completed so far
             logger_func: Function for logging messages
-            
+
         Returns:
             New EpisodeState for the next episode
         """
         # Extract game outcome information
         game_outcome_color = None
         game_outcome_reason = "Unknown"
-        
+
         if step_result.info:
             game_outcome_color = step_result.info.get("winner")
             game_outcome_reason = step_result.info.get("reason", "Unknown")
@@ -280,24 +284,22 @@ class StepManager:
         elif game_outcome_color is None:
             game_outcome_message = f"Draw by {game_outcome_reason}."
         else:
-            game_outcome_message = f"Game ended: {game_outcome_color} by {game_outcome_reason}."
+            game_outcome_message = (
+                f"Game ended: {game_outcome_color} by {game_outcome_reason}."
+            )
 
         # Calculate win rates
-        total_games = game_stats["black_wins"] + game_stats["white_wins"] + game_stats["draws"]
+        total_games = (
+            game_stats["black_wins"] + game_stats["white_wins"] + game_stats["draws"]
+        )
         current_black_win_rate = (
-            game_stats["black_wins"] / total_games
-            if total_games > 0
-            else 0.0
+            game_stats["black_wins"] / total_games if total_games > 0 else 0.0
         )
         current_white_win_rate = (
-            game_stats["white_wins"] / total_games
-            if total_games > 0
-            else 0.0
+            game_stats["white_wins"] / total_games if total_games > 0 else 0.0
         )
         current_draw_rate = (
-            game_stats["draws"] / total_games
-            if total_games > 0
-            else 0.0
+            game_stats["draws"] / total_games if total_games > 0 else 0.0
         )
 
         # Log episode completion
@@ -314,7 +316,7 @@ class StepManager:
                 "white_win_rate": current_white_win_rate,
                 "draw_rate": current_draw_rate,
             },
-            log_level="info"
+            log_level="info",
         )
 
         # Reset game for next episode
@@ -333,7 +335,7 @@ class StepManager:
                 current_obs=reset_result,
                 current_obs_tensor=reset_obs_tensor,
                 episode_reward=0.0,
-                episode_length=0
+                episode_length=0,
             )
 
         except (RuntimeError, ValueError, OSError) as e:
@@ -342,7 +344,7 @@ class StepManager:
                 f"CRITICAL: Game reset failed after episode end: {e}",
                 True,  # also_to_wandb
                 None,  # wandb_data
-                "error"  # log_level
+                "error",  # log_level
             )
             # Return current state to allow caller to handle the error
             return episode_state
@@ -350,7 +352,7 @@ class StepManager:
     def reset_episode(self) -> EpisodeState:
         """
         Reset the game and create a new episode state.
-        
+
         Returns:
             New EpisodeState for a fresh episode
         """
@@ -365,21 +367,19 @@ class StepManager:
             current_obs=reset_obs,
             current_obs_tensor=reset_tensor,
             episode_reward=0.0,
-            episode_length=0
+            episode_length=0,
         )
 
     def update_episode_state(
-        self,
-        episode_state: EpisodeState,
-        step_result: StepResult
+        self, episode_state: EpisodeState, step_result: StepResult
     ) -> EpisodeState:
         """
         Update episode state with the results of a step.
-        
+
         Args:
             episode_state: Current episode state
             step_result: Result from the executed step
-            
+
         Returns:
             Updated EpisodeState
         """
@@ -387,22 +387,22 @@ class StepManager:
             current_obs=step_result.next_obs,
             current_obs_tensor=step_result.next_obs_tensor,
             episode_reward=episode_state.episode_reward + step_result.reward,
-            episode_length=episode_state.episode_length + 1
+            episode_length=episode_state.episode_length + 1,
         )
 
     def _prepare_demo_info(self, legal_shogi_moves) -> Optional[Any]:
         """
         Prepare piece information for demo mode display.
-        
+
         Args:
             legal_shogi_moves: List of legal moves
-            
+
         Returns:
             Piece information for the first legal move, or None if unavailable
         """
         if not legal_shogi_moves or legal_shogi_moves[0] is None:
             return None
-            
+
         try:
             sample_move = legal_shogi_moves[0]
             if (
@@ -414,7 +414,7 @@ class StepManager:
                 return self.game.get_piece(from_r, from_c)
         except (AttributeError, IndexError, ValueError):
             pass  # Silently ignore errors in demo mode preparation
-        
+
         return None
 
     def _handle_demo_mode(
@@ -422,11 +422,11 @@ class StepManager:
         selected_move: Tuple,
         episode_length: int,
         piece_info_for_demo: Optional[Any],
-        logger_func: Callable[[str, bool, Optional[Dict], str], None]
+        logger_func: Callable[[str, bool, Optional[Dict], str], None],
     ) -> None:
         """
         Handle demo mode logging and delay.
-        
+
         Args:
             selected_move: The move selected by the agent
             episode_length: Current episode length
@@ -443,20 +443,20 @@ class StepManager:
             if hasattr(self.game, "current_player")
             else "Unknown"
         )
-        
+
         # Format move description
         move_str = format_move_with_description_enhanced(
             selected_move,
             self.policy_mapper,
             piece_info_for_demo,
         )
-        
+
         # Log the move
         logger_func(
             f"Move {episode_length + 1}: {current_player_name} played {move_str}",
             False,  # also_to_wandb
-            None,   # wandb_data
-            "info"  # log_level
+            None,  # wandb_data
+            "info",  # log_level
         )
 
         # Add delay for easier observation

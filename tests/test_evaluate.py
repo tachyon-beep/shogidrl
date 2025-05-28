@@ -34,10 +34,10 @@ from keisei.utils import (
     EvaluationLogger,
     PolicyOutputMapper,
 )
-from keisei.utils.agent_loading import (
+from keisei.utils.agent_loading import (  # Updated import
     initialize_opponent,
     load_evaluation_agent,
-)  # Updated import
+)
 from keisei.utils.opponents import SimpleHeuristicOpponent, SimpleRandomOpponent
 
 INPUT_CHANNELS = 46  # Use the default from config for tests
@@ -199,7 +199,9 @@ def test_load_evaluation_agent_mocked(mock_ppo_agent_class, policy_mapper, tmp_p
     # and then mock the load_model method on that instance.
     mock_created_agent_instance = MagicMock()  # No spec constraint
     mock_created_agent_instance.load_model.return_value = {}  # Mock load_model behavior
-    mock_ppo_agent_class.return_value = mock_created_agent_instance  # Ensure PPOAgent() returns our mock
+    mock_ppo_agent_class.return_value = (
+        mock_created_agent_instance  # Ensure PPOAgent() returns our mock
+    )
 
     # Create a dummy checkpoint file (must exist for pre-load checks)
     dummy_ckpt = tmp_path / "dummy_checkpoint.pth"
@@ -213,7 +215,7 @@ def test_load_evaluation_agent_mocked(mock_ppo_agent_class, policy_mapper, tmp_p
 # --- Test for Core Evaluation Loop ---
 
 
-def test_run_evaluation_loop_basic(eval_logger_setup): # Removed policy_mapper
+def test_run_evaluation_loop_basic(eval_logger_setup):  # Removed policy_mapper
     """Test that run_evaluation_loop runs games and logs results correctly."""
     logger, log_file_path = eval_logger_setup
 
@@ -227,15 +229,15 @@ def test_run_evaluation_loop_basic(eval_logger_setup): # Removed policy_mapper
     num_games = 2
     max_moves = 5  # Keep games short for testing
 
-    results = run_evaluation_loop(
-        agent_to_eval, opponent, num_games, logger, max_moves
-    )
+    results = run_evaluation_loop(agent_to_eval, opponent, num_games, logger, max_moves)
 
     assert results["games_played"] == num_games
     assert "agent_wins" in results
     assert "opponent_wins" in results
     assert "draws" in results
-    assert results["agent_wins"] + results["opponent_wins"] + results["draws"] == num_games
+    assert (
+        results["agent_wins"] + results["opponent_wins"] + results["draws"] == num_games
+    )
     assert "avg_game_length" in results
     assert results["avg_game_length"] <= max_moves  # Can be less if game ends early
 
@@ -245,8 +247,16 @@ def test_run_evaluation_loop_basic(eval_logger_setup): # Removed policy_mapper
     # f"Starting evaluation: {agent_to_eval.name} vs {opponent.name}"
     assert f"Starting evaluation game 1/{num_games}" in log_content
     assert f"Starting evaluation game 2/{num_games}" in log_content
-    assert "Agent wins game 1" in log_content or "Opponent wins game 1" in log_content or "Game 1 is a draw" in log_content
-    assert "Agent wins game 2" in log_content or "Opponent wins game 2" in log_content or "Game 2 is a draw" in log_content
+    assert (
+        "Agent wins game 1" in log_content
+        or "Opponent wins game 1" in log_content
+        or "Game 1 is a draw" in log_content
+    )
+    assert (
+        "Agent wins game 2" in log_content
+        or "Opponent wins game 2" in log_content
+        or "Game 2 is a draw" in log_content
+    )
 
 
 # --- Tests for Main Script Execution (now execute_full_evaluation_run) ---
@@ -254,7 +264,7 @@ def test_run_evaluation_loop_basic(eval_logger_setup): # Removed policy_mapper
 # Helper for common main test mocks
 COMMON_MAIN_MOCKS = [
     patch(
-        "keisei.evaluation.evaluate.PolicyOutputMapper" # This is used by Evaluator, imported into evaluate.py
+        "keisei.evaluation.evaluate.PolicyOutputMapper"  # This is used by Evaluator, imported into evaluate.py
     ),
     patch(
         "keisei.utils.agent_loading.load_evaluation_agent"  # Corrected: Patched where Evaluator finds it
@@ -266,7 +276,7 @@ COMMON_MAIN_MOCKS = [
         "keisei.evaluation.loop.run_evaluation_loop"  # Corrected: Patched where Evaluator finds it
     ),
     patch(
-        "keisei.evaluation.evaluate.EvaluationLogger" # This is used by Evaluator, imported into evaluate.py
+        "keisei.evaluation.evaluate.EvaluationLogger"  # This is used by Evaluator, imported into evaluate.py
     ),
     patch("wandb.init"),
     patch("wandb.log"),
@@ -323,10 +333,10 @@ def test_execute_full_evaluation_run_basic_random(
 
     expected_run_loop_results = {
         "games_played": 1,  # Changed from num_games
-        "agent_wins": 1,    # Changed from wins
-        "opponent_wins": 0, # Changed from losses
+        "agent_wins": 1,  # Changed from wins
+        "opponent_wins": 0,  # Changed from losses
         "draws": 0,
-        "game_results": [], # Added
+        "game_results": [],  # Added
         "win_rate": 1.0,
         "loss_rate": 0.0,
         "draw_rate": 0.0,
@@ -378,8 +388,8 @@ def test_execute_full_evaluation_run_basic_random(
     # The run_evaluation_loop function expects 5 positional arguments.
     # The call from execute_full_evaluation_run passes:
     # agent, opponent, num_games, logger, max_moves_per_game
-    assert pos_args[4] == max_moves_for_game # max_moves_per_game
-    assert not kw_args # No keyword arguments expected
+    assert pos_args[4] == max_moves_for_game  # max_moves_per_game
+    assert not kw_args  # No keyword arguments expected
 
     mock_wandb_init.assert_not_called()
     mock_wandb_log.assert_not_called()
@@ -423,10 +433,10 @@ def test_execute_full_evaluation_run_heuristic_opponent_with_wandb(
 
     expected_run_loop_results = {
         "games_played": 2,  # Changed
-        "agent_wins": 1,    # Changed
-        "opponent_wins": 1, # Changed
+        "agent_wins": 1,  # Changed
+        "opponent_wins": 1,  # Changed
         "draws": 0,
-        "game_results": [], # Added
+        "game_results": [],  # Added
         "win_rate": 0.5,
         "loss_rate": 0.5,
         "draw_rate": 0.0,
@@ -607,10 +617,10 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(
 
     expected_results = {
         "games_played": 1,  # Changed
-        "agent_wins": 0,    # Changed
-        "opponent_wins": 1, # Changed
+        "agent_wins": 0,  # Changed
+        "opponent_wins": 1,  # Changed
         "draws": 0,
-        "game_results": [], # Added
+        "game_results": [],  # Added
         "win_rate": 0.0,
         "loss_rate": 1.0,
         "draw_rate": 0.0,
@@ -667,10 +677,10 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(
     assert (
         run_loop_pos_args[1] == mock_opponent_agent
     )  # This should be the PPO opponent instance
-    assert run_loop_pos_args[2] == num_games_val # num_games
-    assert run_loop_pos_args[3] == mock_logger_instance # logger
-    assert run_loop_pos_args[4] == max_moves_val # max_moves_per_game
-    assert not run_loop_kwargs # No keyword arguments expected
+    assert run_loop_pos_args[2] == num_games_val  # num_games
+    assert run_loop_pos_args[3] == mock_logger_instance  # logger
+    assert run_loop_pos_args[4] == max_moves_val  # max_moves_per_game
+    assert not run_loop_kwargs  # No keyword arguments expected
 
     expected_wandb_config = {
         "agent_checkpoint": agent_eval_path,
@@ -739,10 +749,10 @@ def test_execute_full_evaluation_run_with_seed(  # MODIFIED: Renamed and refacto
 
     mock_run_loop.return_value = {  # Dummy results
         "games_played": 1,  # Changed
-        "agent_wins": 1,    # Changed
-        "opponent_wins": 0, # Changed
+        "agent_wins": 1,  # Changed
+        "opponent_wins": 0,  # Changed
         "draws": 0,
-        "game_results": [], # Added
+        "game_results": [],  # Added
         "win_rate": 1.0,
         "loss_rate": 0.0,
         "draw_rate": 0.0,
