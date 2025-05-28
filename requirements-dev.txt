@@ -17,6 +17,7 @@ pytest-pylint==0.21.0
 coverage==7.8.0 # For test coverage reports
 
 # Type Checking and Static Analysis
+mypy==1.14.0           # Static type checker
 mypy_extensions==1.1.0 # Often used with mypy, though mypy itself isn't listed
 annotated-types==0.7.0 # pydantic dependency, useful for type hints
 typing-inspection==0.4.0 # May be used by Pydantic or other type-related tools
@@ -24,6 +25,13 @@ typing-inspection==0.4.0 # May be used by Pydantic or other type-related tools
 # Build and Packaging
 setuptools==80.8.0 # If not managed by Poetry or other build backend in pyproject.toml
 # tomlkit==0.13.2 # For pyproject.toml parsing, if scripts interact with it
+
+# Security and Code Quality
+safety==4.0.5          # Security vulnerability scanner
+bandit==2.1.0          # Security linter for Python
+
+# Profiling and Performance Analysis
+snakeviz==2.2.1        # Interactive profiler visualization
 
 # Utilities for Development
 # dill==0.4.0 # For serialization, if used in dev scripts
