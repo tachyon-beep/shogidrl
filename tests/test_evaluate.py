@@ -30,6 +30,7 @@ from keisei.evaluation.evaluate import (
     load_evaluation_agent,
     run_evaluation_loop,
 )
+from keisei.evaluation.evaluate import Evaluator
 from keisei.shogi.shogi_core_definitions import MoveTuple
 from keisei.shogi.shogi_game import ShogiGame
 from keisei.utils import (
@@ -191,11 +192,11 @@ def test_initialize_opponent_ppo(mock_load_agent, policy_mapper):
 @patch(
     "keisei.evaluation.evaluate.PPOAgent"
 )  # MODIFIED: Updated import path # Mock PPOAgent class within evaluate.py
-def test_load_evaluation_agent_mocked(MockPPOAgentClass, policy_mapper, tmp_path):
+def test_load_evaluation_agent_mocked(mock_ppo_agent_class, policy_mapper, tmp_path):
     """Test that load_evaluation_agent returns a PPOAgent instance when checkpoint exists."""
     mock_agent_instance = MagicMock(spec=PPOAgent)
     mock_agent_instance.model = MagicMock()
-    MockPPOAgentClass.return_value = mock_agent_instance
+    mock_ppo_agent_class.return_value = mock_agent_instance
 
     # Create a dummy checkpoint file
     dummy_ckpt = tmp_path / "dummy_checkpoint.pth"
@@ -296,7 +297,7 @@ def apply_mocks(mocks):
     ]  # Indices 0-8: Excludes the three seeding mocks (random.seed, numpy.random.seed, torch.manual_seed)
 )
 # pylint: disable=unused-argument,too-many-positional-arguments,too-many-locals
-def test_execute_full_evaluation_run_basic_random(  # MODIFIED: Renamed and refactored from test_evaluate_main_basic_random_opponent
+def test_execute_full_evaluation_run_basic_random(
     mock_wandb_run_prop,  # For asserting not called
     mock_wandb_finish,  # For asserting not called
     mock_wandb_log,  # For asserting not called
@@ -305,7 +306,7 @@ def test_execute_full_evaluation_run_basic_random(  # MODIFIED: Renamed and refa
     mock_run_loop,
     mock_init_opponent,
     mock_load_agent,
-    MockPolicyOutputMapperClass,  # Mock for the class keisei.evaluate.PolicyOutputMapper
+    mock_policy_output_mapper_class,  # Mock for the class keisei.evaluate.PolicyOutputMapper
     tmp_path,
 ):
     # Create a real PolicyOutputMapper instance for the test, as execute_full_evaluation_run expects one.
@@ -360,7 +361,7 @@ def test_execute_full_evaluation_run_basic_random(  # MODIFIED: Renamed and refa
     # Assertions
     # MockPolicyOutputMapperClass (patch of keisei.evaluate.PolicyOutputMapper) should not be called if
     # execute_full_evaluation_run uses the passed policy_mapper_instance directly.
-    MockPolicyOutputMapperClass.assert_not_called()
+    mock_policy_output_mapper_class.assert_not_called()
 
     mock_load_agent.assert_called_once_with(
         agent_ckpt_path, "cpu", policy_mapper_instance, INPUT_CHANNELS
@@ -392,7 +393,7 @@ def test_execute_full_evaluation_run_basic_random(  # MODIFIED: Renamed and refa
 
 @apply_mocks(COMMON_MAIN_MOCKS)  # Includes all mocks
 # pylint: disable=unused-argument,too-many-positional-arguments,too-many-locals
-def test_execute_full_evaluation_run_heuristic_opponent_with_wandb(  # MODIFIED: Renamed and refactored
+def test_execute_full_evaluation_run_heuristic_opponent_with_wandb(
     mock_torch_seed,
     mock_np_seed,
     mock_random_seed,
@@ -404,12 +405,10 @@ def test_execute_full_evaluation_run_heuristic_opponent_with_wandb(  # MODIFIED:
     mock_run_loop,
     mock_init_opponent,
     mock_load_agent,
-    MockPolicyOutputMapperClass,
+    mock_policy_output_mapper_class,
     tmp_path,
-    # monkeypatch, # MODIFIED: Removed monkeypatch as sys.argv is no longer used
 ):
     policy_mapper_instance = PolicyOutputMapper()  # MODIFIED: Create an instance
-    # MockPolicyOutputMapperClass.return_value = policy_mapper_instance # Not needed if we pass the instance
 
     mock_agent_instance = MockPPOAgent(
         config=make_test_config("cpu", INPUT_CHANNELS, PolicyOutputMapper()),
@@ -472,7 +471,7 @@ def test_execute_full_evaluation_run_heuristic_opponent_with_wandb(  # MODIFIED:
         wandb_reinit=True,
     )
 
-    MockPolicyOutputMapperClass.assert_not_called()  # Should use the passed instance
+    mock_policy_output_mapper_class.assert_not_called()  # Should use the passed instance
 
     mock_load_agent.assert_called_once_with(
         agent_ckpt_path, "cpu", policy_mapper_instance, INPUT_CHANNELS
@@ -541,7 +540,7 @@ def test_execute_full_evaluation_run_heuristic_opponent_with_wandb(  # MODIFIED:
     COMMON_MAIN_MOCKS
 )  # MODIFIED: Keep all common mocks, initialize_opponent is now called within execute_full_evaluation_run
 # pylint: disable=unused-argument,too-many-positional-arguments,too-many-locals
-def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(  # MODIFIED: Renamed and refactored
+def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(
     mock_torch_seed,
     mock_np_seed,
     mock_random_seed,
@@ -553,12 +552,10 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(  # MODIFIED: Renamed
     mock_run_loop,
     mock_init_opponent,  # ADDED: mock_init_opponent is needed as it's called by execute_full_evaluation_run
     mock_load_agent,
-    MockPolicyOutputMapperClass,
+    mock_policy_output_mapper_class,
     tmp_path,
-    # monkeypatch, # MODIFIED: Removed monkeypatch
 ):
     policy_mapper_instance = PolicyOutputMapper()
-    # MockPolicyOutputMapperClass.return_value = policy_mapper_instance # Not needed
 
     mock_agent_to_eval = MockPPOAgent(
         config=make_test_config("cpu", INPUT_CHANNELS, PolicyOutputMapper()),
@@ -652,7 +649,7 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(  # MODIFIED: Renamed
         wandb_reinit=True,
     )
 
-    MockPolicyOutputMapperClass.assert_not_called()
+    mock_policy_output_mapper_class.assert_not_called()
 
     # load_evaluation_agent assertions
     assert mock_load_agent.call_count == 1  # Only called directly for agent_to_eval
@@ -719,7 +716,7 @@ def test_execute_full_evaluation_run_with_seed(  # MODIFIED: Renamed and refacto
     mock_run_loop,
     mock_init_opponent,
     mock_load_agent,
-    MockPolicyOutputMapperClass,  # Mock for the class keisei.evaluate.PolicyOutputMapper
+    mock_policy_output_mapper_class,  # Mock for the class keisei.evaluate.PolicyOutputMapper
     tmp_path,
     # monkeypatch, # MODIFIED: Removed monkeypatch as sys.argv is no longer used
 ):
@@ -776,7 +773,7 @@ def test_execute_full_evaluation_run_with_seed(  # MODIFIED: Renamed and refacto
     mock_torch_seed.assert_called_once_with(seed_value_to_test)
 
     # Other assertions (can be minimal as other tests cover functionality)
-    MockPolicyOutputMapperClass.assert_not_called()
+    mock_policy_output_mapper_class.assert_not_called()
     mock_load_agent.assert_called_once()
     mock_init_opponent.assert_called_once()
     mock_eval_logger_class.assert_called_once()
@@ -844,7 +841,7 @@ def test_evaluator_class_basic(monkeypatch, tmp_path, policy_mapper):
         lambda *a, **kw: DummyOpponent(),
     )
     log_file = tmp_path / "evaluator_test.log"
-    from keisei.evaluation.evaluate import Evaluator
+
     evaluator = Evaluator(
         agent_checkpoint_path="dummy_agent.pth",
         opponent_type="random",
@@ -880,10 +877,10 @@ def make_test_config(device_str, input_channels, policy_mapper):
         )
     try:
         num_actions_total = policy_mapper.get_total_actions()
-    except (
-        Exception
-    ):  # pylint: disable=broad-except  # nosec: test utility, fallback is safe
-        num_actions_total = 13527  # Default fallback for mocks or MagicMock
+    except (AttributeError, TypeError) as e:
+        raise ValueError(
+            "policy_mapper must provide a valid get_total_actions() method returning an int."
+        ) from e
     return AppConfig(
         env=EnvConfig(
             device=device_str,
@@ -915,6 +912,7 @@ def make_test_config(device_str, input_channels, policy_mapper):
             tower_depth=9,
             tower_width=256,
             se_ratio=0.25,
+            weight_decay=0.0,  # Added missing argument
         ),
         evaluation=EvaluationConfig(
             num_games=1,
