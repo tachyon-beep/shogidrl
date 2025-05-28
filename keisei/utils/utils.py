@@ -69,6 +69,38 @@ FLAT_KEY_TO_NESTED = {
 }
 
 
+def _load_yaml_or_json(path: str) -> dict:
+    if path.endswith((".yaml", ".yml")):
+        with open(path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+    elif path.endswith(".json"):
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    else:
+        raise ValueError(f"Unsupported config file type: {path}")
+
+
+def _merge_overrides(config_data: dict, overrides: dict) -> None:
+    for k, v in overrides.items():
+        parts = k.split(".")
+        d = config_data
+        for p in parts[:-1]:
+            if p not in d or not isinstance(d[p], dict):
+                d[p] = {}
+            d = d[p]
+        d[parts[-1]] = v
+
+
+def _map_flat_overrides(overrides: dict) -> dict:
+    mapped = {}
+    for k, v in overrides.items():
+        if k.isupper() and k in FLAT_KEY_TO_NESTED:
+            mapped[FLAT_KEY_TO_NESTED[k]] = v
+        else:
+            mapped[k] = v
+    return mapped
+
+
 def load_config(
     config_path: Optional[str] = None, cli_overrides: Optional[Dict[str, Any]] = None
 ) -> AppConfig:
@@ -76,65 +108,24 @@ def load_config(
     Loads configuration from a YAML or JSON file and applies CLI overrides.
     Always loads default_config.yaml as the base, then merges in overrides from config_path (if present), then CLI overrides.
     """
-    # Always load the base config first
     base_config_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
         "default_config.yaml",
     )
-    with open(base_config_path, "r", encoding="utf-8") as f:
-        config_data = yaml.safe_load(f)
+    config_data = _load_yaml_or_json(base_config_path)
     # If config_path is provided and is not the default, treat as override file (JSON or YAML)
-    if config_path and os.path.abspath(config_path) != os.path.abspath(
-        base_config_path
-    ):
-        if config_path.endswith((".yaml", ".yml")):
-            with open(config_path, "r", encoding="utf-8") as f:
-                override_data = yaml.safe_load(f)
-        elif config_path.endswith(".json"):
-            with open(config_path, "r", encoding="utf-8") as f:
-                override_data = json.load(f)
-        else:
-            raise ValueError(f"Unsupported config file type: {config_path}")
-        # If the override file is a partial dict (not a full config), treat as overrides
+    if config_path and os.path.abspath(config_path) != os.path.abspath(base_config_path):
+        override_data = _load_yaml_or_json(config_path)
         top_keys = {"env", "training", "evaluation", "logging", "wandb", "demo"}
-        if not (
-            isinstance(override_data, dict) and top_keys & set(override_data.keys())
-        ):
-            # It's a flat override dict, not a full config
-            mapped_overrides = {}
-            for k, v in override_data.items():
-                if k.isupper() and k in FLAT_KEY_TO_NESTED:
-                    mapped_overrides[FLAT_KEY_TO_NESTED[k]] = v
-                else:
-                    mapped_overrides[k] = v
-            for k, v in mapped_overrides.items():
-                parts = k.split(".")
-                d = config_data
-                for p in parts[:-1]:
-                    if p not in d or not isinstance(d[p], dict):
-                        d[p] = {}
-                    d = d[p]
-                d[parts[-1]] = v
+        if not (isinstance(override_data, dict) and top_keys & set(override_data.keys())):
+            mapped_overrides = _map_flat_overrides(override_data)
+            _merge_overrides(config_data, mapped_overrides)
         else:
-            # It's a full config, merge top-level keys
             for k, v in override_data.items():
                 config_data[k] = v
-    # Merge CLI overrides (flat dict with dot notation keys)
     if cli_overrides:
-        mapped_overrides = {}
-        for k, v in cli_overrides.items():
-            if k.isupper() and k in FLAT_KEY_TO_NESTED:
-                mapped_overrides[FLAT_KEY_TO_NESTED[k]] = v
-            else:
-                mapped_overrides[k] = v
-        for k, v in mapped_overrides.items():
-            parts = k.split(".")
-            d = config_data
-            for p in parts[:-1]:
-                if p not in d or not isinstance(d[p], dict):
-                    d[p] = {}
-                d = d[p]
-            d[parts[-1]] = v
+        mapped_overrides = _map_flat_overrides(cli_overrides)
+        _merge_overrides(config_data, mapped_overrides)
     try:
         config = AppConfig.parse_obj(config_data)
     except ValidationError as e:
@@ -145,9 +136,6 @@ def load_config(
 
 
 if TYPE_CHECKING:
-    from keisei.config_schema import (  # Keep this for type hinting if used elsewhere
-        AppConfig,
-    )
     from keisei.shogi.shogi_core_definitions import MoveTuple
     from keisei.shogi.shogi_game import ShogiGame  # Added for type hinting
 

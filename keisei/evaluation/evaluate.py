@@ -286,9 +286,6 @@ def run_evaluation_loop(
             selected_move: Optional[MoveTuple] = None
             if isinstance(active_agent, PPOAgent):
                 obs_np = shogi_game_io.generate_neural_network_observation(game)
-                # obs_tensor = torch.tensor( # This variable was unused.
-                #     obs_np, dtype=torch.float32, device=device
-                # ).unsqueeze(0)
                 legal_mask = policy_mapper.get_legal_mask(legal_moves, device)
 
                 if not legal_mask.any() and legal_moves:
@@ -536,10 +533,10 @@ class Evaluator:
         except Exception as e:
             raise RuntimeError(f"Failed to initialize EvaluationLogger: {e}") from e
         # Agent and opponent
-        # Use the correct input_channels from self.policy_mapper if available, else default to 46
-        input_channels = getattr(
-            self.policy_mapper, "input_channels", 46
-        )  # TODO: Remove this hardcoded value when possible, generate exception if not set
+        # Load input_channels from config
+        from keisei.utils.utils import load_config
+        config = load_config()
+        input_channels = config.env.input_channels
 
         try:
             self._agent = load_evaluation_agent(

@@ -27,11 +27,6 @@ from .shogi_core_definitions import (
     get_unpromoted_types,
 )
 
-if TYPE_CHECKING:
-    # from .shogi_core_definitions import MoveTuple # Already imported above
-    pass
-
-
 class ShogiGame:
     """
     Represents the Shogi game state, board, and operations.
