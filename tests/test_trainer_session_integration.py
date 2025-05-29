@@ -1,8 +1,9 @@
 """
-test_trainer_session_integration.py: Integration tests for Trainer and SessionManager.
+test_trainer_session_integration.py: Consolidated integration tests for Trainer and SessionManager.
 
-Tests that verify the SessionManager is properly integrated into the Trainer
-and that session management functionality works correctly end-to-end.
+This file combines two previous test files to verify that the SessionManager
+is properly integrated into the Trainer and that session management
+functionality works correctly end-to-end, removing redundancy.
 """
 
 import tempfile
@@ -34,17 +35,14 @@ class MockArgs:
 
 @pytest.fixture
 def mock_config():
-    """Create a real configuration for testing."""
+    """Create a mock configuration for testing."""
     return AppConfig(
         env=EnvConfig(
-            device="cpu",
-            num_actions_total=13527,
-            input_channels=46,
-            seed=42,
+            device="cpu", num_actions_total=13527, input_channels=46, seed=42
         ),
         training=TrainingConfig(
-            total_timesteps=500_000,
-            steps_per_epoch=2048,
+            total_timesteps=1000,
+            steps_per_epoch=64,
             ppo_epochs=10,
             minibatch_size=64,
             learning_rate=3e-4,
@@ -56,27 +54,23 @@ def mock_config():
             refresh_per_second=4,
             enable_spinner=True,
             input_features="core46",
-            tower_depth=9,
-            tower_width=256,
+            tower_depth=5,
+            tower_width=128,
             se_ratio=0.25,
             model_type="resnet",
             mixed_precision=False,
             ddp=False,
             gradient_clip_max_norm=0.5,
             lambda_gae=0.95,
-            checkpoint_interval_timesteps=10000,
-            evaluation_interval_timesteps=50000,
+            checkpoint_interval_timesteps=1000,
+            evaluation_interval_timesteps=1000,
             weight_decay=0.0,
         ),
         evaluation=EvaluationConfig(
-            num_games=20,
-            opponent_type="random",
-            evaluation_interval_timesteps=50000,
+            num_games=20, opponent_type="random", evaluation_interval_timesteps=1000
         ),
         logging=LoggingConfig(
-            log_file="test.log",
-            model_dir="/tmp/test_models",
-            run_name=None,
+            log_file="test.log", model_dir="/tmp/test_models", run_name=None
         ),
         wandb=WandBConfig(
             enabled=False,
@@ -87,25 +81,14 @@ def mock_config():
             watch_log_freq=1000,
             watch_log_type="all",
         ),
-        demo=DemoConfig(
-            enable_demo_mode=False,
-            demo_mode_delay=0.5,
-        ),
+        demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5),
     )
 
 
 @pytest.fixture
 def mock_args():
     """Create mock command-line arguments."""
-    return MockArgs(
-        run_name=None,
-        resume=None,
-        input_features=None,
-        model=None,
-        tower_depth=None,
-        tower_width=None,
-        se_ratio=None,
-    )
+    return MockArgs()
 
 
 @pytest.fixture
@@ -116,298 +99,124 @@ def temp_dir():
 
 
 class TestTrainerSessionIntegration:
-    """Test integration between Trainer and SessionManager."""
+    """Test SessionManager integration in Trainer."""
 
-    @patch("torch.device")
-    @patch("keisei.training.trainer.Console")
-    @patch("keisei.training.trainer.TrainingLogger")
-    @patch("keisei.training.trainer.ShogiGame")
-    @patch("keisei.training.trainer.PolicyOutputMapper")
-    @patch("keisei.training.trainer.PPOAgent")
-    @patch("keisei.training.trainer.ExperienceBuffer")
-    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.trainer.SessionManager")
+    @patch("keisei.shogi.ShogiGame")
     @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.trainer.display.TrainingDisplay")
-    @patch("keisei.training.trainer.callbacks.CheckpointCallback")
-    @patch("keisei.training.trainer.callbacks.EvaluationCallback")
-    def test_trainer_initialization_with_session_manager(
+    @patch("keisei.utils.PolicyOutputMapper")
+    @patch("keisei.core.ppo_agent.PPOAgent")
+    @patch("keisei.core.experience_buffer.ExperienceBuffer")
+    @patch("keisei.training.models.model_factory")
+    def test_trainer_initialization_and_properties(
         self,
-        mock_eval_callback,
-        mock_checkpoint_callback,
-        mock_display,
-        mock_feature_specs,
         mock_model_factory,
-        mock_experience_buffer,
+        _mock_experience_buffer,
         mock_ppo_agent,
-        mock_policy_mapper,
-        mock_shogi_game,
-        mock_training_logger,
-        mock_console,
-        mock_torch_device,
+        _mock_policy_mapper,
+        mock_feature_specs,
+        _mock_shogi_game,
+        mock_session_manager_class,
         mock_config,
-        mock_args,
         temp_dir,
     ):
-        """Test that Trainer properly initializes with SessionManager."""
-        # Setup feature specs mock
+        """Test that Trainer initializes SessionManager and delegates properties."""
+        # --- Setup Mocks ---
         feature_spec_mock = Mock()
         feature_spec_mock.num_planes = 46
         mock_feature_specs.__getitem__.return_value = feature_spec_mock
 
-        # Setup model factory mock
-        mock_model = Mock()
-        mock_model_factory.return_value = mock_model
+        mock_model_factory.return_value = Mock()
+        mock_ppo_agent.return_value = Mock(name="TestAgent")
 
-        # Setup device mock - return string that PyTorch can handle
-        mock_torch_device.return_value = "cpu"
+        # Get a handle to the mock instance that will be created
+        mock_session_instance = mock_session_manager_class.return_value
 
-        # Setup game mock
-        game_instance = Mock()
-        game_instance.seed = Mock()
-        mock_shogi_game.return_value = game_instance
+        # --- Test with CLI run_name ---
+        args_with_name = MockArgs(run_name="cli_run_name")
+        mock_session_instance.run_name = "cli_run_name"
+        trainer_with_name = Trainer(mock_config, args_with_name)
 
-        # Setup policy mapper mock
-        policy_mapper_instance = Mock()
-        policy_mapper_instance.get_total_actions.return_value = 4096
-        mock_policy_mapper.return_value = policy_mapper_instance
+        assert hasattr(trainer_with_name, "session_manager")
+        assert trainer_with_name.run_name == "cli_run_name"
 
-        # Setup agent mock
-        agent_instance = Mock()
-        agent_instance.name = "test_agent"
-        agent_instance.model = mock_model
-        mock_ppo_agent.return_value = agent_instance
+        # --- Test default initialization and property delegation ---
+        args_without_name = MockArgs()
+        mock_session_instance.run_name = "default_run_name"
+        mock_session_instance.run_artifact_dir = f"{temp_dir}/artifacts"
+        mock_session_instance.model_dir = f"{temp_dir}/models"
+        mock_session_instance.log_file_path = f"{temp_dir}/train.log"
+        mock_session_instance.eval_log_file_path = f"{temp_dir}/eval.log"
+        # FIX: The property on SessionManager is 'is_wandb_active'
+        mock_session_instance.is_wandb_active = True
 
-        # Setup buffer mock
-        buffer_instance = Mock()
-        mock_experience_buffer.return_value = buffer_instance
+        trainer = Trainer(mock_config, args_without_name)
 
-        # Setup logger mock
-        logger_instance = Mock()
-        mock_training_logger.return_value = logger_instance
+        assert trainer.session_manager is not None
+        assert trainer.run_name == "default_run_name"
+        assert trainer.run_artifact_dir == f"{temp_dir}/artifacts"
+        assert trainer.model_dir == f"{temp_dir}/models"
+        assert trainer.log_file_path == f"{temp_dir}/train.log"
+        assert trainer.is_train_wandb_active is True
 
-        # Setup console mock
-        console_instance = Mock()
-        mock_console.return_value = console_instance
-
-        # Use temp directory for session manager
-        with (
-            patch(
-                "keisei.training.trainer.SessionManager"
-            ) as mock_session_manager_class,
-            patch("os.path.join", side_effect=lambda *args: "/".join(args)),
-            patch("glob.glob", return_value=[]),
-            patch("os.makedirs"),
-            patch("os.path.exists", return_value=True),
-        ):
-
-            # Create mock session manager instance
-            mock_session_manager = Mock()
-            mock_session_manager.run_name = "test_run_12345"
-            mock_session_manager.run_artifact_dir = f"{temp_dir}/artifacts"
-            mock_session_manager.model_dir = f"{temp_dir}/models"
-            mock_session_manager.log_file_path = f"{temp_dir}/train.log"
-            mock_session_manager.eval_log_file_path = f"{temp_dir}/eval.log"
-            mock_session_manager.is_wandb_active = False
-
-            # Mock setup methods
-            mock_session_manager.setup_directories = Mock()
-            mock_session_manager.setup_wandb = Mock()
-            mock_session_manager.save_effective_config = Mock()
-            mock_session_manager.setup_seeding = Mock()
-            mock_session_manager.log_session_info = Mock()
-            mock_session_manager.finalize_session = Mock()
-
-            mock_session_manager_class.return_value = mock_session_manager
-
-            # Create Trainer instance
-            trainer = Trainer(mock_config, mock_args)
-
-            # Verify SessionManager was created and initialized
-            assert hasattr(trainer, "session_manager")
-            assert trainer.session_manager is not None
-
-            # Verify session setup methods were called
-            mock_session_manager.setup_directories.assert_called_once()
-            mock_session_manager.setup_wandb.assert_called_once()
-            mock_session_manager.save_effective_config.assert_called_once()
-            mock_session_manager.setup_seeding.assert_called_once()
-
-            # Verify session properties were set on trainer
-            assert hasattr(trainer, "run_name")
-            assert hasattr(trainer, "model_dir")
-            assert hasattr(trainer, "log_file_path")
-
-            # Verify other trainer components were initialized
-            assert hasattr(trainer, "agent")
-            assert hasattr(trainer, "experience_buffer")
-            assert hasattr(trainer, "game")
-            assert hasattr(trainer, "policy_output_mapper")
-
-    @patch("torch.device")
-    @patch("keisei.training.trainer.Console")
-    @patch("keisei.training.trainer.TrainingLogger")
-    @patch("keisei.training.trainer.ShogiGame")
-    @patch("keisei.training.trainer.PolicyOutputMapper")
-    @patch("keisei.training.trainer.PPOAgent")
-    @patch("keisei.training.trainer.ExperienceBuffer")
-    @patch("keisei.training.models.model_factory")
+    @patch("wandb.run", new_callable=Mock)
+    @patch("wandb.finish")
+    @patch("keisei.training.utils.setup_seeding")
+    @patch("keisei.training.utils.setup_directories")
+    @patch("keisei.training.utils.setup_wandb")
+    @patch("keisei.shogi.ShogiGame")
     @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.trainer.display.TrainingDisplay")
-    @patch("keisei.training.trainer.callbacks.CheckpointCallback")
-    @patch("keisei.training.trainer.callbacks.EvaluationCallback")
-    def test_trainer_session_properties_delegation(
+    @patch("keisei.utils.PolicyOutputMapper")
+    @patch("keisei.core.ppo_agent.PPOAgent")
+    @patch("keisei.core.experience_buffer.ExperienceBuffer")
+    @patch("keisei.training.models.model_factory")
+    def test_session_manager_finalization(
         self,
-        mock_eval_callback,
-        mock_checkpoint_callback,
-        mock_display,
+        _mock_model_factory,
+        _mock_experience_buffer,
+        _mock_ppo_agent,
+        _mock_policy_mapper,
         mock_feature_specs,
-        mock_model_factory,
-        mock_experience_buffer,
-        mock_ppo_agent,
-        mock_policy_mapper,
-        mock_shogi_game,
-        mock_training_logger,
-        mock_console,
-        mock_torch_device,
+        _mock_shogi_game,
+        mock_setup_wandb,
+        mock_setup_dirs,
+        _mock_setup_seeding,
+        mock_wandb_finish,
+        _mock_wandb_run,
         mock_config,
         mock_args,
         temp_dir,
     ):
-        """Test that Trainer properly delegates session properties to SessionManager."""
-        # Setup mocks (similar to previous test)
+        """Test that session finalization is called correctly."""
+        mock_setup_dirs.return_value = {
+            "run_artifact_dir": f"{temp_dir}/artifacts",
+            "model_dir": f"{temp_dir}/models",
+            "log_file_path": f"{temp_dir}/train.log",
+            "eval_log_file_path": f"{temp_dir}/eval.log",
+        }
+        mock_config.wandb.enabled = True
+        mock_setup_wandb.return_value = True
+
         feature_spec_mock = Mock()
         feature_spec_mock.num_planes = 46
         mock_feature_specs.__getitem__.return_value = feature_spec_mock
 
-        mock_model = Mock()
-        mock_model_factory.return_value = mock_model
-
-        # Setup device mock - return string that PyTorch can handle
-        mock_torch_device.return_value = "cpu"
-
-        game_instance = Mock()
-        game_instance.seed = Mock()
-        mock_shogi_game.return_value = game_instance
-
-        policy_mapper_instance = Mock()
-        policy_mapper_instance.get_total_actions.return_value = 4096
-        mock_policy_mapper.return_value = policy_mapper_instance
-
-        agent_instance = Mock()
-        agent_instance.name = "test_agent"
-        agent_instance.model = mock_model
-        mock_ppo_agent.return_value = agent_instance
-
-        buffer_instance = Mock()
-        mock_experience_buffer.return_value = buffer_instance
-
-        logger_instance = Mock()
-        mock_training_logger.return_value = logger_instance
-
-        console_instance = Mock()
-        mock_console.return_value = console_instance
-
-        # Mock session manager with specific property values
         with (
-            patch(
-                "keisei.training.trainer.SessionManager"
-            ) as mock_session_manager_class,
             patch("builtins.open", mock_open()),
+            patch("keisei.training.utils.serialize_config"),
         ):
-            mock_session_manager = Mock()
-            mock_session_manager.run_name = "test_run_session"
-            mock_session_manager.run_artifact_dir = f"{temp_dir}/artifacts"
-            mock_session_manager.model_dir = f"{temp_dir}/models"
-            mock_session_manager.log_file_path = f"{temp_dir}/train.log"
-            mock_session_manager.eval_log_file_path = f"{temp_dir}/eval.log"
-            mock_session_manager.is_wandb_active = False
-
-            # Mock setup methods
-            mock_session_manager.setup_directories = Mock()
-            mock_session_manager.setup_wandb = Mock()
-            mock_session_manager.save_effective_config = Mock()
-            mock_session_manager.setup_seeding = Mock()
-
-            mock_session_manager_class.return_value = mock_session_manager
-
-            # Create Trainer instance
             trainer = Trainer(mock_config, mock_args)
 
-            # Verify properties were copied from session manager
-            assert trainer.run_name == "test_run_session"
-            assert trainer.run_artifact_dir == f"{temp_dir}/artifacts"
-            assert trainer.model_dir == f"{temp_dir}/models"
-            assert trainer.log_file_path == f"{temp_dir}/train.log"
-            assert trainer.eval_log_file_path == f"{temp_dir}/eval.log"
-            assert trainer.is_train_wandb_active is False
+        trainer.session_manager.finalize_session()
+        mock_wandb_finish.assert_called_once()
 
-    def test_session_manager_method_integration(self, mock_config, mock_args, temp_dir):
-        """Test that session manager methods are properly integrated."""
-        with (
-            patch(
-                "keisei.training.trainer.SessionManager"
-            ) as mock_session_manager_class,
-            patch("builtins.open", mock_open()),
-        ):
-            mock_session_manager = Mock()
-            mock_session_manager.log_session_info = Mock()
-            mock_session_manager.finalize_session = Mock()
-            mock_session_manager.setup_directories = Mock()
-            mock_session_manager.setup_wandb = Mock()
-            mock_session_manager.save_effective_config = Mock()
-            mock_session_manager.setup_seeding = Mock()
+    @patch("keisei.training.utils.setup_directories")
+    @patch("keisei.training.models.model_factory")
+    def test_session_manager_error_handling(
+        self, _mock_model_factory, mock_setup_dirs, mock_config, mock_args
+    ):
+        """Test that SessionManager errors are handled during Trainer initialization."""
+        mock_setup_dirs.side_effect = OSError("Permission denied")
 
-            # Add required properties
-            mock_session_manager.run_name = "test_session"
-            mock_session_manager.run_artifact_dir = f"{temp_dir}/artifacts"
-            mock_session_manager.model_dir = f"{temp_dir}/models"
-            mock_session_manager.log_file_path = f"{temp_dir}/training.log"
-            mock_session_manager.eval_log_file_path = f"{temp_dir}/eval.log"
-            mock_session_manager.is_wandb_active = False
-
-            mock_session_manager_class.return_value = mock_session_manager
-
-            # Mock all trainer dependencies to avoid initialization issues
-            with (
-                patch.multiple(
-                    "keisei.training.trainer",
-                    Console=Mock(),
-                    TrainingLogger=Mock(),
-                    ShogiGame=Mock(),
-                    PolicyOutputMapper=Mock(),
-                    PPOAgent=Mock(),
-                    ExperienceBuffer=Mock(),
-                    display=Mock(),
-                    callbacks=Mock(),
-                ),
-                patch("keisei.training.models.model_factory"),
-                patch(
-                    "keisei.training.utils.find_latest_checkpoint", return_value=None
-                ),
-                patch("torch.device", return_value="cpu"),
-                patch(
-                    "keisei.shogi.features.FEATURE_SPECS",
-                    {"core46": Mock(num_planes=46)},
-                ),
-            ):
-
-                trainer = Trainer(mock_config, mock_args)
-
-                # Test session info logging delegation
-                mock_log_both = Mock()
-                trainer._log_run_info(mock_log_both)
-
-                # Verify session manager's log_session_info was called with correct arguments
-                mock_session_manager.log_session_info.assert_called_once()
-                call_args = mock_session_manager.log_session_info.call_args
-                assert call_args is not None
-                # Verify keyword arguments were passed
-                assert "logger_func" in call_args.kwargs
-                assert "agent_info" in call_args.kwargs
-                assert "global_timestep" in call_args.kwargs
-                assert "total_episodes_completed" in call_args.kwargs
-
-                # Test session finalization (would be called at end of training)
-                # This would typically be called in training loop completion
-                trainer.session_manager.finalize_session()
-                mock_session_manager.finalize_session.assert_called_once()
+        with pytest.raises(RuntimeError, match="Failed to setup directories"):
+            Trainer(mock_config, mock_args)

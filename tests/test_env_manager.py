@@ -9,7 +9,15 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from keisei.config_schema import AppConfig, DemoConfig, EnvConfig, EvaluationConfig, LoggingConfig, TrainingConfig, WandBConfig
+from keisei.config_schema import (
+    AppConfig,
+    DemoConfig,
+    EnvConfig,
+    EvaluationConfig,
+    LoggingConfig,
+    TrainingConfig,
+    WandBConfig,
+)
 from keisei.training.env_manager import EnvManager
 
 
@@ -86,7 +94,9 @@ class TestEnvManagerInitialization:
 
     @patch("keisei.training.env_manager.ShogiGame")
     @patch("keisei.training.env_manager.PolicyOutputMapper")
-    def test_initialization_success(self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func):
+    def test_initialization_success(
+        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func
+    ):
         """Test successful EnvManager initialization."""
         # Setup mocks
         mock_game = Mock()
@@ -114,7 +124,9 @@ class TestEnvManagerInitialization:
 
     @patch("keisei.training.env_manager.ShogiGame")
     @patch("keisei.training.env_manager.PolicyOutputMapper")
-    def test_initialization_no_seed(self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func):
+    def test_initialization_no_seed(
+        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func
+    ):
         """Test initialization when no seed is specified."""
         # Remove seed from config
         mock_config.env.seed = None
@@ -135,7 +147,9 @@ class TestEnvManagerInitialization:
         mock_game.seed.assert_not_called()
 
     @patch("keisei.training.env_manager.ShogiGame")
-    def test_initialization_game_error(self, mock_shogi_game_class, mock_config, logger_func):
+    def test_initialization_game_error(
+        self, mock_shogi_game_class, mock_config, logger_func
+    ):
         """Test initialization when ShogiGame creation fails."""
         # Setup mock to raise exception
         mock_shogi_game_class.side_effect = RuntimeError("Game initialization failed")
@@ -144,24 +158,34 @@ class TestEnvManagerInitialization:
         with pytest.raises(RuntimeError, match="Failed to initialize ShogiGame"):
             EnvManager(mock_config, logger_func)
 
-        logger_func.assert_any_call("Error initializing ShogiGame: Game initialization failed. Aborting.")
+        logger_func.assert_any_call(
+            "Error initializing ShogiGame: Game initialization failed. Aborting."
+        )
 
     @patch("keisei.training.env_manager.ShogiGame")
     @patch("keisei.training.env_manager.PolicyOutputMapper")
-    def test_initialization_policy_mapper_error(self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func):
+    def test_initialization_policy_mapper_error(
+        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func
+    ):
         """Test initialization when PolicyOutputMapper creation fails."""
         # Setup game mock
         mock_game = Mock()
         mock_shogi_game_class.return_value = mock_game
 
         # Setup policy mapper to raise exception
-        mock_policy_mapper_class.side_effect = ValueError("Policy mapper initialization failed")
+        mock_policy_mapper_class.side_effect = ValueError(
+            "Policy mapper initialization failed"
+        )
 
         # Verify exception is raised
-        with pytest.raises(RuntimeError, match="Failed to initialize PolicyOutputMapper"):
+        with pytest.raises(
+            RuntimeError, match="Failed to initialize PolicyOutputMapper"
+        ):
             EnvManager(mock_config, logger_func)
 
-        logger_func.assert_any_call("Error initializing PolicyOutputMapper: Policy mapper initialization failed")
+        logger_func.assert_any_call(
+            "Error initializing PolicyOutputMapper: Policy mapper initialization failed"
+        )
 
 
 class TestEnvManagerActionSpaceValidation:
@@ -169,7 +193,9 @@ class TestEnvManagerActionSpaceValidation:
 
     @patch("keisei.training.env_manager.ShogiGame")
     @patch("keisei.training.env_manager.PolicyOutputMapper")
-    def test_action_space_validation_success(self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func):
+    def test_action_space_validation_success(
+        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func
+    ):
         """Test successful action space validation."""
         # Setup mocks
         mock_game = Mock()
@@ -187,7 +213,9 @@ class TestEnvManagerActionSpaceValidation:
 
     @patch("keisei.training.env_manager.ShogiGame")
     @patch("keisei.training.env_manager.PolicyOutputMapper")
-    def test_action_space_validation_mismatch(self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func):
+    def test_action_space_validation_mismatch(
+        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func
+    ):
         """Test action space validation with mismatch."""
         # Setup mocks
         mock_game = Mock()
@@ -198,7 +226,9 @@ class TestEnvManagerActionSpaceValidation:
         mock_policy_mapper_class.return_value = mock_mapper
 
         # Verify exception is raised
-        with pytest.raises(RuntimeError, match="Failed to initialize PolicyOutputMapper"):
+        with pytest.raises(
+            RuntimeError, match="Failed to initialize PolicyOutputMapper"
+        ):
             EnvManager(mock_config, logger_func)
 
         expected_error = (
@@ -213,7 +243,9 @@ class TestEnvManagerEnvironmentOperations:
 
     @patch("keisei.training.env_manager.ShogiGame")
     @patch("keisei.training.env_manager.PolicyOutputMapper")
-    def test_reset_game_success(self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func):
+    def test_reset_game_success(
+        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func
+    ):
         """Test successful game reset."""
         # Setup mocks
         mock_game = Mock()
@@ -236,7 +268,9 @@ class TestEnvManagerEnvironmentOperations:
 
     @patch("keisei.training.env_manager.ShogiGame")
     @patch("keisei.training.env_manager.PolicyOutputMapper")
-    def test_reset_game_failure(self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func):
+    def test_reset_game_failure(
+        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func
+    ):
         """Test game reset failure."""
         # Setup mocks
         mock_game = Mock()
@@ -259,7 +293,9 @@ class TestEnvManagerEnvironmentOperations:
 
     @patch("keisei.training.env_manager.ShogiGame")
     @patch("keisei.training.env_manager.PolicyOutputMapper")
-    def test_get_legal_moves_count_success(self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func):
+    def test_get_legal_moves_count_success(
+        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func
+    ):
         """Test getting legal moves count successfully."""
         # Setup mocks
         mock_game = Mock()
@@ -283,7 +319,9 @@ class TestEnvManagerEnvironmentOperations:
 
     @patch("keisei.training.env_manager.ShogiGame")
     @patch("keisei.training.env_manager.PolicyOutputMapper")
-    def test_get_legal_moves_count_error(self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func):
+    def test_get_legal_moves_count_error(
+        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func
+    ):
         """Test getting legal moves count with error."""
         # Setup mocks
         mock_game = Mock()
@@ -302,7 +340,9 @@ class TestEnvManagerEnvironmentOperations:
 
         # Verify error handling
         assert count == 0
-        logger_func.assert_any_call("Error getting legal moves count: Legal moves error")
+        logger_func.assert_any_call(
+            "Error getting legal moves count: Legal moves error"
+        )
 
 
 class TestEnvManagerSeeding:
@@ -310,7 +350,9 @@ class TestEnvManagerSeeding:
 
     @patch("keisei.training.env_manager.ShogiGame")
     @patch("keisei.training.env_manager.PolicyOutputMapper")
-    def test_setup_seeding_with_explicit_seed(self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func):
+    def test_setup_seeding_with_explicit_seed(
+        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func
+    ):
         """Test seeding with explicit seed value."""
         # Setup mocks
         mock_game = Mock()
@@ -332,12 +374,16 @@ class TestEnvManagerSeeding:
 
         # Verify seeding
         assert result is True
-        mock_game.seed.assert_called_with(123)  # Should use explicit seed, not config seed
+        mock_game.seed.assert_called_with(
+            123
+        )  # Should use explicit seed, not config seed
         logger_func.assert_any_call("Environment re-seeded with: 123")
 
     @patch("keisei.training.env_manager.ShogiGame")
     @patch("keisei.training.env_manager.PolicyOutputMapper")
-    def test_setup_seeding_with_config_seed(self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func):
+    def test_setup_seeding_with_config_seed(
+        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func
+    ):
         """Test seeding with config seed value."""
         # Setup mocks
         mock_game = Mock()
@@ -364,7 +410,9 @@ class TestEnvManagerSeeding:
 
     @patch("keisei.training.env_manager.ShogiGame")
     @patch("keisei.training.env_manager.PolicyOutputMapper")
-    def test_setup_seeding_no_seed_method(self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func):
+    def test_setup_seeding_no_seed_method(
+        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func
+    ):
         """Test seeding when game has no seed method."""
         # Setup mocks - game without seed method
         mock_game = Mock(spec=[])  # Empty spec means no seed method
@@ -385,7 +433,9 @@ class TestEnvManagerSeeding:
 
     @patch("keisei.training.env_manager.ShogiGame")
     @patch("keisei.training.env_manager.PolicyOutputMapper")
-    def test_setup_seeding_error(self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func):
+    def test_setup_seeding_error(
+        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func
+    ):
         """Test seeding when seed method raises error."""
         # Setup mocks
         mock_game = Mock()
@@ -415,7 +465,9 @@ class TestEnvManagerValidation:
 
     @patch("keisei.training.env_manager.ShogiGame")
     @patch("keisei.training.env_manager.PolicyOutputMapper")
-    def test_validate_environment_success(self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func):
+    def test_validate_environment_success(
+        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func
+    ):
         """Test successful environment validation."""
         # Setup mocks
         mock_game = Mock()
@@ -439,7 +491,9 @@ class TestEnvManagerValidation:
 
     @patch("keisei.training.env_manager.ShogiGame")
     @patch("keisei.training.env_manager.PolicyOutputMapper")
-    def test_validate_environment_game_none(self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func):
+    def test_validate_environment_game_none(
+        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func
+    ):
         """Test validation when game is None."""
         # Setup mocks
         mock_game = Mock()
@@ -458,11 +512,15 @@ class TestEnvManagerValidation:
 
         # Verify validation failed
         assert result is False
-        logger_func.assert_any_call("Environment validation failed: game not initialized")
+        logger_func.assert_any_call(
+            "Environment validation failed: game not initialized"
+        )
 
     @patch("keisei.training.env_manager.ShogiGame")
     @patch("keisei.training.env_manager.PolicyOutputMapper")
-    def test_validate_environment_policy_mapper_none(self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func):
+    def test_validate_environment_policy_mapper_none(
+        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func
+    ):
         """Test validation when policy mapper is None."""
         # Setup mocks
         mock_game = Mock()
@@ -481,11 +539,15 @@ class TestEnvManagerValidation:
 
         # Verify validation failed
         assert result is False
-        logger_func.assert_any_call("Environment validation failed: policy mapper not initialized")
+        logger_func.assert_any_call(
+            "Environment validation failed: policy mapper not initialized"
+        )
 
     @patch("keisei.training.env_manager.ShogiGame")
     @patch("keisei.training.env_manager.PolicyOutputMapper")
-    def test_validate_environment_invalid_action_space(self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func):
+    def test_validate_environment_invalid_action_space(
+        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func
+    ):
         """Test validation with invalid action space."""
         # Setup mocks
         mock_game = Mock()
@@ -504,7 +566,9 @@ class TestEnvManagerValidation:
 
         # Verify validation failed
         assert result is False
-        logger_func.assert_any_call("Environment validation failed: invalid action space size")
+        logger_func.assert_any_call(
+            "Environment validation failed: invalid action space size"
+        )
 
 
 class TestEnvManagerUtilities:
@@ -512,7 +576,9 @@ class TestEnvManagerUtilities:
 
     @patch("keisei.training.env_manager.ShogiGame")
     @patch("keisei.training.env_manager.PolicyOutputMapper")
-    def test_get_environment_info(self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func):
+    def test_get_environment_info(
+        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func
+    ):
         """Test environment information retrieval."""
         # Setup mocks
         mock_game = Mock()

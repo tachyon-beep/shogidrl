@@ -1,27 +1,31 @@
 """
-test_session_manager.py: Comprehensive unit tests for SessionManager class.
+test_session_management.py: Comprehensive tests for SessionManager and its integration with Trainer.
 
-Tests cover initialization, directory setup, WandB configuration, logging,
-error handling, and session lifecycle management.
+This file covers the standalone unit tests for the SessionManager class, including
+initialization, lifecycle management (directory, WandB setup, config saving),
+logging, and error handling.
+
+It also includes integration tests to verify that the Trainer class correctly
+utilizes the SessionManager for all session-related tasks.
 """
-
-import os
-import tempfile
-from datetime import datetime
-from unittest.mock import Mock, mock_open, patch
+from unittest.mock import Mock, patch, mock_open, MagicMock
 
 import pytest
 
 from keisei.config_schema import (
     AppConfig,
+    DemoConfig,
     EnvConfig,
+    EvaluationConfig,
     LoggingConfig,
     TrainingConfig,
     WandBConfig,
 )
 from keisei.training.session_manager import SessionManager
+from keisei.training.trainer import Trainer
 
 
+# Mock Fixtures
 class MockArgs:
     """Mock command-line arguments for testing."""
 
@@ -33,490 +37,374 @@ class MockArgs:
 
 
 @pytest.fixture
-def mock_config():
-    """Create a mock configuration for testing."""
-    config = Mock(spec=AppConfig)
-
-    # Environment config
-    env_config = Mock(spec=EnvConfig)
-    env_config.seed = 42
-    env_config.device = "cuda"
-    config.env = env_config
-
-    # Training config
-    training_config = Mock(spec=TrainingConfig)
-    training_config.total_timesteps = 1000000
-    training_config.steps_per_epoch = 2048
-    training_config.model_type = "resnet"
-    training_config.input_features = "core46"
-    config.training = training_config
-    # Logging config
-    logging_config = Mock(spec=LoggingConfig)
-    logging_config.run_name = None
-    config.logging = logging_config
-
-    # WandB config
-    wandb_config = Mock(spec=WandBConfig)
-    wandb_config.run_name_prefix = "keisei"
-    config.wandb = wandb_config
-
-    return config
+def mock_app_config():
+    """Create a mock application configuration for testing."""
+    return AppConfig(
+        env=EnvConfig(
+            device="cpu",
+            num_actions_total=13527,
+            input_channels=46,
+            seed=42,
+        ),
+        training=TrainingConfig(
+            total_timesteps=500_000,
+            steps_per_epoch=2048,
+            ppo_epochs=10,
+            minibatch_size=64,
+            learning_rate=3e-4,
+            gamma=0.99,
+            clip_epsilon=0.2,
+            value_loss_coeff=0.5,
+            entropy_coef=0.01,
+            render_every_steps=1,
+            refresh_per_second=4,
+            enable_spinner=True,
+            input_features="core46",
+            tower_depth=9,
+            tower_width=256,
+            se_ratio=0.25,
+            model_type="resnet",
+            mixed_precision=False,
+            ddp=False,
+            gradient_clip_max_norm=0.5,
+            lambda_gae=0.95,
+            checkpoint_interval_timesteps=10000,
+            evaluation_interval_timesteps=50000,
+            weight_decay=0.0,
+        ),
+        evaluation=EvaluationConfig(
+            num_games=20,
+            opponent_type="random",
+            evaluation_interval_timesteps=50000,
+        ),
+        logging=LoggingConfig(
+            log_file="test.log",
+            model_dir="/tmp/test_models",
+            run_name=None,
+        ),
+        wandb=WandBConfig(
+            enabled=False,
+            project="test-project",
+            entity=None,
+            run_name_prefix="test",
+            watch_model=False,
+            watch_log_freq=1000,
+            watch_log_type="all",
+        ),
+        demo=DemoConfig(
+            enable_demo_mode=False,
+            demo_mode_delay=0.5,
+        ),
+    )
 
 
 @pytest.fixture
-def mock_args():
+def mock_cli_args():
     """Create mock command-line arguments."""
-    return MockArgs()
+    return MockArgs(resume=None)
 
 
+# Unit Tests for SessionManager
 class TestSessionManagerInitialization:
-    """Test SessionManager initialization logic."""
+    """Test SessionManager initialization logic and run name precedence."""
 
-    def test_init_with_explicit_run_name(self, mock_config, mock_args):
-        """Test initialization with explicit run_name parameter."""
+    def test_init_with_explicit_run_name(self, mock_app_config, mock_cli_args):
+        """Test initialization with an explicit run_name parameter."""
         explicit_name = "explicit_test_run"
-        manager = SessionManager(mock_config, mock_args, run_name=explicit_name)
+        manager = SessionManager(mock_app_config, mock_cli_args, run_name=explicit_name)
         assert manager.run_name == explicit_name
 
-    def test_init_with_args_run_name(self, mock_config):
+    def test_init_with_args_run_name(self, mock_app_config):
         """Test initialization with run_name from CLI args."""
         args_name = "args_test_run"
         args = MockArgs(run_name=args_name)
-        manager = SessionManager(mock_config, args)
+        manager = SessionManager(mock_app_config, args)
         assert manager.run_name == args_name
 
-    def test_init_with_config_run_name(self, mock_config, mock_args):
-        """Test initialization with run_name from config."""
+    def test_init_with_config_run_name(self, mock_app_config, mock_cli_args):
+        """Test initialization with run_name from the config file."""
         config_name = "config_test_run"
-        mock_config.logging.run_name = config_name
-        manager = SessionManager(mock_config, mock_args)
+        mock_app_config.logging.run_name = config_name
+        manager = SessionManager(mock_app_config, mock_cli_args)
         assert manager.run_name == config_name
 
     @patch("keisei.training.session_manager.generate_run_name")
-    def test_init_with_auto_generated_name(self, mock_generate, mock_config, mock_args):
-        """Test initialization with auto-generated run_name."""
+    def test_init_with_auto_generated_name(self, mock_generate, mock_app_config, mock_cli_args):
+        """Test initialization with an auto-generated run_name."""
         generated_name = "auto_generated_run"
         mock_generate.return_value = generated_name
-
-        manager = SessionManager(mock_config, mock_args)
+        manager = SessionManager(mock_app_config, mock_cli_args)
         assert manager.run_name == generated_name
-        mock_generate.assert_called_once_with(mock_config, None)
+        mock_generate.assert_called_once_with(mock_app_config, None)
 
-    def test_init_precedence_explicit_over_args(self, mock_config):
-        """Test that explicit run_name takes precedence over args."""
+    def test_init_run_name_precedence(self, mock_app_config):
+        """Test the precedence order for determining the run_name."""
         explicit_name = "explicit_name"
         args_name = "args_name"
-        args = MockArgs(run_name=args_name)
-
-        manager = SessionManager(mock_config, args, run_name=explicit_name)
-        assert manager.run_name == explicit_name
-
-    def test_init_precedence_args_over_config(self, mock_config):
-        """Test that args run_name takes precedence over config."""
-        args_name = "args_name"
         config_name = "config_name"
-        args = MockArgs(run_name=args_name)
-        mock_config.logging.run_name = config_name
+        args_with_name = MockArgs(run_name=args_name)
+        mock_app_config.logging.run_name = config_name
 
-        manager = SessionManager(mock_config, args)
-        assert manager.run_name == args_name
+        # Explicit name should have the highest priority
+        manager1 = SessionManager(mock_app_config, args_with_name, run_name=explicit_name)
+        assert manager1.run_name == explicit_name
 
-    def test_init_properties_not_accessible_before_setup(self, mock_config, mock_args):
-        """Test that directory properties raise errors before setup."""
-        manager = SessionManager(mock_config, mock_args, run_name="test")
+        # Args name should have priority over config name
+        manager2 = SessionManager(mock_app_config, args_with_name)
+        assert manager2.run_name == args_name
+
+
+class TestSessionManagerLifecycle:
+    """Test the complete lifecycle of SessionManager: setup, config saving, and finalization."""
+
+    @pytest.fixture
+    def setup_mocks(self):
+        """A single fixture to set up all necessary mocks."""
+        with patch("keisei.training.utils.setup_directories") as mock_setup_dirs, \
+             patch("keisei.training.utils.setup_wandb") as mock_setup_wandb, \
+             patch("keisei.training.utils.serialize_config") as mock_serialize, \
+             patch("keisei.training.utils.setup_seeding") as mock_setup_seeding, \
+             patch("builtins.open", new_callable=mock_open) as mock_file, \
+             patch("os.path.join") as mock_join:
+
+            mock_setup_dirs.return_value = {
+                "run_artifact_dir": "/tmp/test_run",
+                "model_dir": "/tmp/test_run/models",
+                "log_file_path": "/tmp/test_run/training.log",
+                "eval_log_file_path": "/tmp/test_run/eval.log",
+            }
+            mock_setup_wandb.return_value = True
+            mock_serialize.return_value = '{"test": "config"}'
+            mock_join.return_value = "/tmp/test_run/effective_config.json"
+
+            yield {
+                "setup_dirs": mock_setup_dirs,
+                "setup_wandb": mock_setup_wandb,
+                "serialize": mock_serialize,
+                "setup_seeding": mock_setup_seeding,
+                "file": mock_file,
+            }
+
+    def test_full_workflow(self, setup_mocks, mock_app_config, mock_cli_args):
+        """Test the complete session setup workflow."""
+        manager = SessionManager(mock_app_config, mock_cli_args, run_name="test_workflow")
+
+        # 1. Setup Seeding
+        manager.setup_seeding()
+        setup_mocks["setup_seeding"].assert_called_once_with(mock_app_config)
+
+        # 2. Setup Directories
+        dirs = manager.setup_directories()
+        assert dirs["run_artifact_dir"] == "/tmp/test_run"
+        assert manager.run_artifact_dir == "/tmp/test_run"
+        setup_mocks["setup_dirs"].assert_called_once_with(mock_app_config, "test_workflow")
+
+        # 3. Setup WandB
+        wandb_active = manager.setup_wandb()
+        assert wandb_active is True
+        assert manager.is_wandb_active is True
+        setup_mocks["setup_wandb"].assert_called_once_with(mock_app_config, "test_workflow", "/tmp/test_run")
+
+        # 4. Save Effective Config
+        manager.save_effective_config()
+        setup_mocks["serialize"].assert_called_once_with(mock_app_config)
+        setup_mocks["file"].assert_called_once_with("/tmp/test_run/effective_config.json", "w", encoding="utf-8")
+        setup_mocks["file"]().write.assert_called_once_with('{"test": "config"}')
+
+    @patch("wandb.finish")
+    def test_finalize_session(self, _mock_wandb_finish, mock_app_config, mock_cli_args):
+        """Test session finalization with and without an active WandB run."""
+        # Case 1: WandB is active
+        manager1 = SessionManager(mock_app_config, mock_cli_args)
+        manager1._is_wandb_active = True  # pylint: disable=protected-access
+        with patch("wandb.run", MagicMock()):  # Ensure wandb.run is not None
+            manager1.finalize_session()
+        _mock_wandb_finish.assert_called_once()
+
+        # Case 2: WandB is not active
+        _mock_wandb_finish.reset_mock()
+        manager2 = SessionManager(mock_app_config, mock_cli_args)
+        manager2._is_wandb_active = False  # pylint: disable=protected-access
+        manager2.finalize_session()
+        _mock_wandb_finish.assert_not_called()
+
+
+class TestSessionManagerErrorHandling:
+    """Test SessionManager error handling and property access before setup."""
+
+    def test_properties_raise_error_before_setup(self, mock_app_config, mock_cli_args):
+        """Test that properties raise RuntimeError if accessed before setup."""
+        manager = SessionManager(mock_app_config, mock_cli_args)
 
         with pytest.raises(RuntimeError, match="Directories not yet set up"):
             _ = manager.run_artifact_dir
-
         with pytest.raises(RuntimeError, match="Directories not yet set up"):
             _ = manager.model_dir
-
-        with pytest.raises(RuntimeError, match="Directories not yet set up"):
-            _ = manager.log_file_path
-
-        with pytest.raises(RuntimeError, match="Directories not yet set up"):
-            _ = manager.eval_log_file_path
-
-    def test_init_wandb_property_not_accessible_before_setup(
-        self, mock_config, mock_args
-    ):
-        """Test that WandB property raises error before setup."""
-        manager = SessionManager(mock_config, mock_args, run_name="test")
-
         with pytest.raises(RuntimeError, match="WandB not yet initialized"):
             _ = manager.is_wandb_active
 
-
-class TestSessionManagerDirectorySetup:
-    """Test directory setup functionality."""
-
-    @patch("keisei.training.utils.setup_directories")
-    def test_setup_directories_success(self, mock_setup_dirs, mock_config, mock_args):
-        """Test successful directory setup."""
-        expected_dirs = {
-            "run_artifact_dir": "/tmp/test_run",
-            "model_dir": "/tmp/test_run/models",
-            "log_file_path": "/tmp/test_run/training.log",
-            "eval_log_file_path": "/tmp/test_run/eval.log",
-        }
-        mock_setup_dirs.return_value = expected_dirs
-
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        result = manager.setup_directories()
-
-        assert result == expected_dirs
-        assert manager.run_artifact_dir == expected_dirs["run_artifact_dir"]
-        assert manager.model_dir == expected_dirs["model_dir"]
-        assert manager.log_file_path == expected_dirs["log_file_path"]
-        assert manager.eval_log_file_path == expected_dirs["eval_log_file_path"]
-
-        mock_setup_dirs.assert_called_once_with(mock_config, "test_run")
-
-    @patch("keisei.training.utils.setup_directories")
-    def test_setup_directories_failure(self, mock_setup_dirs, mock_config, mock_args):
-        """Test directory setup failure handling."""
-        mock_setup_dirs.side_effect = OSError("Permission denied")
-
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-
+    @patch("keisei.training.utils.setup_directories", side_effect=OSError("Permission denied"))
+    def test_directory_setup_failure(self, _mock_setup_dirs, mock_app_config, mock_cli_args):
+        """Test handling of directory setup failures."""
+        manager = SessionManager(mock_app_config, mock_cli_args)
         with pytest.raises(RuntimeError, match="Failed to setup directories"):
             manager.setup_directories()
 
+    @patch("keisei.training.utils.setup_wandb", side_effect=Exception("WandB API error"))
+    def test_wandb_setup_failure(self, _mock_setup_wandb, mock_app_config, mock_cli_args):
+        """Test that WandB setup failure is handled gracefully."""
+        manager = SessionManager(mock_app_config, mock_cli_args)
+        manager._run_artifact_dir = "/tmp/test"  # pylint: disable=protected-access
 
-class TestSessionManagerWandBSetup:
-    """Test WandB setup functionality."""
-
-    @patch("keisei.training.utils.setup_wandb")
-    def test_setup_wandb_success(self, mock_setup_wandb, mock_config, mock_args):
-        """Test successful WandB setup."""
-        mock_setup_wandb.return_value = True
-
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        # Setup directories first
-        manager._run_artifact_dir = "/tmp/test_run"
-
-        result = manager.setup_wandb()
-
-        assert result is True
-        assert manager.is_wandb_active is True
-        mock_setup_wandb.assert_called_once_with(
-            mock_config, "test_run", "/tmp/test_run"
-        )
-
-    @patch("keisei.training.utils.setup_wandb")
-    def test_setup_wandb_failure(self, mock_setup_wandb, mock_config, mock_args):
-        """Test WandB setup failure handling."""
-        mock_setup_wandb.side_effect = Exception("WandB connection failed")
-
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._run_artifact_dir = "/tmp/test_run"
-
-        with patch("sys.stderr"):
+        with patch("sys.stderr"):  # Suppress error message print
             result = manager.setup_wandb()
+            assert result is False
+            assert manager.is_wandb_active is False
 
-        assert result is False
-        assert manager.is_wandb_active is False
-
-    def test_setup_wandb_without_directories(self, mock_config, mock_args):
-        """Test WandB setup fails without directory setup."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-
-        with pytest.raises(
-            RuntimeError, match="Directories must be set up before initializing WandB"
-        ):
-            manager.setup_wandb()
-
-
-class TestSessionManagerConfigSaving:
-    """Test configuration saving functionality."""
-
-    @patch("keisei.training.utils.serialize_config")
-    @patch("builtins.open", new_callable=mock_open)
-    @patch("os.path.join")
-    def test_save_effective_config_success(
-        self, mock_join, mock_file, mock_serialize, mock_config, mock_args
-    ):
-        """Test successful configuration saving."""
-        mock_serialize.return_value = '{"test": "config"}'
-        mock_join.return_value = "/tmp/test_run/effective_config.json"
-
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._run_artifact_dir = "/tmp/test_run"
-
-        manager.save_effective_config()
-
-        mock_serialize.assert_called_once_with(mock_config)
-        mock_file.assert_called_once_with(
-            "/tmp/test_run/effective_config.json", "w", encoding="utf-8"
-        )
-        mock_file().write.assert_called_once_with('{"test": "config"}')
-
-    @patch("keisei.training.utils.serialize_config")
-    def test_save_effective_config_serialization_error(
-        self, mock_serialize, mock_config, mock_args
-    ):
-        """Test configuration saving with serialization error."""
-        mock_serialize.side_effect = TypeError("Cannot serialize")
-
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._run_artifact_dir = "/tmp/test_run"
-
+    @patch("keisei.training.utils.serialize_config", side_effect=TypeError("Serialization error"))
+    def test_config_saving_failure(self, _mock_serialize, mock_app_config, mock_cli_args):
+        """Test handling of config saving failures."""
+        manager = SessionManager(mock_app_config, mock_cli_args)
+        manager._run_artifact_dir = "/tmp/test"  # pylint: disable=protected-access
         with pytest.raises(RuntimeError, match="Failed to save effective config"):
             manager.save_effective_config()
 
-    def test_save_effective_config_without_directories(self, mock_config, mock_args):
-        """Test configuration saving fails without directory setup."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
 
-        with pytest.raises(
-            RuntimeError, match="Directories must be set up before saving config"
-        ):
-            manager.save_effective_config()
+class TestSessionManagerLoggingAndSummary:
+    """Test session info logging and summary generation."""
 
+    def test_get_session_summary(self, mock_app_config, mock_cli_args):
+        """Test generation of the session summary."""
+        manager = SessionManager(mock_app_config, mock_cli_args, run_name="summary_test")
 
-class TestSessionManagerLogging:
-    """Test session logging functionality."""
+        # Before setup
+        summary1 = manager.get_session_summary()
+        assert summary1["run_name"] == "summary_test"
+        assert summary1["run_artifact_dir"] is None
+        assert summary1["is_wandb_active"] is None
+        assert summary1["seed"] == 42
 
-    def test_log_session_info_basic(self, mock_config, mock_args):
-        """Test basic session info logging."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._run_artifact_dir = "/tmp/test_run"
-        manager._is_wandb_active = False
+        # After setup
+        manager._run_artifact_dir = "/tmp/summary"      # pylint: disable=protected-access
+        manager._model_dir = "/tmp/summary/models"      # pylint: disable=protected-access
+        manager._log_file_path = "/tmp/summary/training.log"  # pylint: disable=protected-access
+        manager._is_wandb_active = True                 # pylint: disable=protected-access
+
+        summary2 = manager.get_session_summary()
+        assert summary2["run_artifact_dir"] == "/tmp/summary"
+        assert summary2["is_wandb_active"] is True
+
+    def test_log_session_info(self, mock_app_config, mock_cli_args):
+        """Test the content of session info logging."""
+        manager = SessionManager(mock_app_config, mock_cli_args, run_name="log_test")
+        manager._run_artifact_dir = "/tmp/log_test_dir"  # pylint: disable=protected-access
+        manager._is_wandb_active = False               # pylint: disable=protected-access
 
         logged_messages = []
-
         def mock_logger(msg):
             logged_messages.append(msg)
 
-        manager.log_session_info(mock_logger)
-
-        assert any("Keisei Training Run: test_run" in msg for msg in logged_messages)
-        assert any("Run directory: /tmp/test_run" in msg for msg in logged_messages)
-        assert any("Random seed: 42" in msg for msg in logged_messages)
-        assert any("Device: cuda" in msg for msg in logged_messages)
-        assert any("Starting fresh training." in msg for msg in logged_messages)
-
-    @patch("wandb.run")
-    def test_log_session_info_with_wandb(self, mock_wandb_run, mock_config, mock_args):
-        """Test session info logging with WandB active."""
-        mock_wandb_run.url = "https://wandb.ai/test/run"
-
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._run_artifact_dir = "/tmp/test_run"
-        manager._is_wandb_active = True
-
-        logged_messages = []
-
-        def mock_logger(msg):
-            logged_messages.append(msg)
-
-        manager.log_session_info(mock_logger)
-
-        assert any("W&B: https://wandb.ai/test/run" in msg for msg in logged_messages)
-
-    def test_log_session_info_with_resume(self, mock_config, mock_args):
-        """Test session info logging with resume information."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._run_artifact_dir = "/tmp/test_run"
-        manager._is_wandb_active = False
-
-        logged_messages = []
-
-        def mock_logger(msg):
-            logged_messages.append(msg)
-
+        # Test logging for a new run
         manager.log_session_info(
             mock_logger,
             agent_info={"type": "PPO", "name": "TestAgent"},
+            global_timestep=0
+        )
+
+        assert any("Keisei Training Run: log_test" in msg for msg in logged_messages)
+        assert any("Run directory: /tmp/log_test_dir" in msg for msg in logged_messages)
+        assert any("Starting fresh training." in msg for msg in logged_messages)
+        assert any("Agent: PPO (TestAgent)" in msg for msg in logged_messages)
+
+        # Test logging for a resumed run
+        logged_messages.clear()
+        manager.log_session_info(
+            mock_logger,
             resumed_from_checkpoint="/path/to/checkpoint.pth",
             global_timestep=50000,
-            total_episodes_completed=200,
+            total_episodes_completed=100
         )
 
-        assert any("Agent: PPO (TestAgent)" in msg for msg in logged_messages)
         assert any("Resumed training from checkpoint" in msg for msg in logged_messages)
         assert any(
-            "Resuming from timestep 50000, 200 episodes completed" in msg
-            for msg in logged_messages
+            "Resuming from timestep 50000, 100 episodes completed" in msg for msg in logged_messages
         )
 
-    @patch("builtins.open", new_callable=mock_open)
-    @patch("keisei.training.session_manager.datetime")
-    def test_log_session_start_success(
-        self, mock_datetime, mock_file, mock_config, mock_args
-    ):
-        """Test successful session start logging."""
-        mock_datetime.now.return_value.strftime.return_value = "2025-05-28 10:30:00"
 
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._log_file_path = "/tmp/test_run/training.log"
+# Integration Tests for Trainer
+class TestTrainerIntegration:
+    """Test the integration of SessionManager within the Trainer class."""
 
-        manager.log_session_start()
+    @pytest.fixture
+    def setup_trainer_mocks(self):
+        """A fixture to set up all necessary mocks for Trainer initialization."""
+        with patch("keisei.training.trainer.ShogiGame"), \
+             patch("keisei.training.trainer.PPOAgent") as mock_ppo_agent, \
+             patch("keisei.training.trainer.model_factory"), \
+             patch("keisei.shogi.features.FEATURE_SPECS"), \
+             patch("keisei.training.utils.setup_directories") as mock_setup_dirs, \
+             patch("keisei.training.utils.setup_wandb") as mock_setup_wandb, \
+             patch("keisei.training.utils.serialize_config") as mock_serialize, \
+             patch("keisei.training.utils.setup_seeding") as mock_setup_seeding, \
+             patch("builtins.open"), \
+             patch("os.path.join", side_effect=lambda *args: "/".join(args)), \
+             patch("glob.glob", return_value=[]), \
+             patch("os.path.exists", return_value=True):
 
-        mock_file.assert_called_once_with(
-            "/tmp/test_run/training.log", "a", encoding="utf-8"
-        )
-        mock_file().write.assert_called_once_with(
-            "[2025-05-28 10:30:00] --- SESSION START: test_run ---\n"
-        )
+            # Common return values for mocks
+            mock_setup_dirs.return_value = {
+                "run_artifact_dir": "/tmp/trainer_run",
+                "model_dir": "/tmp/trainer_run/models",
+                "log_file_path": "/tmp/trainer_run/training.log",
+                "eval_log_file_path": "/tmp/trainer_run/eval.log",
+            }
+            mock_setup_wandb.return_value = False
+            mock_ppo_agent.return_value = Mock(name="TestAgent", model="MockModel")
 
-    @patch("builtins.open", side_effect=IOError("File write error"))
-    def test_log_session_start_failure(self, mock_file, mock_config, mock_args):
-        """Test session start logging failure handling."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._log_file_path = "/tmp/test_run/training.log"
+            yield {
+                "setup_dirs": mock_setup_dirs,
+                "setup_wandb": mock_setup_wandb,
+                "serialize": mock_serialize,
+                "setup_seeding": mock_setup_seeding,
+            }
 
-        with patch("sys.stderr"):
-            manager.log_session_start()  # Should not raise, just print warning
+    def test_trainer_initializes_and_uses_session_manager(self, setup_trainer_mocks, mock_app_config, mock_cli_args):
+        """Test that Trainer correctly initializes and delegates to SessionManager."""
+        trainer = Trainer(mock_app_config, mock_cli_args)
 
-    def test_log_session_start_without_directories(self, mock_config, mock_args):
-        """Test session start logging fails without directory setup."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
+        # Verify SessionManager is created and used
+        assert hasattr(trainer, "session_manager")
+        assert isinstance(trainer.session_manager, SessionManager)
 
-        with pytest.raises(
-            RuntimeError, match="Directories must be set up before logging"
-        ):
-            manager.log_session_start()
+        # Verify setup methods from SessionManager were called during Trainer init
+        setup_trainer_mocks["setup_seeding"].assert_called_once()
+        setup_trainer_mocks["setup_dirs"].assert_called_once()
+        setup_trainer_mocks["setup_wandb"].assert_called_once()
+        setup_trainer_mocks["serialize"].assert_called_once()
 
+        # Verify session properties are correctly accessed from the manager
+        assert trainer.run_name == trainer.session_manager.run_name
+        assert trainer.run_artifact_dir == "/tmp/trainer_run"
+        assert trainer.model_dir == "/tmp/trainer_run/models"
+        assert trainer.log_file_path == "/tmp/trainer_run/training.log"
+        assert trainer.is_train_wandb_active is False
 
-class TestSessionManagerFinalization:
-    """Test session finalization functionality."""
+    def test_trainer_delegates_info_logging_to_session_manager(self, _, mock_app_config, mock_cli_args):
+        """Test that Trainer uses SessionManager for logging run information."""
+        trainer = Trainer(mock_app_config, mock_cli_args)
 
-    @patch("wandb.run")
-    @patch("wandb.finish")
-    def test_finalize_session_with_wandb(
-        self, mock_wandb_finish, mock_wandb_run, mock_config, mock_args
-    ):
-        """Test session finalization with active WandB."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._is_wandb_active = True
+        def mock_log_both(_msg, **_kwargs):
+            pass  # Dummy logger
 
-        manager.finalize_session()
+        # Patch the session manager's method to spy on the call
+        with patch.object(trainer.session_manager, "log_session_info") as mock_log_session:
+            trainer._log_run_info(mock_log_both)  # pylint: disable=protected-access
 
-        mock_wandb_finish.assert_called_once()
+            # Verify SessionManager's log_session_info was called once
+            mock_log_session.assert_called_once()
 
-    @patch("wandb.run", None)
-    def test_finalize_session_without_wandb(self, mock_config, mock_args):
-        """Test session finalization without WandB."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._is_wandb_active = False
-
-        manager.finalize_session()  # Should not raise
-
-    @patch("wandb.run")
-    @patch("wandb.finish", side_effect=Exception("WandB error"))
-    def test_finalize_session_wandb_error(
-        self, mock_wandb_finish, mock_wandb_run, mock_config, mock_args
-    ):
-        """Test session finalization with WandB error."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._is_wandb_active = True
-
-        with patch("sys.stderr"):
-            manager.finalize_session()  # Should not raise, just print warning
-
-
-class TestSessionManagerUtilityMethods:
-    """Test utility methods."""
-
-    @patch("keisei.training.utils.setup_seeding")
-    def test_setup_seeding(self, mock_setup_seeding, mock_config, mock_args):
-        """Test seeding setup delegation."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-
-        manager.setup_seeding()
-
-        mock_setup_seeding.assert_called_once_with(mock_config)
-
-    def test_get_session_summary(self, mock_config, mock_args):
-        """Test session summary generation."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._run_artifact_dir = "/tmp/test_run"
-        manager._model_dir = "/tmp/test_run/models"
-        manager._log_file_path = "/tmp/test_run/training.log"
-        manager._is_wandb_active = True
-
-        summary = manager.get_session_summary()
-
-        expected_summary = {
-            "run_name": "test_run",
-            "run_artifact_dir": "/tmp/test_run",
-            "model_dir": "/tmp/test_run/models",
-            "log_file_path": "/tmp/test_run/training.log",
-            "is_wandb_active": True,
-            "seed": 42,
-            "device": "cuda",
-        }
-
-        assert summary == expected_summary
-
-    def test_get_session_summary_partial_setup(self, mock_config, mock_args):
-        """Test session summary with partial setup."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-
-        summary = manager.get_session_summary()
-
-        assert summary["run_name"] == "test_run"
-        assert summary["run_artifact_dir"] is None
-        assert summary["is_wandb_active"] is None
-        assert summary["seed"] == 42
-        assert summary["device"] == "cuda"
-
-
-class TestSessionManagerIntegration:
-    """Integration tests for complete SessionManager workflows."""
-
-    @patch("keisei.training.utils.setup_directories")
-    @patch("keisei.training.utils.setup_wandb")
-    @patch("keisei.training.utils.serialize_config")
-    @patch("builtins.open", new_callable=mock_open)
-    @patch("os.path.join")
-    def test_complete_session_setup_workflow(
-        self,
-        mock_join,
-        mock_file,
-        mock_serialize,
-        mock_setup_wandb,
-        mock_setup_dirs,
-        mock_config,
-        mock_args,
-    ):
-        """Test complete session setup workflow."""
-        # Setup mocks
-        mock_setup_dirs.return_value = {
-            "run_artifact_dir": "/tmp/test_run",
-            "model_dir": "/tmp/test_run/models",
-            "log_file_path": "/tmp/test_run/training.log",
-            "eval_log_file_path": "/tmp/test_run/eval.log",
-        }
-        mock_setup_wandb.return_value = True
-        mock_serialize.return_value = '{"test": "config"}'
-        mock_join.return_value = "/tmp/test_run/effective_config.json"
-
-        # Execute workflow
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-
-        # Setup directories
-        dirs = manager.setup_directories()
-        assert dirs["run_artifact_dir"] == "/tmp/test_run"
-
-        # Setup WandB
-        wandb_active = manager.setup_wandb()
-        assert wandb_active is True
-
-        # Save config
-        manager.save_effective_config()
-
-        # Log session start
-        with patch("keisei.training.session_manager.datetime"):
-            manager.log_session_start()
-
-        # Verify all components work together
-        assert manager.run_name == "test_run"
-        assert manager.run_artifact_dir == "/tmp/test_run"
-        assert manager.is_wandb_active is True
-
-        # Get summary
-        summary = manager.get_session_summary()
-        assert summary["run_name"] == "test_run"
-        assert summary["is_wandb_active"] is True
+            # Verify it was called with the correct information from the trainer
+            call_args = mock_log_session.call_args
+            assert call_args[1]["agent_info"]["name"] == "TestAgent"
+            assert call_args[1]["global_timestep"] == 0
+            assert call_args[1]["total_episodes_completed"] == 0

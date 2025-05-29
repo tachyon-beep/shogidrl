@@ -49,14 +49,10 @@ def test_actor_critic_init_and_forward():
             weight_decay=0.0,
         ),
         evaluation=EvaluationConfig(
-            num_games=20,
-            opponent_type="random",
-            evaluation_interval_timesteps=50000
+            num_games=20, opponent_type="random", evaluation_interval_timesteps=50000
         ),
         logging=LoggingConfig(
-            log_file="logs/training_log.txt",
-            model_dir="models/",
-            run_name=None
+            log_file="logs/training_log.txt", model_dir="models/", run_name=None
         ),
         wandb=WandBConfig(
             enabled=True,
@@ -65,7 +61,7 @@ def test_actor_critic_init_and_forward():
             run_name_prefix="keisei",
             watch_model=True,
             watch_log_freq=1000,
-            watch_log_type="all"
+            watch_log_type="all",
         ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5),
     )

@@ -15,9 +15,9 @@ import sys
 from typing import Any, Dict, List, Optional, Tuple
 
 import torch
-import wandb
 from torch.cuda.amp import GradScaler
 
+import wandb
 from keisei.config_schema import AppConfig
 from keisei.core.ppo_agent import PPOAgent
 
@@ -27,7 +27,9 @@ from . import utils
 class ModelManager:
     """Manages model lifecycle for training runs."""
 
-    def __init__(self, config: AppConfig, args: Any, device: torch.device, logger_func=None):
+    def __init__(
+        self, config: AppConfig, args: Any, device: torch.device, logger_func=None
+    ):
         """
         Initialize the ModelManager.
 
@@ -80,7 +82,7 @@ class ModelManager:
         self.use_mixed_precision = (
             self.config.training.mixed_precision and self.device.type == "cuda"
         )
-        
+
         if self.use_mixed_precision:
             self.scaler = GradScaler()
             self.logger_func("Mixed precision training enabled (CUDA).")
@@ -106,7 +108,7 @@ class ModelManager:
             tower_width=self.tower_width,
             se_ratio=self.se_ratio if self.se_ratio > 0 else None,
         )
-        
+
         return model.to(self.device)
 
     def create_agent(self) -> PPOAgent:
@@ -122,11 +124,11 @@ class ModelManager:
     def handle_checkpoint_resume(self, agent: PPOAgent, model_dir: str) -> bool:
         """
         Handle resuming from checkpoint if specified or auto-detected.
-        
+
         Args:
             agent: PPO agent to load checkpoint into
             model_dir: Directory to search for checkpoints
-            
+
         Returns:
             bool: True if resumed from checkpoint, False otherwise
         """
@@ -147,7 +149,7 @@ class ModelManager:
                     dest_ckpt = os.path.join(model_dir, os.path.basename(parent_ckpt))
                     shutil.copy2(parent_ckpt, dest_ckpt)
                     latest_ckpt = dest_ckpt
-                    
+
             if latest_ckpt:
                 checkpoint_data = agent.load_model(latest_ckpt)
                 self.resumed_from_checkpoint = latest_ckpt
@@ -158,7 +160,7 @@ class ModelManager:
                 self.resumed_from_checkpoint = None
                 self.checkpoint_data = None
                 return False
-                
+
         elif resume_path:
             checkpoint_data = agent.load_model(resume_path)
             self.resumed_from_checkpoint = resume_path
@@ -245,7 +247,7 @@ class ModelManager:
     ) -> Tuple[bool, Optional[str]]:
         """
         Save the final trained model and create associated artifacts.
-        
+
         Args:
             agent: PPO agent to save
             model_dir: Directory to save model in
@@ -254,12 +256,12 @@ class ModelManager:
             game_stats: Dictionary with black_wins, white_wins, draws
             run_name: Current run name
             is_wandb_active: Whether WandB is active
-            
+
         Returns:
             Tuple[bool, Optional[str]]: (success, model_path)
         """
         final_model_path = os.path.join(model_dir, "final_model.pth")
-        
+
         try:
             agent.save_model(
                 final_model_path,
@@ -279,7 +281,7 @@ class ModelManager:
                 "model_type": getattr(self.config.training, "model_type", "resnet"),
                 "feature_set": getattr(self.config.env, "feature_set", "core"),
             }
-            
+
             self.create_model_artifact(
                 model_path=final_model_path,
                 artifact_name="final-model",
@@ -289,9 +291,9 @@ class ModelManager:
                 metadata=final_metadata,
                 aliases=["latest", "final"],
             )
-            
+
             return True, final_model_path
-            
+
         except (OSError, RuntimeError) as e:
             self.logger_func(f"Error saving final model {final_model_path}: {e}")
             return False, None
@@ -308,7 +310,7 @@ class ModelManager:
     ) -> Tuple[bool, Optional[str]]:
         """
         Save a final checkpoint with game statistics.
-        
+
         Args:
             agent: PPO agent to save
             model_dir: Directory to save checkpoint in
@@ -317,21 +319,21 @@ class ModelManager:
             game_stats: Dictionary with black_wins, white_wins, draws
             run_name: Current run name
             is_wandb_active: Whether WandB is active
-            
+
         Returns:
             Tuple[bool, Optional[str]]: (success, checkpoint_path)
         """
         if global_timestep <= 0:
             return False, None
-            
+
         checkpoint_filename = os.path.join(
             model_dir, f"checkpoint_ts{global_timestep}.pth"
         )
-        
+
         # Don't save if checkpoint already exists
         if os.path.exists(checkpoint_filename):
             return True, checkpoint_filename
-            
+
         try:
             agent.save_model(
                 checkpoint_filename,
@@ -352,7 +354,7 @@ class ModelManager:
                 "model_type": getattr(self.config.training, "model_type", "resnet"),
                 "feature_set": getattr(self.config.env, "feature_set", "core"),
             }
-            
+
             self.create_model_artifact(
                 model_path=checkpoint_filename,
                 artifact_name="final-checkpoint",
@@ -362,11 +364,13 @@ class ModelManager:
                 metadata=checkpoint_metadata,
                 aliases=["latest-checkpoint"],
             )
-            
+
             return True, checkpoint_filename
-            
+
         except (OSError, RuntimeError) as e:
-            self.logger_func(f"Error saving final checkpoint {checkpoint_filename}: {e}")
+            self.logger_func(
+                f"Error saving final checkpoint {checkpoint_filename}: {e}"
+            )
             return False, None
 
     def get_model_info(self) -> Dict[str, Any]:

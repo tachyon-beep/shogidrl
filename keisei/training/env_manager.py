@@ -45,7 +45,7 @@ class EnvManager:
         try:
             # Initialize the Shogi game
             self.game = ShogiGame()
-            
+
             # Setup seeding if specified
             if hasattr(self.game, "seed") and self.config.env.seed is not None:
                 try:
@@ -65,10 +65,10 @@ class EnvManager:
         try:
             self.policy_output_mapper = PolicyOutputMapper()
             self.action_space_size = self.policy_output_mapper.get_total_actions()
-            
+
             # Validate action space consistency
             self._validate_action_space()
-            
+
         except (RuntimeError, ValueError) as e:
             self.logger_func(f"Error initializing PolicyOutputMapper: {e}")
             raise RuntimeError(f"Failed to initialize PolicyOutputMapper: {e}") from e
@@ -77,7 +77,7 @@ class EnvManager:
         """Validate that action space configuration is consistent."""
         config_num_actions = self.config.env.num_actions_total
         mapper_num_actions = self.policy_output_mapper.get_total_actions()
-        
+
         if config_num_actions != mapper_num_actions:
             error_msg = (
                 f"Action space mismatch: config specifies {config_num_actions} "
@@ -85,7 +85,7 @@ class EnvManager:
             )
             self.logger_func(f"CRITICAL: {error_msg}")
             raise ValueError(error_msg)
-            
+
         self.logger_func(f"Action space validated: {mapper_num_actions} total actions")
 
     def get_environment_info(self) -> dict:
@@ -114,7 +114,7 @@ class EnvManager:
     def validate_environment(self) -> bool:
         """
         Validate that the environment is properly configured and functional.
-        
+
         Returns:
             bool: True if environment is valid, False otherwise
         """
@@ -126,12 +126,16 @@ class EnvManager:
 
             # Check policy mapper
             if self.policy_output_mapper is None:
-                self.logger_func("Environment validation failed: policy mapper not initialized")
+                self.logger_func(
+                    "Environment validation failed: policy mapper not initialized"
+                )
                 return False
 
             # Check action space consistency
             if self.action_space_size <= 0:
-                self.logger_func("Environment validation failed: invalid action space size")
+                self.logger_func(
+                    "Environment validation failed: invalid action space size"
+                )
                 return False
 
             # Test game reset functionality
@@ -142,7 +146,9 @@ class EnvManager:
 
             # Test observation space
             if self.obs_space_shape is None or len(self.obs_space_shape) != 3:
-                self.logger_func("Environment validation failed: invalid observation space shape")
+                self.logger_func(
+                    "Environment validation failed: invalid observation space shape"
+                )
                 return False
 
             self.logger_func("Environment validation passed")
@@ -164,12 +170,12 @@ class EnvManager:
     def setup_seeding(self, seed: int = None):
         """
         Setup seeding for the environment.
-        
+
         Args:
             seed: Optional seed value. If None, uses config seed.
         """
         seed_value = seed if seed is not None else self.config.env.seed
-        
+
         if seed_value is not None and hasattr(self.game, "seed"):
             try:
                 self.game.seed(seed_value)

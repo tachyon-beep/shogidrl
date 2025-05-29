@@ -24,8 +24,13 @@ from rich.console import Console, Text
 import wandb
 from keisei.config_schema import AppConfig
 from keisei.core.experience_buffer import ExperienceBuffer
+
+# Backwards compatibility imports for tests (these classes are now used in managers)
+from keisei.core.ppo_agent import PPOAgent
 from keisei.evaluation.evaluate import execute_full_evaluation_run
+from keisei.shogi import ShogiGame
 from keisei.utils import (
+    PolicyOutputMapper,
     TrainingLogger,
 )
 
@@ -34,11 +39,6 @@ from .env_manager import EnvManager
 from .model_manager import ModelManager
 from .session_manager import SessionManager
 from .step_manager import EpisodeState, StepManager
-
-# Backwards compatibility imports for tests (these classes are now used in managers)
-from keisei.core.ppo_agent import PPOAgent
-from keisei.shogi import ShogiGame
-from keisei.utils import PolicyOutputMapper
 
 
 class Trainer:
@@ -152,7 +152,7 @@ class Trainer:
         """Initialize PPO agent and experience buffer using ModelManager."""
         # Create agent using ModelManager
         self.agent = self.model_manager.create_agent()
-        
+
         self.experience_buffer = ExperienceBuffer(
             buffer_size=self.config.training.steps_per_epoch,
             gamma=self.config.training.gamma,
@@ -187,15 +187,17 @@ class Trainer:
             model_dir=self.model_dir,
         )
         self.resumed_from_checkpoint = self.model_manager.resumed_from_checkpoint
-        
+
         # Restore training state from checkpoint data
         if self.model_manager.checkpoint_data:
             checkpoint_data = self.model_manager.checkpoint_data
-            
+
             # Restore global timestep and episode count
             self.global_timestep = checkpoint_data.get("global_timestep", 0)
-            self.total_episodes_completed = checkpoint_data.get("total_episodes_completed", 0)
-            
+            self.total_episodes_completed = checkpoint_data.get(
+                "total_episodes_completed", 0
+            )
+
             # Restore game statistics
             self.black_wins = checkpoint_data.get("black_wins", 0)
             self.white_wins = checkpoint_data.get("white_wins", 0)
@@ -521,7 +523,9 @@ class Trainer:
 
             # Log checkpoint resume status
             if self.resumed_from_checkpoint:
-                log_both(f"Resumed training from checkpoint: {self.resumed_from_checkpoint}")
+                log_both(
+                    f"Resumed training from checkpoint: {self.resumed_from_checkpoint}"
+                )
 
             last_time = time.time()
             steps_since_last_time = 0
@@ -570,58 +574,80 @@ class Trainer:
     @property
     def model(self):
         """Access the model through ModelManager."""
-        return self.model_manager.model if hasattr(self.model_manager, 'model') else None
-    
+        return (
+            self.model_manager.model if hasattr(self.model_manager, "model") else None
+        )
+
     @property
     def feature_spec(self):
-        """Access the feature spec through ModelManager.""" 
-        return self.model_manager.feature_spec if hasattr(self.model_manager, 'feature_spec') else None
+        """Access the feature spec through ModelManager."""
+        return (
+            self.model_manager.feature_spec
+            if hasattr(self.model_manager, "feature_spec")
+            else None
+        )
 
     @property
     def obs_shape(self):
         """Access the observation shape through ModelManager."""
-        return self.model_manager.obs_shape if hasattr(self.model_manager, 'obs_shape') else None
-    
+        return (
+            self.model_manager.obs_shape
+            if hasattr(self.model_manager, "obs_shape")
+            else None
+        )
+
     @property
     def tower_depth(self):
         """Access the tower depth through ModelManager."""
-        return self.model_manager.tower_depth if hasattr(self.model_manager, 'tower_depth') else None
+        return (
+            self.model_manager.tower_depth
+            if hasattr(self.model_manager, "tower_depth")
+            else None
+        )
 
     @property
     def tower_width(self):
         """Access the tower width through ModelManager."""
-        return self.model_manager.tower_width if hasattr(self.model_manager, 'tower_width') else None
-    
-    @property 
+        return (
+            self.model_manager.tower_width
+            if hasattr(self.model_manager, "tower_width")
+            else None
+        )
+
+    @property
     def se_ratio(self):
         """Access the SE ratio through ModelManager."""
-        return self.model_manager.se_ratio if hasattr(self.model_manager, 'se_ratio') else None
+        return (
+            self.model_manager.se_ratio
+            if hasattr(self.model_manager, "se_ratio")
+            else None
+        )
 
     # Backward compatibility delegation methods
     def _create_model_artifact(
-        self, 
-        model_path: str, 
+        self,
+        model_path: str,
         artifact_name: Optional[str] = None,
         artifact_type: str = "model",
         description: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
         aliases: Optional[List[str]] = None,
-        log_both: Optional[Callable] = None
+        log_both: Optional[Callable] = None,
     ) -> bool:
         """Backward compatibility method - delegates to ModelManager."""
         # Use default artifact name if not provided
         if artifact_name is None:
             artifact_name = os.path.basename(model_path)
-            
+
         # Use default description if not provided
         if description is None:
             # Use trainer's run_name for backward compatibility (tests set this manually)
-            run_name = getattr(self, 'run_name', self.session_manager.run_name)
+            run_name = getattr(self, "run_name", self.session_manager.run_name)
             description = f"Model checkpoint from run {run_name}"
-        
+
         # Use trainer's run_name for artifact naming (for backward compatibility with tests)
-        run_name = getattr(self, 'run_name', self.session_manager.run_name)
-        
+        run_name = getattr(self, "run_name", self.session_manager.run_name)
+
         # Store original logger function and temporarily replace if log_both provided
         original_logger = self.model_manager.logger_func
         if log_both:
@@ -631,21 +657,22 @@ class Trainer:
                     return log_both(message, log_level="error")
                 else:
                     return log_both(message)
+
             self.model_manager.logger_func = logger_wrapper
-            
+
         try:
             result = self.model_manager.create_model_artifact(
-                model_path=model_path, 
+                model_path=model_path,
                 artifact_name=artifact_name,
                 run_name=run_name,
                 is_wandb_active=self.session_manager.is_wandb_active,
                 artifact_type=artifact_type,
                 description=description,
                 metadata=metadata,
-                aliases=aliases
+                aliases=aliases,
             )
         finally:
             # Restore original logger function
             self.model_manager.logger_func = original_logger
-            
+
         return result
