@@ -2,6 +2,7 @@
 training/callbacks.py: Periodic task callbacks for the Shogi RL trainer.
 """
 
+import os
 from abc import ABC
 from typing import TYPE_CHECKING
 
@@ -36,9 +37,10 @@ class CheckpointCallback(Callback):
                         "draws": trainer.draws,
                     },
                 )
-                trainer.log_both(
-                    f"Checkpoint saved to {ckpt_save_path}", also_to_wandb=True
-                )
+                if trainer.log_both is not None:
+                    trainer.log_both(
+                        f"Checkpoint saved to {ckpt_save_path}", also_to_wandb=True
+                    )
 
                 # Create W&B artifact for periodic checkpoint using ModelManager
                 checkpoint_metadata = {
@@ -64,14 +66,12 @@ class CheckpointCallback(Callback):
                     aliases=["latest-periodic"],
                 )
             except (OSError, RuntimeError) as e:
-                trainer.log_both(
-                    f"Error saving checkpoint {ckpt_save_path}: {e}",
-                    log_level="error",
-                    also_to_wandb=True,
-                )
-
-
-import os
+                if trainer.log_both is not None:
+                    trainer.log_both(
+                        f"Error saving checkpoint {ckpt_save_path}: {e}",
+                        log_level="error",
+                        also_to_wandb=True,
+                    )
 
 
 class EvaluationCallback(Callback):
@@ -91,38 +91,43 @@ class EvaluationCallback(Callback):
                 trainer.global_timestep + 1,
                 trainer.total_episodes_completed,
             )
-            trainer.log_both(
-                f"Starting periodic evaluation at timestep {trainer.global_timestep + 1}...",
-                also_to_wandb=True,
-            )
+            if trainer.log_both is not None:
+                trainer.log_both(
+                    f"Starting periodic evaluation at timestep {trainer.global_timestep + 1}...",
+                    also_to_wandb=True,
+                )
             trainer.agent.model.eval()
-            eval_results = trainer.execute_full_evaluation_run(
-                agent_checkpoint_path=eval_ckpt_path,
-                opponent_type=getattr(self.eval_cfg, "opponent_type", "random"),
-                opponent_checkpoint_path=getattr(
-                    self.eval_cfg, "opponent_checkpoint_path", None
-                ),
-                num_games=getattr(self.eval_cfg, "num_games", 20),
-                max_moves_per_game=getattr(self.eval_cfg, "max_moves_per_game", 256),
-                device_str=trainer.config.env.device,
-                log_file_path_eval=getattr(self.eval_cfg, "log_file_path_eval", ""),
-                policy_mapper=trainer.policy_output_mapper,
-                seed=trainer.config.env.seed,
-                wandb_log_eval=getattr(self.eval_cfg, "wandb_log_eval", False),
-                wandb_project_eval=getattr(self.eval_cfg, "wandb_project_eval", None),
-                wandb_entity_eval=getattr(self.eval_cfg, "wandb_entity_eval", None),
-                wandb_run_name_eval=f"periodic_eval_{trainer.run_name}_ts{trainer.global_timestep+1}",
-                wandb_group=trainer.run_name,
-                wandb_reinit=True,
-                logger_also_stdout=False,
-            )
-            trainer.agent.model.train()
-            trainer.log_both(
-                f"Periodic evaluation finished. Results: {eval_results}",
-                also_to_wandb=True,
-                wandb_data=(
-                    dict(eval_results)
-                    if isinstance(eval_results, dict)
-                    else {"eval_summary": str(eval_results)}
-                ),
-            )
+            if trainer.execute_full_evaluation_run is not None:
+                eval_results = trainer.execute_full_evaluation_run(
+                    agent_checkpoint_path=eval_ckpt_path,
+                    opponent_type=getattr(self.eval_cfg, "opponent_type", "random"),
+                    opponent_checkpoint_path=getattr(
+                        self.eval_cfg, "opponent_checkpoint_path", None
+                    ),
+                    num_games=getattr(self.eval_cfg, "num_games", 20),
+                    max_moves_per_game=getattr(self.eval_cfg, "max_moves_per_game", 256),
+                    device_str=trainer.config.env.device,
+                    log_file_path_eval=getattr(self.eval_cfg, "log_file_path_eval", ""),
+                    policy_mapper=trainer.policy_output_mapper,
+                    seed=trainer.config.env.seed,
+                    wandb_log_eval=getattr(self.eval_cfg, "wandb_log_eval", False),
+                    wandb_project_eval=getattr(self.eval_cfg, "wandb_project_eval", None),
+                    wandb_entity_eval=getattr(self.eval_cfg, "wandb_entity_eval", None),
+                    wandb_run_name_eval=f"periodic_eval_{trainer.run_name}_ts{trainer.global_timestep+1}",
+                    wandb_group=trainer.run_name,
+                    wandb_reinit=True,
+                    logger_also_stdout=False,
+                )
+                trainer.agent.model.train()
+                if trainer.log_both is not None:
+                    trainer.log_both(
+                        f"Periodic evaluation finished. Results: {eval_results}",
+                        also_to_wandb=True,
+                        wandb_data=(
+                            dict(eval_results)
+                            if isinstance(eval_results, dict)
+                            else {"eval_summary": str(eval_results)}
+                        ),
+                    )
+            else:
+                trainer.agent.model.train()
