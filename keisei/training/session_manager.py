@@ -152,7 +152,7 @@ class SessionManager:
         try:
             # Ensure the directory exists
             os.makedirs(self._run_artifact_dir, exist_ok=True)
-            
+
             effective_config_str = utils.serialize_config(self.config)
             config_path = os.path.join(self._run_artifact_dir, "effective_config.json")
             with open(config_path, "w", encoding="utf-8") as f:

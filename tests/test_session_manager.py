@@ -130,14 +130,18 @@ class TestSessionManagerDirectoryOperations:
                 "run_artifact_dir": run_artifact_path,
                 "model_dir": models_path,
                 "log_file_path": os.path.join(run_artifact_path, "training.log"),
-                "eval_log_file_path": os.path.join(run_artifact_path, "rich_periodic_eval_log.txt"),
+                "eval_log_file_path": os.path.join(
+                    run_artifact_path, "rich_periodic_eval_log.txt"
+                ),
             }
 
         with patch(
             "keisei.training.utils.setup_directories",
             side_effect=mock_setup_directories_side_effect,
         ):
-            manager = SessionManager(mock_app_config, mock_cli_args, run_name="test_run")
+            manager = SessionManager(
+                mock_app_config, mock_cli_args, run_name="test_run"
+            )
             manager.setup_directories()
 
             # Verify directories were created
@@ -160,21 +164,30 @@ class TestSessionManagerDirectoryOperations:
                 "run_artifact_dir": run_artifact_path,
                 "model_dir": os.path.join(run_artifact_path, "models"),
                 "log_file_path": os.path.join(run_artifact_path, "training.log"),
-                "eval_log_file_path": os.path.join(run_artifact_path, "rich_periodic_eval_log.txt"),
+                "eval_log_file_path": os.path.join(
+                    run_artifact_path, "rich_periodic_eval_log.txt"
+                ),
             }
 
         def mock_serialize_config(config):
             """Mock config serialization."""
             return {"mocked": "config"}
 
-        with patch(
-            "keisei.training.utils.setup_directories",
-            side_effect=mock_setup_directories_side_effect,
-        ), patch(
-            "keisei.training.utils.serialize_config", side_effect=mock_serialize_config
-        ), patch("builtins.open", mock_open()) as mock_file:
+        with (
+            patch(
+                "keisei.training.utils.setup_directories",
+                side_effect=mock_setup_directories_side_effect,
+            ),
+            patch(
+                "keisei.training.utils.serialize_config",
+                side_effect=mock_serialize_config,
+            ),
+            patch("builtins.open", mock_open()) as mock_file,
+        ):
 
-            manager = SessionManager(mock_app_config, mock_cli_args, run_name="test_run")
+            manager = SessionManager(
+                mock_app_config, mock_cli_args, run_name="test_run"
+            )
             manager.setup_directories()
 
             # Ensure the directory doesn't exist initially
@@ -187,7 +200,9 @@ class TestSessionManagerDirectoryOperations:
             assert os.path.exists(run_artifact_path)
 
             # Verify file was opened for writing
-            expected_config_path = os.path.join(run_artifact_path, "effective_config.json")
+            expected_config_path = os.path.join(
+                run_artifact_path, "effective_config.json"
+            )
             mock_file.assert_called_with(expected_config_path, "w", encoding="utf-8")
 
     def test_wandb_enabled_directory_consistency(
@@ -204,19 +219,27 @@ class TestSessionManagerDirectoryOperations:
                 "run_artifact_dir": run_artifact_path,
                 "model_dir": os.path.join(run_artifact_path, "models"),
                 "log_file_path": os.path.join(run_artifact_path, "training.log"),
-                "eval_log_file_path": os.path.join(run_artifact_path, "rich_periodic_eval_log.txt"),
+                "eval_log_file_path": os.path.join(
+                    run_artifact_path, "rich_periodic_eval_log.txt"
+                ),
             }
 
         def mock_setup_wandb_success(config, run_name, run_artifact_dir):
             return True
 
-        with patch(
-            "keisei.training.utils.setup_directories",
-            side_effect=mock_setup_directories_wandb,
-        ), patch(
-            "keisei.training.utils.setup_wandb", side_effect=mock_setup_wandb_success
+        with (
+            patch(
+                "keisei.training.utils.setup_directories",
+                side_effect=mock_setup_directories_wandb,
+            ),
+            patch(
+                "keisei.training.utils.setup_wandb",
+                side_effect=mock_setup_wandb_success,
+            ),
         ):
-            manager = SessionManager(mock_app_config, mock_cli_args, run_name="wandb_test")
+            manager = SessionManager(
+                mock_app_config, mock_cli_args, run_name="wandb_test"
+            )
             manager.setup_directories()
             wandb_result = manager.setup_wandb()
 
@@ -237,7 +260,9 @@ class TestSessionManagerDirectoryOperations:
                 "run_artifact_dir": run1_path,
                 "model_dir": os.path.join(run1_path, "models"),
                 "log_file_path": os.path.join(run1_path, "training.log"),
-                "eval_log_file_path": os.path.join(run1_path, "rich_periodic_eval_log.txt"),
+                "eval_log_file_path": os.path.join(
+                    run1_path, "rich_periodic_eval_log.txt"
+                ),
             }
 
         def mock_setup_run2(config, run_name):
@@ -246,14 +271,20 @@ class TestSessionManagerDirectoryOperations:
                 "run_artifact_dir": run2_path,
                 "model_dir": os.path.join(run2_path, "models"),
                 "log_file_path": os.path.join(run2_path, "training.log"),
-                "eval_log_file_path": os.path.join(run2_path, "rich_periodic_eval_log.txt"),
+                "eval_log_file_path": os.path.join(
+                    run2_path, "rich_periodic_eval_log.txt"
+                ),
             }
 
-        with patch("keisei.training.utils.setup_directories", side_effect=mock_setup_run1):
+        with patch(
+            "keisei.training.utils.setup_directories", side_effect=mock_setup_run1
+        ):
             manager1 = SessionManager(mock_app_config, mock_cli_args, run_name="run1")
             manager1.setup_directories()
 
-        with patch("keisei.training.utils.setup_directories", side_effect=mock_setup_run2):
+        with patch(
+            "keisei.training.utils.setup_directories", side_effect=mock_setup_run2
+        ):
             manager2 = SessionManager(mock_app_config, mock_cli_args, run_name="run2")
             manager2.setup_directories()
 

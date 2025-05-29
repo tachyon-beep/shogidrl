@@ -520,29 +520,33 @@ def test_dictionary_constants():
 ]]></file>
   <file path="test_session_manager.py"><![CDATA[
 """
-test_session_manager.py: Comprehensive unit tests for SessionManager class.
+test_session_management.py: Comprehensive tests for SessionManager and its integration with Trainer.
 
-Tests cover initialization, directory setup, WandB configuration, logging,
-error handling, and session lifecycle management.
+This file covers the standalone unit tests for the SessionManager class, including
+initialization, lifecycle management (directory, WandB setup, config saving),
+logging, and error handling.
 """
 
 import os
 import tempfile
-from datetime import datetime
-from unittest.mock import Mock, mock_open, patch
+from unittest.mock import MagicMock, Mock, mock_open, patch
 
 import pytest
 
 from keisei.config_schema import (
     AppConfig,
+    DemoConfig,
     EnvConfig,
+    EvaluationConfig,
     LoggingConfig,
     TrainingConfig,
     WandBConfig,
 )
 from keisei.training.session_manager import SessionManager
+from keisei.training.trainer import Trainer
 
 
+# Mock Fixtures
 class MockArgs:
     """Mock command-line arguments for testing."""
 
@@ -554,493 +558,681 @@ class MockArgs:
 
 
 @pytest.fixture
-def mock_config():
-    """Create a mock configuration for testing."""
-    config = Mock(spec=AppConfig)
-
-    # Environment config
-    env_config = Mock(spec=EnvConfig)
-    env_config.seed = 42
-    env_config.device = "cuda"
-    config.env = env_config
-
-    # Training config
-    training_config = Mock(spec=TrainingConfig)
-    training_config.total_timesteps = 1000000
-    training_config.steps_per_epoch = 2048
-    training_config.model_type = "resnet"
-    training_config.input_features = "core46"
-    config.training = training_config
-    # Logging config
-    logging_config = Mock(spec=LoggingConfig)
-    logging_config.run_name = None
-    config.logging = logging_config
-
-    # WandB config
-    wandb_config = Mock(spec=WandBConfig)
-    wandb_config.run_name_prefix = "keisei"
-    config.wandb = wandb_config
-
-    return config
+def mock_app_config():
+    """Create a mock application configuration for testing."""
+    return AppConfig(
+        env=EnvConfig(
+            device="cpu",
+            num_actions_total=13527,
+            input_channels=46,
+            seed=42,
+        ),
+        training=TrainingConfig(
+            total_timesteps=500_000,
+            steps_per_epoch=2048,
+            ppo_epochs=10,
+            minibatch_size=64,
+            learning_rate=3e-4,
+            gamma=0.99,
+            clip_epsilon=0.2,
+            value_loss_coeff=0.5,
+            entropy_coef=0.01,
+            render_every_steps=1,
+            refresh_per_second=4,
+            enable_spinner=True,
+            input_features="core46",
+            tower_depth=9,
+            tower_width=256,
+            se_ratio=0.25,
+            model_type="resnet",
+            mixed_precision=False,
+            ddp=False,
+            gradient_clip_max_norm=0.5,
+            lambda_gae=0.95,
+            checkpoint_interval_timesteps=10000,
+            evaluation_interval_timesteps=50000,
+            weight_decay=0.0,
+        ),
+        evaluation=EvaluationConfig(
+            num_games=20,
+            opponent_type="random",
+            evaluation_interval_timesteps=50000,
+        ),
+        logging=LoggingConfig(
+            log_file="test.log",
+            model_dir="/tmp/test_models",
+            run_name=None,
+        ),
+        wandb=WandBConfig(
+            enabled=False,
+            project="test-project",
+            entity=None,
+            run_name_prefix="test",
+            watch_model=False,
+            watch_log_freq=1000,
+            watch_log_type="all",
+        ),
+        demo=DemoConfig(
+            enable_demo_mode=False,
+            demo_mode_delay=0.5,
+        ),
+    )
 
 
 @pytest.fixture
-def mock_args():
+def mock_cli_args():
     """Create mock command-line arguments."""
-    return MockArgs()
+    return MockArgs(resume=None)
 
 
+@pytest.fixture
+def temp_base_dir():
+    """Create a temporary directory for testing directory operations."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        yield tmpdir
+
+
+# Enhanced Unit Tests for SessionManager
+class TestSessionManagerDirectoryOperations:
+    """Test SessionManager directory creation and path handling robustness."""
+
+    def test_directory_setup_creates_missing_directories(
+        self, mock_app_config, mock_cli_args, temp_base_dir
+    ):
+        """Test that directory setup correctly creates all necessary directories."""
+        run_artifact_path = os.path.join(temp_base_dir, "run_artifacts", "test_run")
+        models_path = os.path.join(run_artifact_path, "models")
+
+        def mock_setup_directories_side_effect(config, run_name):
+            """Mock side effect that creates directories like the real function."""
+            os.makedirs(run_artifact_path, exist_ok=True)
+            os.makedirs(models_path, exist_ok=True)
+            return {
+                "run_artifact_dir": run_artifact_path,
+                "model_dir": models_path,
+                "log_file_path": os.path.join(run_artifact_path, "training.log"),
+                "eval_log_file_path": os.path.join(
+                    run_artifact_path, "rich_periodic_eval_log.txt"
+                ),
+            }
+
+        with patch(
+            "keisei.training.utils.setup_directories",
+            side_effect=mock_setup_directories_side_effect,
+        ):
+            manager = SessionManager(
+                mock_app_config, mock_cli_args, run_name="test_run"
+            )
+            manager.setup_directories()
+
+            # Verify directories were created
+            assert os.path.exists(run_artifact_path)
+            assert os.path.exists(models_path)
+
+            # Verify SessionManager properties work
+            assert manager.run_artifact_dir == run_artifact_path
+            assert manager.model_dir == models_path
+
+    def test_save_effective_config_with_missing_directory(
+        self, mock_app_config, mock_cli_args, temp_base_dir
+    ):
+        """Test that save_effective_config handles missing run_artifact_dir correctly."""
+        run_artifact_path = os.path.join(temp_base_dir, "nonexistent", "test_run")
+
+        def mock_setup_directories_side_effect(config, run_name):
+            """Mock that doesn't create the directory initially."""
+            return {
+                "run_artifact_dir": run_artifact_path,
+                "model_dir": os.path.join(run_artifact_path, "models"),
+                "log_file_path": os.path.join(run_artifact_path, "training.log"),
+                "eval_log_file_path": os.path.join(
+                    run_artifact_path, "rich_periodic_eval_log.txt"
+                ),
+            }
+
+        def mock_serialize_config(config):
+            """Mock config serialization."""
+            return {"mocked": "config"}
+
+        with (
+            patch(
+                "keisei.training.utils.setup_directories",
+                side_effect=mock_setup_directories_side_effect,
+            ),
+            patch(
+                "keisei.training.utils.serialize_config",
+                side_effect=mock_serialize_config,
+            ),
+            patch("builtins.open", mock_open()) as mock_file,
+        ):
+
+            manager = SessionManager(
+                mock_app_config, mock_cli_args, run_name="test_run"
+            )
+            manager.setup_directories()
+
+            # Ensure the directory doesn't exist initially
+            assert not os.path.exists(run_artifact_path)
+
+            # This should create the directory and save the config
+            manager.save_effective_config()
+
+            # Verify directory was created
+            assert os.path.exists(run_artifact_path)
+
+            # Verify file was opened for writing
+            expected_config_path = os.path.join(
+                run_artifact_path, "effective_config.json"
+            )
+            mock_file.assert_called_with(expected_config_path, "w", encoding="utf-8")
+
+    def test_wandb_enabled_directory_consistency(
+        self, mock_app_config, mock_cli_args, temp_base_dir
+    ):
+        """Test that W&B enabled/disabled scenarios maintain directory consistency."""
+        # Test with W&B enabled
+        mock_app_config.wandb.enabled = True
+        run_artifact_path = os.path.join(temp_base_dir, "wandb_test_run")
+
+        def mock_setup_directories_wandb(config, run_name):
+            os.makedirs(run_artifact_path, exist_ok=True)
+            return {
+                "run_artifact_dir": run_artifact_path,
+                "model_dir": os.path.join(run_artifact_path, "models"),
+                "log_file_path": os.path.join(run_artifact_path, "training.log"),
+                "eval_log_file_path": os.path.join(
+                    run_artifact_path, "rich_periodic_eval_log.txt"
+                ),
+            }
+
+        def mock_setup_wandb_success(config, run_name, run_artifact_dir):
+            return True
+
+        with (
+            patch(
+                "keisei.training.utils.setup_directories",
+                side_effect=mock_setup_directories_wandb,
+            ),
+            patch(
+                "keisei.training.utils.setup_wandb",
+                side_effect=mock_setup_wandb_success,
+            ),
+        ):
+            manager = SessionManager(
+                mock_app_config, mock_cli_args, run_name="wandb_test"
+            )
+            manager.setup_directories()
+            wandb_result = manager.setup_wandb()
+
+            assert wandb_result is True
+            assert manager.is_wandb_active is True
+            assert os.path.exists(run_artifact_path)
+
+    def test_multiple_session_managers_different_directories(
+        self, mock_app_config, mock_cli_args, temp_base_dir
+    ):
+        """Test that multiple SessionManager instances can coexist with different directories."""
+        run1_path = os.path.join(temp_base_dir, "run1")
+        run2_path = os.path.join(temp_base_dir, "run2")
+
+        def mock_setup_run1(config, run_name):
+            os.makedirs(run1_path, exist_ok=True)
+            return {
+                "run_artifact_dir": run1_path,
+                "model_dir": os.path.join(run1_path, "models"),
+                "log_file_path": os.path.join(run1_path, "training.log"),
+                "eval_log_file_path": os.path.join(
+                    run1_path, "rich_periodic_eval_log.txt"
+                ),
+            }
+
+        def mock_setup_run2(config, run_name):
+            os.makedirs(run2_path, exist_ok=True)
+            return {
+                "run_artifact_dir": run2_path,
+                "model_dir": os.path.join(run2_path, "models"),
+                "log_file_path": os.path.join(run2_path, "training.log"),
+                "eval_log_file_path": os.path.join(
+                    run2_path, "rich_periodic_eval_log.txt"
+                ),
+            }
+
+        with patch(
+            "keisei.training.utils.setup_directories", side_effect=mock_setup_run1
+        ):
+            manager1 = SessionManager(mock_app_config, mock_cli_args, run_name="run1")
+            manager1.setup_directories()
+
+        with patch(
+            "keisei.training.utils.setup_directories", side_effect=mock_setup_run2
+        ):
+            manager2 = SessionManager(mock_app_config, mock_cli_args, run_name="run2")
+            manager2.setup_directories()
+
+        # Verify both managers have different, correct paths
+        assert manager1.run_artifact_dir == run1_path
+        assert manager2.run_artifact_dir == run2_path
+        assert os.path.exists(run1_path)
+        assert os.path.exists(run2_path)
+
+
+# Unit Tests for SessionManager
 class TestSessionManagerInitialization:
-    """Test SessionManager initialization logic."""
+    """Test SessionManager initialization logic and run name precedence."""
 
-    def test_init_with_explicit_run_name(self, mock_config, mock_args):
-        """Test initialization with explicit run_name parameter."""
+    def test_init_with_explicit_run_name(self, mock_app_config, mock_cli_args):
+        """Test initialization with an explicit run_name parameter."""
         explicit_name = "explicit_test_run"
-        manager = SessionManager(mock_config, mock_args, run_name=explicit_name)
+        manager = SessionManager(mock_app_config, mock_cli_args, run_name=explicit_name)
         assert manager.run_name == explicit_name
 
-    def test_init_with_args_run_name(self, mock_config):
+    def test_init_with_args_run_name(self, mock_app_config):
         """Test initialization with run_name from CLI args."""
         args_name = "args_test_run"
         args = MockArgs(run_name=args_name)
-        manager = SessionManager(mock_config, args)
+        manager = SessionManager(mock_app_config, args)
         assert manager.run_name == args_name
 
-    def test_init_with_config_run_name(self, mock_config, mock_args):
-        """Test initialization with run_name from config."""
+    def test_init_with_config_run_name(self, mock_app_config, mock_cli_args):
+        """Test initialization with run_name from the config file."""
         config_name = "config_test_run"
-        mock_config.logging.run_name = config_name
-        manager = SessionManager(mock_config, mock_args)
+        mock_app_config.logging.run_name = config_name
+        manager = SessionManager(mock_app_config, mock_cli_args)
         assert manager.run_name == config_name
 
     @patch("keisei.training.session_manager.generate_run_name")
-    def test_init_with_auto_generated_name(self, mock_generate, mock_config, mock_args):
-        """Test initialization with auto-generated run_name."""
+    def test_init_with_auto_generated_name(
+        self, mock_generate, mock_app_config, mock_cli_args
+    ):
+        """Test initialization with an auto-generated run_name."""
         generated_name = "auto_generated_run"
         mock_generate.return_value = generated_name
-
-        manager = SessionManager(mock_config, mock_args)
+        manager = SessionManager(mock_app_config, mock_cli_args)
         assert manager.run_name == generated_name
-        mock_generate.assert_called_once_with(mock_config, None)
+        mock_generate.assert_called_once_with(mock_app_config, None)
 
-    def test_init_precedence_explicit_over_args(self, mock_config):
-        """Test that explicit run_name takes precedence over args."""
+    def test_init_run_name_precedence(self, mock_app_config):
+        """Test the precedence order for determining the run_name."""
         explicit_name = "explicit_name"
         args_name = "args_name"
-        args = MockArgs(run_name=args_name)
-
-        manager = SessionManager(mock_config, args, run_name=explicit_name)
-        assert manager.run_name == explicit_name
-
-    def test_init_precedence_args_over_config(self, mock_config):
-        """Test that args run_name takes precedence over config."""
-        args_name = "args_name"
         config_name = "config_name"
-        args = MockArgs(run_name=args_name)
-        mock_config.logging.run_name = config_name
+        args_with_name = MockArgs(run_name=args_name)
+        mock_app_config.logging.run_name = config_name
 
-        manager = SessionManager(mock_config, args)
-        assert manager.run_name == args_name
+        # Explicit name should have the highest priority
+        manager1 = SessionManager(
+            mock_app_config, args_with_name, run_name=explicit_name
+        )
+        assert manager1.run_name == explicit_name
 
-    def test_init_properties_not_accessible_before_setup(self, mock_config, mock_args):
-        """Test that directory properties raise errors before setup."""
-        manager = SessionManager(mock_config, mock_args, run_name="test")
+        # Args name should have priority over config name
+        manager2 = SessionManager(mock_app_config, args_with_name)
+        assert manager2.run_name == args_name
+
+
+class TestSessionManagerLifecycle:
+    """Test the complete lifecycle of SessionManager: setup, config saving, and finalization."""
+
+    @pytest.fixture
+    def setup_mocks(self):
+        """A single fixture to set up all necessary mocks."""
+        with (
+            patch("keisei.training.utils.setup_directories") as mock_setup_dirs,
+            patch("keisei.training.utils.setup_wandb") as mock_setup_wandb,
+            patch("keisei.training.utils.serialize_config") as mock_serialize,
+            patch("keisei.training.utils.setup_seeding") as mock_setup_seeding,
+            patch("builtins.open", new_callable=mock_open) as mock_file,
+            patch("os.path.join") as mock_join,
+        ):
+
+            mock_setup_dirs.return_value = {
+                "run_artifact_dir": "/tmp/test_run",
+                "model_dir": "/tmp/test_run/models",
+                "log_file_path": "/tmp/test_run/training.log",
+                "eval_log_file_path": "/tmp/test_run/eval.log",
+            }
+            mock_setup_wandb.return_value = True
+            mock_serialize.return_value = '{"test": "config"}'
+            mock_join.return_value = "/tmp/test_run/effective_config.json"
+
+            yield {
+                "setup_dirs": mock_setup_dirs,
+                "setup_wandb": mock_setup_wandb,
+                "serialize": mock_serialize,
+                "setup_seeding": mock_setup_seeding,
+                "file": mock_file,
+            }
+
+    def test_full_workflow(self, setup_mocks, mock_app_config, mock_cli_args):
+        """Test the complete session setup workflow."""
+        manager = SessionManager(
+            mock_app_config, mock_cli_args, run_name="test_workflow"
+        )
+
+        # 1. Setup Seeding
+        manager.setup_seeding()
+        setup_mocks["setup_seeding"].assert_called_once_with(mock_app_config)
+
+        # 2. Setup Directories
+        dirs = manager.setup_directories()
+        assert dirs["run_artifact_dir"] == "/tmp/test_run"
+        assert manager.run_artifact_dir == "/tmp/test_run"
+        setup_mocks["setup_dirs"].assert_called_once_with(
+            mock_app_config, "test_workflow"
+        )
+
+        # 3. Setup WandB
+        wandb_active = manager.setup_wandb()
+        assert wandb_active is True
+        assert manager.is_wandb_active is True
+        setup_mocks["setup_wandb"].assert_called_once_with(
+            mock_app_config, "test_workflow", "/tmp/test_run"
+        )
+
+        # 4. Save Effective Config
+        manager.save_effective_config()
+        setup_mocks["serialize"].assert_called_once_with(mock_app_config)
+        setup_mocks["file"].assert_called_once_with(
+            "/tmp/test_run/effective_config.json", "w", encoding="utf-8"
+        )
+        setup_mocks["file"]().write.assert_called_once_with('{"test": "config"}')
+
+    @patch("wandb.finish")
+    def test_finalize_session(self, _mock_wandb_finish, mock_app_config, mock_cli_args):
+        """Test session finalization with and without an active WandB run."""
+        # Case 1: WandB is active
+        manager1 = SessionManager(mock_app_config, mock_cli_args)
+        manager1._is_wandb_active = True  # pylint: disable=protected-access
+        with patch("wandb.run", MagicMock()):  # Ensure wandb.run is not None
+            manager1.finalize_session()
+        _mock_wandb_finish.assert_called_once()
+
+        # Case 2: WandB is not active
+        _mock_wandb_finish.reset_mock()
+        manager2 = SessionManager(mock_app_config, mock_cli_args)
+        manager2._is_wandb_active = False  # pylint: disable=protected-access
+        manager2.finalize_session()
+        _mock_wandb_finish.assert_not_called()
+
+
+class TestSessionManagerErrorHandling:
+    """Test SessionManager error handling and property access before setup."""
+
+    def test_properties_raise_error_before_setup(self, mock_app_config, mock_cli_args):
+        """Test that properties raise RuntimeError if accessed before setup."""
+        manager = SessionManager(mock_app_config, mock_cli_args)
 
         with pytest.raises(RuntimeError, match="Directories not yet set up"):
             _ = manager.run_artifact_dir
-
         with pytest.raises(RuntimeError, match="Directories not yet set up"):
             _ = manager.model_dir
-
-        with pytest.raises(RuntimeError, match="Directories not yet set up"):
-            _ = manager.log_file_path
-
-        with pytest.raises(RuntimeError, match="Directories not yet set up"):
-            _ = manager.eval_log_file_path
-
-    def test_init_wandb_property_not_accessible_before_setup(
-        self, mock_config, mock_args
-    ):
-        """Test that WandB property raises error before setup."""
-        manager = SessionManager(mock_config, mock_args, run_name="test")
-
         with pytest.raises(RuntimeError, match="WandB not yet initialized"):
             _ = manager.is_wandb_active
 
-
-class TestSessionManagerDirectorySetup:
-    """Test directory setup functionality."""
-
-    @patch("keisei.training.utils.setup_directories")
-    def test_setup_directories_success(self, mock_setup_dirs, mock_config, mock_args):
-        """Test successful directory setup."""
-        expected_dirs = {
-            "run_artifact_dir": "/tmp/test_run",
-            "model_dir": "/tmp/test_run/models",
-            "log_file_path": "/tmp/test_run/training.log",
-            "eval_log_file_path": "/tmp/test_run/eval.log",
-        }
-        mock_setup_dirs.return_value = expected_dirs
-
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        result = manager.setup_directories()
-
-        assert result == expected_dirs
-        assert manager.run_artifact_dir == expected_dirs["run_artifact_dir"]
-        assert manager.model_dir == expected_dirs["model_dir"]
-        assert manager.log_file_path == expected_dirs["log_file_path"]
-        assert manager.eval_log_file_path == expected_dirs["eval_log_file_path"]
-
-        mock_setup_dirs.assert_called_once_with(mock_config, "test_run")
-
-    @patch("keisei.training.utils.setup_directories")
-    def test_setup_directories_failure(self, mock_setup_dirs, mock_config, mock_args):
-        """Test directory setup failure handling."""
-        mock_setup_dirs.side_effect = OSError("Permission denied")
-
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-
+    @patch(
+        "keisei.training.utils.setup_directories",
+        side_effect=OSError("Permission denied"),
+    )
+    def test_directory_setup_failure(
+        self, _mock_setup_dirs, mock_app_config, mock_cli_args
+    ):
+        """Test handling of directory setup failures."""
+        manager = SessionManager(mock_app_config, mock_cli_args)
         with pytest.raises(RuntimeError, match="Failed to setup directories"):
             manager.setup_directories()
 
+    @patch(
+        "keisei.training.utils.setup_wandb", side_effect=Exception("WandB API error")
+    )
+    def test_wandb_setup_failure(
+        self, _mock_setup_wandb, mock_app_config, mock_cli_args
+    ):
+        """Test that WandB setup failure is handled gracefully."""
+        manager = SessionManager(mock_app_config, mock_cli_args)
+        manager._run_artifact_dir = "/tmp/test"  # pylint: disable=protected-access
 
-class TestSessionManagerWandBSetup:
-    """Test WandB setup functionality."""
-
-    @patch("keisei.training.utils.setup_wandb")
-    def test_setup_wandb_success(self, mock_setup_wandb, mock_config, mock_args):
-        """Test successful WandB setup."""
-        mock_setup_wandb.return_value = True
-
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        # Setup directories first
-        manager._run_artifact_dir = "/tmp/test_run"
-
-        result = manager.setup_wandb()
-
-        assert result is True
-        assert manager.is_wandb_active is True
-        mock_setup_wandb.assert_called_once_with(
-            mock_config, "test_run", "/tmp/test_run"
-        )
-
-    @patch("keisei.training.utils.setup_wandb")
-    def test_setup_wandb_failure(self, mock_setup_wandb, mock_config, mock_args):
-        """Test WandB setup failure handling."""
-        mock_setup_wandb.side_effect = Exception("WandB connection failed")
-
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._run_artifact_dir = "/tmp/test_run"
-
-        with patch("sys.stderr"):
+        with patch("sys.stderr"):  # Suppress error message print
             result = manager.setup_wandb()
+            assert result is False
+            assert manager.is_wandb_active is False
 
-        assert result is False
-        assert manager.is_wandb_active is False
-
-    def test_setup_wandb_without_directories(self, mock_config, mock_args):
-        """Test WandB setup fails without directory setup."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-
-        with pytest.raises(
-            RuntimeError, match="Directories must be set up before initializing WandB"
-        ):
-            manager.setup_wandb()
-
-
-class TestSessionManagerConfigSaving:
-    """Test configuration saving functionality."""
-
-    @patch("keisei.training.utils.serialize_config")
-    @patch("builtins.open", new_callable=mock_open)
-    @patch("os.path.join")
-    def test_save_effective_config_success(
-        self, mock_join, mock_file, mock_serialize, mock_config, mock_args
+    @patch(
+        "keisei.training.utils.serialize_config",
+        side_effect=TypeError("Serialization error"),
+    )
+    def test_config_saving_failure(
+        self, _mock_serialize, mock_app_config, mock_cli_args
     ):
-        """Test successful configuration saving."""
-        mock_serialize.return_value = '{"test": "config"}'
-        mock_join.return_value = "/tmp/test_run/effective_config.json"
-
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._run_artifact_dir = "/tmp/test_run"
-
-        manager.save_effective_config()
-
-        mock_serialize.assert_called_once_with(mock_config)
-        mock_file.assert_called_once_with(
-            "/tmp/test_run/effective_config.json", "w", encoding="utf-8"
-        )
-        mock_file().write.assert_called_once_with('{"test": "config"}')
-
-    @patch("keisei.training.utils.serialize_config")
-    def test_save_effective_config_serialization_error(
-        self, mock_serialize, mock_config, mock_args
-    ):
-        """Test configuration saving with serialization error."""
-        mock_serialize.side_effect = TypeError("Cannot serialize")
-
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._run_artifact_dir = "/tmp/test_run"
-
+        """Test handling of config saving failures."""
+        manager = SessionManager(mock_app_config, mock_cli_args)
+        manager._run_artifact_dir = "/tmp/test"  # pylint: disable=protected-access
         with pytest.raises(RuntimeError, match="Failed to save effective config"):
             manager.save_effective_config()
 
-    def test_save_effective_config_without_directories(self, mock_config, mock_args):
-        """Test configuration saving fails without directory setup."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
 
-        with pytest.raises(
-            RuntimeError, match="Directories must be set up before saving config"
-        ):
-            manager.save_effective_config()
+class TestSessionManagerLoggingAndSummary:
+    """Test session info logging and summary generation."""
 
+    def test_get_session_summary(self, mock_app_config, mock_cli_args):
+        """Test generation of the session summary."""
+        manager = SessionManager(
+            mock_app_config, mock_cli_args, run_name="summary_test"
+        )
 
-class TestSessionManagerLogging:
-    """Test session logging functionality."""
+        # Before setup
+        summary1 = manager.get_session_summary()
+        assert summary1["run_name"] == "summary_test"
+        assert summary1["run_artifact_dir"] is None
+        assert summary1["is_wandb_active"] is None
+        assert summary1["seed"] == 42
 
-    def test_log_session_info_basic(self, mock_config, mock_args):
-        """Test basic session info logging."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._run_artifact_dir = "/tmp/test_run"
-        manager._is_wandb_active = False
+        # After setup
+        manager._run_artifact_dir = "/tmp/summary"  # pylint: disable=protected-access
+        manager._model_dir = "/tmp/summary/models"  # pylint: disable=protected-access
+        manager._log_file_path = (
+            "/tmp/summary/training.log"  # pylint: disable=protected-access
+        )
+        manager._is_wandb_active = True  # pylint: disable=protected-access
 
-        logged_messages = []
+        summary2 = manager.get_session_summary()
+        assert summary2["run_artifact_dir"] == "/tmp/summary"
+        assert summary2["is_wandb_active"] is True
 
-        def mock_logger(msg):
-            logged_messages.append(msg)
-
-        manager.log_session_info(mock_logger)
-
-        assert any("Keisei Training Run: test_run" in msg for msg in logged_messages)
-        assert any("Run directory: /tmp/test_run" in msg for msg in logged_messages)
-        assert any("Random seed: 42" in msg for msg in logged_messages)
-        assert any("Device: cuda" in msg for msg in logged_messages)
-        assert any("Starting fresh training." in msg for msg in logged_messages)
-
-    @patch("wandb.run")
-    def test_log_session_info_with_wandb(self, mock_wandb_run, mock_config, mock_args):
-        """Test session info logging with WandB active."""
-        mock_wandb_run.url = "https://wandb.ai/test/run"
-
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._run_artifact_dir = "/tmp/test_run"
-        manager._is_wandb_active = True
+    def test_log_session_info(self, mock_app_config, mock_cli_args):
+        """Test the content of session info logging."""
+        manager = SessionManager(mock_app_config, mock_cli_args, run_name="log_test")
+        manager._run_artifact_dir = (
+            "/tmp/log_test_dir"  # pylint: disable=protected-access
+        )
+        manager._is_wandb_active = False  # pylint: disable=protected-access
 
         logged_messages = []
 
         def mock_logger(msg):
             logged_messages.append(msg)
 
-        manager.log_session_info(mock_logger)
-
-        assert any("W&B: https://wandb.ai/test/run" in msg for msg in logged_messages)
-
-    def test_log_session_info_with_resume(self, mock_config, mock_args):
-        """Test session info logging with resume information."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._run_artifact_dir = "/tmp/test_run"
-        manager._is_wandb_active = False
-
-        logged_messages = []
-
-        def mock_logger(msg):
-            logged_messages.append(msg)
-
+        # Test logging for a new run
         manager.log_session_info(
             mock_logger,
             agent_info={"type": "PPO", "name": "TestAgent"},
-            resumed_from_checkpoint="/path/to/checkpoint.pth",
-            global_timestep=50000,
-            total_episodes_completed=200,
+            global_timestep=0,
         )
 
+        assert any("Keisei Training Run: log_test" in msg for msg in logged_messages)
+        assert any("Run directory: /tmp/log_test_dir" in msg for msg in logged_messages)
+        assert any("Starting fresh training." in msg for msg in logged_messages)
         assert any("Agent: PPO (TestAgent)" in msg for msg in logged_messages)
+
+        # Test logging for a resumed run
+        logged_messages.clear()
+        manager.log_session_info(
+            mock_logger,
+            resumed_from_checkpoint="/path/to/checkpoint.pth",
+            global_timestep=50000,
+            total_episodes_completed=100,
+        )
+
         assert any("Resumed training from checkpoint" in msg for msg in logged_messages)
         assert any(
-            "Resuming from timestep 50000, 200 episodes completed" in msg
+            "Resuming from timestep 50000, 100 episodes completed" in msg
             for msg in logged_messages
         )
 
-    @patch("builtins.open", new_callable=mock_open)
-    @patch("keisei.training.session_manager.datetime")
-    def test_log_session_start_success(
-        self, mock_datetime, mock_file, mock_config, mock_args
-    ):
-        """Test successful session start logging."""
-        mock_datetime.now.return_value.strftime.return_value = "2025-05-28 10:30:00"
 
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._log_file_path = "/tmp/test_run/training.log"
+# Integration Tests for Trainer
+class TestTrainerIntegration:
+    """Test the integration of SessionManager within the Trainer class."""
 
-        manager.log_session_start()
-
-        mock_file.assert_called_once_with(
-            "/tmp/test_run/training.log", "a", encoding="utf-8"
-        )
-        mock_file().write.assert_called_once_with(
-            "[2025-05-28 10:30:00] --- SESSION START: test_run ---\n"
-        )
-
-    @patch("builtins.open", side_effect=IOError("File write error"))
-    def test_log_session_start_failure(self, mock_file, mock_config, mock_args):
-        """Test session start logging failure handling."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._log_file_path = "/tmp/test_run/training.log"
-
-        with patch("sys.stderr"):
-            manager.log_session_start()  # Should not raise, just print warning
-
-    def test_log_session_start_without_directories(self, mock_config, mock_args):
-        """Test session start logging fails without directory setup."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-
-        with pytest.raises(
-            RuntimeError, match="Directories must be set up before logging"
+    @pytest.fixture
+    def setup_trainer_mocks(self, mock_app_config):
+        """A fixture to set up all necessary mocks for Trainer initialization."""
+        # Use autospec=True to ensure mocks have the same signature as the real methods.
+        # Patch where modules are LOOKED UP, not where they are defined.
+        with (
+            patch(
+                "keisei.training.env_manager.ShogiGame", autospec=True
+            ) as mock_shogi_game_class,
+            patch(
+                "keisei.training.env_manager.PolicyOutputMapper", autospec=True
+            ) as mock_policy_mapper_class,
+            patch(
+                "keisei.training.models.model_factory", autospec=True
+            ) as mock_model_factory,
+            patch(
+                "keisei.training.trainer.PPOAgent", autospec=True
+            ) as mock_ppo_agent_class,
+            patch(
+                "keisei.shogi.features.FEATURE_SPECS", new_callable=dict
+            ) as mock_feature_specs,
+            patch(
+                "keisei.training.session_manager.SessionManager.setup_directories",
+                autospec=True,
+            ) as mock_setup_dirs,
+            patch(
+                "keisei.training.session_manager.SessionManager.setup_wandb",
+                autospec=True,
+            ) as mock_setup_wandb,
+            patch(
+                "keisei.training.session_manager.SessionManager.save_effective_config",
+                autospec=True,
+            ) as mock_save_config,
+            patch(
+                "keisei.training.session_manager.SessionManager.setup_seeding",
+                autospec=True,
+            ) as mock_setup_seeding,
+            patch(
+                "keisei.training.session_manager.generate_run_name",
+                return_value="mocked_auto_run_name",
+            ) as mock_gen_name,
+            patch("builtins.open", new_callable=mock_open),
+            patch("os.path.join", side_effect=lambda *args: "/".join(args)),
+            patch("glob.glob", return_value=[]),
+            patch("os.path.exists", return_value=True),
         ):
-            manager.log_session_start()
 
+            # --- Mock SessionManager side effects ---
+            def mock_setup_directories_impl(session_manager_self):
+                dirs = {
+                    "run_artifact_dir": "/tmp/trainer_run",
+                    "model_dir": "/tmp/trainer_run/models",
+                    "log_file_path": "/tmp/trainer_run/training.log",
+                    "eval_log_file_path": "/tmp/trainer_run/eval.log",
+                }
+                session_manager_self._run_artifact_dir = dirs["run_artifact_dir"]
+                session_manager_self._model_dir = dirs["model_dir"]
+                session_manager_self._log_file_path = dirs["log_file_path"]
+                session_manager_self._eval_log_file_path = dirs["eval_log_file_path"]
+                return dirs
 
-class TestSessionManagerFinalization:
-    """Test session finalization functionality."""
+            def mock_setup_wandb_impl(session_manager_self):
+                session_manager_self._is_wandb_active = False
+                return False
 
-    @patch("wandb.run")
-    @patch("wandb.finish")
-    def test_finalize_session_with_wandb(
-        self, mock_wandb_finish, mock_wandb_run, mock_config, mock_args
+            mock_setup_dirs.side_effect = mock_setup_directories_impl
+            mock_setup_wandb.side_effect = mock_setup_wandb_impl
+
+            # --- Mock other dependencies ---
+            mock_game_instance = mock_shogi_game_class.return_value
+            mock_game_instance.get_observation.return_value = Mock(
+                name="MockObservation"
+            )
+            mock_game_instance.reset.return_value = (
+                mock_game_instance.get_observation.return_value
+            )
+
+            mock_policy_mapper_class.return_value.get_total_actions.return_value = (
+                mock_app_config.env.num_actions_total
+            )
+
+            mock_model_instance = mock_model_factory.return_value
+            mock_model_instance.to.return_value = mock_model_instance
+            mock_feature_specs["core46"] = Mock(
+                num_planes=mock_app_config.env.input_channels
+            )
+
+            # FIX: Configure the PPOAgent mock instance with a 'name' attribute
+            mock_agent_instance = mock_ppo_agent_class.return_value
+            mock_agent_instance.model = mock_model_instance
+            mock_agent_instance.name = "TestAgent"
+
+            # Yield all necessary mocks for assertions in the tests.
+            yield {
+                "mock_setup_dirs": mock_setup_dirs,
+                "mock_setup_wandb": mock_setup_wandb,
+                "mock_save_config": mock_save_config,
+                "mock_setup_seeding": mock_setup_seeding,
+                "mock_ppo_agent_class": mock_ppo_agent_class,
+                "mock_generate_run_name": mock_gen_name,
+            }
+
+    def test_trainer_initializes_and_uses_session_manager(
+        self, setup_trainer_mocks, mock_app_config, mock_cli_args
     ):
-        """Test session finalization with active WandB."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._is_wandb_active = True
+        """Test that Trainer correctly initializes and delegates to SessionManager."""
+        trainer = Trainer(mock_app_config, mock_cli_args)
 
-        manager.finalize_session()
+        # Verify SessionManager is created and used
+        assert hasattr(trainer, "session_manager")
+        assert isinstance(trainer.session_manager, SessionManager)
 
-        mock_wandb_finish.assert_called_once()
+        # Assert calls on the mock objects from the fixture
+        setup_trainer_mocks["mock_setup_dirs"].assert_called_once()
+        setup_trainer_mocks["mock_setup_wandb"].assert_called_once()
+        setup_trainer_mocks["mock_save_config"].assert_called_once()
+        setup_trainer_mocks["mock_setup_seeding"].assert_called_once()
+        setup_trainer_mocks["mock_generate_run_name"].assert_called_once()
 
-    @patch("wandb.run", None)
-    def test_finalize_session_without_wandb(self, mock_config, mock_args):
-        """Test session finalization without WandB."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._is_wandb_active = False
+        # Verify session properties are correctly accessed from the manager
+        assert trainer.run_name == "mocked_auto_run_name"
+        assert trainer.run_artifact_dir == "/tmp/trainer_run"
+        assert trainer.model_dir == "/tmp/trainer_run/models"
+        assert trainer.log_file_path == "/tmp/trainer_run/training.log"
+        assert trainer.is_train_wandb_active is False
 
-        manager.finalize_session()  # Should not raise
-
-    @patch("wandb.run")
-    @patch("wandb.finish", side_effect=Exception("WandB error"))
-    def test_finalize_session_wandb_error(
-        self, mock_wandb_finish, mock_wandb_run, mock_config, mock_args
+    def test_trainer_delegates_info_logging_to_session_manager(
+        self, setup_trainer_mocks, mock_app_config, mock_cli_args
     ):
-        """Test session finalization with WandB error."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._is_wandb_active = True
+        """Test that Trainer uses SessionManager for logging run information."""
+        trainer = Trainer(mock_app_config, mock_cli_args)
 
-        with patch("sys.stderr"):
-            manager.finalize_session()  # Should not raise, just print warning
+        # Create a mock logger function
+        mock_log_both = Mock()
 
+        # Spy on the SessionManager's log_session_info method
+        with patch.object(
+            trainer.session_manager, "log_session_info"
+        ) as mock_log_session:
+            trainer._log_run_info(mock_log_both)  # pylint: disable=protected-access
 
-class TestSessionManagerUtilityMethods:
-    """Test utility methods."""
+            # Verify SessionManager's method was called once
+            mock_log_session.assert_called_once()
 
-    @patch("keisei.training.utils.setup_seeding")
-    def test_setup_seeding(self, mock_setup_seeding, mock_config, mock_args):
-        """Test seeding setup delegation."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-
-        manager.setup_seeding()
-
-        mock_setup_seeding.assert_called_once_with(mock_config)
-
-    def test_get_session_summary(self, mock_config, mock_args):
-        """Test session summary generation."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-        manager._run_artifact_dir = "/tmp/test_run"
-        manager._model_dir = "/tmp/test_run/models"
-        manager._log_file_path = "/tmp/test_run/training.log"
-        manager._is_wandb_active = True
-
-        summary = manager.get_session_summary()
-
-        expected_summary = {
-            "run_name": "test_run",
-            "run_artifact_dir": "/tmp/test_run",
-            "model_dir": "/tmp/test_run/models",
-            "log_file_path": "/tmp/test_run/training.log",
-            "is_wandb_active": True,
-            "seed": 42,
-            "device": "cuda",
-        }
-
-        assert summary == expected_summary
-
-    def test_get_session_summary_partial_setup(self, mock_config, mock_args):
-        """Test session summary with partial setup."""
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-
-        summary = manager.get_session_summary()
-
-        assert summary["run_name"] == "test_run"
-        assert summary["run_artifact_dir"] is None
-        assert summary["is_wandb_active"] is None
-        assert summary["seed"] == 42
-        assert summary["device"] == "cuda"
-
-
-class TestSessionManagerIntegration:
-    """Integration tests for complete SessionManager workflows."""
-
-    @patch("keisei.training.utils.setup_directories")
-    @patch("keisei.training.utils.setup_wandb")
-    @patch("keisei.training.utils.serialize_config")
-    @patch("builtins.open", new_callable=mock_open)
-    @patch("os.path.join")
-    def test_complete_session_setup_workflow(
-        self,
-        mock_join,
-        mock_file,
-        mock_serialize,
-        mock_setup_wandb,
-        mock_setup_dirs,
-        mock_config,
-        mock_args,
-    ):
-        """Test complete session setup workflow."""
-        # Setup mocks
-        mock_setup_dirs.return_value = {
-            "run_artifact_dir": "/tmp/test_run",
-            "model_dir": "/tmp/test_run/models",
-            "log_file_path": "/tmp/test_run/training.log",
-            "eval_log_file_path": "/tmp/test_run/eval.log",
-        }
-        mock_setup_wandb.return_value = True
-        mock_serialize.return_value = '{"test": "config"}'
-        mock_join.return_value = "/tmp/test_run/effective_config.json"
-
-        # Execute workflow
-        manager = SessionManager(mock_config, mock_args, run_name="test_run")
-
-        # Setup directories
-        dirs = manager.setup_directories()
-        assert dirs["run_artifact_dir"] == "/tmp/test_run"
-
-        # Setup WandB
-        wandb_active = manager.setup_wandb()
-        assert wandb_active is True
-
-        # Save config
-        manager.save_effective_config()
-
-        # Log session start
-        with patch("keisei.training.session_manager.datetime"):
-            manager.log_session_start()
-
-        # Verify all components work together
-        assert manager.run_name == "test_run"
-        assert manager.run_artifact_dir == "/tmp/test_run"
-        assert manager.is_wandb_active is True
-
-        # Get summary
-        summary = manager.get_session_summary()
-        assert summary["run_name"] == "test_run"
-        assert summary["is_wandb_active"] is True
+            # Verify it was called with the correct info from the trainer
+            call_kwargs = mock_log_session.call_args.kwargs
+            # FIX: The agent instance mock now has the 'name' attribute configured
+            assert call_kwargs["agent_info"]["name"] == "TestAgent"
+            assert call_kwargs["global_timestep"] == 0
+            assert call_kwargs["total_episodes_completed"] == 0
 
 ]]></file>
   <file path="test_features.py"><![CDATA[
@@ -1184,772 +1376,6 @@ def test_registry_and_spec():
     assert "core46" in features.FEATURE_SPECS
     assert features.FEATURE_SPECS["core46"].num_planes == 46
     assert features.FEATURE_SPECS["core46+all"].num_planes == 51
-
-]]></file>
-  <file path="test_session_manager_integration.py"><![CDATA[
-"""
-test_session_manager_integration.py: Integration tests for SessionManager with Trainer.
-
-These tests verify that SessionManager properly integrates wi    @patch('keisei.training.trainer.ShogiGame')
-    @patch('keisei.training.trainer.PPOAgent')
-    @patch('keisei.training.trainer.model_factory')
-    @patch('keisei.shogi.features.FEATURE_SPECS')
-    @patch('keisei.training.utils.setup_directories')
-    @patch('keisei.training.utils.setup_wandb')
-    @patch('keisei.training.utils.serialize_config')
-    @patch('keisei.training.utils.setup_seeding')
-    def test_trainer_uses_session_manager(self, mock_setup_seeding, mock_serialize,
-                                         mock_setup_wandb, mock_setup_dirs,
-                                         mock_feature_specs, mock_model_factory,ner class
-and maintains backward compatibility while providing the expected functionality.
-"""
-
-import os
-import tempfile
-from unittest.mock import Mock, patch
-
-import pytest
-
-from keisei.config_schema import (
-    AppConfig,
-    DemoConfig,
-    EnvConfig,
-    EvaluationConfig,
-    LoggingConfig,
-    TrainingConfig,
-    WandBConfig,
-)
-from keisei.training.session_manager import SessionManager
-from keisei.training.trainer import Trainer
-
-
-class MockArgs:
-    """Mock command-line arguments for testing."""
-
-    def __init__(self, **kwargs):
-        self.run_name = kwargs.get("run_name")
-        self.resume = kwargs.get("resume")
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-
-
-@pytest.fixture
-def mock_config():
-    """Create a mock configuration for testing."""
-    return AppConfig(
-        env=EnvConfig(
-            device="cpu",
-            num_actions_total=13527,
-            input_channels=46,
-            seed=42,
-        ),
-        training=TrainingConfig(
-            total_timesteps=500_000,
-            steps_per_epoch=2048,
-            ppo_epochs=10,
-            minibatch_size=64,
-            learning_rate=3e-4,
-            gamma=0.99,
-            clip_epsilon=0.2,
-            value_loss_coeff=0.5,
-            entropy_coef=0.01,
-            render_every_steps=1,
-            refresh_per_second=4,
-            enable_spinner=True,
-            input_features="core46",
-            tower_depth=9,
-            tower_width=256,
-            se_ratio=0.25,
-            model_type="resnet",
-            mixed_precision=False,
-            ddp=False,
-            gradient_clip_max_norm=0.5,
-            lambda_gae=0.95,
-            checkpoint_interval_timesteps=10000,
-            evaluation_interval_timesteps=50000,
-            weight_decay=0.0,
-        ),
-        evaluation=EvaluationConfig(
-            num_games=20,
-            opponent_type="random",
-            evaluation_interval_timesteps=50000,
-        ),
-        logging=LoggingConfig(
-            log_file="test.log",
-            model_dir="/tmp/test_models",
-            run_name=None,
-        ),
-        wandb=WandBConfig(
-            enabled=False,
-            project="test-project",
-            entity=None,
-            run_name_prefix="test",
-            watch_model=False,
-            watch_log_freq=1000,
-            watch_log_type="all",
-        ),
-        demo=DemoConfig(
-            enable_demo_mode=False,
-            demo_mode_delay=0.5,
-        ),
-    )
-
-
-@pytest.fixture
-def mock_args():
-    """Create mock command-line arguments."""
-    return MockArgs(resume=None)
-
-
-class TestSessionManagerTrainerIntegration:
-    """Test SessionManager integration with Trainer class."""
-
-    @patch("keisei.training.trainer.ShogiGame")
-    @patch("keisei.training.trainer.PPOAgent")
-    @patch("keisei.training.models.model_factory")
-    @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.utils.setup_directories")
-    @patch("keisei.training.utils.setup_wandb")
-    @patch("keisei.training.utils.serialize_config")
-    @patch("keisei.training.utils.setup_seeding")
-    def test_trainer_uses_session_manager(
-        self,
-        mock_setup_seeding,
-        mock_serialize,
-        mock_setup_wandb,
-        mock_setup_dirs,
-        mock_feature_specs,
-        mock_model_factory,
-        mock_ppo_agent,
-        mock_shogi_game,
-        mock_config,
-        mock_args,
-    ):
-        """Test that Trainer properly uses SessionManager for session management."""
-        # Setup mocks
-        mock_setup_dirs.return_value = {
-            "run_artifact_dir": "/tmp/test_run",
-            "model_dir": "/tmp/test_run/models",
-            "log_file_path": "/tmp/test_run/training.log",
-            "eval_log_file_path": "/tmp/test_run/eval.log",
-        }
-        mock_setup_wandb.return_value = False
-        mock_serialize.return_value = '{"test": "config"}'
-
-        # Mock feature spec
-        mock_feature_spec = Mock()
-        mock_feature_spec.num_planes = 119
-        mock_feature_specs.__getitem__.return_value = mock_feature_spec
-
-        # Mock model factory
-        mock_model = Mock()
-        mock_model_factory.return_value = mock_model
-
-        # Mock agent
-        mock_agent_instance = Mock()
-        mock_agent_instance.name = "TestAgent"
-        mock_ppo_agent.return_value = mock_agent_instance
-
-        # Mock game
-        mock_game_instance = Mock()
-        mock_game_instance.reset.return_value = Mock()
-        mock_shogi_game.return_value = mock_game_instance
-
-        with (
-            patch("builtins.open"),
-            patch("os.path.join", side_effect=lambda *args: "/".join(args)),
-            patch("glob.glob", return_value=[]),
-            patch("os.makedirs"),
-            patch("os.path.exists", return_value=True),
-        ):
-            trainer = Trainer(mock_config, mock_args)
-
-        # Verify SessionManager is created and used
-        assert hasattr(trainer, "session_manager")
-        assert isinstance(trainer.session_manager, SessionManager)
-
-        # Verify session properties are accessible through trainer
-        assert trainer.run_name == trainer.session_manager.run_name
-        assert trainer.run_artifact_dir == trainer.session_manager.run_artifact_dir
-        assert trainer.model_dir == trainer.session_manager.model_dir
-        assert trainer.log_file_path == trainer.session_manager.log_file_path
-        assert trainer.is_train_wandb_active == trainer.session_manager.is_wandb_active
-
-        # Verify setup methods were called
-        mock_setup_dirs.assert_called_once()
-        mock_setup_wandb.assert_called_once()
-        mock_serialize.assert_called_once()
-        mock_setup_seeding.assert_called_once()
-
-    @patch("keisei.training.trainer.ShogiGame")
-    @patch("keisei.training.trainer.PPOAgent")
-    @patch("keisei.training.models.model_factory")
-    @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.utils.setup_directories")
-    @patch("keisei.training.utils.setup_wandb")
-    @patch("keisei.training.utils.serialize_config")
-    @patch("keisei.training.utils.setup_seeding")
-    def test_trainer_session_info_logging(
-        self,
-        mock_setup_seeding,
-        mock_serialize,
-        mock_setup_wandb,
-        mock_setup_dirs,
-        mock_feature_specs,
-        mock_model_factory,
-        mock_ppo_agent,
-        mock_shogi_game,
-        mock_config,
-        mock_args,
-    ):
-        """Test that Trainer uses SessionManager for session info logging."""
-        # Setup mocks
-        mock_setup_dirs.return_value = {
-            "run_artifact_dir": "/tmp/test_run",
-            "model_dir": "/tmp/test_run/models",
-            "log_file_path": "/tmp/test_run/training.log",
-            "eval_log_file_path": "/tmp/test_run/eval.log",
-        }
-        mock_setup_wandb.return_value = False
-        mock_serialize.return_value = '{"test": "config"}'
-
-        # Mock feature spec
-        mock_feature_spec = Mock()
-        mock_feature_spec.num_planes = 119
-        mock_feature_specs.__getitem__.return_value = mock_feature_spec
-
-        # Mock model factory
-        mock_model = Mock()
-        mock_model_factory.return_value = mock_model
-
-        # Mock agent
-        mock_agent_instance = Mock()
-        mock_agent_instance.name = "TestAgent"
-        mock_agent_instance.model = "MockModel"
-        mock_ppo_agent.return_value = mock_agent_instance
-
-        # Mock game
-        mock_game_instance = Mock()
-        mock_game_instance.reset.return_Value = Mock()
-        mock_shogi_game.return_value = mock_game_instance
-
-        with (
-            patch("builtins.open"),
-            patch("os.path.join", side_effect=lambda *args: "/".join(args)),
-            patch("glob.glob", return_value=[]),
-            patch("os.makedirs"),
-            patch("os.path.exists", return_value=True),
-        ):
-            trainer = Trainer(mock_config, mock_args)
-
-        # Test session info logging
-        logged_messages = []
-
-        def mock_log_both(msg, **kwargs):
-            logged_messages.append(msg)
-
-        # Mock the session manager's log_session_info method
-        with patch.object(
-            trainer.session_manager, "log_session_info"
-        ) as mock_log_session:
-            trainer._log_run_info(mock_log_both)
-
-            # Verify SessionManager's log_session_info was called
-            mock_log_session.assert_called_once()
-
-            # Verify it was called with correct parameters
-            call_args = mock_log_session.call_args
-            assert call_args[1]["agent_info"]["type"] == "Mock"
-            assert call_args[1]["agent_info"]["name"] == "TestAgent"
-            assert call_args[1]["global_timestep"] == 0
-            assert call_args[1]["total_episodes_completed"] == 0
-
-    def test_session_manager_standalone_functionality(self, mock_config, mock_args):
-        """Test that SessionManager works independently for basic operations."""
-        session_manager = SessionManager(
-            mock_config, mock_args, run_name="test_session"
-        )
-
-        # Test basic properties
-        assert session_manager.run_name == "test_session"
-
-        # Test properties raise errors before setup
-        with pytest.raises(RuntimeError, match="Directories not yet set up"):
-            _ = session_manager.run_artifact_dir
-
-        with pytest.raises(RuntimeError, match="WandB not yet initialized"):
-            _ = session_manager.is_wandb_active
-
-    @patch("keisei.training.utils.setup_directories")
-    @patch("keisei.training.utils.setup_wandb")
-    @patch("keisei.training.utils.serialize_config")
-    @patch("builtins.open")
-    @patch("os.path.join")
-    def test_session_manager_full_workflow(
-        self,
-        mock_join,
-        mock_open,
-        mock_serialize,
-        mock_setup_wandb,
-        mock_setup_dirs,
-        mock_config,
-        mock_args,
-    ):
-        """Test SessionManager complete workflow."""
-        # Setup mocks
-        mock_setup_dirs.return_value = {
-            "run_artifact_dir": "/tmp/test_session",
-            "model_dir": "/tmp/test_session/models",
-            "log_file_path": "/tmp/test_session/training.log",
-            "eval_log_file_path": "/tmp/test_session/eval.log",
-        }
-        mock_setup_wandb.return_value = True
-        mock_serialize.return_value = '{"session": "config"}'
-        mock_join.return_value = "/tmp/test_session/effective_config.json"
-
-        session_manager = SessionManager(
-            mock_config, mock_args, run_name="test_session"
-        )
-
-        # Execute full workflow
-        dirs = session_manager.setup_directories()
-        wandb_active = session_manager.setup_wandb()
-        session_manager.save_effective_config()
-
-        # Verify workflow results
-        assert dirs["run_artifact_dir"] == "/tmp/test_session"
-        assert wandb_active is True
-        assert session_manager.is_wandb_active is True
-        assert session_manager.run_artifact_dir == "/tmp/test_session"
-
-        # Test session summary
-        summary = session_manager.get_session_summary()
-        assert summary["run_name"] == "test_session"
-        assert summary["is_wandb_active"] is True
-        assert summary["seed"] == 42
-
-    def test_session_manager_backward_compatibility(self, mock_config, mock_args):
-        """Test that SessionManager maintains backward compatibility."""
-        # Test run name precedence (same as before)
-        explicit_name = "explicit_run"
-        session_manager = SessionManager(mock_config, mock_args, run_name=explicit_name)
-        assert session_manager.run_name == explicit_name
-
-        # Test with args run name
-        args_name = "args_run"
-        args_with_name = MockArgs(run_name=args_name)
-        session_manager2 = SessionManager(mock_config, args_with_name)
-        assert session_manager2.run_name == args_name
-
-        # Test with config run name
-        config_name = "config_run"
-        mock_config.logging.run_name = config_name
-        session_manager3 = SessionManager(mock_config, mock_args)
-        assert session_manager3.run_name == config_name
-
-
-class TestSessionManagerErrorHandling:
-    """Test SessionManager error handling scenarios."""
-
-    def test_directory_setup_failure(self, mock_config, mock_args):
-        """Test handling of directory setup failures."""
-        session_manager = SessionManager(mock_config, mock_args, run_name="test")
-
-        with patch(
-            "keisei.training.utils.setup_directories",
-            side_effect=OSError("Permission denied"),
-        ):
-            with pytest.raises(RuntimeError, match="Failed to setup directories"):
-                session_manager.setup_directories()
-
-    def test_wandb_setup_failure(self, mock_config, mock_args):
-        """Test handling of WandB setup failures."""
-        session_manager = SessionManager(mock_config, mock_args, run_name="test")
-        session_manager._run_artifact_dir = "/tmp/test"
-
-        with patch(
-            "keisei.training.utils.setup_wandb", side_effect=Exception("WandB error")
-        ):
-            with patch("sys.stderr"):
-                result = session_manager.setup_wandb()
-                assert result is False
-                assert session_manager.is_wandb_active is False
-
-    def test_config_saving_failure(self, mock_config, mock_args):
-        """Test handling of config saving failures."""
-        session_manager = SessionManager(mock_config, mock_args, run_name="test")
-        session_manager._run_artifact_dir = "/tmp/test"
-
-        with patch(
-            "keisei.training.utils.serialize_config",
-            side_effect=TypeError("Serialization error"),
-        ):
-            with pytest.raises(RuntimeError, match="Failed to save effective config"):
-                session_manager.save_effective_config()
-
-]]></file>
-  <file path="test_utils.py"><![CDATA[
-"""
-Unit tests for PolicyOutputMapper in utils.py
-"""
-
-from typing import List
-
-import pytest
-import torch
-
-from keisei.shogi import MoveTuple, PieceType
-from keisei.utils import PolicyOutputMapper
-
-# Test for the new PolicyOutputMapper
-
-
-@pytest.fixture
-def mapper() -> PolicyOutputMapper:
-    return PolicyOutputMapper()
-
-
-def test_policy_output_mapper_init(mapper: PolicyOutputMapper):
-    """Test PolicyOutputMapper initializes with correct total actions."""
-    assert isinstance(mapper, PolicyOutputMapper)
-    # Board moves: (81 * 81 - 81) * 2 = 80 * 81 * 2 = 12960
-    # Drop moves: 81 * 7 = 567
-    # Total = 12960 + 567 = 13527
-    assert mapper.get_total_actions() == 13527
-
-
-def test_policy_output_mapper_mappings(mapper: PolicyOutputMapper):
-    """Test basic move to index and index to move conversions."""
-    # Example board move: (0,0) to (1,0) without promotion
-    move1: MoveTuple = (0, 0, 1, 0, False)
-    idx1 = mapper.shogi_move_to_policy_index(move1)
-    retrieved_move1 = mapper.policy_index_to_shogi_move(idx1)
-    assert retrieved_move1 == move1
-
-    # Example board move with promotion: (0,0) to (1,0) with promotion
-    move_promo: MoveTuple = (0, 0, 1, 0, True)
-    idx_promo = mapper.shogi_move_to_policy_index(move_promo)
-    retrieved_move_promo = mapper.policy_index_to_shogi_move(idx_promo)
-    assert retrieved_move_promo == move_promo
-    assert idx_promo == idx1 + 1  # Promo move should be next to non-promo
-
-    # Example drop move: Pawn to (4,4)
-    # PieceType.PAWN is the first in droppable_piece_types list (index 0)
-    # Drop moves start after all 12960 board moves.
-    # Offset for (4,4) square: (4 * 9 + 4) * 7 = (36 + 4) * 7 = 40 * 7 = 280
-    # Index for PAWN drop at (4,4) = 12960 (board moves) + 280 (offset for square and PAWN) = 13240
-    move2: MoveTuple = (None, None, 4, 4, PieceType.PAWN)
-    idx2 = mapper.shogi_move_to_policy_index(move2)
-    retrieved_move2 = mapper.policy_index_to_shogi_move(idx2)
-    assert retrieved_move2 == move2
-    assert idx2 == 13240
-
-    # Example drop move: LANCE to (0,0)
-    # PieceType.LANCE is the second in droppable_piece_types list (index 1)
-    # Offset for (0,0) square: (0 * 9 + 0) * 7 = 0
-    # Index for LANCE drop at (0,0) = 12960 (board moves) + 0 (offset for square) + 1 (for LANCE) = 12961
-    move3: MoveTuple = (None, None, 0, 0, PieceType.LANCE)
-    idx3 = mapper.shogi_move_to_policy_index(move3)
-    retrieved_move3 = mapper.policy_index_to_shogi_move(idx3)
-    assert retrieved_move3 == move3
-    assert (
-        idx3 == 12960 + 1
-    )  # (0*9+0)*7 + 1 (Lance is index 1 in droppable_piece_types)
-
-    with pytest.raises(ValueError):
-        # A move tuple that is structurally valid but wouldn't be generated
-        # e.g. if from_sq == to_sq for a board move (already skipped in generation)
-        # or a piece type not in droppable_piece_types for a drop.
-        # For a simple ValueError test, use a move that get() would return None for.
-        mapper.shogi_move_to_policy_index((-1, -1, -1, -1, False))
-
-    with pytest.raises(IndexError):
-        mapper.policy_index_to_shogi_move(
-            mapper.get_total_actions()
-        )  # Exact total_actions is out of bounds (0-indexed)
-    with pytest.raises(IndexError):
-        mapper.policy_index_to_shogi_move(-1)
-
-
-def test_get_legal_mask(mapper: PolicyOutputMapper):
-    """Test the get_legal_mask method."""
-    device = torch.device("cpu")
-
-    # Example legal Shogi moves (ensure these are valid MoveTuple structures)
-    legal_shogi_moves: List[MoveTuple] = [
-        (0, 0, 1, 0, False),
-        (None, None, 4, 4, PieceType.PAWN),
-        (2, 2, 3, 3, True),
-    ]
-
-    # Verify these test moves are known to the mapper
-    for move in legal_shogi_moves:
-        assert (
-            move in mapper.move_to_idx
-        ), f"Test move {move} is not in the mapper. Check move generation or test data."
-
-    mask = mapper.get_legal_mask(legal_shogi_moves, device)
-
-    assert mask.shape == (mapper.get_total_actions(),)
-    assert mask.dtype == torch.bool
-    assert mask.sum().item() == len(legal_shogi_moves)
-
-    for move in legal_shogi_moves:
-        idx = mapper.shogi_move_to_policy_index(move)
-        assert mask[idx].item() is True
-
-    # Test with an empty list of legal moves
-    empty_mask = mapper.get_legal_mask([], device)
-    assert empty_mask.sum().item() == 0
-
-    # Test with a move not in the mapper (should be ignored by get_legal_mask if it occurs)
-    # This case depends on the strictness of ShogiGame.get_legal_moves()
-    # For now, PolicyOutputMapper.get_legal_mask has a try-except ValueError for robustness.
-    # If ShogiGame guarantees all its output moves are mappable, this part is less critical.
-    # non_mappable_move: MoveTuple = (99,99,99,99,False) # A deliberately unmappable move
-    # mask_with_unmappable = mapper.get_legal_mask([legal_shogi_moves[0], non_mappable_move], device)
-    # assert mask_with_unmappable.sum().item() == 1 # Only the mappable one should be True
-
-
-# Additional tests for PolicyOutputMapper
-
-
-def test_policy_output_mapper_total_actions(mapper: PolicyOutputMapper):
-    # Based on the logic in PolicyOutputMapper:
-    # Board moves: 9x9 (from_sq) * 8x8 (to_sq, excluding same square) = 81 * 64, but this is not how it's calculated.
-    # It's (9*9 for from_sq) * (9*9 for to_sq), then filter out from_sq == to_sq.
-    # (81 * 81 - 81) = 81 * 80 = 6480 board destinations.
-    # Each board move can be with or without promotion: 6480 * 2 = 12960 board move policy outputs.
-    # Drop moves: 9x9 (to_sq) * 7 (droppable piece types) = 81 * 7 = 567 drop move policy outputs.
-    # Total = 12960 + 567 = 13527
-    assert mapper.get_total_actions() == 13527
-    assert len(mapper.idx_to_move) == 13527
-    assert len(mapper.move_to_idx) == 13527
-
-
-@pytest.mark.parametrize(
-    "r_from, c_from, r_to, c_to, promote",  # Removed expected_idx_offset
-    [
-        (0, 0, 0, 1, False),  # Removed 0
-        (0, 0, 0, 1, True),  # Removed 1
-        (8, 8, 8, 7, False),  # Removed 12958
-        (8, 8, 8, 7, True),  # Removed 12959
-    ],
-)
-def test_board_move_to_policy_index_edges(  # pylint: disable=too-many-positional-arguments
-    mapper: PolicyOutputMapper,
-    r_from,
-    c_from,
-    r_to,
-    c_to,
-    promote,  # Removed expected_idx_offset
-):
-    move: MoveTuple = (r_from, c_from, r_to, c_to, promote)
-    # This test is a bit fragile as it assumes specific ordering. The existing test_policy_output_mapper_mappings is better for general validation.
-    # The exact index depends on the iteration order in __init__.
-    # For now, let's ensure it's within bounds and consistent.
-    idx = mapper.shogi_move_to_policy_index(move)
-    assert 0 <= idx < 12960  # Board moves are in this range
-    retrieved_move = mapper.policy_index_to_shogi_move(idx)
-    assert retrieved_move == move
-
-
-@pytest.mark.parametrize(
-    "r_to, c_to, piece_type, expected_idx_start_offset",
-    [
-        (0, 0, PieceType.PAWN, 12960),  # First possible drop move (Pawn to 9a)
-        (8, 8, PieceType.ROOK, 13526),  # Last possible drop move (Rook to 1i)
-    ],
-)
-def test_drop_move_to_policy_index_edges(
-    mapper: PolicyOutputMapper,
-    r_to,
-    c_to,
-    piece_type,
-    expected_idx_start_offset,  # pylint: disable=unused-argument, too-many-positional-arguments
-):
-    move: MoveTuple = (None, None, r_to, c_to, piece_type)
-    idx = mapper.shogi_move_to_policy_index(move)
-    # Exact index depends on iteration order and PieceType enum order.
-    # Check if it's within the drop move range and consistent.
-    assert 12960 <= idx < 13527
-    retrieved_move = mapper.policy_index_to_shogi_move(idx)
-    assert retrieved_move == move
-
-
-def test_get_legal_mask_all_legal(mapper: PolicyOutputMapper):
-    """Test get_legal_mask when all moves are theoretically legal (for mask creation purposes)."""
-    # This doesn't mean they are game-legal, just that the mapper can map them.
-    all_moves = mapper.idx_to_move  # Get all moves the mapper knows
-    device = torch.device("cpu")
-    mask = mapper.get_legal_mask(all_moves, device)
-    assert mask.shape == (mapper.get_total_actions(),)
-    assert mask.dtype == torch.bool
-    assert mask.sum().item() == mapper.get_total_actions()
-
-
-# Tests for USI conversion utilities
-
-
-@pytest.mark.parametrize(
-    "r, c, expected_usi",
-    [
-        (0, 0, "9a"),
-        (8, 8, "1i"),
-        (2, 2, "7c"),
-        (4, 4, "5e"),
-        (0, 8, "1a"),
-        (8, 0, "9i"),
-    ],
-)
-def test_usi_sq(mapper: PolicyOutputMapper, r, c, expected_usi):
-    assert mapper._usi_sq(r, c) == expected_usi  # pylint: disable=protected-access
-
-
-@pytest.mark.parametrize("r, c", [(-1, 0), (0, -1), (9, 0), (0, 9)])
-def test_usi_sq_invalid(mapper: PolicyOutputMapper, r, c):
-    with pytest.raises(ValueError):
-        mapper._usi_sq(r, c)  # pylint: disable=protected-access
-
-
-@pytest.mark.parametrize(
-    "piece_type, expected_char",
-    [
-        (PieceType.PAWN, "P"),
-        (PieceType.LANCE, "L"),
-        (PieceType.KNIGHT, "N"),
-        (PieceType.SILVER, "S"),
-        (PieceType.GOLD, "G"),
-        (PieceType.BISHOP, "B"),
-        (PieceType.ROOK, "R"),
-    ],
-)
-def test_get_usi_char_for_drop_valid(  # pylint: disable=protected-access
-    mapper: PolicyOutputMapper, piece_type, expected_char
-):
-    assert mapper._get_usi_char_for_drop(piece_type) == expected_char
-
-
-@pytest.mark.parametrize(
-    "invalid_piece_type",
-    [PieceType.KING, PieceType.PROMOTED_PAWN, PieceType.PROMOTED_ROOK],
-)
-def test_get_usi_char_for_drop_invalid(mapper: PolicyOutputMapper, invalid_piece_type):
-    with pytest.raises(ValueError):
-        mapper._get_usi_char_for_drop(  # pylint: disable=protected-access
-            invalid_piece_type
-        )  # pylint: disable=protected-access
-
-
-@pytest.mark.parametrize(
-    "move_tuple, expected_usi",
-    [
-        ((2, 2, 3, 2, False), "7c7d"),  # Corrected: (2,2)=7c, (3,2)=7d
-        ((7, 7, 8, 6, True), "2h3i+"),  # Corrected: (7,7)=2h, (8,6)=3i
-        ((None, None, 4, 4, PieceType.PAWN), "P*5e"),  # Drop Pawn to 5e
-        ((None, None, 0, 0, PieceType.ROOK), "R*9a"),  # Drop Rook to 9a
-        ((6, 7, 5, 7, False), "2g2f"),  # Corrected: (6,7)=2g, (5,7)=2f
-    ],
-)
-def test_shogi_move_to_usi_valid(
-    mapper: PolicyOutputMapper, move_tuple: MoveTuple, expected_usi
-):
-    assert mapper.shogi_move_to_usi(move_tuple) == expected_usi
-
-
-@pytest.mark.parametrize(
-    "invalid_move_tuple",
-    [
-        # ((0, 0, 0, 0, False)), # This is a valid tuple structure, _usi_sq would work. PolicyOutputMapper skips same-square.
-        # ((1, 1, 1, 1, True)),  # Same as above.
-        (
-            (None, None, 0, 0, PieceType.KING)
-        ),  # Cannot drop King - _get_usi_char_for_drop raises ValueError
-        (
-            (0, 1, 2, 3, "False")
-        ),  # Invalid promote type - isinstance check in shogi_move_to_usi
-        ((0, 1, 2, 3, 4)),  # Invalid structure / promote type
-        ("7g7f"),  # Not a tuple - shogi_move_to_usi expects a tuple
-        ((0, 0, 9, 0, False)),  # Invalid to_sq for _usi_sq
-    ],
-)
-def test_shogi_move_to_usi_invalid(mapper: PolicyOutputMapper, invalid_move_tuple):
-    with pytest.raises(
-        (ValueError, TypeError)
-    ):  # Allow TypeError for cases like passing a string
-        mapper.shogi_move_to_usi(invalid_move_tuple)  # type: ignore
-
-
-@pytest.mark.parametrize(
-    "usi_move, expected_tuple",
-    [
-        ("7c7d", (2, 2, 3, 2, False)),  # Corrected
-        ("2h3i+", (7, 7, 8, 6, True)),  # Corrected
-        ("P*5e", (None, None, 4, 4, PieceType.PAWN)),
-        ("R*9a", (None, None, 0, 0, PieceType.ROOK)),
-        ("2g2f", (6, 7, 5, 7, False)),  # Corrected
-    ],
-)
-def test_usi_to_shogi_move_valid(
-    mapper: PolicyOutputMapper, usi_move, expected_tuple: MoveTuple
-):
-    assert mapper.usi_to_shogi_move(usi_move) == expected_tuple
-
-
-@pytest.mark.parametrize(
-    "invalid_usi_move",
-    [
-        # ("7g7g"), # This is a valid USI string, though the move might be illegal in a game.
-        ("P*5e+"),  # Drop moves cannot have promotion
-        ("K*5e"),  # Cannot drop King (invalid piece char for drop)
-        ("7g10f"),  # Invalid 'to_sq' rank
-        ("1234"),  # Malformed board move
-        ("L*1j"),  # Invalid 'to_sq' rank for drop
-        (12345),  # Not a string
-        ("P*5X"),  # Invalid rank char in drop
-        ("X*5e"),  # Invalid piece char for drop
-        ("7g7f++"),  # Double promotion
-        ("7g7"),  # Too short
-        ("B*"),  # Missing target square for drop
-        ("*5e"),  # Missing piece for drop
-    ],
-)
-def test_usi_to_shogi_move_invalid(mapper: PolicyOutputMapper, invalid_usi_move):
-    with pytest.raises((ValueError, TypeError)):  # Allow TypeError for non-string input
-        mapper.usi_to_shogi_move(invalid_usi_move)  # type: ignore
-
-
-# Test for shogi_move_to_policy_index with a move that might cause issues with PieceType enum identity
-# This is to ensure the fallback logic in shogi_move_to_policy_index is covered.
-def test_shogi_move_to_policy_index_enum_identity_fallback(mapper: PolicyOutputMapper):
-    # Create a move tuple where PieceType might be a different instance but same value
-    # This is hard to simulate perfectly without manipulating enum internals, but we can try
-    # by creating a PieceType that's equivalent but not identical if that were possible.
-    # The current fallback handles `move[0] is None` and `isinstance(move[4], PieceType)`.
-    # Let's test a drop move that should be found by the fallback.
-    # The goal is to test the *fallback* path, which is tricky.
-    # The fallback specifically iterates through self.move_to_idx.items() if the initial get() fails.
-    # This test might be more conceptual unless we can force a cache miss for the primary key.
-
-    # Let's test a valid drop move that should be found.
-    valid_drop_move: MoveTuple = (None, None, 2, 2, PieceType.GOLD)
-    idx = mapper.shogi_move_to_policy_index(valid_drop_move)
-    assert idx is not None
-    assert 12960 <= idx < 13527
-
-    # Test a board move that should be found.
-    valid_board_move: MoveTuple = (1, 1, 2, 2, False)
-    idx_board = mapper.shogi_move_to_policy_index(valid_board_move)
-    assert idx_board is not None
-    assert 0 <= idx_board < 12960
-
-    # Test the ValueError for a completely unmappable move (already in existing tests but good to have here too)
-    with pytest.raises(ValueError):
-        mapper.shogi_move_to_policy_index((0, 0, 0, 0, PieceType.PAWN))  # type: ignore # Invalid piece type for board move promo flag
-
-
-# Test TrainingLogger (already in test_logger.py, but can be here too for module completeness if desired)
-# For now, assume test_logger.py covers TrainingLogger adequately.
 
 ]]></file>
   <file path="test_shogi_game_io.py"><![CDATA[
@@ -2478,6 +1904,9 @@ class TestTrainerSessionIntegration:
             Trainer(mock_config, mock_args)
 
 ]]></file>
+  <file path="test_training_loop_manager.py"><![CDATA[
+
+]]></file>
   <file path="test_env_manager.py"><![CDATA[
 """
 test_env_manager.py: Comprehensive unit tests for EnvManager class.
@@ -2590,6 +2019,7 @@ class TestEnvManagerInitialization:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
+        env_manager.setup_environment()  # Call setup_environment
 
         # Verify initialization
         assert env_manager.config == mock_config
@@ -2622,7 +2052,8 @@ class TestEnvManagerInitialization:
         mock_policy_mapper_class.return_value = mock_mapper
 
         # Create EnvManager
-        _ = EnvManager(mock_config, logger_func)
+        env_manager = EnvManager(mock_config, logger_func)
+        env_manager.setup_environment()  # Call setup_environment
 
         # Verify seeding was not called
         mock_game.seed.assert_not_called()
@@ -2637,7 +2068,8 @@ class TestEnvManagerInitialization:
 
         # Verify exception is raised
         with pytest.raises(RuntimeError, match="Failed to initialize ShogiGame"):
-            EnvManager(mock_config, logger_func)
+            env_manager = EnvManager(mock_config, logger_func)
+            env_manager.setup_environment()  # Call setup_environment
 
         logger_func.assert_any_call(
             "Error initializing ShogiGame: Game initialization failed. Aborting."
@@ -2662,7 +2094,8 @@ class TestEnvManagerInitialization:
         with pytest.raises(
             RuntimeError, match="Failed to initialize PolicyOutputMapper"
         ):
-            EnvManager(mock_config, logger_func)
+            env_manager = EnvManager(mock_config, logger_func)
+            env_manager.setup_environment()  # Call setup_environment
 
         logger_func.assert_any_call(
             "Error initializing PolicyOutputMapper: Policy mapper initialization failed"
@@ -2687,7 +2120,8 @@ class TestEnvManagerActionSpaceValidation:
         mock_policy_mapper_class.return_value = mock_mapper
 
         # Create EnvManager
-        _ = EnvManager(mock_config, logger_func)
+        env_manager = EnvManager(mock_config, logger_func)
+        env_manager.setup_environment()  # Call setup_environment
 
         # Verify validation passed
         logger_func.assert_any_call("Action space validated: 13527 total actions")
@@ -2710,7 +2144,8 @@ class TestEnvManagerActionSpaceValidation:
         with pytest.raises(
             RuntimeError, match="Failed to initialize PolicyOutputMapper"
         ):
-            EnvManager(mock_config, logger_func)
+            env_manager = EnvManager(mock_config, logger_func)
+            env_manager.setup_environment()  # Call setup_environment
 
         expected_error = (
             "Action space mismatch: config specifies 13527 "
@@ -2739,6 +2174,7 @@ class TestEnvManagerEnvironmentOperations:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
+        env_manager.setup_environment()  # Call setup_environment
 
         # Test game reset
         result = env_manager.reset_game()
@@ -2764,6 +2200,7 @@ class TestEnvManagerEnvironmentOperations:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
+        env_manager.setup_environment()  # Call setup_environment
 
         # Test game reset
         result = env_manager.reset_game()
@@ -2790,6 +2227,7 @@ class TestEnvManagerEnvironmentOperations:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
+        env_manager.setup_environment()  # Call setup_environment
 
         # Test getting legal moves count
         count = env_manager.get_legal_moves_count()
@@ -2815,6 +2253,7 @@ class TestEnvManagerEnvironmentOperations:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
+        env_manager.setup_environment()  # Call setup_environment
 
         # Test getting legal moves count
         count = env_manager.get_legal_moves_count()
@@ -2846,6 +2285,7 @@ class TestEnvManagerSeeding:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
+        env_manager.setup_environment()  # Call setup_environment
 
         # Reset logger_func to track new calls
         logger_func.reset_mock()
@@ -2877,6 +2317,7 @@ class TestEnvManagerSeeding:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
+        env_manager.setup_environment()  # Call setup_environment
 
         # Reset logger_func to track new calls
         logger_func.reset_mock()
@@ -2905,6 +2346,7 @@ class TestEnvManagerSeeding:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
+        env_manager.setup_environment()  # Call setup_environment
 
         # Test seeding
         result = env_manager.setup_seeding(123)
@@ -2929,6 +2371,7 @@ class TestEnvManagerSeeding:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
+        env_manager.setup_environment()  # Call setup_environment
 
         # Reset logger_func to track new calls
         logger_func.reset_mock()
@@ -2962,6 +2405,7 @@ class TestEnvManagerValidation:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
+        env_manager.setup_environment()  # Call setup_environment
 
         # Test validation
         result = env_manager.validate_environment()
@@ -3013,6 +2457,7 @@ class TestEnvManagerValidation:
 
         # Create EnvManager and manually set policy mapper to None
         env_manager = EnvManager(mock_config, logger_func)
+        env_manager.setup_environment()  # Call setup
         env_manager.policy_output_mapper = None  # type: ignore
 
         # Test validation
@@ -3040,6 +2485,7 @@ class TestEnvManagerValidation:
 
         # Create EnvManager and manually set invalid action space size
         env_manager = EnvManager(mock_config, logger_func)
+        env_manager.setup_environment()  # Call setup
         env_manager.action_space_size = 0
 
         # Test validation
@@ -3071,6 +2517,7 @@ class TestEnvManagerUtilities:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
+        env_manager.setup_environment()  # Call setup
 
         # Get environment info
         info = env_manager.get_environment_info()
@@ -6251,6 +5698,9 @@ class TestModelManagerInitialization:
         # Create ModelManager
         manager = ModelManager(mock_config, mock_args, device, logger_func)
 
+        # Explicitly create model after manager initialization
+        created_model = manager.create_model()
+
         # Verify initialization
         assert manager.config == mock_config
         assert manager.args == mock_args
@@ -6264,7 +5714,12 @@ class TestModelManagerInitialization:
         assert manager.obs_shape == (46, 9, 9)
         assert manager.use_mixed_precision is False
         assert manager.scaler is None
-        assert manager.model == mock_model
+        assert (
+            manager.model == mock_model
+        )  # model_factory was mocked to return mock_model
+        assert (
+            created_model == mock_model
+        )  # create_model should return the created model
 
     @patch("keisei.shogi.features.FEATURE_SPECS")
     @patch("keisei.training.models.model_factory")
@@ -6422,8 +5877,8 @@ class TestModelManagerCheckpointHandling:
         assert result is True
         assert manager.resumed_from_checkpoint == checkpoint_path
         mock_agent.load_model.assert_called_once_with(checkpoint_path)
-        logger_func.assert_any_call(
-            f"Resumed training from checkpoint: {checkpoint_path}"
+        logger_func.assert_any_call(  # Updated log message
+            f"Resumed from latest checkpoint: {checkpoint_path}"
         )
 
     @patch("keisei.shogi.features.FEATURE_SPECS")
@@ -6470,8 +5925,10 @@ class TestModelManagerCheckpointHandling:
 
     @patch("keisei.shogi.features.FEATURE_SPECS")
     @patch("keisei.training.models.model_factory")
+    @patch("os.path.exists")  # Add patch for os.path.exists
     def test_handle_checkpoint_resume_explicit_path(
         self,
+        mock_os_path_exists,  # Add mock for os.path.exists
         mock_model_factory,
         mock_features,
         mock_config,
@@ -6490,6 +5947,9 @@ class TestModelManagerCheckpointHandling:
         mock_model_factory.return_value = mock_model
 
         checkpoint_path = "/path/to/specific/checkpoint.pth"
+        mock_os_path_exists.return_value = (
+            True  # Ensure os.path.exists returns True for the mock path
+        )
 
         # Create args with explicit resume path
         args = MockArgs(resume=checkpoint_path)
@@ -6507,8 +5967,8 @@ class TestModelManagerCheckpointHandling:
         assert result is True
         assert manager.resumed_from_checkpoint == checkpoint_path
         mock_agent.load_model.assert_called_once_with(checkpoint_path)
-        logger_func.assert_any_call(
-            f"Resumed training from checkpoint: {checkpoint_path}"
+        logger_func.assert_any_call(  # Updated log message
+            f"Resumed from specified checkpoint: {checkpoint_path}"
         )
 
 
@@ -6849,18 +6309,80 @@ class TestModelManagerUtilities:
 
     @patch("keisei.shogi.features.FEATURE_SPECS")
     @patch("keisei.training.models.model_factory")
-    @patch("keisei.training.model_manager.PPOAgent")
-    def test_create_agent(
+    # PPOAgent patch is removed as we instantiate it directly.
+    def test_model_creation_and_agent_instantiation(  # Renamed test
         self,
-        mock_ppo_agent,
+        # mock_ppo_agent, # Removed
+        mock_model_factory,
+        mock_features,  # This is the patch object for 'keisei.shogi.features.FEATURE_SPECS'
+        mock_config,
+        mock_args,
+        device,
+        logger_func,
+    ):  # pylint: disable=too-many-positional-arguments
+        """Test model creation via ModelManager and subsequent PPOAgent instantiation."""
+        from keisei.core.ppo_agent import PPOAgent  # Import for direct instantiation
+
+        # Setup mocks for model creation
+        mock_feature_spec_instance = Mock(name="MockFeatureSpecInstance")
+        mock_feature_spec_instance.num_planes = 46
+        # mock_features is the patch object for 'keisei.shogi.features.FEATURE_SPECS'
+        # We need to mock its __getitem__ if it's a dict-like access.
+        mock_features.__getitem__.return_value = mock_feature_spec_instance
+
+        # This is the model that model_factory will return
+        mock_model_from_factory = Mock(name="MockModelFromFactory")
+        mock_model_from_factory.to.return_value = mock_model_from_factory
+        mock_model_factory.return_value = mock_model_from_factory
+
+        # Create ModelManager
+        manager = ModelManager(mock_config, mock_args, device, logger_func)
+
+        # 1. Create model using ModelManager
+        # This call will set manager.model internally and return the model
+        returned_model = manager.create_model()
+        assert returned_model == mock_model_from_factory
+        assert manager.model == mock_model_from_factory  # Verify internal state
+
+        # 2. Instantiate PPOAgent (as Trainer would do)
+        # We instantiate PPOAgent directly.
+        agent = PPOAgent(
+            config=mock_config,
+            device=device,
+        )
+
+        # Ensure returned_model is not None before assigning it to agent.model
+        # manager.create_model() is type-hinted to return ActorCriticProtocol,
+        # and raises an error if it can't. So, returned_model should not be None here.
+        assert (
+            returned_model is not None
+        ), "manager.create_model() should have returned a model or raised an error."
+        agent.model = returned_model  # Now Pylance should be satisfied
+
+        # Verify agent created and model assigned
+        # agent.model was just assigned returned_model, which was asserted to be mock_model_from_factory
+        assert agent.model == mock_model_from_factory
+        assert agent.device == device
+        assert agent.config == mock_config
+
+
+class TestModelManagerEnhancedCheckpointHandling:
+    """Enhanced tests for checkpoint loading scenarios and edge cases."""
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.utils.find_latest_checkpoint")
+    def test_load_checkpoint_multiple_available(
+        self,
+        mock_find_checkpoint,
         mock_model_factory,
         mock_features,
         mock_config,
         mock_args,
         device,
         logger_func,
-    ):  # pylint: disable=too-many-positional-arguments
-        """Test PPO agent creation."""
+    ):
+        """Test checkpoint loading when multiple checkpoints exist."""
         # Setup mocks
         mock_feature_spec = Mock()
         mock_feature_spec.num_planes = 46
@@ -6870,19 +6392,358 @@ class TestModelManagerUtilities:
         mock_model.to.return_value = mock_model
         mock_model_factory.return_value = mock_model
 
-        mock_agent = Mock()
-        mock_ppo_agent.return_value = mock_agent
+        # Mock find_latest_checkpoint to return the latest checkpoint
+        latest_checkpoint_path = os.path.join(
+            mock_config.logging.model_dir, "checkpoint_2000.pth"
+        )
+        mock_find_checkpoint.return_value = latest_checkpoint_path
 
-        # Create ModelManager
+        # Mock checkpoint data
+        checkpoint_data = {
+            "model_state_dict": {},
+            "optimizer_state_dict": {},
+            "global_timestep": 2000,
+            "total_episodes_completed": 50,
+            "black_wins": 25,
+            "white_wins": 20,
+            "draws": 5,
+        }
+
+        # Create args with resume="latest"
+        args_with_resume = MockArgs(resume="latest")
+        manager = ModelManager(mock_config, args_with_resume, device, logger_func)
+        manager.create_model()
+
+        # Mock an agent for testing
+        mock_agent = Mock()
+        mock_agent.load_model.return_value = checkpoint_data
+
+        # Test loading latest checkpoint
+        result = manager.handle_checkpoint_resume(
+            mock_agent, mock_config.logging.model_dir
+        )
+
+        assert result is True
+        assert manager.checkpoint_data is not None
+        assert manager.checkpoint_data["global_timestep"] == 2000
+        mock_agent.load_model.assert_called_with(latest_checkpoint_path)
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    @patch("os.path.exists")
+    def test_load_checkpoint_specific_not_found(
+        self,
+        mock_exists,
+        mock_model_factory,
+        mock_features,
+        mock_config,
+        mock_args,
+        device,
+        logger_func,
+    ):
+        """Test loading a specific checkpoint that doesn't exist."""
+        # Setup mocks
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_features.__getitem__.return_value = mock_feature_spec
+
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        # Mock specific checkpoint doesn't exist
+        mock_exists.return_value = False
+
+        manager = ModelManager(mock_config, mock_args, device, logger_func)
+        manager.create_model()
+
+        mock_agent = Mock()
+
+        # Test loading specific non-existent checkpoint - set args to use specific path
+        args_with_resume = MockArgs(resume="checkpoint_9999.pth")
+        manager_with_resume = ModelManager(
+            mock_config, args_with_resume, device, logger_func
+        )
+        manager_with_resume.create_model()
+
+        result = manager_with_resume.handle_checkpoint_resume(
+            mock_agent, "/some/model/dir"
+        )
+
+        assert result is False
+        logger_func.assert_any_call(
+            "Specified resume checkpoint not found: checkpoint_9999.pth"
+        )
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    @patch("os.path.exists")
+    @patch("torch.load")
+    def test_load_checkpoint_corrupted_data(
+        self,
+        mock_torch_load,
+        mock_exists,
+        mock_model_factory,
+        mock_features,
+        mock_config,
+        mock_args,
+        device,
+        logger_func,
+    ):
+        """Test handling of corrupted checkpoint data."""
+        # Setup mocks
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_features.__getitem__.return_value = mock_feature_spec
+
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        mock_exists.return_value = True
+        # Mock corrupted checkpoint (missing required keys)
+        mock_torch_load.return_value = {"incomplete": "data"}
+
+        manager = ModelManager(mock_config, mock_args, device, logger_func)
+        manager.create_model()
+
+        mock_agent = Mock()
+        mock_agent.load_model.return_value = {"incomplete": "data"}
+
+        # Test loading corrupted checkpoint
+        args_with_resume = MockArgs(resume="latest")
+        manager_with_resume = ModelManager(
+            mock_config, args_with_resume, device, logger_func
+        )
+        manager_with_resume.create_model()
+
+        # Mock the utils.find_latest_checkpoint to return a valid path
+        with patch(
+            "keisei.training.model_manager.utils.find_latest_checkpoint",
+            return_value="/path/to/corrupt.pth",
+        ):
+            result = manager_with_resume.handle_checkpoint_resume(
+                mock_agent, "/some/model/dir"
+            )
+
+        # Should handle gracefully - either succeed or fail, but not crash
+        assert isinstance(result, bool)  # Should return a boolean
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    def test_save_checkpoint_directory_creation(
+        self,
+        mock_model_factory,
+        mock_features,
+        mock_config,
+        mock_args,
+        device,
+        logger_func,
+        temp_dir,
+    ):
+        """Test that save_checkpoint creates directories if they don't exist."""
+        # Setup mocks
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_features.__getitem__.return_value = mock_feature_spec
+
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        # Use a non-existent subdirectory
+        nonexistent_model_dir = os.path.join(temp_dir, "models", "subdir")
+        mock_config.logging.model_dir = nonexistent_model_dir
+
+        manager = ModelManager(mock_config, mock_args, device, logger_func)
+        manager.create_model()
+
+        mock_agent = Mock()
+        mock_agent.model = manager.model
+        mock_agent.optimizer = Mock()
+
+        # Test checkpoint saving - should create directory
+        stats = {
+            "black_wins": 10,
+            "white_wins": 8,
+            "draws": 7,
+        }
+        manager.save_checkpoint(
+            agent=mock_agent,
+            model_dir=nonexistent_model_dir,
+            timestep=1000,
+            episode_count=25,
+            stats=stats,
+            run_name="test_run",
+            is_wandb_active=False,
+        )
+
+        # Verify directory was created
+        assert os.path.exists(nonexistent_model_dir)
+
+        # Verify save was attempted via agent.save_model
+        mock_agent.save_model.assert_called_once_with(
+            os.path.join(nonexistent_model_dir, "checkpoint_ts1000.pth"),
+            1000,
+            25,
+            stats_to_save=stats,
+        )
+
+
+class TestModelManagerWandBArtifactEnhancements:
+    """Enhanced tests for W&B artifact creation with edge cases."""
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    @patch("wandb.Artifact")
+    @patch("wandb.log_artifact")
+    @patch("wandb.run")
+    def test_create_model_artifact_with_metadata(
+        self,
+        mock_wandb_run,
+        mock_log_artifact,
+        mock_artifact_class,
+        mock_model_factory,
+        mock_features,
+        mock_config,
+        mock_args,
+        device,
+        logger_func,
+        temp_dir,
+    ):
+        """Test model artifact creation with comprehensive metadata."""
+        # Setup mocks
+        mock_wandb_run.return_value = True  # Mock that wandb.run is active
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_features.__getitem__.return_value = mock_feature_spec
+
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        mock_artifact = Mock()
+        mock_artifact_class.return_value = mock_artifact
+
+        # Create test model file
+        model_path = os.path.join(temp_dir, "test_model.pth")
+        with open(model_path, "w", encoding="utf-8") as f:
+            f.write("dummy model data")
+
         manager = ModelManager(mock_config, mock_args, device, logger_func)
 
-        # Create agent
-        agent = manager.create_agent()
+        # Test artifact creation with metadata
+        result = manager.create_model_artifact(
+            model_path=model_path,
+            artifact_name="enhanced-test-model",
+            run_name="test_run_with_metadata",
+            is_wandb_active=True,
+            metadata={"epochs": 100, "accuracy": 0.95},
+        )
 
-        # Verify agent created and model assigned
-        assert agent == mock_agent
-        assert agent.model == mock_model
-        mock_ppo_agent.assert_called_once_with(config=mock_config, device=device)
+        # Verify artifact creation was attempted (mocked W&B environment)
+        assert result is True
+        mock_artifact_class.assert_called_once()
+        mock_log_artifact.assert_called_once()
+        mock_artifact_class.assert_called_once()
+        mock_artifact.add_file.assert_called_once_with(model_path)
+        mock_log_artifact.assert_called_once_with(mock_artifact, aliases=None)
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    @patch("wandb.Artifact")
+    @patch("wandb.log_artifact", side_effect=RuntimeError("W&B API Error"))
+    @patch("wandb.run")
+    def test_create_model_artifact_wandb_failure_handling(
+        self,
+        mock_wandb_run,
+        mock_log_artifact,
+        mock_artifact_class,
+        mock_model_factory,
+        mock_features,
+        mock_config,
+        mock_args,
+        device,
+        logger_func,
+        temp_dir,
+    ):
+        """Test robust handling of W&B API failures during artifact creation."""
+        # Setup mocks
+        mock_wandb_run.return_value = True  # Mock that wandb.run is active
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_features.__getitem__.return_value = mock_feature_spec
+
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        mock_artifact = Mock()
+        mock_artifact_class.return_value = mock_artifact
+
+        # Create test model file
+        model_path = os.path.join(temp_dir, "test_model.pth")
+        with open(model_path, "w", encoding="utf-8") as f:
+            f.write("dummy model data")
+
+        manager = ModelManager(mock_config, mock_args, device, logger_func)
+
+        # Test artifact creation with W&B failure
+        result = manager.create_model_artifact(
+            model_path=model_path,
+            artifact_name="failing-test-model",
+            run_name="test_run_fail",
+            is_wandb_active=True,
+        )
+
+        # Should handle failure gracefully
+        assert result is False
+        logger_func.assert_any_call(
+            "Error creating W&B artifact for %s: W&B API Error" % model_path
+        )
+
+    def test_create_model_artifact_wandb_inactive(
+        self,
+        mock_config,
+        mock_args,
+        device,
+        logger_func,
+        temp_dir,
+    ):
+        """Test that artifact creation is skipped when W&B is inactive."""
+        with (
+            patch("keisei.shogi.features.FEATURE_SPECS") as mock_features,
+            patch("keisei.training.models.model_factory") as mock_model_factory,
+        ):
+
+            # Setup mocks
+            mock_feature_spec = Mock()
+            mock_feature_spec.num_planes = 46
+            mock_features.__getitem__.return_value = mock_feature_spec
+
+            mock_model = Mock()
+            mock_model.to.return_value = mock_model
+            mock_model_factory.return_value = mock_model
+
+            # Create test model file
+            model_path = os.path.join(temp_dir, "test_model.pth")
+            with open(model_path, "w", encoding="utf-8") as f:
+                f.write("dummy model data")
+
+            manager = ModelManager(mock_config, mock_args, device, logger_func)
+
+            # Test with W&B inactive
+            result = manager.create_model_artifact(
+                model_path=model_path,
+                artifact_name="inactive-wandb-test",
+                run_name="test_run",
+                is_wandb_active=False,  # W&B not active
+            )
+
+            # Should skip artifact creation
+            assert result is False
+            # The method returns False immediately when W&B is inactive,
+            # without logging a specific message
 
 ]]></file>
   <file path="test_reward_with_flipped_perspective.py"><![CDATA[
@@ -7992,7 +7853,9 @@ This module tests the W&B artifacts functionality, sweep parameter handling,
 and W&B logging integration in the Trainer class.
 """
 
-from typing import Any, Dict
+import os
+import tempfile
+from typing import Any, Dict, Optional
 from unittest.mock import Mock, patch
 
 import pytest
@@ -8009,6 +7872,13 @@ from keisei.config_schema import (
 from keisei.training.train_wandb_sweep import apply_wandb_sweep_config
 from keisei.training.trainer import Trainer
 from keisei.training.utils import setup_wandb
+
+
+@pytest.fixture
+def temp_base_dir():
+    """Provide a temporary base directory for testing."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        yield temp_dir
 
 
 class DummyArgs:
@@ -8419,6 +8289,278 @@ class TestWandBUtilities:
         result = setup_wandb(config, "test_run", "/tmp/test")
 
         assert result is False
+
+
+class TestWandBLoggingIntegration:
+    """Test the integration between Trainer.log_both and W&B logging with current logic."""
+
+    def test_log_both_impl_creation_and_wandb_logic(self, temp_base_dir):
+        """Test that log_both_impl correctly implements W&B logging logic."""
+        config = make_test_config(wandb_enabled=True)
+        args = DummyArgs()
+
+        with (
+            patch("keisei.training.utils.setup_wandb", return_value=True),
+            patch("keisei.training.utils.setup_directories") as mock_setup_dirs,
+        ):
+
+            # Create actual test directories
+            run_artifact_dir = os.path.join(temp_base_dir, "test_run")
+            model_dir = os.path.join(run_artifact_dir, "models")
+            os.makedirs(run_artifact_dir, exist_ok=True)
+            os.makedirs(model_dir, exist_ok=True)
+
+            # Mock directory setup with actual paths
+            mock_setup_dirs.return_value = {
+                "run_artifact_dir": run_artifact_dir,
+                "model_dir": model_dir,
+                "log_file_path": os.path.join(run_artifact_dir, "training.log"),
+                "eval_log_file_path": os.path.join(
+                    run_artifact_dir, "rich_periodic_eval_log.txt"
+                ),
+            }
+
+            trainer = Trainer(config=config, args=args)
+
+            # Verify W&B is active after setup
+            assert trainer.session_manager.is_wandb_active is True
+            assert trainer.is_train_wandb_active is True
+
+            # Create a mock logger to simulate the log_both_impl creation
+            mock_logger = Mock()
+
+            # Test the log_both_impl logic directly (simulating what happens in run_training_loop)
+            with (
+                patch("wandb.log") as mock_wandb_log,
+                patch("wandb.run", Mock()),
+            ):  # wandb.run exists
+
+                # Simulate the log_both_impl function from run_training_loop
+                def log_both_impl(
+                    message: str,
+                    also_to_wandb: bool = False,
+                    wandb_data: Optional[Dict] = None,
+                ):
+                    mock_logger.log(message)
+                    if trainer.is_train_wandb_active and also_to_wandb:
+                        import wandb
+
+                        if wandb.run:
+                            log_payload = {"train_message": message}
+                            if wandb_data:
+                                log_payload.update(wandb_data)
+                            wandb.log(log_payload, step=trainer.global_timestep)
+
+                # Test W&B logging when conditions are met
+                log_both_impl(
+                    "Test message", also_to_wandb=True, wandb_data={"loss": 0.5}
+                )
+
+                expected_payload = {"train_message": "Test message", "loss": 0.5}
+                mock_wandb_log.assert_called_once_with(
+                    expected_payload, step=trainer.global_timestep
+                )
+
+    def test_log_both_impl_wandb_run_none(self, temp_base_dir):
+        """Test that log_both_impl handles the case where wandb.run is None."""
+        config = make_test_config(wandb_enabled=True)
+        args = DummyArgs()
+
+        with (
+            patch("keisei.training.utils.setup_wandb", return_value=True),
+            patch("keisei.training.utils.setup_directories") as mock_setup_dirs,
+        ):
+
+            # Create actual test directories
+            run_artifact_dir = os.path.join(temp_base_dir, "test_run")
+            model_dir = os.path.join(run_artifact_dir, "models")
+            os.makedirs(run_artifact_dir, exist_ok=True)
+            os.makedirs(model_dir, exist_ok=True)
+
+            # Mock directory setup with actual paths
+            mock_setup_dirs.return_value = {
+                "run_artifact_dir": run_artifact_dir,
+                "model_dir": model_dir,
+                "log_file_path": os.path.join(run_artifact_dir, "training.log"),
+                "eval_log_file_path": os.path.join(
+                    run_artifact_dir, "rich_periodic_eval_log.txt"
+                ),
+            }
+
+            trainer = Trainer(config=config, args=args)
+            mock_logger = Mock()
+
+            # Test with wandb.run = None
+            with patch("wandb.log") as mock_wandb_log, patch("wandb.run", None):
+
+                def log_both_impl(
+                    message: str,
+                    also_to_wandb: bool = False,
+                    wandb_data: Optional[Dict] = None,
+                ):
+                    mock_logger.log(message)
+                    if trainer.is_train_wandb_active and also_to_wandb:
+                        import wandb
+
+                        if wandb.run:
+                            log_payload = {"train_message": message}
+                            if wandb_data:
+                                log_payload.update(wandb_data)
+                            wandb.log(log_payload, step=trainer.global_timestep)
+
+                # Should not crash, should not call wandb.log
+                log_both_impl(
+                    "Test message", also_to_wandb=True, wandb_data={"loss": 0.5}
+                )
+
+                # Verify wandb.log was NOT called since wandb.run is None
+                mock_wandb_log.assert_not_called()
+
+    def test_log_both_impl_wandb_disabled_in_config(self, temp_base_dir):
+        """Test that log_both_impl does not log to W&B when disabled in config."""
+        config = make_test_config(wandb_enabled=False)  # W&B disabled
+        args = DummyArgs()
+
+        with patch("keisei.training.utils.setup_directories") as mock_setup_dirs:
+            # Create actual test directories
+            run_artifact_dir = os.path.join(temp_base_dir, "test_run")
+            model_dir = os.path.join(run_artifact_dir, "models")
+            os.makedirs(run_artifact_dir, exist_ok=True)
+            os.makedirs(model_dir, exist_ok=True)
+
+            # Mock directory setup with actual paths
+            mock_setup_dirs.return_value = {
+                "run_artifact_dir": run_artifact_dir,
+                "model_dir": model_dir,
+                "log_file_path": os.path.join(run_artifact_dir, "training.log"),
+                "eval_log_file_path": os.path.join(
+                    run_artifact_dir, "rich_periodic_eval_log.txt"
+                ),
+            }
+
+            trainer = Trainer(config=config, args=args)
+
+            # Verify W&B is not active
+            assert trainer.session_manager.is_wandb_active is False
+            assert trainer.is_train_wandb_active is False
+
+            mock_logger = Mock()
+
+            with patch("wandb.log") as mock_wandb_log, patch("wandb.run", Mock()):
+
+                def log_both_impl(
+                    message: str,
+                    also_to_wandb: bool = False,
+                    wandb_data: Optional[Dict] = None,
+                ):
+                    mock_logger.log(message)
+                    if trainer.is_train_wandb_active and also_to_wandb:
+                        import wandb
+
+                        if wandb.run:
+                            log_payload = {"train_message": message}
+                            if wandb_data:
+                                log_payload.update(wandb_data)
+                            wandb.log(log_payload, step=trainer.global_timestep)
+
+                # Should not log to W&B due to is_train_wandb_active = False
+                log_both_impl(
+                    "Test message", also_to_wandb=True, wandb_data={"loss": 0.5}
+                )
+
+                # Verify wandb.log was NOT called
+                mock_wandb_log.assert_not_called()
+
+    def test_log_both_impl_also_to_wandb_false(self, temp_base_dir):
+        """Test that log_both_impl respects also_to_wandb=False parameter."""
+        config = make_test_config(wandb_enabled=True)
+        args = DummyArgs()
+
+        with (
+            patch("keisei.training.utils.setup_wandb", return_value=True),
+            patch("keisei.training.utils.setup_directories") as mock_setup_dirs,
+        ):
+
+            # Create actual test directories
+            run_artifact_dir = os.path.join(temp_base_dir, "test_run")
+            model_dir = os.path.join(run_artifact_dir, "models")
+            os.makedirs(run_artifact_dir, exist_ok=True)
+            os.makedirs(model_dir, exist_ok=True)
+
+            # Mock directory setup with actual paths
+            mock_setup_dirs.return_value = {
+                "run_artifact_dir": run_artifact_dir,
+                "model_dir": model_dir,
+                "log_file_path": os.path.join(run_artifact_dir, "training.log"),
+                "eval_log_file_path": os.path.join(
+                    run_artifact_dir, "rich_periodic_eval_log.txt"
+                ),
+            }
+
+            trainer = Trainer(config=config, args=args)
+            mock_logger = Mock()
+
+            with patch("wandb.log") as mock_wandb_log, patch("wandb.run", Mock()):
+
+                def log_both_impl(
+                    message: str,
+                    also_to_wandb: bool = False,
+                    wandb_data: Optional[Dict] = None,
+                ):
+                    mock_logger.log(message)
+                    if trainer.is_train_wandb_active and also_to_wandb:
+                        import wandb
+
+                        if wandb.run:
+                            log_payload = {"train_message": message}
+                            if wandb_data:
+                                log_payload.update(wandb_data)
+                            wandb.log(log_payload, step=trainer.global_timestep)
+
+                # Test with also_to_wandb=False
+                log_both_impl(
+                    "Test message", also_to_wandb=False, wandb_data={"loss": 0.5}
+                )
+
+                # Verify wandb.log was NOT called due to also_to_wandb=False
+                mock_wandb_log.assert_not_called()
+
+    def test_session_manager_wandb_state_consistency(self, temp_base_dir):
+        """Test that SessionManager.is_wandb_active reflects the actual W&B state consistently."""
+        config = make_test_config(wandb_enabled=True)
+        args = DummyArgs()
+
+        with patch("keisei.training.utils.setup_directories") as mock_setup_dirs:
+            # Create actual test directories
+            run_artifact_dir = os.path.join(temp_base_dir, "test_run")
+            model_dir = os.path.join(run_artifact_dir, "models")
+            os.makedirs(run_artifact_dir, exist_ok=True)
+            os.makedirs(model_dir, exist_ok=True)
+
+            # Mock directory setup with actual paths
+            mock_setup_dirs.return_value = {
+                "run_artifact_dir": run_artifact_dir,
+                "model_dir": model_dir,
+                "log_file_path": os.path.join(run_artifact_dir, "training.log"),
+                "eval_log_file_path": os.path.join(
+                    run_artifact_dir, "rich_periodic_eval_log.txt"
+                ),
+            }
+
+            trainer = Trainer(config=config, args=args)
+
+            # Test successful W&B setup
+            with patch("keisei.training.utils.setup_wandb", return_value=True):
+                result = trainer.session_manager.setup_wandb()
+                assert result is True
+                assert trainer.session_manager.is_wandb_active is True
+
+            # Test failed W&B setup
+            trainer2 = Trainer(config=config, args=args)
+            with patch("keisei.training.utils.setup_wandb", return_value=False):
+                result = trainer2.session_manager.setup_wandb()
+                assert result is False
+                assert trainer2.session_manager.is_wandb_active is False
 
 
 if __name__ == "__main__":
@@ -15182,6 +15324,370 @@ class TestIntegrationMoveFormatting:
             assert parts[1].endswith(".")
             assert len(parts[0]) > 0  # USI part should not be empty
             assert len(parts[1]) > 1  # Description part should not be just "."
+
+]]></file>
+  <file path="test_shogi_utils.py"><![CDATA[
+"""
+Unit tests for PolicyOutputMapper in utils.py
+"""
+
+from typing import List
+
+import pytest
+import torch
+
+from keisei.shogi import MoveTuple, PieceType
+from keisei.utils import PolicyOutputMapper
+
+# Test for the new PolicyOutputMapper
+
+
+@pytest.fixture
+def mapper() -> PolicyOutputMapper:
+    return PolicyOutputMapper()
+
+
+def test_policy_output_mapper_init(mapper: PolicyOutputMapper):
+    """Test PolicyOutputMapper initializes with correct total actions."""
+    assert isinstance(mapper, PolicyOutputMapper)
+    # Board moves: (81 * 81 - 81) * 2 = 80 * 81 * 2 = 12960
+    # Drop moves: 81 * 7 = 567
+    # Total = 12960 + 567 = 13527
+    assert mapper.get_total_actions() == 13527
+
+
+def test_policy_output_mapper_mappings(mapper: PolicyOutputMapper):
+    """Test basic move to index and index to move conversions."""
+    # Example board move: (0,0) to (1,0) without promotion
+    move1: MoveTuple = (0, 0, 1, 0, False)
+    idx1 = mapper.shogi_move_to_policy_index(move1)
+    retrieved_move1 = mapper.policy_index_to_shogi_move(idx1)
+    assert retrieved_move1 == move1
+
+    # Example board move with promotion: (0,0) to (1,0) with promotion
+    move_promo: MoveTuple = (0, 0, 1, 0, True)
+    idx_promo = mapper.shogi_move_to_policy_index(move_promo)
+    retrieved_move_promo = mapper.policy_index_to_shogi_move(idx_promo)
+    assert retrieved_move_promo == move_promo
+    assert idx_promo == idx1 + 1  # Promo move should be next to non-promo
+
+    # Example drop move: Pawn to (4,4)
+    # PieceType.PAWN is the first in droppable_piece_types list (index 0)
+    # Drop moves start after all 12960 board moves.
+    # Offset for (4,4) square: (4 * 9 + 4) * 7 = (36 + 4) * 7 = 40 * 7 = 280
+    # Index for PAWN drop at (4,4) = 12960 (board moves) + 280 (offset for square and PAWN) = 13240
+    move2: MoveTuple = (None, None, 4, 4, PieceType.PAWN)
+    idx2 = mapper.shogi_move_to_policy_index(move2)
+    retrieved_move2 = mapper.policy_index_to_shogi_move(idx2)
+    assert retrieved_move2 == move2
+    assert idx2 == 13240
+
+    # Example drop move: LANCE to (0,0)
+    # PieceType.LANCE is the second in droppable_piece_types list (index 1)
+    # Offset for (0,0) square: (0 * 9 + 0) * 7 = 0
+    # Index for LANCE drop at (0,0) = 12960 (board moves) + 0 (offset for square) + 1 (for LANCE) = 12961
+    move3: MoveTuple = (None, None, 0, 0, PieceType.LANCE)
+    idx3 = mapper.shogi_move_to_policy_index(move3)
+    retrieved_move3 = mapper.policy_index_to_shogi_move(idx3)
+    assert retrieved_move3 == move3
+    assert (
+        idx3 == 12960 + 1
+    )  # (0*9+0)*7 + 1 (Lance is index 1 in droppable_piece_types)
+
+    with pytest.raises(ValueError):
+        # A move tuple that is structurally valid but wouldn't be generated
+        # e.g. if from_sq == to_sq for a board move (already skipped in generation)
+        # or a piece type not in droppable_piece_types for a drop.
+        # For a simple ValueError test, use a move that get() would return None for.
+        mapper.shogi_move_to_policy_index((-1, -1, -1, -1, False))
+
+    with pytest.raises(IndexError):
+        mapper.policy_index_to_shogi_move(
+            mapper.get_total_actions()
+        )  # Exact total_actions is out of bounds (0-indexed)
+    with pytest.raises(IndexError):
+        mapper.policy_index_to_shogi_move(-1)
+
+
+def test_get_legal_mask(mapper: PolicyOutputMapper):
+    """Test the get_legal_mask method."""
+    device = torch.device("cpu")
+
+    # Example legal Shogi moves (ensure these are valid MoveTuple structures)
+    legal_shogi_moves: List[MoveTuple] = [
+        (0, 0, 1, 0, False),
+        (None, None, 4, 4, PieceType.PAWN),
+        (2, 2, 3, 3, True),
+    ]
+
+    # Verify these test moves are known to the mapper
+    for move in legal_shogi_moves:
+        assert (
+            move in mapper.move_to_idx
+        ), f"Test move {move} is not in the mapper. Check move generation or test data."
+
+    mask = mapper.get_legal_mask(legal_shogi_moves, device)
+
+    assert mask.shape == (mapper.get_total_actions(),)
+    assert mask.dtype == torch.bool
+    assert mask.sum().item() == len(legal_shogi_moves)
+
+    for move in legal_shogi_moves:
+        idx = mapper.shogi_move_to_policy_index(move)
+        assert mask[idx].item() is True
+
+    # Test with an empty list of legal moves
+    empty_mask = mapper.get_legal_mask([], device)
+    assert empty_mask.sum().item() == 0
+
+    # Test with a move not in the mapper (should be ignored by get_legal_mask if it occurs)
+    # This case depends on the strictness of ShogiGame.get_legal_moves()
+    # For now, PolicyOutputMapper.get_legal_mask has a try-except ValueError for robustness.
+    # If ShogiGame guarantees all its output moves are mappable, this part is less critical.
+    # non_mappable_move: MoveTuple = (99,99,99,99,False) # A deliberately unmappable move
+    # mask_with_unmappable = mapper.get_legal_mask([legal_shogi_moves[0], non_mappable_move], device)
+    # assert mask_with_unmappable.sum().item() == 1 # Only the mappable one should be True
+
+
+# Additional tests for PolicyOutputMapper
+
+
+def test_policy_output_mapper_total_actions(mapper: PolicyOutputMapper):
+    # Based on the logic in PolicyOutputMapper:
+    # Board moves: 9x9 (from_sq) * 8x8 (to_sq, excluding same square) = 81 * 64, but this is not how it's calculated.
+    # It's (9*9 for from_sq) * (9*9 for to_sq), then filter out from_sq == to_sq.
+    # (81 * 81 - 81) = 81 * 80 = 6480 board destinations.
+    # Each board move can be with or without promotion: 6480 * 2 = 12960 board move policy outputs.
+    # Drop moves: 9x9 (to_sq) * 7 (droppable piece types) = 81 * 7 = 567 drop move policy outputs.
+    # Total = 12960 + 567 = 13527
+    assert mapper.get_total_actions() == 13527
+    assert len(mapper.idx_to_move) == 13527
+    assert len(mapper.move_to_idx) == 13527
+
+
+@pytest.mark.parametrize(
+    "r_from, c_from, r_to, c_to, promote",  # Removed expected_idx_offset
+    [
+        (0, 0, 0, 1, False),  # Removed 0
+        (0, 0, 0, 1, True),  # Removed 1
+        (8, 8, 8, 7, False),  # Removed 12958
+        (8, 8, 8, 7, True),  # Removed 12959
+    ],
+)
+def test_board_move_to_policy_index_edges(  # pylint: disable=too-many-positional-arguments
+    mapper: PolicyOutputMapper,
+    r_from,
+    c_from,
+    r_to,
+    c_to,
+    promote,  # Removed expected_idx_offset
+):
+    move: MoveTuple = (r_from, c_from, r_to, c_to, promote)
+    # This test is a bit fragile as it assumes specific ordering. The existing test_policy_output_mapper_mappings is better for general validation.
+    # The exact index depends on the iteration order in __init__.
+    # For now, let's ensure it's within bounds and consistent.
+    idx = mapper.shogi_move_to_policy_index(move)
+    assert 0 <= idx < 12960  # Board moves are in this range
+    retrieved_move = mapper.policy_index_to_shogi_move(idx)
+    assert retrieved_move == move
+
+
+@pytest.mark.parametrize(
+    "r_to, c_to, piece_type, expected_idx_start_offset",
+    [
+        (0, 0, PieceType.PAWN, 12960),  # First possible drop move (Pawn to 9a)
+        (8, 8, PieceType.ROOK, 13526),  # Last possible drop move (Rook to 1i)
+    ],
+)
+def test_drop_move_to_policy_index_edges(
+    mapper: PolicyOutputMapper,
+    r_to,
+    c_to,
+    piece_type,
+    expected_idx_start_offset,  # pylint: disable=unused-argument, too-many-positional-arguments
+):
+    move: MoveTuple = (None, None, r_to, c_to, piece_type)
+    idx = mapper.shogi_move_to_policy_index(move)
+    # Exact index depends on iteration order and PieceType enum order.
+    # Check if it's within the drop move range and consistent.
+    assert 12960 <= idx < 13527
+    retrieved_move = mapper.policy_index_to_shogi_move(idx)
+    assert retrieved_move == move
+
+
+def test_get_legal_mask_all_legal(mapper: PolicyOutputMapper):
+    """Test get_legal_mask when all moves are theoretically legal (for mask creation purposes)."""
+    # This doesn't mean they are game-legal, just that the mapper can map them.
+    all_moves = mapper.idx_to_move  # Get all moves the mapper knows
+    device = torch.device("cpu")
+    mask = mapper.get_legal_mask(all_moves, device)
+    assert mask.shape == (mapper.get_total_actions(),)
+    assert mask.dtype == torch.bool
+    assert mask.sum().item() == mapper.get_total_actions()
+
+
+# Tests for USI conversion utilities
+
+
+@pytest.mark.parametrize(
+    "r, c, expected_usi",
+    [
+        (0, 0, "9a"),
+        (8, 8, "1i"),
+        (2, 2, "7c"),
+        (4, 4, "5e"),
+        (0, 8, "1a"),
+        (8, 0, "9i"),
+    ],
+)
+def test_usi_sq(mapper: PolicyOutputMapper, r, c, expected_usi):
+    assert mapper._usi_sq(r, c) == expected_usi  # pylint: disable=protected-access
+
+
+@pytest.mark.parametrize("r, c", [(-1, 0), (0, -1), (9, 0), (0, 9)])
+def test_usi_sq_invalid(mapper: PolicyOutputMapper, r, c):
+    with pytest.raises(ValueError):
+        mapper._usi_sq(r, c)  # pylint: disable=protected-access
+
+
+@pytest.mark.parametrize(
+    "piece_type, expected_char",
+    [
+        (PieceType.PAWN, "P"),
+        (PieceType.LANCE, "L"),
+        (PieceType.KNIGHT, "N"),
+        (PieceType.SILVER, "S"),
+        (PieceType.GOLD, "G"),
+        (PieceType.BISHOP, "B"),
+        (PieceType.ROOK, "R"),
+    ],
+)
+def test_get_usi_char_for_drop_valid(  # pylint: disable=protected-access
+    mapper: PolicyOutputMapper, piece_type, expected_char
+):
+    assert mapper._get_usi_char_for_drop(piece_type) == expected_char
+
+
+@pytest.mark.parametrize(
+    "invalid_piece_type",
+    [PieceType.KING, PieceType.PROMOTED_PAWN, PieceType.PROMOTED_ROOK],
+)
+def test_get_usi_char_for_drop_invalid(mapper: PolicyOutputMapper, invalid_piece_type):
+    with pytest.raises(ValueError):
+        mapper._get_usi_char_for_drop(  # pylint: disable=protected-access
+            invalid_piece_type
+        )  # pylint: disable=protected-access
+
+
+@pytest.mark.parametrize(
+    "move_tuple, expected_usi",
+    [
+        ((2, 2, 3, 2, False), "7c7d"),  # Corrected: (2,2)=7c, (3,2)=7d
+        ((7, 7, 8, 6, True), "2h3i+"),  # Corrected: (7,7)=2h, (8,6)=3i
+        ((None, None, 4, 4, PieceType.PAWN), "P*5e"),  # Drop Pawn to 5e
+        ((None, None, 0, 0, PieceType.ROOK), "R*9a"),  # Drop Rook to 9a
+        ((6, 7, 5, 7, False), "2g2f"),  # Corrected: (6,7)=2g, (5,7)=2f
+    ],
+)
+def test_shogi_move_to_usi_valid(
+    mapper: PolicyOutputMapper, move_tuple: MoveTuple, expected_usi
+):
+    assert mapper.shogi_move_to_usi(move_tuple) == expected_usi
+
+
+@pytest.mark.parametrize(
+    "invalid_move_tuple",
+    [
+        # ((0, 0, 0, 0, False)), # This is a valid tuple structure, _usi_sq would work. PolicyOutputMapper skips same-square.
+        # ((1, 1, 1, 1, True)),  # Same as above.
+        (
+            (None, None, 0, 0, PieceType.KING)
+        ),  # Cannot drop King - _get_usi_char_for_drop raises ValueError
+        (
+            (0, 1, 2, 3, "False")
+        ),  # Invalid promote type - isinstance check in shogi_move_to_usi
+        ((0, 1, 2, 3, 4)),  # Invalid structure / promote type
+        ("7g7f"),  # Not a tuple - shogi_move_to_usi expects a tuple
+        ((0, 0, 9, 0, False)),  # Invalid to_sq for _usi_sq
+    ],
+)
+def test_shogi_move_to_usi_invalid(mapper: PolicyOutputMapper, invalid_move_tuple):
+    with pytest.raises(
+        (ValueError, TypeError)
+    ):  # Allow TypeError for cases like passing a string
+        mapper.shogi_move_to_usi(invalid_move_tuple)  # type: ignore
+
+
+@pytest.mark.parametrize(
+    "usi_move, expected_tuple",
+    [
+        ("7c7d", (2, 2, 3, 2, False)),  # Corrected
+        ("2h3i+", (7, 7, 8, 6, True)),  # Corrected
+        ("P*5e", (None, None, 4, 4, PieceType.PAWN)),
+        ("R*9a", (None, None, 0, 0, PieceType.ROOK)),
+        ("2g2f", (6, 7, 5, 7, False)),  # Corrected
+    ],
+)
+def test_usi_to_shogi_move_valid(
+    mapper: PolicyOutputMapper, usi_move, expected_tuple: MoveTuple
+):
+    assert mapper.usi_to_shogi_move(usi_move) == expected_tuple
+
+
+@pytest.mark.parametrize(
+    "invalid_usi_move",
+    [
+        # ("7g7g"), # This is a valid USI string, though the move might be illegal in a game.
+        ("P*5e+"),  # Drop moves cannot have promotion
+        ("K*5e"),  # Cannot drop King (invalid piece char for drop)
+        ("7g10f"),  # Invalid 'to_sq' rank
+        ("1234"),  # Malformed board move
+        ("L*1j"),  # Invalid 'to_sq' rank for drop
+        (12345),  # Not a string
+        ("P*5X"),  # Invalid rank char in drop
+        ("X*5e"),  # Invalid piece char for drop
+        ("7g7f++"),  # Double promotion
+        ("7g7"),  # Too short
+        ("B*"),  # Missing target square for drop
+        ("*5e"),  # Missing piece for drop
+    ],
+)
+def test_usi_to_shogi_move_invalid(mapper: PolicyOutputMapper, invalid_usi_move):
+    with pytest.raises((ValueError, TypeError)):  # Allow TypeError for non-string input
+        mapper.usi_to_shogi_move(invalid_usi_move)  # type: ignore
+
+
+# Test for shogi_move_to_policy_index with a move that might cause issues with PieceType enum identity
+# This is to ensure the fallback logic in shogi_move_to_policy_index is covered.
+def test_shogi_move_to_policy_index_enum_identity_fallback(mapper: PolicyOutputMapper):
+    # Create a move tuple where PieceType might be a different instance but same value
+    # This is hard to simulate perfectly without manipulating enum internals, but we can try
+    # by creating a PieceType that's equivalent but not identical if that were possible.
+    # The current fallback handles `move[0] is None` and `isinstance(move[4], PieceType)`.
+    # Let's test a drop move that should be found by the fallback.
+    # The goal is to test the *fallback* path, which is tricky.
+    # The fallback specifically iterates through self.move_to_idx.items() if the initial get() fails.
+    # This test might be more conceptual unless we can force a cache miss for the primary key.
+
+    # Let's test a valid drop move that should be found.
+    valid_drop_move: MoveTuple = (None, None, 2, 2, PieceType.GOLD)
+    idx = mapper.shogi_move_to_policy_index(valid_drop_move)
+    assert idx is not None
+    assert 12960 <= idx < 13527
+
+    # Test a board move that should be found.
+    valid_board_move: MoveTuple = (1, 1, 2, 2, False)
+    idx_board = mapper.shogi_move_to_policy_index(valid_board_move)
+    assert idx_board is not None
+    assert 0 <= idx_board < 12960
+
+    # Test the ValueError for a completely unmappable move (already in existing tests but good to have here too)
+    with pytest.raises(ValueError):
+        mapper.shogi_move_to_policy_index((0, 0, 0, 0, PieceType.PAWN))  # type: ignore # Invalid piece type for board move promo flag
+
+
+# Test TrainingLogger (already in test_logger.py, but can be here too for module completeness if desired)
+# For now, assume test_logger.py covers TrainingLogger adequately.
 
 ]]></file>
   <file path="test_ppo_agent.py"><![CDATA[

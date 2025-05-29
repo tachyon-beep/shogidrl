@@ -22,9 +22,9 @@ from rich.console import Console, Text
 
 import wandb
 from keisei.config_schema import AppConfig
-from keisei.core.actor_critic_protocol import (
+from keisei.core.actor_critic_protocol import (  # Import ActorCriticProtocol
     ActorCriticProtocol,
-)  # Import ActorCriticProtocol
+)
 from keisei.core.experience_buffer import ExperienceBuffer
 
 # Backwards compatibility imports for tests (these classes are now used in managers)
@@ -443,6 +443,7 @@ class Trainer:
             rich_console=self.rich_console,
             rich_log_panel=self.rich_log_messages,
         ) as logger:
+
             def log_both_impl(
                 message: str,
                 also_to_wandb: bool = False,
@@ -460,7 +461,9 @@ class Trainer:
             self.execute_full_evaluation_run = execute_full_evaluation_run
 
             session_start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            self.log_both(f"--- SESSION START: {self.run_name} at {session_start_time} ---")
+            self.log_both(
+                f"--- SESSION START: {self.run_name} at {session_start_time} ---"
+            )
 
             # Setup run information logging
             self._log_run_info(self.log_both)
@@ -470,7 +473,7 @@ class Trainer:
                 self.log_both(
                     f"Resumed training from checkpoint: {self.resumed_from_checkpoint}"
                 )
-            
+
             initial_episode_state = self._initialize_game_state(self.log_both)
             self.training_loop_manager.set_initial_episode_state(initial_episode_state)
 
@@ -483,7 +486,7 @@ class Trainer:
             #    self.training_loop_manager.run()
             # else, if display.start() just initializes and run() handles updates:
             # self.display.start() # Or similar initialization if needed
-            
+
             # The TrainingDisplay.start() method in the current `display.py` (not shown here but assumed)
             # likely sets up the Rich Live display. The TrainingLoopManager will then call
             # display.update_progress and display.update_log_panel.
@@ -492,10 +495,16 @@ class Trainer:
                 self.training_loop_manager.run()  # Delegate the loop execution
             except KeyboardInterrupt:
                 # This is already logged by TrainingLoopManager, but we ensure finalization.
-                self.log_both("Trainer caught KeyboardInterrupt from TrainingLoopManager. Finalizing.", also_to_wandb=True)
+                self.log_both(
+                    "Trainer caught KeyboardInterrupt from TrainingLoopManager. Finalizing.",
+                    also_to_wandb=True,
+                )
             except Exception as e:
                 # This is already logged by TrainingLoopManager.
-                self.log_both(f"Trainer caught unhandled exception from TrainingLoopManager: {e}. Finalizing.", also_to_wandb=True)
+                self.log_both(
+                    f"Trainer caught unhandled exception from TrainingLoopManager: {e}. Finalizing.",
+                    also_to_wandb=True,
+                )
                 # Optionally, re-raise if higher-level handling is needed: raise
             finally:
                 # Finalization is critical and should always run.
