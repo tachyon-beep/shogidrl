@@ -66,7 +66,7 @@ def make_test_config(**overrides) -> AppConfig:
     env_data: Dict[str, Any] = {
         "device": "cpu",
         "input_channels": 46,
-        "num_actions_total": 4158,
+        "num_actions_total": 13527,
         "seed": 42,
     }
     env_data.update({k: v for k, v in overrides.items() if k in env_data})

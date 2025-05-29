@@ -1,0 +1,651 @@
+"""
+test_model_manager.py: Comprehensive unit tests for ModelManager class.
+
+Tests cover model configuration, mixed precision setup, checkpoint handling,
+WandB artifact creation, and model saving functionality.
+"""
+
+import os
+import tempfile
+from unittest.mock import Mock, patch
+
+import pytest
+import torch
+
+from keisei.config_schema import (
+    AppConfig,
+    DemoConfig,
+    EnvConfig,
+    EvaluationConfig,
+    LoggingConfig,
+    TrainingConfig,
+    WandBConfig,
+)
+from keisei.training.model_manager import ModelManager
+
+
+class MockArgs:
+    """Mock command-line arguments for testing."""
+
+    def __init__(self, **kwargs):
+        self.resume = kwargs.get("resume", None)
+        self.input_features = kwargs.get("input_features", None)
+        self.model = kwargs.get("model", None)
+        self.tower_depth = kwargs.get("tower_depth", None)
+        self.tower_width = kwargs.get("tower_width", None)
+        self.se_ratio = kwargs.get("se_ratio", None)
+
+
+@pytest.fixture
+def mock_config():
+    """Create a mock AppConfig for testing."""
+    return AppConfig(
+        env=EnvConfig(
+            device="cpu",
+            num_actions_total=13527,
+            input_channels=46,
+            seed=42,
+        ),
+        training=TrainingConfig(
+            total_timesteps=500_000,
+            steps_per_epoch=2048,
+            ppo_epochs=10,
+            minibatch_size=64,
+            learning_rate=3e-4,
+            gamma=0.99,
+            clip_epsilon=0.2,
+            value_loss_coeff=0.5,
+            entropy_coef=0.01,
+            render_every_steps=1,
+            refresh_per_second=4,
+            enable_spinner=True,
+            input_features="core46",
+            tower_depth=9,
+            tower_width=256,
+            se_ratio=0.25,
+            model_type="resnet",
+            mixed_precision=False,
+            ddp=False,
+            gradient_clip_max_norm=0.5,
+            lambda_gae=0.95,
+            checkpoint_interval_timesteps=10000,
+            evaluation_interval_timesteps=50000,
+            weight_decay=0.0,
+        ),
+        evaluation=EvaluationConfig(
+            num_games=20,
+            opponent_type="random",
+            evaluation_interval_timesteps=50000,
+        ),
+        logging=LoggingConfig(
+            log_file="test.log",
+            model_dir="/tmp/test_models",
+            run_name=None,
+        ),
+        wandb=WandBConfig(
+            enabled=False,
+            project="test-project",
+            entity=None,
+            run_name_prefix="test",
+            watch_model=False,
+            watch_log_freq=1000,
+            watch_log_type="all",
+        ),
+        demo=DemoConfig(
+            enable_demo_mode=False,
+            demo_mode_delay=0.5,
+        ),
+    )
+
+
+@pytest.fixture
+def mock_args():
+    """Create mock command-line arguments."""
+    return MockArgs()
+
+
+@pytest.fixture
+def device():
+    """Create a test device."""
+    return torch.device("cpu")
+
+
+@pytest.fixture
+def logger_func():
+    """Create a mock logger function."""
+    return Mock()
+
+
+@pytest.fixture
+def temp_dir():
+    """Create a temporary directory for testing."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        yield tmpdir
+
+
+class TestModelManagerInitialization:
+    """Test ModelManager initialization and configuration."""
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    def test_initialization_success(self, mock_model_factory, mock_feature_specs, mock_config, mock_args, device, logger_func):
+        """Test successful ModelManager initialization."""
+        # Setup mocks
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_feature_specs.__getitem__.return_value = mock_feature_spec
+        
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        # Create ModelManager
+        manager = ModelManager(mock_config, mock_args, device, logger_func)
+
+        # Verify initialization
+        assert manager.config == mock_config
+        assert manager.args == mock_args
+        assert manager.device == device
+        assert manager.logger_func == logger_func
+        assert manager.input_features == "core46"
+        assert manager.model_type == "resnet"
+        assert manager.tower_depth == 9
+        assert manager.tower_width == 256
+        assert abs(manager.se_ratio - 0.25) < 1e-6
+        assert manager.obs_shape == (46, 9, 9)
+        assert manager.use_mixed_precision is False
+        assert manager.scaler is None
+        assert manager.model == mock_model
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    def test_initialization_with_args_override(self, mock_model_factory, mock_feature_specs, mock_config, device, logger_func):  # pylint: disable=too-many-positional-arguments
+        """Test initialization with command-line argument overrides."""
+        # Setup mocks
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 60
+        mock_feature_specs.__getitem__.return_value = mock_feature_spec
+
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        # Create args with overrides
+        args = MockArgs(
+            input_features="extended",
+            model="cnn",
+            tower_depth=12,
+            tower_width=512,
+            se_ratio=0.5,
+        )
+
+        # Create ModelManager
+        manager = ModelManager(mock_config, args, device, logger_func)
+
+        # Verify overrides applied
+        assert manager.input_features == "extended"
+        assert manager.model_type == "cnn"
+        assert manager.tower_depth == 12
+        assert manager.tower_width == 512
+        assert abs(manager.se_ratio - 0.5) < 1e-6
+        assert manager.obs_shape == (60, 9, 9)
+
+    @patch("keisei.training.model_manager.GradScaler")
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    def test_mixed_precision_cuda_enabled(self, mock_model_factory, mock_feature_specs, mock_grad_scaler, mock_config, mock_args, logger_func):
+        """Test mixed precision setup with CUDA enabled."""
+        # Enable mixed precision in config
+        mock_config.training.mixed_precision = True
+        
+        # Setup mocks
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_feature_specs["core46"] = mock_feature_spec
+        
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+        
+        mock_scaler = Mock()
+        mock_grad_scaler.return_value = mock_scaler
+
+        # Create CUDA device
+        cuda_device = torch.device("cuda")
+
+        # Create ModelManager
+        manager = ModelManager(mock_config, mock_args, cuda_device, logger_func)
+
+        # Verify mixed precision enabled
+        assert manager.use_mixed_precision is True
+        assert manager.scaler == mock_scaler
+        mock_grad_scaler.assert_called_once()
+        logger_func.assert_any_call("Mixed precision training enabled (CUDA).")
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    def test_mixed_precision_cpu_warning(self, mock_model_factory, mock_feature_specs, mock_config, mock_args, device, logger_func):
+        """Test mixed precision warning when CUDA not available."""
+        # Enable mixed precision in config but use CPU device
+        mock_config.training.mixed_precision = True
+        
+        # Setup mocks
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_feature_specs["core46"] = mock_feature_spec
+        
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        # Create ModelManager
+        manager = ModelManager(mock_config, mock_args, device, logger_func)
+
+        # Verify mixed precision disabled with warning
+        assert manager.use_mixed_precision is False
+        assert manager.scaler is None
+        logger_func.assert_any_call(
+            "Mixed precision training requested but CUDA is not available/selected. "
+            "Proceeding without mixed precision."
+        )
+
+
+class TestModelManagerCheckpointHandling:
+    """Test checkpoint loading and resuming functionality."""
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.utils.find_latest_checkpoint")
+    def test_handle_checkpoint_resume_latest_found(self, mock_find_checkpoint, mock_model_factory, mock_feature_specs, mock_config, device, logger_func, temp_dir):
+        """Test resuming from latest checkpoint when found."""
+        # Setup mocks
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_feature_specs["core46"] = mock_feature_spec
+        
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        checkpoint_path = os.path.join(temp_dir, "checkpoint.pth")
+        mock_find_checkpoint.return_value = checkpoint_path
+
+        # Create args with resume="latest"
+        args = MockArgs(resume="latest")
+        
+        # Create ModelManager
+        manager = ModelManager(mock_config, args, device, logger_func)
+        
+        # Create mock agent
+        mock_agent = Mock()
+        
+        # Test checkpoint resume
+        result = manager.handle_checkpoint_resume(mock_agent, temp_dir)
+        
+        # Verify checkpoint loaded
+        assert result is True
+        assert manager.resumed_from_checkpoint == checkpoint_path
+        mock_agent.load_model.assert_called_once_with(checkpoint_path)
+        logger_func.assert_any_call(f"Resumed training from checkpoint: {checkpoint_path}")
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.utils.find_latest_checkpoint")
+    def test_handle_checkpoint_resume_not_found(self, mock_find_checkpoint, mock_model_factory, mock_features, mock_config, device, logger_func, temp_dir):
+        """Test resuming when no checkpoint found."""
+        # Setup mocks
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_features.FEATURE_SPECS = {"core46": mock_feature_spec}
+        
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        mock_find_checkpoint.return_value = None
+
+        # Create args with resume="latest"
+        args = MockArgs(resume="latest")
+        
+        # Create ModelManager
+        manager = ModelManager(mock_config, args, device, logger_func)
+        
+        # Create mock agent
+        mock_agent = Mock()
+        
+        # Test checkpoint resume
+        result = manager.handle_checkpoint_resume(mock_agent, temp_dir)
+        
+        # Verify no checkpoint loaded
+        assert result is False
+        assert manager.resumed_from_checkpoint is None
+        mock_agent.load_model.assert_not_called()
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    def test_handle_checkpoint_resume_explicit_path(self, mock_model_factory, mock_features, mock_config, device, logger_func, temp_dir):
+        """Test resuming from explicit checkpoint path."""
+        # Setup mocks
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_features.FEATURE_SPECS = {"core46": mock_feature_spec}
+        
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        checkpoint_path = "/path/to/specific/checkpoint.pth"
+
+        # Create args with explicit resume path
+        args = MockArgs(resume=checkpoint_path)
+        
+        # Create ModelManager
+        manager = ModelManager(mock_config, args, device, logger_func)
+        
+        # Create mock agent
+        mock_agent = Mock()
+        
+        # Test checkpoint resume
+        result = manager.handle_checkpoint_resume(mock_agent, temp_dir)
+        
+        # Verify checkpoint loaded
+        assert result is True
+        assert manager.resumed_from_checkpoint == checkpoint_path
+        mock_agent.load_model.assert_called_once_with(checkpoint_path)
+        logger_func.assert_any_call(f"Resumed training from checkpoint: {checkpoint_path}")
+
+
+class TestModelManagerArtifacts:
+    """Test WandB artifact creation functionality."""
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.wandb")
+    def test_create_model_artifact_success(self, mock_wandb, mock_model_factory, mock_features, mock_config, mock_args, device, logger_func, temp_dir):
+        """Test successful model artifact creation."""
+        # Setup mocks
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_features.FEATURE_SPECS = {"core46": mock_feature_spec}
+        
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        # Create a test model file
+        model_path = os.path.join(temp_dir, "test_model.pth")
+        with open(model_path, "w", encoding="utf-8") as f:
+            f.write("test model content")
+
+        # Setup WandB mocks
+        mock_wandb.run = Mock()
+        mock_artifact = Mock()
+        mock_wandb.Artifact.return_value = mock_artifact
+
+        # Create ModelManager
+        manager = ModelManager(mock_config, mock_args, device, logger_func)
+
+        # Test artifact creation
+        result = manager.create_model_artifact(
+            model_path=model_path,
+            artifact_name="test-model",
+            run_name="test_run",
+            is_wandb_active=True,
+            description="Test model",
+            metadata={"test": "value"},
+            aliases=["latest"],
+        )
+
+        # Verify artifact created
+        assert result is True
+        mock_wandb.Artifact.assert_called_once()
+        mock_artifact.add_file.assert_called_once_with(model_path)
+        mock_wandb.log_artifact.assert_called_once_with(mock_artifact, aliases=["latest"])
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    def test_create_model_artifact_wandb_inactive(self, mock_model_factory, mock_features, mock_config, mock_args, device, logger_func):
+        """Test artifact creation when WandB is inactive."""
+        # Setup mocks
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_features.FEATURE_SPECS = {"core46": mock_feature_spec}
+        
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        # Create ModelManager
+        manager = ModelManager(mock_config, mock_args, device, logger_func)
+
+        # Test artifact creation with WandB inactive
+        result = manager.create_model_artifact(
+            model_path="/path/to/model.pth",
+            artifact_name="test-model",
+            run_name="test_run",
+            is_wandb_active=False,
+        )
+
+        # Verify artifact not created
+        assert result is False
+
+    @patch("keisei.training.model_manager.wandb")
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    def test_create_model_artifact_file_missing(self, mock_model_factory, mock_features, mock_wandb, mock_config, mock_args, device, logger_func):  # pylint: disable=too-many-positional-arguments
+        """Test artifact creation when model file is missing."""
+        # Setup mocks
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_features.__getitem__.return_value = mock_feature_spec
+
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        # Setup wandb mock
+        mock_wandb.run = Mock()
+
+        # Create ModelManager
+        manager = ModelManager(mock_config, mock_args, device, logger_func)
+
+        # Test artifact creation with missing file
+        result = manager.create_model_artifact(
+            model_path="/nonexistent/model.pth",
+            artifact_name="test-model",
+            run_name="test_run",
+            is_wandb_active=True,
+        )
+
+        # Verify artifact not created
+        assert result is False
+        logger_func.assert_any_call(
+            "Warning: Model file /nonexistent/model.pth does not exist, skipping artifact creation."
+        )
+
+
+class TestModelManagerSaving:
+    """Test model and checkpoint saving functionality."""
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    def test_save_final_model_success(self, mock_model_factory, mock_features, mock_config, mock_args, device, logger_func, temp_dir):
+        """Test successful final model saving."""
+        # Setup mocks
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_features.FEATURE_SPECS = {"core46": mock_feature_spec}
+        
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        # Create ModelManager
+        manager = ModelManager(mock_config, mock_args, device, logger_func)
+
+        # Create mock agent
+        mock_agent = Mock()
+
+        game_stats = {"black_wins": 10, "white_wins": 5, "draws": 2}
+
+        # Test final model saving
+        with patch.object(manager, 'create_model_artifact', return_value=True) as mock_artifact:
+            success, model_path = manager.save_final_model(
+                agent=mock_agent,
+                model_dir=temp_dir,
+                global_timestep=1000,
+                total_episodes_completed=17,
+                game_stats=game_stats,
+                run_name="test_run",
+                is_wandb_active=True,
+            )
+
+        # Verify model saved
+        assert success is True
+        assert model_path == os.path.join(temp_dir, "final_model.pth")
+        mock_agent.save_model.assert_called_once_with(model_path, 1000, 17)
+        mock_artifact.assert_called_once()
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    def test_save_final_checkpoint_success(self, mock_model_factory, mock_features, mock_config, mock_args, device, logger_func, temp_dir):
+        """Test successful final checkpoint saving."""
+        # Setup mocks
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_features.FEATURE_SPECS = {"core46": mock_feature_spec}
+        
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        # Create ModelManager
+        manager = ModelManager(mock_config, mock_args, device, logger_func)
+
+        # Create mock agent
+        mock_agent = Mock()
+
+        game_stats = {"black_wins": 10, "white_wins": 5, "draws": 2}
+
+        # Test final checkpoint saving
+        with patch.object(manager, 'create_model_artifact', return_value=True) as mock_artifact:
+            success, checkpoint_path = manager.save_final_checkpoint(
+                agent=mock_agent,
+                model_dir=temp_dir,
+                global_timestep=1000,
+                total_episodes_completed=17,
+                game_stats=game_stats,
+                run_name="test_run",
+                is_wandb_active=True,
+            )
+
+        # Verify checkpoint saved
+        assert success is True
+        expected_path = os.path.join(temp_dir, "checkpoint_ts1000.pth")
+        assert checkpoint_path == expected_path
+        mock_agent.save_model.assert_called_once_with(
+            expected_path, 1000, 17, stats_to_save=game_stats
+        )
+        mock_artifact.assert_called_once()
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    def test_save_final_checkpoint_zero_timestep(self, mock_model_factory, mock_features, mock_config, mock_args, device, logger_func, temp_dir):
+        """Test final checkpoint saving with zero timestep."""
+        # Setup mocks
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_features.FEATURE_SPECS = {"core46": mock_feature_spec}
+        
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        # Create ModelManager
+        manager = ModelManager(mock_config, mock_args, device, logger_func)
+
+        # Create mock agent
+        mock_agent = Mock()
+
+        game_stats = {"black_wins": 0, "white_wins": 0, "draws": 0}
+
+        # Test final checkpoint saving with zero timestep
+        success, checkpoint_path = manager.save_final_checkpoint(
+            agent=mock_agent,
+            model_dir=temp_dir,
+            global_timestep=0,
+            total_episodes_completed=0,
+            game_stats=game_stats,
+            run_name="test_run",
+            is_wandb_active=True,
+        )
+
+        # Verify checkpoint not saved
+        assert success is False
+        assert checkpoint_path is None
+        mock_agent.save_model.assert_not_called()
+
+
+class TestModelManagerUtilities:
+    """Test utility methods and information retrieval."""
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    def test_get_model_info(self, mock_model_factory, mock_features, mock_config, mock_args, device, logger_func):  # pylint: disable=too-many-positional-arguments
+        """Test model information retrieval."""
+        # Setup mocks
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_features.__getitem__.return_value = mock_feature_spec
+
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        # Create ModelManager
+        manager = ModelManager(mock_config, mock_args, device, logger_func)
+
+        # Get model info
+        info = manager.get_model_info()
+
+        # Verify information
+        expected_info = {
+            "model_type": "resnet",
+            "input_features": "core46",
+            "tower_depth": 9,
+            "tower_width": 256,
+            "se_ratio": 0.25,
+            "obs_shape": (46, 9, 9),
+            "num_planes": 46,
+            "use_mixed_precision": False,
+            "device": "cpu",
+        }
+        assert info == expected_info
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.PPOAgent")
+    def test_create_agent(self, mock_ppo_agent, mock_model_factory, mock_features, mock_config, mock_args, device, logger_func):  # pylint: disable=too-many-positional-arguments
+        """Test PPO agent creation."""
+        # Setup mocks
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_features.__getitem__.return_value = mock_feature_spec
+
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        mock_agent = Mock()
+        mock_ppo_agent.return_value = mock_agent
+
+        # Create ModelManager
+        manager = ModelManager(mock_config, mock_args, device, logger_func)
+
+        # Create agent
+        agent = manager.create_agent()
+
+        # Verify agent created and model assigned
+        assert agent == mock_agent
+        assert agent.model == mock_model
+        mock_ppo_agent.assert_called_once_with(config=mock_config, device=device)

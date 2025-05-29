@@ -23,7 +23,9 @@ import pytest
 
 from keisei.config_schema import (
     AppConfig,
+    DemoConfig,
     EnvConfig,
+    EvaluationConfig,
     LoggingConfig,
     TrainingConfig,
     WandBConfig,
@@ -45,56 +47,63 @@ class MockArgs:
 @pytest.fixture
 def mock_config():
     """Create a mock configuration for testing."""
-    config = Mock(spec=AppConfig)
-
-    # Environment config
-    env_config = Mock(spec=EnvConfig)
-    env_config.seed = 42
-    env_config.device = "cuda"
-    env_config.num_actions_total = 8192
-    env_config.input_channels = 119
-    config.env = env_config
-
-    # Training config
-    training_config = Mock(spec=TrainingConfig)
-    training_config.total_timesteps = 1000000
-    training_config.steps_per_epoch = 2048
-    training_config.model_type = "resnet"
-    training_config.input_features = "core46"
-    training_config.mixed_precision = False
-    training_config.tower_depth = 9
-    training_config.tower_width = 256
-    training_config.se_ratio = 0.25
-    training_config.ppo_epochs = 10
-    training_config.minibatch_size = 64
-    training_config.learning_rate = 3e-4
-    training_config.gamma = 0.99
-    training_config.lambda_gae = 0.95
-    training_config.clip_epsilon = 0.2
-    training_config.value_loss_coeff = 0.5
-    training_config.entropy_coef = 0.01
-    training_config.checkpoint_interval_timesteps = 10000
-    training_config.evaluation_interval_timesteps = 50000
-    config.training = training_config
-
-    # Logging config
-    logging_config = Mock(spec=LoggingConfig)
-    logging_config.run_name = None
-    config.logging = logging_config
-
-    # WandB config
-    wandb_config = Mock(spec=WandBConfig)
-    wandb_config.run_name_prefix = "keisei"
-    wandb_config.enabled = False
-    config.wandb = wandb_config
-
-    # Demo config
-    demo_config = Mock()
-    demo_config.enable_demo_mode = False
-    demo_config.demo_mode_delay = 0.1
-    config.demo = demo_config
-
-    return config
+    return AppConfig(
+        env=EnvConfig(
+            device="cpu",
+            num_actions_total=13527,
+            input_channels=46,
+            seed=42,
+        ),
+        training=TrainingConfig(
+            total_timesteps=500_000,
+            steps_per_epoch=2048,
+            ppo_epochs=10,
+            minibatch_size=64,
+            learning_rate=3e-4,
+            gamma=0.99,
+            clip_epsilon=0.2,
+            value_loss_coeff=0.5,
+            entropy_coef=0.01,
+            render_every_steps=1,
+            refresh_per_second=4,
+            enable_spinner=True,
+            input_features="core46",
+            tower_depth=9,
+            tower_width=256,
+            se_ratio=0.25,
+            model_type="resnet",
+            mixed_precision=False,
+            ddp=False,
+            gradient_clip_max_norm=0.5,
+            lambda_gae=0.95,
+            checkpoint_interval_timesteps=10000,
+            evaluation_interval_timesteps=50000,
+            weight_decay=0.0,
+        ),
+        evaluation=EvaluationConfig(
+            num_games=20,
+            opponent_type="random",
+            evaluation_interval_timesteps=50000,
+        ),
+        logging=LoggingConfig(
+            log_file="test.log",
+            model_dir="/tmp/test_models",
+            run_name=None,
+        ),
+        wandb=WandBConfig(
+            enabled=False,
+            project="test-project",
+            entity=None,
+            run_name_prefix="test",
+            watch_model=False,
+            watch_log_freq=1000,
+            watch_log_type="all",
+        ),
+        demo=DemoConfig(
+            enable_demo_mode=False,
+            demo_mode_delay=0.5,
+        ),
+    )
 
 
 @pytest.fixture

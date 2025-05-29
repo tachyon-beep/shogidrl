@@ -38,7 +38,7 @@ def mock_config():
     env_config = Mock(spec=EnvConfig)
     env_config.seed = 42
     env_config.device = "cpu"
-    env_config.num_actions_total = 4096
+    env_config.num_actions_total = 13527
     env_config.input_channels = 46
     config.env = env_config
 

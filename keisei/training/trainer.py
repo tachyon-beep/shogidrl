@@ -4,7 +4,6 @@ trainer.py: Contains the Trainer class for managing the Shogi RL training loop (
 
 import json
 import os
-import shutil
 import sys
 import time
 from datetime import datetime
@@ -21,22 +20,25 @@ from typing import (  # pylint: disable=unused-import
 
 import torch  # Add torch import
 from rich.console import Console, Text
-from torch.cuda.amp import GradScaler  # For mixed precision
 
 import wandb
 from keisei.config_schema import AppConfig
 from keisei.core.experience_buffer import ExperienceBuffer
-from keisei.core.ppo_agent import PPOAgent
 from keisei.evaluation.evaluate import execute_full_evaluation_run
-from keisei.shogi import ShogiGame
 from keisei.utils import (
-    PolicyOutputMapper,
     TrainingLogger,
 )
 
-from . import callbacks, display, utils
+from . import callbacks, display
+from .env_manager import EnvManager
+from .model_manager import ModelManager
 from .session_manager import SessionManager
 from .step_manager import EpisodeState, StepManager
+
+# Backwards compatibility imports for tests (these classes are now used in managers)
+from keisei.core.ppo_agent import PPOAgent
+from keisei.shogi import ShogiGame
+from keisei.utils import PolicyOutputMapper
 
 
 class Trainer:
@@ -44,10 +46,6 @@ class Trainer:
     Manages the training process for the PPO Shogi agent.
     This class orchestrates setup, training loop, evaluation, and logging.
     """
-
-    # Mixed-precision training
-    use_mixed_precision: bool = False
-    scaler: Optional[torch.cuda.amp.GradScaler] = None
 
     # Statistics for tracking and logging
     global_timestep: int = 0
@@ -99,62 +97,9 @@ class Trainer:
         self.console = Console()
         self.logger = TrainingLogger(self.log_file_path, self.console)
 
-        # Mixed Precision Setup
-        self.use_mixed_precision = (
-            self.config.training.mixed_precision and self.device.type == "cuda"
-        )
-        if self.use_mixed_precision:
-            self.scaler = GradScaler()
-            self.logger.log(
-                str(
-                    Text("Mixed precision training enabled (CUDA).", style="green")
-                )  # Convert Text to str
-            )
-        elif self.config.training.mixed_precision and self.device.type != "cuda":
-            self.logger.log(
-                str(
-                    Text(  # Convert Text to str
-                        "Mixed precision training requested but CUDA is not available/selected. Proceeding without mixed precision.",
-                        style="yellow",
-                    )
-                )
-            )
-            self.use_mixed_precision = False
-
-        # --- Model/feature config integration ---
-        self.input_features = (
-            getattr(args, "input_features", None) or config.training.input_features
-        )
-        self.model_type = getattr(args, "model", None) or config.training.model_type
-        self.tower_depth = (
-            getattr(args, "tower_depth", None) or config.training.tower_depth
-        )
-        self.tower_width = (
-            getattr(args, "tower_width", None) or config.training.tower_width
-        )
-        self.se_ratio = getattr(args, "se_ratio", None) or config.training.se_ratio
-        # Feature builder
-        from keisei.shogi import features
-
-        self.feature_spec = features.FEATURE_SPECS[self.input_features]
-        self.obs_shape = (self.feature_spec.num_planes, 9, 9)
-        # Model factory
-        from keisei.training.models import model_factory  # Corrected import
-
-        # from keisei.training.models.resnet_tower import ActorCriticResTower # Old direct import
-        # if self.model_type == "resnet": # Old direct instantiation
-        self.model = model_factory(
-            model_type=self.model_type,
-            obs_shape=self.obs_shape,
-            num_actions=config.env.num_actions_total,  # Added num_actions
-            tower_depth=self.tower_depth,
-            tower_width=self.tower_width,
-            se_ratio=self.se_ratio if self.se_ratio > 0 else None,
-            # Add any other kwargs your model_factory or models might need, e.g.:
-            # num_actions_total=config.env.num_actions_total # Already passed as num_actions
-        )
-        # else:
-        #     raise ValueError(f"Unknown model_type: {self.model_type}")
+        # Initialize managers
+        self.model_manager = ModelManager(config, args, self.device, self.logger.log)
+        self.env_manager = EnvManager(config, self.logger.log)
 
         # Initialize Rich TUI
         self.rich_console = Console(file=sys.stderr, record=True)
@@ -163,13 +108,13 @@ class Trainer:
         # WP-2: Store pending progress bar updates to consolidate them
         self.pending_progress_updates: Dict[str, Any] = {}
 
-        # Initialize game and components
+        # Initialize game and components using EnvManager
         self._setup_game_components()
 
         # Setup training components
         self._setup_training_components()
 
-        # Handle checkpoint resuming
+        # Handle checkpoint resuming using ModelManager
         self._handle_checkpoint_resume()
 
         # Display and callbacks
@@ -189,26 +134,25 @@ class Trainer:
         ]
 
     def _setup_game_components(self):
-        """Initialize game environment and policy mapper."""
+        """Initialize game environment and policy mapper using EnvManager."""
         try:
-            self.game = ShogiGame()
-            if hasattr(self.game, "seed") and self.config.env.seed is not None:
-                self.game.seed(self.config.env.seed)
-            self.obs_space_shape = (self.config.env.input_channels, 9, 9)
+            # Use EnvManager to setup environment
+            env_info = self.env_manager.get_environment_info()
+            self.game = env_info["game"]
+            self.policy_output_mapper = env_info["policy_mapper"]
+            self.action_space_size = env_info["action_space_size"]
+            self.obs_space_shape = env_info["obs_space_shape"]
         except (RuntimeError, ValueError, OSError) as e:
             self.rich_console.print(
-                f"[bold red]Error initializing ShogiGame: {e}. Aborting.[/bold red]"
+                f"[bold red]Error initializing game components: {e}. Aborting.[/bold red]"
             )
-            raise RuntimeError(f"Failed to initialize ShogiGame: {e}") from e
-        self.policy_output_mapper = PolicyOutputMapper()
-        self.action_space_size = self.policy_output_mapper.get_total_actions()
+            raise RuntimeError(f"Failed to initialize game components: {e}") from e
 
     def _setup_training_components(self):
-        """Initialize PPO agent and experience buffer."""
-        self.agent = PPOAgent(
-            config=self.config,
-            device=torch.device(self.config.env.device),
-        )
+        """Initialize PPO agent and experience buffer using ModelManager."""
+        # Create agent using ModelManager
+        self.agent = self.model_manager.create_agent()
+        
         self.experience_buffer = ExperienceBuffer(
             buffer_size=self.config.training.steps_per_epoch,
             gamma=self.config.training.gamma,
@@ -237,44 +181,25 @@ class Trainer:
         # No longer print to stderr for test compatibility
 
     def _handle_checkpoint_resume(self):
-        """Handle resuming from checkpoint if specified or auto-detected."""
-        resume_path = self.args.resume
-
-        def find_ckpt_in_dir(directory):
-            return utils.find_latest_checkpoint(directory)
-
-        if resume_path == "latest" or resume_path is None:
-            # Try to find latest checkpoint in the run's model_dir
-            latest_ckpt = find_ckpt_in_dir(self.model_dir)
-            # If not found, try the parent directory (savedir)
-            if not latest_ckpt:
-                parent_dir = os.path.dirname(self.model_dir.rstrip(os.sep))
-                parent_ckpt = find_ckpt_in_dir(parent_dir)
-                if parent_ckpt:
-                    # Copy the checkpoint into the run's model_dir for consistency
-                    dest_ckpt = os.path.join(
-                        self.model_dir, os.path.basename(parent_ckpt)
-                    )
-                    shutil.copy2(parent_ckpt, dest_ckpt)
-                    latest_ckpt = dest_ckpt
-            if latest_ckpt:
-                self.agent.load_model(latest_ckpt)
-                self.resumed_from_checkpoint = latest_ckpt
-                msg = f"Resumed training from checkpoint: {latest_ckpt}"
-                self._log_event(msg)
-                if hasattr(self, "rich_console"):
-                    self.rich_console.print(f"[yellow]{msg}[/yellow]")
-            else:
-                self.resumed_from_checkpoint = None
-        elif resume_path:
-            self.agent.load_model(resume_path)
-            self.resumed_from_checkpoint = resume_path
-            msg = f"Resumed training from checkpoint: {resume_path}"
-            self._log_event(msg)
-            if hasattr(self, "rich_console"):
-                self.rich_console.print(f"[yellow]{msg}[/yellow]")
-        else:
-            self.resumed_from_checkpoint = None
+        """Handle resuming from checkpoint using ModelManager."""
+        self.model_manager.handle_checkpoint_resume(
+            agent=self.agent,
+            model_dir=self.model_dir,
+        )
+        self.resumed_from_checkpoint = self.model_manager.resumed_from_checkpoint
+        
+        # Restore training state from checkpoint data
+        if self.model_manager.checkpoint_data:
+            checkpoint_data = self.model_manager.checkpoint_data
+            
+            # Restore global timestep and episode count
+            self.global_timestep = checkpoint_data.get("global_timestep", 0)
+            self.total_episodes_completed = checkpoint_data.get("total_episodes_completed", 0)
+            
+            # Restore game statistics
+            self.black_wins = checkpoint_data.get("black_wins", 0)
+            self.white_wins = checkpoint_data.get("white_wins", 0)
+            self.draws = checkpoint_data.get("draws", 0)
 
     def _log_run_info(self, log_both):
         """Log run information at the start of training."""
@@ -292,13 +217,16 @@ class Trainer:
             total_episodes_completed=self.total_episodes_completed,
         )
 
-        # Log model structure (trainer-specific)
-        log_both(f"Model Structure:\n{self.agent.model}", also_to_wandb=False)
-        self._log_event(f"Model Structure:\n{self.agent.model}")
+        # Log model structure (trainer-specific) using ModelManager
+        model_info = self.model_manager.get_model_info()
+        log_both(f"Model Structure:\n{model_info}", also_to_wandb=False)
+        self._log_event(f"Model Structure:\n{model_info}")
 
     def _initialize_game_state(self, log_both) -> EpisodeState:
-        """Initialize the game state for training."""
+        """Initialize the game state for training using EnvManager."""
         try:
+            # Reset game using EnvManager
+            self.env_manager.reset_game()
             episode_state = self.step_manager.reset_episode()
             return episode_state
         except (RuntimeError, ValueError, OSError) as e:
@@ -434,73 +362,6 @@ class Trainer:
             wandb_data=learn_metrics,
         )
 
-    def _create_model_artifact(
-        self,
-        model_path: str,
-        artifact_name: str,
-        artifact_type: str = "model",
-        description: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        aliases: Optional[List[str]] = None,
-        log_both=None,
-    ) -> bool:
-        """
-        Create and upload a W&B artifact for a model checkpoint.
-
-        Args:
-            model_path: Path to the model file to upload
-            artifact_name: Name for the artifact (without run prefix)
-            artifact_type: Type of artifact (default: "model")
-            description: Optional description for the artifact
-            metadata: Optional metadata dict to attach to the artifact
-            aliases: Optional list of aliases (e.g., ["latest", "best"])
-            log_both: Logging function to use
-
-        Returns:
-            bool: True if artifact was created successfully, False otherwise
-        """
-        if not (self.is_train_wandb_active and wandb.run):
-            return False
-
-        if not os.path.exists(model_path):
-            if log_both:
-                log_both(
-                    f"Warning: Model file {model_path} does not exist, skipping artifact creation."
-                )
-            return False
-
-        try:
-            # Create artifact with run name prefix for uniqueness
-            full_artifact_name = f"{self.run_name}-{artifact_name}"
-            artifact = wandb.Artifact(
-                name=full_artifact_name,
-                type=artifact_type,
-                description=description or f"Model checkpoint from run {self.run_name}",
-                metadata=metadata or {},
-            )
-
-            # Add the model file
-            artifact.add_file(model_path)
-
-            # Log the artifact with optional aliases
-            wandb.log_artifact(artifact, aliases=aliases)
-
-            if log_both:
-                aliases_str = f" with aliases {aliases}" if aliases else ""
-                log_both(
-                    f"Model artifact '{full_artifact_name}' created and uploaded{aliases_str}"
-                )
-
-            return True
-
-        except (OSError, RuntimeError, TypeError, ValueError) as e:
-            if log_both:
-                log_both(
-                    f"Error creating W&B artifact for {model_path}: {e}",
-                    log_level="error",
-                )
-            return False
-
     def _finalize_training(self, log_both):
         """Finalize training and save final model."""
         log_both(
@@ -521,7 +382,7 @@ class Trainer:
                 )
                 log_both(f"Final model saved to {final_model_path}", also_to_wandb=True)
 
-                # Create W&B artifact for final model
+                # Create W&B artifact for final model using ModelManager
                 final_metadata = {
                     "training_timesteps": self.global_timestep,
                     "total_episodes": self.total_episodes_completed,
@@ -532,13 +393,14 @@ class Trainer:
                     "model_type": getattr(self.config.training, "model_type", "resnet"),
                     "feature_set": getattr(self.config.env, "feature_set", "core"),
                 }
-                self._create_model_artifact(
+                self.model_manager.create_model_artifact(
                     model_path=final_model_path,
                     artifact_name="final-model",
+                    run_name=self.run_name,
+                    is_wandb_active=self.is_train_wandb_active,
                     description=f"Final trained model after {self.global_timestep} timesteps",
                     metadata=final_metadata,
                     aliases=["latest", "final"],
-                    log_both=log_both,
                 )
 
                 if self.is_train_wandb_active and wandb.run:
@@ -575,7 +437,7 @@ class Trainer:
                 f"Final checkpoint saved to {last_ckpt_filename}", also_to_wandb=True
             )
 
-            # Create W&B artifact for final checkpoint
+            # Create W&B artifact for final checkpoint using ModelManager
             checkpoint_metadata = {
                 "training_timesteps": self.global_timestep,
                 "total_episodes": self.total_episodes_completed,
@@ -586,13 +448,14 @@ class Trainer:
                 "model_type": getattr(self.config.training, "model_type", "resnet"),
                 "feature_set": getattr(self.config.env, "feature_set", "core"),
             }
-            self._create_model_artifact(
+            self.model_manager.create_model_artifact(
                 model_path=last_ckpt_filename,
                 artifact_name="final-checkpoint",
+                run_name=self.run_name,
+                is_wandb_active=self.is_train_wandb_active,
                 description=f"Final checkpoint at timestep {self.global_timestep}",
                 metadata=checkpoint_metadata,
                 aliases=["latest-checkpoint"],
-                log_both=log_both,
             )
 
         if self.is_train_wandb_active and wandb.run:
@@ -656,6 +519,10 @@ class Trainer:
             # Setup run information logging
             self._log_run_info(log_both)
 
+            # Log checkpoint resume status
+            if self.resumed_from_checkpoint:
+                log_both(f"Resumed training from checkpoint: {self.resumed_from_checkpoint}")
+
             last_time = time.time()
             steps_since_last_time = 0
             episode_state = self._initialize_game_state(log_both)
@@ -698,3 +565,87 @@ class Trainer:
 
                 # End of training loop
                 self._finalize_training(log_both)
+
+    # Property accessors for backward compatibility
+    @property
+    def model(self):
+        """Access the model through ModelManager."""
+        return self.model_manager.model if hasattr(self.model_manager, 'model') else None
+    
+    @property
+    def feature_spec(self):
+        """Access the feature spec through ModelManager.""" 
+        return self.model_manager.feature_spec if hasattr(self.model_manager, 'feature_spec') else None
+
+    @property
+    def obs_shape(self):
+        """Access the observation shape through ModelManager."""
+        return self.model_manager.obs_shape if hasattr(self.model_manager, 'obs_shape') else None
+    
+    @property
+    def tower_depth(self):
+        """Access the tower depth through ModelManager."""
+        return self.model_manager.tower_depth if hasattr(self.model_manager, 'tower_depth') else None
+
+    @property
+    def tower_width(self):
+        """Access the tower width through ModelManager."""
+        return self.model_manager.tower_width if hasattr(self.model_manager, 'tower_width') else None
+    
+    @property 
+    def se_ratio(self):
+        """Access the SE ratio through ModelManager."""
+        return self.model_manager.se_ratio if hasattr(self.model_manager, 'se_ratio') else None
+
+    # Backward compatibility delegation methods
+    def _create_model_artifact(
+        self, 
+        model_path: str, 
+        artifact_name: Optional[str] = None,
+        artifact_type: str = "model",
+        description: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        aliases: Optional[List[str]] = None,
+        log_both: Optional[Callable] = None
+    ) -> bool:
+        """Backward compatibility method - delegates to ModelManager."""
+        # Use default artifact name if not provided
+        if artifact_name is None:
+            artifact_name = os.path.basename(model_path)
+            
+        # Use default description if not provided
+        if description is None:
+            # Use trainer's run_name for backward compatibility (tests set this manually)
+            run_name = getattr(self, 'run_name', self.session_manager.run_name)
+            description = f"Model checkpoint from run {run_name}"
+        
+        # Use trainer's run_name for artifact naming (for backward compatibility with tests)
+        run_name = getattr(self, 'run_name', self.session_manager.run_name)
+        
+        # Store original logger function and temporarily replace if log_both provided
+        original_logger = self.model_manager.logger_func
+        if log_both:
+            # Create a wrapper that detects error messages and adds log_level="error"
+            def logger_wrapper(message):
+                if "Error creating W&B artifact" in message:
+                    return log_both(message, log_level="error")
+                else:
+                    return log_both(message)
+            self.model_manager.logger_func = logger_wrapper
+            
+        try:
+            result = self.model_manager.create_model_artifact(
+                model_path=model_path, 
+                artifact_name=artifact_name,
+                run_name=run_name,
+                is_wandb_active=self.session_manager.is_wandb_active,
+                artifact_type=artifact_type,
+                description=description,
+                metadata=metadata,
+                aliases=aliases
+            )
+        finally:
+            # Restore original logger function
+            self.model_manager.logger_func = original_logger
+            
+        return result

@@ -6,7 +6,7 @@
     "env": {
         "device": "cpu",
         "input_channels": 46,
-        "num_actions_total": 4158,
+        "num_actions_total": 13527,
         "seed": 42
     },
     "evaluation": {
