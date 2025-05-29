@@ -10,12 +10,14 @@ This module handles environment-related concerns including:
 """
 
 import sys
-from typing import Any, Tuple, Optional, Callable # Added Optional
+from typing import Any, Callable, Optional, Tuple  # Added Optional
+
+import numpy as np  # Added for type hinting
 
 from keisei.config_schema import AppConfig
 from keisei.shogi import ShogiGame
 from keisei.utils import PolicyOutputMapper
-import numpy as np # Added for type hinting
+
 # Callable already imported via the line above
 
 
@@ -77,14 +79,16 @@ class EnvManager:
         except (RuntimeError, ValueError) as e:
             self.logger_func(f"Error initializing PolicyOutputMapper: {e}")
             raise RuntimeError(f"Failed to initialize PolicyOutputMapper: {e}") from e
-        
+
         return self.game, self.policy_output_mapper
 
     def _validate_action_space(self):
         """Validate that action space configuration is consistent."""
         if self.policy_output_mapper is None:
             # This should not happen if called after policy_output_mapper is initialized
-            self.logger_func("CRITICAL: PolicyOutputMapper not initialized before _validate_action_space.")
+            self.logger_func(
+                "CRITICAL: PolicyOutputMapper not initialized before _validate_action_space."
+            )
             raise ValueError("PolicyOutputMapper not initialized.")
 
         config_num_actions = self.config.env.num_actions_total
@@ -140,7 +144,9 @@ class EnvManager:
         try:
             # ShogiGame.reset() now returns the observation directly.
             initial_obs = self.game.reset()
-            self.logger_func("Game state initialized and initial observation obtained from game.reset().")
+            self.logger_func(
+                "Game state initialized and initial observation obtained from game.reset()."
+            )
             return initial_obs
         except Exception as e:
             self.logger_func(f"Error initializing game state: {e}")
@@ -176,19 +182,23 @@ class EnvManager:
             # Test game reset functionality
             # Get initial observation, reset, then get another and compare
             # This assumes get_observation() is available and returns a comparable state.
-            if not self.game: # Should be caught by earlier check, but good practice
-                self.logger_func("Environment validation failed: game not initialized for reset test.")
+            if not self.game:  # Should be caught by earlier check, but good practice
+                self.logger_func(
+                    "Environment validation failed: game not initialized for reset test."
+                )
                 return False
 
             obs1 = self.game.get_observation()
-            if not self.reset_game(): # Resets the game
+            if not self.reset_game():  # Resets the game
                 self.logger_func("Environment validation failed: game reset failed")
                 return False
-            obs2_after_reset = self.game.get_observation() # Get obs after reset
+            obs2_after_reset = self.game.get_observation()  # Get obs after reset
 
             # Simple comparison; for complex objects, a more robust comparison might be needed
             if not np.array_equal(obs1, obs2_after_reset):
-                self.logger_func("Environment validation warning: Observation after reset differs from initial observation. This might be expected if seeding is not deterministic or initial state has randomness.")
+                self.logger_func(
+                    "Environment validation warning: Observation after reset differs from initial observation. This might be expected if seeding is not deterministic or initial state has randomness."
+                )
             # Depending on game logic, obs1 and obs2_after_reset should ideally be the same if reset is deterministic.
             # For now, we just check if reset_game() itself succeeded.
 
@@ -209,7 +219,9 @@ class EnvManager:
     def get_legal_moves_count(self) -> int:
         """Get the number of legal moves in the current game state."""
         if not self.game:
-            self.logger_func("Error: Game not initialized. Cannot get legal moves count.")
+            self.logger_func(
+                "Error: Game not initialized. Cannot get legal moves count."
+            )
             return 0
         try:
             legal_moves = self.game.get_legal_moves()
@@ -241,7 +253,9 @@ class EnvManager:
                 return False
         elif seed_value is None:
             self.logger_func("No seed value provided for re-seeding.")
-            return False # Or True if no-op is considered success
-        else: # game does not have seed method
-            self.logger_func(f"Warning: Game object does not have a 'seed' method. Cannot re-seed with {seed_value}.")
+            return False  # Or True if no-op is considered success
+        else:  # game does not have seed method
+            self.logger_func(
+                f"Warning: Game object does not have a 'seed' method. Cannot re-seed with {seed_value}."
+            )
             return False

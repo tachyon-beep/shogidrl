@@ -23,8 +23,10 @@ from rich.console import Console, Text
 
 import wandb
 from keisei.config_schema import AppConfig
+from keisei.core.actor_critic_protocol import (
+    ActorCriticProtocol,
+)  # Import ActorCriticProtocol
 from keisei.core.experience_buffer import ExperienceBuffer
-from keisei.core.actor_critic_protocol import ActorCriticProtocol # Import ActorCriticProtocol
 
 # Backwards compatibility imports for tests (these classes are now used in managers)
 from keisei.core.ppo_agent import PPOAgent
@@ -67,11 +69,10 @@ class Trainer:
         self.args = args
 
         # Declare instance attributes that will be set up
-        self.model: Optional[ActorCriticProtocol] = None # Model instance
-        self.agent: Optional[PPOAgent] = None # Agent instance
+        self.model: Optional[ActorCriticProtocol] = None  # Model instance
+        self.agent: Optional[PPOAgent] = None  # Agent instance
         self.log_both: Optional[Callable] = None
         self.execute_full_evaluation_run: Optional[Callable] = None
-
 
         # Initialize session manager for session-level concerns
         self.session_manager = SessionManager(config, args)
@@ -152,7 +153,9 @@ class Trainer:
             self.obs_space_shape = self.env_manager.obs_space_shape
 
             if self.game is None or self.policy_output_mapper is None:
-                raise RuntimeError("EnvManager.setup_environment() failed to return valid game or policy_output_mapper.")
+                raise RuntimeError(
+                    "EnvManager.setup_environment() failed to return valid game or policy_output_mapper."
+                )
 
         except (RuntimeError, ValueError, OSError) as e:
             self.rich_console.print(
@@ -163,7 +166,7 @@ class Trainer:
     def _setup_training_components(self):
         """Initialize PPO agent and experience buffer."""
         # Create model using ModelManager
-        self.model = self.model_manager.create_model() # Get the model instance
+        self.model = self.model_manager.create_model()  # Get the model instance
 
         # Initialize PPOAgent and assign the model
         self.agent = PPOAgent(
@@ -172,8 +175,12 @@ class Trainer:
         )
         if self.model is None:
             # This should ideally not happen if model_manager.create_model() raises an error on failure
-            raise RuntimeError("Model was not created successfully before agent initialization.")
-        self.agent.model = self.model # self.model is now confirmed to be ActorCriticProtocol
+            raise RuntimeError(
+                "Model was not created successfully before agent initialization."
+            )
+        self.agent.model = (
+            self.model
+        )  # self.model is now confirmed to be ActorCriticProtocol
 
         self.experience_buffer = ExperienceBuffer(
             buffer_size=self.config.training.steps_per_epoch,
@@ -205,7 +212,9 @@ class Trainer:
     def _handle_checkpoint_resume(self):
         """Handle resuming from checkpoint using ModelManager."""
         if not self.agent:
-            self.logger.log("[ERROR] Agent not initialized before handling checkpoint resume. This should not happen.")
+            self.logger.log(
+                "[ERROR] Agent not initialized before handling checkpoint resume. This should not happen."
+            )
             # Or raise an error, as this indicates a logic flaw
             raise RuntimeError("Agent not initialized before _handle_checkpoint_resume")
 
@@ -237,12 +246,13 @@ class Trainer:
         # Delegate session info logging to SessionManager
         agent_name = "N/A"
         agent_type_name = "N/A"
-        if self.agent: # Check if agent is initialized
-            agent_name = getattr(self.agent, "name", "N/A") # PPOAgent might not have a 'name' attribute
+        if self.agent:  # Check if agent is initialized
+            agent_name = getattr(
+                self.agent, "name", "N/A"
+            )  # PPOAgent might not have a 'name' attribute
             agent_type_name = type(self.agent).__name__
-        
-        agent_info = {"type": agent_type_name, "name": agent_name}
 
+        agent_info = {"type": agent_type_name, "name": agent_name}
 
         def log_wrapper(msg):
             log_both(msg)
@@ -371,7 +381,10 @@ class Trainer:
     def _perform_ppo_update(self, current_obs_np, log_both):
         """Perform a PPO update."""
         if not self.agent:
-            log_both("[ERROR] PPO update called but agent is not initialized.", also_to_wandb=True)
+            log_both(
+                "[ERROR] PPO update called but agent is not initialized.",
+                also_to_wandb=True,
+            )
             return
 
         with torch.no_grad():
@@ -412,8 +425,13 @@ class Trainer:
         )
 
         if not self.agent:
-            log_both("[ERROR] Finalize training: Agent not initialized. Cannot save model or checkpoint.", also_to_wandb=True)
-            if self.is_train_wandb_active and wandb.run: # Ensure WandB is finalized if active
+            log_both(
+                "[ERROR] Finalize training: Agent not initialized. Cannot save model or checkpoint.",
+                also_to_wandb=True,
+            )
+            if (
+                self.is_train_wandb_active and wandb.run
+            ):  # Ensure WandB is finalized if active
                 self.session_manager.finalize_session()
                 log_both("Weights & Biases run finished due to error.")
             return
@@ -426,7 +444,8 @@ class Trainer:
 
         if self.global_timestep >= self.config.training.total_timesteps:
             log_both(
-                "Training successfully completed all timesteps. Saving final model.", also_to_wandb=True
+                "Training successfully completed all timesteps. Saving final model.",
+                also_to_wandb=True,
             )
             success, final_model_path = self.model_manager.save_final_model(
                 agent=self.agent,
@@ -438,10 +457,16 @@ class Trainer:
                 is_wandb_active=self.is_train_wandb_active,
             )
             if success and final_model_path:
-                log_both(f"Final model processing (save & artifact) successful: {final_model_path}", also_to_wandb=True)
+                log_both(
+                    f"Final model processing (save & artifact) successful: {final_model_path}",
+                    also_to_wandb=True,
+                )
             else:
-                log_both(f"[ERROR] Failed to save/artifact final model for timestep {self.global_timestep}.", also_to_wandb=True)
-            
+                log_both(
+                    f"[ERROR] Failed to save/artifact final model for timestep {self.global_timestep}.",
+                    also_to_wandb=True,
+                )
+
             # WandB finishing is handled by SessionManager or after all save attempts
         else:
             log_both(
@@ -450,7 +475,10 @@ class Trainer:
             )
 
         # Always attempt to save a final checkpoint
-        log_both(f"Attempting to save final checkpoint at timestep {self.global_timestep}.", also_to_wandb=False)
+        log_both(
+            f"Attempting to save final checkpoint at timestep {self.global_timestep}.",
+            also_to_wandb=False,
+        )
         ckpt_success, final_ckpt_path = self.model_manager.save_final_checkpoint(
             agent=self.agent,
             model_dir=self.model_dir,
@@ -461,13 +489,18 @@ class Trainer:
             is_wandb_active=self.is_train_wandb_active,
         )
         if ckpt_success and final_ckpt_path:
-            log_both(f"Final checkpoint processing (save & artifact) successful: {final_ckpt_path}", also_to_wandb=True)
-        elif self.global_timestep > 0 : # Only log error if a checkpoint was expected
-            log_both(f"[ERROR] Failed to save/artifact final checkpoint for timestep {self.global_timestep}.", also_to_wandb=True)
-
+            log_both(
+                f"Final checkpoint processing (save & artifact) successful: {final_ckpt_path}",
+                also_to_wandb=True,
+            )
+        elif self.global_timestep > 0:  # Only log error if a checkpoint was expected
+            log_both(
+                f"[ERROR] Failed to save/artifact final checkpoint for timestep {self.global_timestep}.",
+                also_to_wandb=True,
+            )
 
         if self.is_train_wandb_active and wandb.run:
-            self.session_manager.finalize_session() # Finalize session after all save attempts
+            self.session_manager.finalize_session()  # Finalize session after all save attempts
             log_both("Weights & Biases run finished.")
 
         # Save the full console log from Rich

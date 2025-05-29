@@ -11,9 +11,9 @@ import torch
 import torch.nn.functional as F
 
 from keisei.config_schema import AppConfig
+from keisei.core.actor_critic_protocol import ActorCriticProtocol
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.neural_network import ActorCritic
-from keisei.core.actor_critic_protocol import ActorCriticProtocol
 from keisei.utils import PolicyOutputMapper
 
 if TYPE_CHECKING:
@@ -41,7 +41,9 @@ class PPOAgent:
 
         self.policy_output_mapper = policy_output_mapper
         self.num_actions_total = self.policy_output_mapper.get_total_actions()
-        self.model: ActorCriticProtocol = ActorCritic(input_channels, self.num_actions_total).to(self.device)
+        self.model: ActorCriticProtocol = ActorCritic(
+            input_channels, self.num_actions_total
+        ).to(self.device)
         # Add weight_decay from config if present, else default to 0.0
         weight_decay = getattr(config.training, "weight_decay", 0.0)
         self.optimizer = torch.optim.Adam(

@@ -6,7 +6,7 @@ initialization, lifecycle management (directory, WandB setup, config saving),
 logging, and error handling.
 """
 
-from unittest.mock import Mock, patch, mock_open, MagicMock
+from unittest.mock import MagicMock, Mock, mock_open, patch
 
 import pytest
 
@@ -127,7 +127,9 @@ class TestSessionManagerInitialization:
         assert manager.run_name == config_name
 
     @patch("keisei.training.session_manager.generate_run_name")
-    def test_init_with_auto_generated_name(self, mock_generate, mock_app_config, mock_cli_args):
+    def test_init_with_auto_generated_name(
+        self, mock_generate, mock_app_config, mock_cli_args
+    ):
         """Test initialization with an auto-generated run_name."""
         generated_name = "auto_generated_run"
         mock_generate.return_value = generated_name
@@ -144,7 +146,9 @@ class TestSessionManagerInitialization:
         mock_app_config.logging.run_name = config_name
 
         # Explicit name should have the highest priority
-        manager1 = SessionManager(mock_app_config, args_with_name, run_name=explicit_name)
+        manager1 = SessionManager(
+            mock_app_config, args_with_name, run_name=explicit_name
+        )
         assert manager1.run_name == explicit_name
 
         # Args name should have priority over config name
@@ -158,12 +162,14 @@ class TestSessionManagerLifecycle:
     @pytest.fixture
     def setup_mocks(self):
         """A single fixture to set up all necessary mocks."""
-        with patch("keisei.training.utils.setup_directories") as mock_setup_dirs, \
-             patch("keisei.training.utils.setup_wandb") as mock_setup_wandb, \
-             patch("keisei.training.utils.serialize_config") as mock_serialize, \
-             patch("keisei.training.utils.setup_seeding") as mock_setup_seeding, \
-             patch("builtins.open", new_callable=mock_open) as mock_file, \
-             patch("os.path.join") as mock_join:
+        with (
+            patch("keisei.training.utils.setup_directories") as mock_setup_dirs,
+            patch("keisei.training.utils.setup_wandb") as mock_setup_wandb,
+            patch("keisei.training.utils.serialize_config") as mock_serialize,
+            patch("keisei.training.utils.setup_seeding") as mock_setup_seeding,
+            patch("builtins.open", new_callable=mock_open) as mock_file,
+            patch("os.path.join") as mock_join,
+        ):
 
             mock_setup_dirs.return_value = {
                 "run_artifact_dir": "/tmp/test_run",
@@ -185,7 +191,9 @@ class TestSessionManagerLifecycle:
 
     def test_full_workflow(self, setup_mocks, mock_app_config, mock_cli_args):
         """Test the complete session setup workflow."""
-        manager = SessionManager(mock_app_config, mock_cli_args, run_name="test_workflow")
+        manager = SessionManager(
+            mock_app_config, mock_cli_args, run_name="test_workflow"
+        )
 
         # 1. Setup Seeding
         manager.setup_seeding()
@@ -195,18 +203,24 @@ class TestSessionManagerLifecycle:
         dirs = manager.setup_directories()
         assert dirs["run_artifact_dir"] == "/tmp/test_run"
         assert manager.run_artifact_dir == "/tmp/test_run"
-        setup_mocks["setup_dirs"].assert_called_once_with(mock_app_config, "test_workflow")
+        setup_mocks["setup_dirs"].assert_called_once_with(
+            mock_app_config, "test_workflow"
+        )
 
         # 3. Setup WandB
         wandb_active = manager.setup_wandb()
         assert wandb_active is True
         assert manager.is_wandb_active is True
-        setup_mocks["setup_wandb"].assert_called_once_with(mock_app_config, "test_workflow", "/tmp/test_run")
+        setup_mocks["setup_wandb"].assert_called_once_with(
+            mock_app_config, "test_workflow", "/tmp/test_run"
+        )
 
         # 4. Save Effective Config
         manager.save_effective_config()
         setup_mocks["serialize"].assert_called_once_with(mock_app_config)
-        setup_mocks["file"].assert_called_once_with("/tmp/test_run/effective_config.json", "w", encoding="utf-8")
+        setup_mocks["file"].assert_called_once_with(
+            "/tmp/test_run/effective_config.json", "w", encoding="utf-8"
+        )
         setup_mocks["file"]().write.assert_called_once_with('{"test": "config"}')
 
     @patch("wandb.finish")
@@ -241,15 +255,24 @@ class TestSessionManagerErrorHandling:
         with pytest.raises(RuntimeError, match="WandB not yet initialized"):
             _ = manager.is_wandb_active
 
-    @patch("keisei.training.utils.setup_directories", side_effect=OSError("Permission denied"))
-    def test_directory_setup_failure(self, _mock_setup_dirs, mock_app_config, mock_cli_args):
+    @patch(
+        "keisei.training.utils.setup_directories",
+        side_effect=OSError("Permission denied"),
+    )
+    def test_directory_setup_failure(
+        self, _mock_setup_dirs, mock_app_config, mock_cli_args
+    ):
         """Test handling of directory setup failures."""
         manager = SessionManager(mock_app_config, mock_cli_args)
         with pytest.raises(RuntimeError, match="Failed to setup directories"):
             manager.setup_directories()
 
-    @patch("keisei.training.utils.setup_wandb", side_effect=Exception("WandB API error"))
-    def test_wandb_setup_failure(self, _mock_setup_wandb, mock_app_config, mock_cli_args):
+    @patch(
+        "keisei.training.utils.setup_wandb", side_effect=Exception("WandB API error")
+    )
+    def test_wandb_setup_failure(
+        self, _mock_setup_wandb, mock_app_config, mock_cli_args
+    ):
         """Test that WandB setup failure is handled gracefully."""
         manager = SessionManager(mock_app_config, mock_cli_args)
         manager._run_artifact_dir = "/tmp/test"  # pylint: disable=protected-access
@@ -259,8 +282,13 @@ class TestSessionManagerErrorHandling:
             assert result is False
             assert manager.is_wandb_active is False
 
-    @patch("keisei.training.utils.serialize_config", side_effect=TypeError("Serialization error"))
-    def test_config_saving_failure(self, _mock_serialize, mock_app_config, mock_cli_args):
+    @patch(
+        "keisei.training.utils.serialize_config",
+        side_effect=TypeError("Serialization error"),
+    )
+    def test_config_saving_failure(
+        self, _mock_serialize, mock_app_config, mock_cli_args
+    ):
         """Test handling of config saving failures."""
         manager = SessionManager(mock_app_config, mock_cli_args)
         manager._run_artifact_dir = "/tmp/test"  # pylint: disable=protected-access
@@ -273,7 +301,9 @@ class TestSessionManagerLoggingAndSummary:
 
     def test_get_session_summary(self, mock_app_config, mock_cli_args):
         """Test generation of the session summary."""
-        manager = SessionManager(mock_app_config, mock_cli_args, run_name="summary_test")
+        manager = SessionManager(
+            mock_app_config, mock_cli_args, run_name="summary_test"
+        )
 
         # Before setup
         summary1 = manager.get_session_summary()
@@ -283,10 +313,12 @@ class TestSessionManagerLoggingAndSummary:
         assert summary1["seed"] == 42
 
         # After setup
-        manager._run_artifact_dir = "/tmp/summary"      # pylint: disable=protected-access
-        manager._model_dir = "/tmp/summary/models"      # pylint: disable=protected-access
-        manager._log_file_path = "/tmp/summary/training.log"  # pylint: disable=protected-access
-        manager._is_wandb_active = True                 # pylint: disable=protected-access
+        manager._run_artifact_dir = "/tmp/summary"  # pylint: disable=protected-access
+        manager._model_dir = "/tmp/summary/models"  # pylint: disable=protected-access
+        manager._log_file_path = (
+            "/tmp/summary/training.log"  # pylint: disable=protected-access
+        )
+        manager._is_wandb_active = True  # pylint: disable=protected-access
 
         summary2 = manager.get_session_summary()
         assert summary2["run_artifact_dir"] == "/tmp/summary"
@@ -295,10 +327,13 @@ class TestSessionManagerLoggingAndSummary:
     def test_log_session_info(self, mock_app_config, mock_cli_args):
         """Test the content of session info logging."""
         manager = SessionManager(mock_app_config, mock_cli_args, run_name="log_test")
-        manager._run_artifact_dir = "/tmp/log_test_dir"  # pylint: disable=protected-access
-        manager._is_wandb_active = False              # pylint: disable=protected-access
+        manager._run_artifact_dir = (
+            "/tmp/log_test_dir"  # pylint: disable=protected-access
+        )
+        manager._is_wandb_active = False  # pylint: disable=protected-access
 
         logged_messages = []
+
         def mock_logger(msg):
             logged_messages.append(msg)
 
@@ -306,7 +341,7 @@ class TestSessionManagerLoggingAndSummary:
         manager.log_session_info(
             mock_logger,
             agent_info={"type": "PPO", "name": "TestAgent"},
-            global_timestep=0
+            global_timestep=0,
         )
 
         assert any("Keisei Training Run: log_test" in msg for msg in logged_messages)
@@ -320,12 +355,13 @@ class TestSessionManagerLoggingAndSummary:
             mock_logger,
             resumed_from_checkpoint="/path/to/checkpoint.pth",
             global_timestep=50000,
-            total_episodes_completed=100
+            total_episodes_completed=100,
         )
 
         assert any("Resumed training from checkpoint" in msg for msg in logged_messages)
         assert any(
-            "Resuming from timestep 50000, 100 episodes completed" in msg for msg in logged_messages
+            "Resuming from timestep 50000, 100 episodes completed" in msg
+            for msg in logged_messages
         )
 
 
@@ -338,20 +374,47 @@ class TestTrainerIntegration:
         """A fixture to set up all necessary mocks for Trainer initialization."""
         # Use autospec=True to ensure mocks have the same signature as the real methods.
         # Patch where modules are LOOKED UP, not where they are defined.
-        with patch("keisei.training.env_manager.ShogiGame", autospec=True) as mock_shogi_game_class, \
-             patch("keisei.training.env_manager.PolicyOutputMapper", autospec=True) as mock_policy_mapper_class, \
-             patch("keisei.training.models.model_factory", autospec=True) as mock_model_factory, \
-             patch("keisei.training.trainer.PPOAgent", autospec=True) as mock_ppo_agent_class, \
-             patch("keisei.shogi.features.FEATURE_SPECS", new_callable=dict) as mock_feature_specs, \
-             patch("keisei.training.session_manager.SessionManager.setup_directories", autospec=True) as mock_setup_dirs, \
-             patch("keisei.training.session_manager.SessionManager.setup_wandb", autospec=True) as mock_setup_wandb, \
-             patch("keisei.training.session_manager.SessionManager.save_effective_config", autospec=True) as mock_save_config, \
-             patch("keisei.training.session_manager.SessionManager.setup_seeding", autospec=True) as mock_setup_seeding, \
-             patch("keisei.training.session_manager.generate_run_name", return_value="mocked_auto_run_name") as mock_gen_name, \
-             patch("builtins.open", new_callable=mock_open), \
-             patch("os.path.join", side_effect=lambda *args: "/".join(args)), \
-             patch("glob.glob", return_value=[]), \
-             patch("os.path.exists", return_value=True):
+        with (
+            patch(
+                "keisei.training.env_manager.ShogiGame", autospec=True
+            ) as mock_shogi_game_class,
+            patch(
+                "keisei.training.env_manager.PolicyOutputMapper", autospec=True
+            ) as mock_policy_mapper_class,
+            patch(
+                "keisei.training.models.model_factory", autospec=True
+            ) as mock_model_factory,
+            patch(
+                "keisei.training.trainer.PPOAgent", autospec=True
+            ) as mock_ppo_agent_class,
+            patch(
+                "keisei.shogi.features.FEATURE_SPECS", new_callable=dict
+            ) as mock_feature_specs,
+            patch(
+                "keisei.training.session_manager.SessionManager.setup_directories",
+                autospec=True,
+            ) as mock_setup_dirs,
+            patch(
+                "keisei.training.session_manager.SessionManager.setup_wandb",
+                autospec=True,
+            ) as mock_setup_wandb,
+            patch(
+                "keisei.training.session_manager.SessionManager.save_effective_config",
+                autospec=True,
+            ) as mock_save_config,
+            patch(
+                "keisei.training.session_manager.SessionManager.setup_seeding",
+                autospec=True,
+            ) as mock_setup_seeding,
+            patch(
+                "keisei.training.session_manager.generate_run_name",
+                return_value="mocked_auto_run_name",
+            ) as mock_gen_name,
+            patch("builtins.open", new_callable=mock_open),
+            patch("os.path.join", side_effect=lambda *args: "/".join(args)),
+            patch("glob.glob", return_value=[]),
+            patch("os.path.exists", return_value=True),
+        ):
 
             # --- Mock SessionManager side effects ---
             def mock_setup_directories_impl(session_manager_self):
@@ -376,14 +439,22 @@ class TestTrainerIntegration:
 
             # --- Mock other dependencies ---
             mock_game_instance = mock_shogi_game_class.return_value
-            mock_game_instance.get_observation.return_value = Mock(name="MockObservation")
-            mock_game_instance.reset.return_value = mock_game_instance.get_observation.return_value
+            mock_game_instance.get_observation.return_value = Mock(
+                name="MockObservation"
+            )
+            mock_game_instance.reset.return_value = (
+                mock_game_instance.get_observation.return_value
+            )
 
-            mock_policy_mapper_class.return_value.get_total_actions.return_value = mock_app_config.env.num_actions_total
+            mock_policy_mapper_class.return_value.get_total_actions.return_value = (
+                mock_app_config.env.num_actions_total
+            )
 
             mock_model_instance = mock_model_factory.return_value
             mock_model_instance.to.return_value = mock_model_instance
-            mock_feature_specs["core46"] = Mock(num_planes=mock_app_config.env.input_channels)
+            mock_feature_specs["core46"] = Mock(
+                num_planes=mock_app_config.env.input_channels
+            )
 
             # FIX: Configure the PPOAgent mock instance with a 'name' attribute
             mock_agent_instance = mock_ppo_agent_class.return_value
@@ -400,7 +471,9 @@ class TestTrainerIntegration:
                 "mock_generate_run_name": mock_gen_name,
             }
 
-    def test_trainer_initializes_and_uses_session_manager(self, setup_trainer_mocks, mock_app_config, mock_cli_args):
+    def test_trainer_initializes_and_uses_session_manager(
+        self, setup_trainer_mocks, mock_app_config, mock_cli_args
+    ):
         """Test that Trainer correctly initializes and delegates to SessionManager."""
         trainer = Trainer(mock_app_config, mock_cli_args)
 
@@ -422,7 +495,9 @@ class TestTrainerIntegration:
         assert trainer.log_file_path == "/tmp/trainer_run/training.log"
         assert trainer.is_train_wandb_active is False
 
-    def test_trainer_delegates_info_logging_to_session_manager(self, setup_trainer_mocks, mock_app_config, mock_cli_args):
+    def test_trainer_delegates_info_logging_to_session_manager(
+        self, setup_trainer_mocks, mock_app_config, mock_cli_args
+    ):
         """Test that Trainer uses SessionManager for logging run information."""
         trainer = Trainer(mock_app_config, mock_cli_args)
 
@@ -430,7 +505,9 @@ class TestTrainerIntegration:
         mock_log_both = Mock()
 
         # Spy on the SessionManager's log_session_info method
-        with patch.object(trainer.session_manager, "log_session_info") as mock_log_session:
+        with patch.object(
+            trainer.session_manager, "log_session_info"
+        ) as mock_log_session:
             trainer._log_run_info(mock_log_both)  # pylint: disable=protected-access
 
             # Verify SessionManager's method was called once

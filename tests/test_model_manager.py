@@ -149,7 +149,7 @@ class TestModelManagerInitialization:
 
         # Create ModelManager
         manager = ModelManager(mock_config, mock_args, device, logger_func)
-        
+
         # Explicitly create model after manager initialization
         created_model = manager.create_model()
 
@@ -166,8 +166,12 @@ class TestModelManagerInitialization:
         assert manager.obs_shape == (46, 9, 9)
         assert manager.use_mixed_precision is False
         assert manager.scaler is None
-        assert manager.model == mock_model # model_factory was mocked to return mock_model
-        assert created_model == mock_model # create_model should return the created model
+        assert (
+            manager.model == mock_model
+        )  # model_factory was mocked to return mock_model
+        assert (
+            created_model == mock_model
+        )  # create_model should return the created model
 
     @patch("keisei.shogi.features.FEATURE_SPECS")
     @patch("keisei.training.models.model_factory")
@@ -325,7 +329,7 @@ class TestModelManagerCheckpointHandling:
         assert result is True
         assert manager.resumed_from_checkpoint == checkpoint_path
         mock_agent.load_model.assert_called_once_with(checkpoint_path)
-        logger_func.assert_any_call( # Updated log message
+        logger_func.assert_any_call(  # Updated log message
             f"Resumed from latest checkpoint: {checkpoint_path}"
         )
 
@@ -373,10 +377,10 @@ class TestModelManagerCheckpointHandling:
 
     @patch("keisei.shogi.features.FEATURE_SPECS")
     @patch("keisei.training.models.model_factory")
-    @patch("os.path.exists") # Add patch for os.path.exists
+    @patch("os.path.exists")  # Add patch for os.path.exists
     def test_handle_checkpoint_resume_explicit_path(
         self,
-        mock_os_path_exists, # Add mock for os.path.exists
+        mock_os_path_exists,  # Add mock for os.path.exists
         mock_model_factory,
         mock_features,
         mock_config,
@@ -395,7 +399,9 @@ class TestModelManagerCheckpointHandling:
         mock_model_factory.return_value = mock_model
 
         checkpoint_path = "/path/to/specific/checkpoint.pth"
-        mock_os_path_exists.return_value = True # Ensure os.path.exists returns True for the mock path
+        mock_os_path_exists.return_value = (
+            True  # Ensure os.path.exists returns True for the mock path
+        )
 
         # Create args with explicit resume path
         args = MockArgs(resume=checkpoint_path)
@@ -413,7 +419,7 @@ class TestModelManagerCheckpointHandling:
         assert result is True
         assert manager.resumed_from_checkpoint == checkpoint_path
         mock_agent.load_model.assert_called_once_with(checkpoint_path)
-        logger_func.assert_any_call( # Updated log message
+        logger_func.assert_any_call(  # Updated log message
             f"Resumed from specified checkpoint: {checkpoint_path}"
         )
 
@@ -756,18 +762,18 @@ class TestModelManagerUtilities:
     @patch("keisei.shogi.features.FEATURE_SPECS")
     @patch("keisei.training.models.model_factory")
     # PPOAgent patch is removed as we instantiate it directly.
-    def test_model_creation_and_agent_instantiation( # Renamed test
+    def test_model_creation_and_agent_instantiation(  # Renamed test
         self,
         # mock_ppo_agent, # Removed
         mock_model_factory,
-        mock_features, # This is the patch object for 'keisei.shogi.features.FEATURE_SPECS'
+        mock_features,  # This is the patch object for 'keisei.shogi.features.FEATURE_SPECS'
         mock_config,
         mock_args,
         device,
         logger_func,
     ):  # pylint: disable=too-many-positional-arguments
         """Test model creation via ModelManager and subsequent PPOAgent instantiation."""
-        from keisei.core.ppo_agent import PPOAgent # Import for direct instantiation
+        from keisei.core.ppo_agent import PPOAgent  # Import for direct instantiation
 
         # Setup mocks for model creation
         mock_feature_spec_instance = Mock(name="MockFeatureSpecInstance")
@@ -775,7 +781,6 @@ class TestModelManagerUtilities:
         # mock_features is the patch object for 'keisei.shogi.features.FEATURE_SPECS'
         # We need to mock its __getitem__ if it's a dict-like access.
         mock_features.__getitem__.return_value = mock_feature_spec_instance
-
 
         # This is the model that model_factory will return
         mock_model_from_factory = Mock(name="MockModelFromFactory")
@@ -789,7 +794,7 @@ class TestModelManagerUtilities:
         # This call will set manager.model internally and return the model
         returned_model = manager.create_model()
         assert returned_model == mock_model_from_factory
-        assert manager.model == mock_model_from_factory # Verify internal state
+        assert manager.model == mock_model_from_factory  # Verify internal state
 
         # 2. Instantiate PPOAgent (as Trainer would do)
         # We instantiate PPOAgent directly.
@@ -797,13 +802,14 @@ class TestModelManagerUtilities:
             config=mock_config,
             device=device,
         )
-        
+
         # Ensure returned_model is not None before assigning it to agent.model
         # manager.create_model() is type-hinted to return ActorCriticProtocol,
         # and raises an error if it can't. So, returned_model should not be None here.
-        assert returned_model is not None, "manager.create_model() should have returned a model or raised an error."
-        agent.model = returned_model # Now Pylance should be satisfied
-
+        assert (
+            returned_model is not None
+        ), "manager.create_model() should have returned a model or raised an error."
+        agent.model = returned_model  # Now Pylance should be satisfied
 
         # Verify agent created and model assigned
         assert agent is not None

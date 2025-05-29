@@ -109,7 +109,7 @@ class TestEnvManagerInitialization:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
-        env_manager.setup_environment() # Call setup_environment
+        env_manager.setup_environment()  # Call setup_environment
 
         # Verify initialization
         assert env_manager.config == mock_config
@@ -143,7 +143,7 @@ class TestEnvManagerInitialization:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
-        env_manager.setup_environment() # Call setup_environment
+        env_manager.setup_environment()  # Call setup_environment
 
         # Verify seeding was not called
         mock_game.seed.assert_not_called()
@@ -159,7 +159,7 @@ class TestEnvManagerInitialization:
         # Verify exception is raised
         with pytest.raises(RuntimeError, match="Failed to initialize ShogiGame"):
             env_manager = EnvManager(mock_config, logger_func)
-            env_manager.setup_environment() # Call setup_environment
+            env_manager.setup_environment()  # Call setup_environment
 
         logger_func.assert_any_call(
             "Error initializing ShogiGame: Game initialization failed. Aborting."
@@ -185,7 +185,7 @@ class TestEnvManagerInitialization:
             RuntimeError, match="Failed to initialize PolicyOutputMapper"
         ):
             env_manager = EnvManager(mock_config, logger_func)
-            env_manager.setup_environment() # Call setup_environment
+            env_manager.setup_environment()  # Call setup_environment
 
         logger_func.assert_any_call(
             "Error initializing PolicyOutputMapper: Policy mapper initialization failed"
@@ -211,7 +211,7 @@ class TestEnvManagerActionSpaceValidation:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
-        env_manager.setup_environment() # Call setup_environment
+        env_manager.setup_environment()  # Call setup_environment
 
         # Verify validation passed
         logger_func.assert_any_call("Action space validated: 13527 total actions")
@@ -235,7 +235,7 @@ class TestEnvManagerActionSpaceValidation:
             RuntimeError, match="Failed to initialize PolicyOutputMapper"
         ):
             env_manager = EnvManager(mock_config, logger_func)
-            env_manager.setup_environment() # Call setup_environment
+            env_manager.setup_environment()  # Call setup_environment
 
         expected_error = (
             "Action space mismatch: config specifies 13527 "
@@ -264,7 +264,7 @@ class TestEnvManagerEnvironmentOperations:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
-        env_manager.setup_environment() # Call setup_environment
+        env_manager.setup_environment()  # Call setup_environment
 
         # Test game reset
         result = env_manager.reset_game()
@@ -290,7 +290,7 @@ class TestEnvManagerEnvironmentOperations:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
-        env_manager.setup_environment() # Call setup_environment
+        env_manager.setup_environment()  # Call setup_environment
 
         # Test game reset
         result = env_manager.reset_game()
@@ -317,7 +317,7 @@ class TestEnvManagerEnvironmentOperations:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
-        env_manager.setup_environment() # Call setup_environment
+        env_manager.setup_environment()  # Call setup_environment
 
         # Test getting legal moves count
         count = env_manager.get_legal_moves_count()
@@ -343,7 +343,7 @@ class TestEnvManagerEnvironmentOperations:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
-        env_manager.setup_environment() # Call setup_environment
+        env_manager.setup_environment()  # Call setup_environment
 
         # Test getting legal moves count
         count = env_manager.get_legal_moves_count()
@@ -375,7 +375,7 @@ class TestEnvManagerSeeding:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
-        env_manager.setup_environment() # Call setup_environment
+        env_manager.setup_environment()  # Call setup_environment
 
         # Reset logger_func to track new calls
         logger_func.reset_mock()
@@ -407,7 +407,7 @@ class TestEnvManagerSeeding:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
-        env_manager.setup_environment() # Call setup_environment
+        env_manager.setup_environment()  # Call setup_environment
 
         # Reset logger_func to track new calls
         logger_func.reset_mock()
@@ -436,7 +436,7 @@ class TestEnvManagerSeeding:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
-        env_manager.setup_environment() # Call setup_environment
+        env_manager.setup_environment()  # Call setup_environment
 
         # Test seeding
         result = env_manager.setup_seeding(123)
@@ -461,7 +461,7 @@ class TestEnvManagerSeeding:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
-        env_manager.setup_environment() # Call setup_environment
+        env_manager.setup_environment()  # Call setup_environment
 
         # Reset logger_func to track new calls
         logger_func.reset_mock()
@@ -495,7 +495,7 @@ class TestEnvManagerValidation:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
-        env_manager.setup_environment() # Call setup_environment
+        env_manager.setup_environment()  # Call setup_environment
 
         # Test validation
         result = env_manager.validate_environment()
@@ -547,7 +547,7 @@ class TestEnvManagerValidation:
 
         # Create EnvManager and manually set policy mapper to None
         env_manager = EnvManager(mock_config, logger_func)
-        env_manager.setup_environment() # Call setup
+        env_manager.setup_environment()  # Call setup
         env_manager.policy_output_mapper = None  # type: ignore
 
         # Test validation
@@ -575,7 +575,7 @@ class TestEnvManagerValidation:
 
         # Create EnvManager and manually set invalid action space size
         env_manager = EnvManager(mock_config, logger_func)
-        env_manager.setup_environment() # Call setup
+        env_manager.setup_environment()  # Call setup
         env_manager.action_space_size = 0
 
         # Test validation
@@ -607,7 +607,7 @@ class TestEnvManagerUtilities:
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
-        env_manager.setup_environment() # Call setup
+        env_manager.setup_environment()  # Call setup
 
         # Get environment info
         info = env_manager.get_environment_info()
