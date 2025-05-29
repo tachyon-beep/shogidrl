@@ -118,10 +118,10 @@ class ModelManager:
 
         # Assign to self.model after moving to device
         self.model = created_model.to(self.device)
-        
+
         if self.model is None: # Should not happen if .to() raises on error or created_model was None
-             raise RuntimeError("Failed to create model or move model to device.")
-        
+            raise RuntimeError("Failed to create model or move model to device.")
+
         return self.model
 
     # create_agent method removed as Trainer will instantiate the agent
@@ -157,7 +157,7 @@ class ModelManager:
                         dest_ckpt = os.path.join(model_dir, os.path.basename(parent_ckpt))
                         shutil.copy2(parent_ckpt, dest_ckpt)
                         latest_ckpt = dest_ckpt
-            
+
             if latest_ckpt:
                 self.checkpoint_data = agent.load_model(latest_ckpt)
                 self.resumed_from_checkpoint = latest_ckpt
@@ -350,7 +350,7 @@ class ModelManager:
         if os.path.exists(checkpoint_filename):
             self.logger_func(f"Checkpoint {checkpoint_filename} already exists. Skipping save.")
             return True, checkpoint_filename
-        
+
         try:
             os.makedirs(model_dir, exist_ok=True) # Ensure model_dir exists
             agent.save_model(
@@ -381,7 +381,7 @@ class ModelManager:
                 aliases=[f"ts-{timestep}"], # Add a timestep specific alias
             )
             if not artifact_created and is_wandb_active:
-                 self.logger_func(f"Warning: Failed to create WandB artifact for {checkpoint_filename}")
+                self.logger_func(f"Warning: Failed to create WandB artifact for {checkpoint_filename}")
 
 
             return True, checkpoint_filename

@@ -325,8 +325,8 @@ class TestModelManagerCheckpointHandling:
         assert result is True
         assert manager.resumed_from_checkpoint == checkpoint_path
         mock_agent.load_model.assert_called_once_with(checkpoint_path)
-        logger_func.assert_any_call(
-            f"Resumed training from checkpoint: {checkpoint_path}"
+        logger_func.assert_any_call( # Updated log message
+            f"Resumed from latest checkpoint: {checkpoint_path}"
         )
 
     @patch("keisei.shogi.features.FEATURE_SPECS")
@@ -373,8 +373,10 @@ class TestModelManagerCheckpointHandling:
 
     @patch("keisei.shogi.features.FEATURE_SPECS")
     @patch("keisei.training.models.model_factory")
+    @patch("os.path.exists") # Add patch for os.path.exists
     def test_handle_checkpoint_resume_explicit_path(
         self,
+        mock_os_path_exists, # Add mock for os.path.exists
         mock_model_factory,
         mock_features,
         mock_config,
@@ -393,6 +395,7 @@ class TestModelManagerCheckpointHandling:
         mock_model_factory.return_value = mock_model
 
         checkpoint_path = "/path/to/specific/checkpoint.pth"
+        mock_os_path_exists.return_value = True # Ensure os.path.exists returns True for the mock path
 
         # Create args with explicit resume path
         args = MockArgs(resume=checkpoint_path)
@@ -410,8 +413,8 @@ class TestModelManagerCheckpointHandling:
         assert result is True
         assert manager.resumed_from_checkpoint == checkpoint_path
         mock_agent.load_model.assert_called_once_with(checkpoint_path)
-        logger_func.assert_any_call(
-            f"Resumed training from checkpoint: {checkpoint_path}"
+        logger_func.assert_any_call( # Updated log message
+            f"Resumed from specified checkpoint: {checkpoint_path}"
         )
 
 
@@ -794,16 +797,17 @@ class TestModelManagerUtilities:
             config=mock_config,
             device=device,
         )
-        # Assign the model created by ModelManager to the agent
-        # We use returned_model here, which is confirmed to be mock_model_from_factory (an ActorCriticProtocol mock)
-        # and manager.model is also asserted to be this.
-        if returned_model is None:
-            raise AssertionError("manager.create_model() returned None unexpectedly in test")
-        agent.model = returned_model
+        
+        # Ensure returned_model is not None before assigning it to agent.model
+        # manager.create_model() is type-hinted to return ActorCriticProtocol,
+        # and raises an error if it can't. So, returned_model should not be None here.
+        assert returned_model is not None, "manager.create_model() should have returned a model or raised an error."
+        agent.model = returned_model # Now Pylance should be satisfied
 
 
         # Verify agent created and model assigned
         assert agent is not None
-        assert agent.model == mock_model_from_factory # Agent should have the model from ModelManager
+        # agent.model was just assigned returned_model, which was asserted to be mock_model_from_factory
+        assert agent.model == mock_model_from_factory
         assert agent.device == device
         assert agent.config == mock_config

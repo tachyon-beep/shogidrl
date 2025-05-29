@@ -140,12 +140,20 @@ class Trainer:
     def _setup_game_components(self):
         """Initialize game environment and policy mapper using EnvManager."""
         try:
-            # Use EnvManager to setup environment
-            env_info = self.env_manager.get_environment_info()
-            self.game = env_info["game"]
-            self.policy_output_mapper = env_info["policy_mapper"]
-            self.action_space_size = env_info["action_space_size"]
-            self.obs_space_shape = env_info["obs_space_shape"]
+            # Call EnvManager's setup_environment to get game and mapper
+            self.game, self.policy_output_mapper = self.env_manager.setup_environment()
+
+            # Retrieve other info if needed, or ensure EnvManager sets them internally
+            # For now, let's assume action_space_size and obs_space_shape are set within EnvManager
+            # by its setup_environment method, and we can access them via properties or get_environment_info
+            # if that method is still useful for other details.
+            # Based on EnvManager changes, these are set as attributes during its setup_environment.
+            self.action_space_size = self.env_manager.action_space_size
+            self.obs_space_shape = self.env_manager.obs_space_shape
+
+            if self.game is None or self.policy_output_mapper is None:
+                raise RuntimeError("EnvManager.setup_environment() failed to return valid game or policy_output_mapper.")
+
         except (RuntimeError, ValueError, OSError) as e:
             self.rich_console.print(
                 f"[bold red]Error initializing game components: {e}. Aborting.[/bold red]"
