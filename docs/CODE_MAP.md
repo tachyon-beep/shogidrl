@@ -1,30 +1,696 @@
-Below is a refreshed **Shogi DRL / Keisei Code Map – rev 29 May 2025**.
-Additions/changes since the earlier draft are **highlighted in *italics***.
-
-*(Words of Estimative Probability appear in the “Accuracy” column.)*
+Here’s that table reformatted as a plain-Markdown document, with each subsystem as its own section:
 
 ---
 
-| #      | Sub-system                      | Sections & Purpose                                                                                                                                                                          | Core / Supporting Files                                                                                                     | Reviewer Watch-list (issues & risks)                                                                                                                                                                                                                                                                                                                                                                 | Accuracy       |
-| :----- | :------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :-------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------- |
-| **1**  | **Configuration & Overrides**   | Pydantic schema; YAML/JSON/CLI/env loaders.<br/>Consumers: `training` & `evaluation` CLIs, `Trainer`, `SessionManager`, `ModelManager`, `EnvManager`.                                       | `config_schema.py`; `utils/utils.py` (`load_config`, `FLAT_KEY_TO_NESTED`); `training/train*.py`; `evaluation/evaluate.py`. | • `num_actions_total` vs `PolicyOutputMapper` validated by `EnvManager`.<br/>• *Device-string validator still missing (typo e.g. `cuda:O` silently passes).*<br/>• Complex override precedence in `load_config` – document plainly.<br/>• Keep `default_config.yaml` ↔ `config_schema.py` aligned.<br/>• Redundant CLI parsing between the two train scripts.                                        | Almost Certain |
-| **2**  | **Shogi Engine Core**           | `shogi_core_definitions.py`, `shogi_game.py`, rule logic, move exec, I/O & features (duplication noted).                                                                                    | All `shogi/*` modules shown.                                                                                                | • `copy.deepcopy` & list scans may bottleneck.<br/>• Replace `DEBUG_*` prints with `logging`.<br/>• Stress-test `uchi-fu-zume`, `sennichite`, mandatory promotion.<br/>• Unit-test SFEN & KIF conversions.<br/>• Observation builder duplicated in `features.py` vs `shogi_game_io.py` – refactor. <br/>• *`board_history` now used for repetition; ensure memory won’t balloon in very long games.* | Highly Likely  |
-| **3**  | **Policy ↔ Move Mapping**       | Action-index ⇆ `MoveTuple` ⇆ USI.                                                                                                                                                           | `utils.utils.PolicyOutputMapper`.                                                                                           | • 13 527-action space must equal `EnvConfig.num_actions_total` (checked).<br/>• Heuristic fallback for `PieceType` identity still brittle.<br/>• Consider explicit mapping versioning in checkpoints.<br/>• Robustly test `−∞` logits → NaN path.                                                                                                                                                    | Almost Certain |
-| **4**  | **Neural-Net Models**           | Simple `core.ActorCritic` vs ResNet-tower `training.models.*`; factory picks model.                                                                                                         | `core/neural_network.py`; `training/models/*`.                                                                              | • **CRITICAL**: Model mismatch between `PPOAgent` default and Trainer’s ResNet injection – ensure shared API.<br/>• `checkpoint.load_checkpoint_with_padding` patches only `stem.weight`; generalise.<br/>• BatchNorm stats portability.<br/>• Warn if “dummy” model selected in production.                                                                                                         | Highly Likely  |
-| **5**  | **Reinforcement-Learning Core** | PPO agent, experience buffer.                                                                                                                                                               | `core/ppo_agent.py`; `core/experience_buffer.py`.                                                                           | • List-based buffer & per-step legal-mask tensor (13 k bools) may exhaust RAM – investigate compressed/sparse or regenerate on-the-fly.<br/>• `ExperienceBuffer.get_batch()` returns empty dict on shape errors – silent training skip risk.<br/>• Hyper-parameter sanity (clip ε, GA E λ, grad-clip).                                                                                               | Highly Likely  |
-| **6**  | **Environment & Managers**      | *NEW:* `EnvManager` bootstraps `ShogiGame`, validates action-space, applies seeding; *SessionManager* creates dirs, run-names, W\&B; *StepManager* owns per-step orchestration & demo-mode. | `training/env_manager.py`; `training/session_manager.py`; `training/step_manager.py`.                                       | • Action-space mismatch raises early fatal error – good guard-rail.<br/>• `StepManager` demo-mode sleeps each ply – fine for demos, disable for perf runs.<br/>• *SessionManager names runs via `generate_run_name`; collisions possible on high-rate CI.*                                                                                                                                           | Likely         |
-| **7**  | **Training Orchestration & UI** | Trainer loop, callbacks, Rich TUI.                                                                                                                                                          | `training/trainer.py`; `training/display.py`; `training/callbacks.py`.                                                      | • **CRITICAL** resume gap: `ModelManager.handle_checkpoint_resume()` loads counters into `PPOAgent`, *but Trainer never copies them*, so stats & schedules reset. Root cause lives here.<br/>• Periodic evaluation callback blocks main loop – consider thread/process.<br/>• High-frequency flush on NFS may throttle (`TrainingLogger`).                                                           | Highly Likely  |
-| **8**  | **Evaluation Pipeline**         | Evaluator wrapper, core loop, CLI.                                                                                                                                                          | `evaluation/evaluate.py`; `evaluation/loop.py`; `utils/agent_loading.py`.                                                   | • Loop still feeds **all-ones** legal mask – agent can attempt illegal moves and be “skipped”; replace with proper mask.<br/>• W\&B init guarded but noisy; unify style with training path.                                                                                                                                                                                                          | Highly Likely  |
-| **9**  | **Logging / Checkpoint / W\&B** | Plain + Rich loggers, checkpoint save/load & migration, W\&B artefacts.                                                                                                                     | `utils/utils.TrainingLogger`; `utils/checkpoint.py`; `training/model_manager.py`.                                           | • Still mixing `print` & `logging`.<br/>• Only first conv layer padding supported.<br/>• Buffered writes recommended for network filesystems.                                                                                                                                                                                                                                                        | Almost Certain |
-| **10** | **Entry-points & Packaging**    | CLIs, `__init__.py` re-exports, package surface.                                                                                                                                            | root & subpackage `__init__.py`; `train.py`, `train_wandb_sweep.py`, `evaluate.py`.                                         | • Static cycle check still advisable.<br/>• Ensure top-level re-exports don’t trigger heavy imports.                                                                                                                                                                                                                                                                                                 | Likely         |
+## 1. Configuration Management
+
+**Sections & Purpose:**
+Pydantic schema definition, loading from YAML/JSON, application of CLI/env overrides. Ensures consistent and validated configuration throughout the application.
+
+**Core / Supporting Files:**
+
+* `config_schema.py`
+* `utils/utils.py` (`load_config`, `FLAT_KEY_TO_NESTED`)
+* `training/train.py`
+* `training/train_wandb_sweep.py`
+* `evaluation/evaluate.py`
+
+**Reviewer Watch-list (issues & risks):**
+
+* **Device String Validation:**
+  `EnvManager` could centralise validation for device strings (e.g., `cuda:0` vs `cuda:O`). Currently, typos might pass silently.
+* **Override Complexity:**
+  Document override precedence in `load_config` clearly.
+* **Synchronization:**
+  Maintain alignment between `default_config.yaml` and `config_schema.py`.
+* **Redundancy:**
+  CLI parsing logic is duplicated between `training/train.py` and `training/train_wandb_sweep.py`.
+
+**Accuracy:** Almost Certain
 
 ---
 
-### New/expanded focus areas
+## 2. Shogi Game Engine
 
-* **ExperienceBuffer silent-failure path** – when stacking tensors fails, training simply receives an empty metrics dict and soldiers on.  Add explicit assert or raise.
-* **Trainer ↔ ModelManager resume handshake** – propagate `global_timestep`, `episodes`, win/draw stats after `agent.load_model()` or Trainer will double-count.
-* **EnvManager** could adopt device-string validation to centralise the check flagged in row 1.
-* **Repetition (`board_history`) GC** – if you ever raise `max_moves_per_game`, memory will creep up; consider ring-buffer.
+**Sections & Purpose:**
+Core game logic, including piece definitions, board representation, move execution, rule validation (checks, drops, promotion), and game state I/O (SFEN, KIF, observation tensors).
 
-Feel free to slice this table into separate Markdown pages (one per row) if you need finer navigation, or shout if you want JSON/YAML exports instead.
+**Core / Supporting Files:**
+All `shogi/*` modules:
+
+* `shogi_core_definitions.py`
+* `shogi_game.py`
+* `shogi_rules_logic.py`
+* `shogi_move_execution.py`
+* `shogi_game_io.py`
+* `shogi/features.py`
+
+**Reviewer Watch-list (issues & risks):**
+
+* **Performance:**
+  `copy.deepcopy` in `ShogiGame` and extensive list scanning in rule checks (`shogi_rules_logic.py`) could be bottlenecks.
+* **Logging:**
+  Replace remaining `DEBUG_*` print statements with structured logging.
+* **Rule Testing:**
+  Thoroughly test complex rules: `uchi-fu-zume`, `sennichite`, mandatory promotions.
+* **I/O Testing:**
+  Unit-test SFEN & KIF conversions for correctness and edge cases. KIF move format needs review.
+* **Observation Logic:**
+  Duplication between `shogi/features.py` and `shogi/shogi_game_io.py` should be refactored to a single source of truth.
+* **Memory:**
+  `ShogiGame.board_history` for sennichite could grow large; consider a ring buffer for very long games.
+
+**Accuracy:** Highly Likely
+
+---
+
+## 3. Action Space Management
+
+**Sections & Purpose:**
+Defines the mapping between the policy network's output (action indices) and Shogi game moves (`MoveTuple`), including USI conversion.
+
+**Core / Supporting Files:**
+
+* `utils/utils.PolicyOutputMapper`
+
+**Reviewer Watch-list (issues & risks):**
+
+* **Consistency:**
+  `EnvConfig.num_actions_total` (13 527) must match `PolicyOutputMapper.get_total_actions()`; validate via `EnvManager`.
+* **Robustness:**
+  Heuristic fallback for `PieceType` identity in `shogi_move_to_policy_index` is a patch; ideally direct matches should always work.
+* **Versioning:**
+  Consider explicit mapping versioning in model checkpoints if the action-space definition evolves.
+* **NaN Path:**
+  Test and handle the `−∞` logits → NaN probability path in models using this mapping.
+
+**Accuracy:** Almost Certain
+
+---
+
+## 4. Neural Network Models
+
+**Sections & Purpose:**
+Definition of actor-critic neural network architectures (simple CNN, ResNet tower with optional SE blocks) and a factory for instantiating them. Includes `ActorCriticProtocol` for interface consistency.
+
+**Core / Supporting Files:**
+
+* `core/neural_network.py` (ActorCritic)
+* `training/models/resnet_tower.py` (ActorCriticResTower)
+* `training/models/__init__.py` (model\_factory)
+* `core/actor_critic_protocol.py`
+
+**Reviewer Watch-list (issues & risks):**
+
+* **Model Injection:**
+  `PPOAgent` initializes a default `ActorCritic` model, later replaced by `Trainer` with one from `ModelManager`. Ensure `ActorCriticProtocol` enforces API compatibility.
+* **Checkpoint Loading:**
+  `utils/checkpoint.load_checkpoint_with_padding` only handles `stem.weight` input-channel changes; generalise or document.
+* **BatchNorm:**
+  Handle BatchNorm running stats correctly during save/load and evaluation.
+* **Production Models:**
+  Warn if “dummy” or “test” models are selected for production/serious training runs.
+* **Code Duplication:**
+  Refactor common methods (`get_action_and_value`, `evaluate_actions`) from both model classes into a shared base.
+
+**Accuracy:** Highly Likely
+
+---
+
+## 5. Reinforcement Learning Core
+
+**Sections & Purpose:**
+Implements the PPO algorithm (`PPOAgent`) and the experience replay buffer (`ExperienceBuffer`) for collecting and processing training data, including GAE calculation.
+
+**Core / Supporting Files:**
+
+* `core/ppo_agent.py`
+* `core/experience_buffer.py`
+
+**Reviewer Watch-list (issues & risks):**
+
+* **Memory Usage:**
+  `ExperienceBuffer` stores \~13 k booleans/step for `legal_masks`; investigate compression, sparse tensors, or on-the-fly regeneration.
+* **Silent Failure:**
+  `ExperienceBuffer.get_batch()` returns an empty dict on tensor-stack errors, risking silent training skips. Add an explicit assert or raise.
+* **Hyperparameters:**
+  Ensure sanity and appropriate scaling of PPO hyperparameters (clip ε, GAE λ, gradient-clip norm, etc.).
+
+**Accuracy:** Highly Likely
+
+---
+
+## 6. Training Session & Env Management
+
+**Sections & Purpose:**
+
+* **`EnvManager`**: Bootstraps `ShogiGame`, validates action-space, applies seeding.
+* **`SessionManager`**: Manages run lifecycle (naming, directory creation, W\&B initialization, config saving).
+* **`StepManager`**: Orchestrates individual training steps, episode state, and demo-mode interactions.
+
+**Core / Supporting Files:**
+
+* `training/env_manager.py`
+* `training/session_manager.py`
+* `training/step_manager.py`
+
+**Reviewer Watch-list (issues & risks):**
+
+* **Action Space Validation:**
+  `EnvManager` fatally errors on mismatch—good guard-rail.
+* **Demo Mode:**
+  `StepManager`’s per-ply sleep is fine for demos but should be disabled for performance-critical runs (config-dependent).
+* **Run Name Collisions:**
+  `SessionManager` uses timestamps for run names; unlikely but possible collisions in high-frequency CI—consider adding extra uniqueness.
+
+**Accuracy:** Likely
+
+---
+
+## 7. Training Orchestration
+
+**Sections & Purpose:**
+The main `Trainer` class orchestrates the entire training process: coordinating managers, handling PPO updates, managing callbacks, and overseeing the training loop (via `TrainingLoopManager`).
+
+**Core / Supporting Files:**
+
+* `training/trainer.py`
+* `training/training_loop_manager.py`
+* `training/callbacks.py`
+
+**Reviewer Watch-list (issues & risks):**
+
+* **CRITICAL Resume Gap:**
+  `ModelManager.handle_checkpoint_resume()` loads counters into `PPOAgent` but `Trainer` doesn’t copy them back to its own state (`self.global_timestep`, etc.), causing incorrect resumption.
+* **Blocking Callbacks:**
+  Periodic evaluation in `EvaluationCallback` blocks the main loop; consider offloading to a separate thread/process for long runs.
+
+**Accuracy:** Highly Likely
+
+---
+
+## 8. User Interface (Training)
+
+**Sections & Purpose:**
+Rich-based Text UI (TUI) for displaying live training progress, metrics, and logs.
+
+**Core / Supporting Files:**
+
+* `training/display.py`
+
+**Reviewer Watch-list (issues & risks):**
+
+* **TUI Robustness:**
+  Ensure errors within Rich display logic don’t crash the TUI or training.
+* **Log Flushing:**
+  `TrainingLogger` flushes per message; on NFS this may throttle I/O. Consider buffered writes or less frequent flushes.
+
+**Accuracy:** Likely
+
+---
+
+## 9. Evaluation Pipeline
+
+**Sections & Purpose:**
+`Evaluator` class and supporting scripts for running evaluation games between an agent and various opponents (random, heuristic, other PPO agents).
+
+**Core / Supporting Files:**
+
+* `evaluation/evaluate.py`
+* `evaluation/loop.py`
+* `utils/agent_loading.py`
+* `utils/opponents.py`
+
+**Reviewer Watch-list (issues & risks):**
+
+* **Legal Mask in Eval:**
+  `evaluation/loop.py` still uses an all-ones legal mask, letting the agent attempt illegal moves (then crash). For accurate policy evaluation, use the actual legal mask.
+* **W\&B Init:**
+  W\&B initialization in evaluation is guarded but could be noisy; unify with the training path’s setup.
+* **Dummy Configs:**
+  `utils/agent_loading.py` uses dummy configs; enhance checkpoints to store necessary architectural metadata.
+
+**Accuracy:** Highly Likely
+
+---
+
+## 10. Logging & Persistence
+
+**Sections & Purpose:**
+Utilities for file-based logging (`TrainingLogger`, `EvaluationLogger`), model checkpointing (save/load, migration for input-channel changes), and W\&B artifact management.
+
+**Core / Supporting Files:**
+
+* `utils/utils.py` (Loggers)
+* `utils/checkpoint.py`
+* `training/model_manager.py` (checkpointing, W\&B artifacts)
+* `training/callbacks.py` (triggers saving)
+
+**Reviewer Watch-list (issues & risks):**
+
+* **Logging Consistency:**
+  Mixed `print` statements and formal logger usage—standardise on logger objects.
+* **Checkpoint Migration:**
+  `utils/checkpoint.py` only supports padding the first conv layer; generalise or document.
+* **File I/O:**
+  Consider buffered writes for loggers on network filesystems; `TrainingLogger` currently flushes on each write.
+
+**Accuracy:** Almost Certain
+
+---
+
+## 11. Entry Points & Packaging
+
+**Sections & Purpose:**
+Command-Line Interfaces (CLIs) for training and evaluation, package structure (`__init__.py` files), and overall organisation of importable modules.
+
+**Core / Supporting Files:**
+
+* Root `__init__.py` & all sub-package `__init__.py` files
+* `training/train.py`
+* `training/train_wandb_sweep.py`
+* `evaluation/evaluate.py`
+
+**Reviewer Watch-list (issues & risks):**
+
+* **Static Analysis:**
+  Run a static cycle check (e.g. `pylint --enable=cyclic-import` or `deptry`) for a codebase this size.
+* **Import Performance:**
+  Ensure top-level re-exports in `__init__.py` don’t trigger heavy imports unless needed.
+
+**Accuracy:** Likely
+
+## System Block Diagrams
+
+Here are conceptual block diagrams for each subsystem:
+
+### 1. Configuration Management
+
+```mermaid
+graph LR
+    subgraph Configuration Sources
+        A1{{YAML/JSON Files}}
+        A2{{CLI Arguments}}
+        A3{{Environment Variables (implied)}}
+    end
+
+    subgraph Processing
+        B1["utils/utils.py (load_config)"]
+        B2["config_schema.py (Pydantic Schemas & Validation)"]
+    end
+
+    subgraph Consumers
+        C1["training/train.py"]
+        C2["training/train_wandb_sweep.py"]
+        C3["evaluation/evaluate.py"]
+        C4["training/session_manager.py"]
+        C5["training/env_manager.py"]
+        C6[...]
+    end
+
+    D1{{"AppConfig Object (Validated)"}}
+
+    A1 --> B1
+    A2 --> B1
+    A3 -- (Conceptual) --> B1
+    B1 -- Uses for Validation --> B2
+    B1 --> D1
+    D1 --> C1
+    D1 --> C2
+    D1 --> C3
+    D1 --> C4
+    D1 --> C5
+    D1 --> C6
+
+    style B2 fill:#lightgrey,stroke:#333,stroke-width:2px
+    style D1 fill:#lightblue,stroke:#333,stroke-width:2px
+```
+**Interactions:** Configuration files and CLI/env inputs are processed by `load_config`, which uses Pydantic schemas from `config_schema.py` for validation, producing a typed `AppConfig` object consumed by various parts of the application.
+
+---
+
+### 2. Shogi Game Engine
+
+```mermaid
+graph LR
+    subgraph Core Game State & Control
+        A["shogi_game.py (ShogiGame Class)"]
+    end
+
+    subgraph Fundamental Definitions
+        B["shogi_core_definitions.py (Piece, Color, PieceType, MoveTuple, etc.)"]
+    end
+
+    subgraph Game Logic & Rules
+        C["shogi_rules_logic.py (Move generation, Check detection, Rule validation)"]
+        D["shogi_move_execution.py (Applying/Reverting moves)"]
+    end
+
+    subgraph Input/Output & Features
+        E["shogi_game_io.py (SFEN/KIF, Text Representation)"]
+        F["shogi/features.py (Observation Tensor Builders)"]
+    end
+
+    A -- Uses Definitions --> B
+    A -- Delegates Rule Checks & Move Validation --> C
+    A -- Delegates Move Application/Reversion --> D
+    A -- Uses for Game State I/O --> E
+    A -- (Potentially) Uses for Observation --> F  // Or E uses F
+
+    C -- Uses Definitions --> B
+    D -- Uses Definitions --> B
+    D -- May Use Rule Logic --> C
+    E -- Uses Definitions --> B
+    F -- Uses Definitions --> B
+
+    style A fill:#lightblue,stroke:#333,stroke-width:2px
+```
+**Interactions:** `ShogiGame` is central, using core definitions, delegating rule checks and move execution, and utilizing I/O modules for state representation and feature extraction.
+
+---
+
+### 3. Action Space Management
+
+```mermaid
+graph LR
+    A["utils/utils.py (PolicyOutputMapper Class)"]
+    B{{"Shogi Game Move (MoveTuple)"}}
+    C{{"Policy Network Output (Action Index)"}}
+    D{{"USI String Representation"}}
+    E(["config_schema.py (EnvConfig.num_actions_total)"])
+
+    B -- shogi_move_to_policy_index --> A
+    A -- policy_index_to_shogi_move --> B
+    B -- shogi_move_to_usi --> A
+    A -- usi_to_shogi_move --> B
+    A -- Returns --> C
+    C -- Used by --> A
+    A -- Converts to/from --> D
+
+    A -- Total Actions Compared With --> E
+
+    style A fill:#lightblue,stroke:#333,stroke-width:2px
+```
+**Interactions:** `PolicyOutputMapper` provides bidirectional mapping between Shogi moves, policy indices, and USI strings. `EnvConfig`'s action count should align with the mapper's total actions.
+
+---
+
+### 4. Neural Network Models
+
+```mermaid
+graph LR
+    subgraph Model Interface
+        A["core/actor_critic_protocol.py (ActorCriticProtocol)"]
+    end
+
+    subgraph Model Implementations
+        B1["core/neural_network.py (ActorCritic - Simple CNN)"]
+        B2["training/models/resnet_tower.py (ActorCriticResTower)"]
+    end
+
+    subgraph Instantiation & Utilities
+        C1["training/models/__init__.py (model_factory)"]
+        C2["utils/checkpoint.py (load_checkpoint_with_padding)"]
+    end
+
+    subgraph Consumer
+        D["core/ppo_agent.py (PPOAgent)"]
+    end
+
+    C1 -- Creates instances of --> B1
+    C1 -- Creates instances of --> B2
+    B1 -- Implements --> A
+    B2 -- Implements --> A
+    D -- Uses Model Adhering to --> A
+    C2 -- Modifies Model State During Load --> B1
+    C2 -- Modifies Model State During Load --> B2
+
+
+    style A fill:#lightgrey,stroke:#333,stroke-width:2px
+    style D fill:#lightblue,stroke:#333,stroke-width:2px
+```
+**Interactions:** `model_factory` creates specific model implementations (like `ActorCriticResTower`) which adhere to `ActorCriticProtocol`. `PPOAgent` uses these models. `load_checkpoint_with_padding` assists in loading state into these models.
+
+---
+
+### 5. Reinforcement Learning Core
+
+```mermaid
+graph LR
+    A["core/ppo_agent.py (PPOAgent)"]
+    B["core/experience_buffer.py (ExperienceBuffer)"]
+    C["Neural Network Model (Implements ActorCriticProtocol)"]
+    D{{"Game Observations, Actions, Rewards"}}
+    E{{"Policy/Value Updates"}}
+
+    A -- Uses --> C
+    D -- Collected into --> B
+    B -- Provides Batches to --> A
+    A -- Calculates GAE using data from --> B
+    A -- Computes --> E
+    E -- Applied to --> C
+
+    style A fill:#lightblue,stroke:#333,stroke-width:2px
+    style B fill:#lightgrey,stroke:#333,stroke-width:2px
+```
+**Interactions:** `PPOAgent` uses a neural model to select actions and evaluate states. Experiences (observations, actions, rewards) are stored in `ExperienceBuffer`. The agent retrieves batches from the buffer, calculates GAE, and performs PPO updates on the model.
+
+---
+
+### 6. Training Session & Env Management
+
+```mermaid
+graph LR
+    subgraph Managers
+        A["training/env_manager.py (EnvManager)"]
+        B["training/session_manager.py (SessionManager)"]
+        C["training/step_manager.py (StepManager)"]
+    end
+
+    subgraph Dependencies
+        D["shogi_game.py (ShogiGame)"]
+        E["core/ppo_agent.py (PPOAgent)"]
+        F["utils/utils.py (PolicyOutputMapper)"]
+        G["config_schema.py (AppConfig)"]
+        H["core/experience_buffer.py (ExperienceBuffer)"]
+        I["((File System: Dirs, Logs))"]
+        J["((W&B Service))"]
+    end
+
+    G --> A
+    G --> B
+    G --> C
+
+    A -- Instantiates & Manages --> D
+    A -- Uses --> F
+    B -- Manages --> I
+    B -- Initializes & Manages --> J
+    C -- Uses --> D
+    C -- Uses --> E
+    C -- Uses --> F
+    C -- Uses --> H
+
+    style A fill:#lightblue,stroke:#333,stroke-width:2px
+    style B fill:#lightblue,stroke:#333,stroke-width:2px
+    style C fill:#lightblue,stroke:#333,stroke-width:2px
+```
+**Interactions:** `EnvManager` sets up the game environment. `SessionManager` handles run lifecycle aspects like directories and W&B. `StepManager` uses the game, agent, and buffer to execute individual training steps and manage episode state. All are configured via `AppConfig`.
+
+---
+
+### 7. Training Orchestration
+
+```mermaid
+graph LR
+    A["training/trainer.py (Trainer Class)"]
+
+    subgraph Core Loop Logic
+        B["training/training_loop_manager.py (TrainingLoopManager)"]
+    end
+
+    subgraph Callbacks & Hooks
+        C["training/callbacks.py (CheckpointCallback, EvaluationCallback)"]
+    end
+
+    subgraph Managed Components (by Trainer)
+        D["training/session_manager.py"]
+        E["training/env_manager.py"]
+        F["training/model_manager.py"]
+        G["training/step_manager.py"]
+        H["core/ppo_agent.py"]
+        I["core/experience_buffer.py"]
+    end
+
+    A -- Instantiates & Coordinates --> D
+    A -- Instantiates & Coordinates --> E
+    A -- Instantiates & Coordinates --> F
+    A -- Instantiates & Coordinates --> G
+    A -- Instantiates & Coordinates --> H
+    A -- Instantiates & Coordinates --> I
+    A -- Instantiates & Delegates Loop to --> B
+    A -- Manages & Triggers --> C
+
+    B -- Executes Training Loop --> A
+    B -- Uses --> G
+    B -- Uses --> H
+    B -- Uses --> I
+    C -- Triggered by --> B
+    C -- Interact with (e.g. save model) --> F
+    C -- Interact with --> A
+
+
+    style A fill:#lightblue,stroke:#333,stroke-width:2px
+    style B fill:#lightgrey,stroke:#333,stroke-width:2px
+```
+**Interactions:** The `Trainer` is the central orchestrator, initializing and coordinating various managers. It delegates the main training iteration logic to `TrainingLoopManager`. Callbacks are registered with the `Trainer` and triggered during the loop to perform tasks like checkpointing and evaluation.
+
+---
+
+### 8. User Interface (Training)
+
+```mermaid
+graph LR
+    A["training/display.py (TrainingDisplay Class)"]
+    B["((Rich TUI Library))"]
+    C["training/trainer.py (Trainer Class)"]
+    D["utils/utils.py (TrainingLogger)"]
+    E{{"Training Progress, Metrics, Logs"}}
+
+    C -- Provides Data --> E
+    D -- Provides Log Data --> E
+    E -- Input to --> A
+    A -- Uses --> B
+    B -- Renders --> F[("Live Text User Interface")]
+
+    style A fill:#lightblue,stroke:#333,stroke-width:2px
+    style F fill:#lightgreen,stroke:#333,stroke-width:2px
+```
+**Interactions:** `TrainingDisplay` uses the Rich library to render a TUI. It receives progress, metrics, and log data from the `Trainer` and `TrainingLogger` to update the display.
+
+---
+
+### 9. Evaluation Pipeline
+
+```mermaid
+graph LR
+    A["evaluation/evaluate.py (Evaluator Class & CLI)"]
+
+    subgraph Core Evaluation Logic
+        B["evaluation/loop.py (run_evaluation_loop)"]
+    end
+
+    subgraph Agent & Opponent Handling
+        C["utils/agent_loading.py (load_evaluation_agent, initialize_opponent)"]
+        D["utils/opponents.py (SimpleRandomOpponent, SimpleHeuristicOpponent)"]
+        E["core/ppo_agent.py (PPOAgent as opponent)"]
+    end
+
+    subgraph Game
+        F["shogi_game.py (ShogiGame)"]
+    end
+
+    A -- Uses --> C
+    C -- Creates --> D
+    C -- Loads --> E
+    A -- Configures & Runs --> B
+    B -- Uses Agent from --> C
+    B -- Uses Opponent from --> C
+    B -- Simulates Games Using --> F
+
+    style A fill:#lightblue,stroke:#333,stroke-width:2px
+```
+**Interactions:** The `Evaluator` (or its CLI) uses `agent_loading.py` to set up the agent under test and any PPO-based opponents. Simpler opponents come from `opponents.py`. The `evaluation/loop.py` then runs game simulations using these agents and `ShogiGame`.
+
+---
+
+### 10. Logging & Persistence
+
+```mermaid
+graph LR
+    subgraph Loggers
+        A1["utils/utils.py (TrainingLogger)"]
+        A2["utils/utils.py (EvaluationLogger)"]
+    end
+
+    subgraph Checkpoint/Model Management
+        B1["training/model_manager.py (ModelManager)"]
+        B2["utils/checkpoint.py (load_checkpoint_with_padding)"]
+    end
+
+    subgraph Triggers & Consumers
+        C1["training/trainer.py"]
+        C2["training/callbacks.py (CheckpointCallback, EvaluationCallback)"]
+        C3["evaluation/evaluate.py (Evaluator)"]
+        D["core/ppo_agent.py (PPOAgent save/load methods)"]
+    end
+
+    subgraph External Storage
+        E1["((File System: Log Files, Checkpoint Files))"]
+        E2["((W&B Artifacts))"]
+    end
+
+    C1 -- Uses --> A1
+    C3 -- Uses --> A2
+    A1 --> E1
+    A2 --> E1
+
+    C1 -- Uses --> B1
+    C2 -- Triggers --> B1
+    B1 -- Calls --> D
+    B1 -- Handles --> E1
+    B1 -- Handles --> E2
+    B2 -- Used by (indirectly via ModelManager or PPOAgent load) --> B1
+    D -- Called by --> B1
+
+
+    style B1 fill:#lightblue,stroke:#333,stroke-width:2px
+```
+**Interactions:** `TrainingLogger` and `EvaluationLogger` write to log files. `ModelManager` is central to saving/loading models and checkpoints to the file system and W&B, often triggered by callbacks or the `Trainer`. `PPOAgent` contains the underlying model state save/load logic. `utils/checkpoint.py` provides specialized loading.
+
+---
+
+### 11. Entry Points & Packaging
+
+```mermaid
+graph TD
+    subgraph User Invocation
+        A1["CLI: python -m keisei.training.train"]
+        A2["CLI: python -m keisei.training.train_wandb_sweep"]
+        A3["CLI: python -m keisei.evaluation.evaluate"]
+    end
+
+    subgraph Main Application Logic
+        B1["training/train.py --> Trainer Orchestration"]
+        B2["training/train_wandb_sweep.py --> Trainer Orchestration (with Sweep Overrides)"]
+        B3["evaluation/evaluate.py --> Evaluation Pipeline"]
+    end
+
+    subgraph Package Structure
+        C1["Root __init__.py"]
+        C2["training/__init__.py"]
+        C3["evaluation/__init__.py"]
+        C4["core/__init__.py"]
+        C5["shogi/__init__.py"]
+        C6["utils/__init__.py"]
+    end
+
+    A1 --> B1
+    A2 --> B2
+    A3 --> B3
+
+    B1 -- Imports from --> C2
+    B1 -- Imports from --> C4
+    B1 -- Imports from --> C5
+    B1 -- Imports from --> C6
+
+    C1 -- Defines Package --> C2
+    C1 -- Defines Package --> C3
+    C1 -- Defines Package --> C4
+    C1 -- Defines Package --> C5
+    C1 -- Defines Package --> C6
+
+    style A1 fill:#lightgreen,stroke:#333,stroke-width:2px
+    style A2 fill:#lightgreen,stroke:#333,stroke-width:2px
+    style A3 fill:#lightgreen,stroke:#333,stroke-width:2px
+```
+**Interactions:** Users interact via CLI entry points. These scripts then initiate the main application logic (training or evaluation). The `__init__.py` files define the package structure and control module imports and exports.

@@ -28,8 +28,9 @@ logging:
   log_file: "training_log.txt"
 wandb:
   enabled: true
-  project: "keisei-shogi"
   entity: null
+  log_model_artifact: false
+
 demo:
   enable_demo_mode: true  # If true, enables demo mode with per-move delay and extra logging
   demo_mode_delay: 0.01     # Delay in seconds between moves in demo mode

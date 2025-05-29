@@ -263,8 +263,15 @@ class ModelManager:
 
             return True
 
+        except KeyboardInterrupt:
+            self.logger_func(f"W&B artifact upload interrupted for {model_path}")
+            return False
         except (OSError, RuntimeError, TypeError, ValueError) as e:
             self.logger_func(f"Error creating W&B artifact for {model_path}: {e}")
+            return False
+        except Exception as e:
+            # Catch any other WandB-related exceptions (network errors, etc.)
+            self.logger_func(f"Unexpected error during W&B artifact upload for {model_path}: {e}")
             return False
 
     def save_final_model(

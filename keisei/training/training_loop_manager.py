@@ -3,6 +3,7 @@
 Manages the main training loop execution, previously part of the Trainer class.
 """
 import time
+import torch  # Add missing torch import
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 if TYPE_CHECKING:

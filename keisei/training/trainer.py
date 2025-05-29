@@ -477,38 +477,26 @@ class Trainer:
             initial_episode_state = self._initialize_game_state(self.log_both)
             self.training_loop_manager.set_initial_episode_state(initial_episode_state)
 
-            # The display.start() context manager should wrap the loop execution
-            # It's currently managed by the TrainingDisplay class itself if it uses a Live display.
-            # If direct management is needed here, it would be: `with self.display.start() as ...:`
-            # For now, assuming display manages its own lifecycle based on its methods.
-            # If display.start() is a context manager that needs to wrap the loop:
-            # with self.display.start() as _:
-            #    self.training_loop_manager.run()
-            # else, if display.start() just initializes and run() handles updates:
-            # self.display.start() # Or similar initialization if needed
-
-            # The TrainingDisplay.start() method in the current `display.py` (not shown here but assumed)
-            # likely sets up the Rich Live display. The TrainingLoopManager will then call
-            # display.update_progress and display.update_log_panel.
-
-            try:
-                self.training_loop_manager.run()  # Delegate the loop execution
-            except KeyboardInterrupt:
-                # This is already logged by TrainingLoopManager, but we ensure finalization.
-                self.log_both(
-                    "Trainer caught KeyboardInterrupt from TrainingLoopManager. Finalizing.",
-                    also_to_wandb=True,
-                )
-            except Exception as e:
-                # This is already logged by TrainingLoopManager.
-                self.log_both(
-                    f"Trainer caught unhandled exception from TrainingLoopManager: {e}. Finalizing.",
-                    also_to_wandb=True,
-                )
-                # Optionally, re-raise if higher-level handling is needed: raise
-            finally:
-                # Finalization is critical and should always run.
-                self._finalize_training(self.log_both)
+            # Start the Rich Live display as a context manager
+            with self.display.start():
+                try:
+                    self.training_loop_manager.run()  # Delegate the loop execution
+                except KeyboardInterrupt:
+                    # This is already logged by TrainingLoopManager, but we ensure finalization.
+                    self.log_both(
+                        "Trainer caught KeyboardInterrupt from TrainingLoopManager. Finalizing.",
+                        also_to_wandb=True,
+                    )
+                except Exception as e:
+                    # This is already logged by TrainingLoopManager.
+                    self.log_both(
+                        f"Trainer caught unhandled exception from TrainingLoopManager: {e}. Finalizing.",
+                        also_to_wandb=True,
+                    )
+                    # Optionally, re-raise if higher-level handling is needed: raise
+                finally:
+                    # Finalization is critical and should always run.
+                    self._finalize_training(self.log_both)
 
     # The @property for model was removed to allow direct assignment to self.model.
     # The instance attribute self.model (Optional[ActorCriticProtocol]) should be used directly.
