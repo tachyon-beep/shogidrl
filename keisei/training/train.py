@@ -6,7 +6,6 @@ Refactored to use the Trainer class for better modularity.
 import argparse
 import multiprocessing
 import sys
-from datetime import datetime
 
 import wandb  # Add wandb import for sweep support
 from keisei.config_schema import AppConfig

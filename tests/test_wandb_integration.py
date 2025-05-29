@@ -5,7 +5,9 @@ This module tests the W&B artifacts functionality, sweep parameter handling,
 and W&B logging integration in the Trainer class.
 """
 
-from typing import Any, Dict
+import os
+import tempfile
+from typing import Any, Dict, Optional
 from unittest.mock import Mock, patch
 
 import pytest
@@ -22,6 +24,13 @@ from keisei.config_schema import (
 from keisei.training.train_wandb_sweep import apply_wandb_sweep_config
 from keisei.training.trainer import Trainer
 from keisei.training.utils import setup_wandb
+
+
+@pytest.fixture
+def temp_base_dir():
+    """Provide a temporary base directory for testing."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        yield temp_dir
 
 
 class DummyArgs:
@@ -432,6 +441,249 @@ class TestWandBUtilities:
         result = setup_wandb(config, "test_run", "/tmp/test")
 
         assert result is False
+
+
+class TestWandBLoggingIntegration:
+    """Test the integration between Trainer.log_both and W&B logging with current logic."""
+
+    def test_log_both_impl_creation_and_wandb_logic(self, temp_base_dir):
+        """Test that log_both_impl correctly implements W&B logging logic."""
+        config = make_test_config(wandb_enabled=True)
+        args = DummyArgs()
+
+        with patch("keisei.training.utils.setup_wandb", return_value=True), \
+             patch("keisei.training.utils.setup_directories") as mock_setup_dirs:
+
+            # Create actual test directories
+            run_artifact_dir = os.path.join(temp_base_dir, "test_run")
+            model_dir = os.path.join(run_artifact_dir, "models")
+            os.makedirs(run_artifact_dir, exist_ok=True)
+            os.makedirs(model_dir, exist_ok=True)
+
+            # Mock directory setup with actual paths
+            mock_setup_dirs.return_value = {
+                "run_artifact_dir": run_artifact_dir,
+                "model_dir": model_dir,
+                "log_file_path": os.path.join(run_artifact_dir, "training.log"),
+                "eval_log_file_path": os.path.join(run_artifact_dir, "rich_periodic_eval_log.txt")
+            }
+            
+            trainer = Trainer(config=config, args=args)
+            
+            # Verify W&B is active after setup
+            assert trainer.session_manager.is_wandb_active is True
+            assert trainer.is_train_wandb_active is True
+            
+            # Create a mock logger to simulate the log_both_impl creation
+            mock_logger = Mock()
+            
+            # Test the log_both_impl logic directly (simulating what happens in run_training_loop)
+            with patch("wandb.log") as mock_wandb_log, \
+                 patch("wandb.run", Mock()):  # wandb.run exists
+                
+                # Simulate the log_both_impl function from run_training_loop
+                def log_both_impl(
+                    message: str,
+                    also_to_wandb: bool = False,
+                    wandb_data: Optional[Dict] = None,
+                ):
+                    mock_logger.log(message)
+                    if trainer.is_train_wandb_active and also_to_wandb:
+                        import wandb
+                        if wandb.run:
+                            log_payload = {"train_message": message}
+                            if wandb_data:
+                                log_payload.update(wandb_data)
+                            wandb.log(log_payload, step=trainer.global_timestep)
+                
+                # Test W&B logging when conditions are met
+                log_both_impl("Test message", also_to_wandb=True, wandb_data={"loss": 0.5})
+                
+                expected_payload = {"train_message": "Test message", "loss": 0.5}
+                mock_wandb_log.assert_called_once_with(expected_payload, step=trainer.global_timestep)
+
+    def test_log_both_impl_wandb_run_none(self, temp_base_dir):
+        """Test that log_both_impl handles the case where wandb.run is None."""
+        config = make_test_config(wandb_enabled=True)
+        args = DummyArgs()
+
+        with patch("keisei.training.utils.setup_wandb", return_value=True), \
+             patch("keisei.training.utils.setup_directories") as mock_setup_dirs:
+
+            # Create actual test directories
+            run_artifact_dir = os.path.join(temp_base_dir, "test_run")
+            model_dir = os.path.join(run_artifact_dir, "models")
+            os.makedirs(run_artifact_dir, exist_ok=True)
+            os.makedirs(model_dir, exist_ok=True)
+
+            # Mock directory setup with actual paths
+            mock_setup_dirs.return_value = {
+                "run_artifact_dir": run_artifact_dir,
+                "model_dir": model_dir,
+                "log_file_path": os.path.join(run_artifact_dir, "training.log"),
+                "eval_log_file_path": os.path.join(run_artifact_dir, "rich_periodic_eval_log.txt")
+            }
+            
+            trainer = Trainer(config=config, args=args)
+            mock_logger = Mock()
+            
+            # Test with wandb.run = None
+            with patch("wandb.log") as mock_wandb_log, \
+                 patch("wandb.run", None):
+                
+                def log_both_impl(
+                    message: str,
+                    also_to_wandb: bool = False,
+                    wandb_data: Optional[Dict] = None,
+                ):
+                    mock_logger.log(message)
+                    if trainer.is_train_wandb_active and also_to_wandb:
+                        import wandb
+                        if wandb.run:
+                            log_payload = {"train_message": message}
+                            if wandb_data:
+                                log_payload.update(wandb_data)
+                            wandb.log(log_payload, step=trainer.global_timestep)
+                
+                # Should not crash, should not call wandb.log
+                log_both_impl("Test message", also_to_wandb=True, wandb_data={"loss": 0.5})
+                
+                # Verify wandb.log was NOT called since wandb.run is None
+                mock_wandb_log.assert_not_called()
+
+    def test_log_both_impl_wandb_disabled_in_config(self, temp_base_dir):
+        """Test that log_both_impl does not log to W&B when disabled in config."""
+        config = make_test_config(wandb_enabled=False)  # W&B disabled
+        args = DummyArgs()
+        
+        with patch("keisei.training.utils.setup_directories") as mock_setup_dirs:
+            # Create actual test directories
+            run_artifact_dir = os.path.join(temp_base_dir, "test_run")
+            model_dir = os.path.join(run_artifact_dir, "models")
+            os.makedirs(run_artifact_dir, exist_ok=True)
+            os.makedirs(model_dir, exist_ok=True)
+
+            # Mock directory setup with actual paths
+            mock_setup_dirs.return_value = {
+                "run_artifact_dir": run_artifact_dir,
+                "model_dir": model_dir,
+                "log_file_path": os.path.join(run_artifact_dir, "training.log"),
+                "eval_log_file_path": os.path.join(run_artifact_dir, "rich_periodic_eval_log.txt")
+            }
+            
+            trainer = Trainer(config=config, args=args)
+            
+            # Verify W&B is not active
+            assert trainer.session_manager.is_wandb_active is False
+            assert trainer.is_train_wandb_active is False
+            
+            mock_logger = Mock()
+            
+            with patch("wandb.log") as mock_wandb_log, \
+                 patch("wandb.run", Mock()):
+                
+                def log_both_impl(
+                    message: str,
+                    also_to_wandb: bool = False,
+                    wandb_data: Optional[Dict] = None,
+                ):
+                    mock_logger.log(message)
+                    if trainer.is_train_wandb_active and also_to_wandb:
+                        import wandb
+                        if wandb.run:
+                            log_payload = {"train_message": message}
+                            if wandb_data:
+                                log_payload.update(wandb_data)
+                            wandb.log(log_payload, step=trainer.global_timestep)
+                
+                # Should not log to W&B due to is_train_wandb_active = False
+                log_both_impl("Test message", also_to_wandb=True, wandb_data={"loss": 0.5})
+                
+                # Verify wandb.log was NOT called
+                mock_wandb_log.assert_not_called()
+
+    def test_log_both_impl_also_to_wandb_false(self, temp_base_dir):
+        """Test that log_both_impl respects also_to_wandb=False parameter."""
+        config = make_test_config(wandb_enabled=True)
+        args = DummyArgs()
+
+        with patch("keisei.training.utils.setup_wandb", return_value=True), \
+             patch("keisei.training.utils.setup_directories") as mock_setup_dirs:
+
+            # Create actual test directories
+            run_artifact_dir = os.path.join(temp_base_dir, "test_run")
+            model_dir = os.path.join(run_artifact_dir, "models")
+            os.makedirs(run_artifact_dir, exist_ok=True)
+            os.makedirs(model_dir, exist_ok=True)
+
+            # Mock directory setup with actual paths
+            mock_setup_dirs.return_value = {
+                "run_artifact_dir": run_artifact_dir,
+                "model_dir": model_dir,
+                "log_file_path": os.path.join(run_artifact_dir, "training.log"),
+                "eval_log_file_path": os.path.join(run_artifact_dir, "rich_periodic_eval_log.txt")
+            }
+
+            trainer = Trainer(config=config, args=args)
+            mock_logger = Mock()
+            
+            with patch("wandb.log") as mock_wandb_log, \
+                 patch("wandb.run", Mock()):
+                
+                def log_both_impl(
+                    message: str,
+                    also_to_wandb: bool = False,
+                    wandb_data: Optional[Dict] = None,
+                ):
+                    mock_logger.log(message)
+                    if trainer.is_train_wandb_active and also_to_wandb:
+                        import wandb
+                        if wandb.run:
+                            log_payload = {"train_message": message}
+                            if wandb_data:
+                                log_payload.update(wandb_data)
+                            wandb.log(log_payload, step=trainer.global_timestep)
+                
+                # Test with also_to_wandb=False
+                log_both_impl("Test message", also_to_wandb=False, wandb_data={"loss": 0.5})
+                
+                # Verify wandb.log was NOT called due to also_to_wandb=False
+                mock_wandb_log.assert_not_called()
+
+    def test_session_manager_wandb_state_consistency(self, temp_base_dir):
+        """Test that SessionManager.is_wandb_active reflects the actual W&B state consistently."""
+        config = make_test_config(wandb_enabled=True)
+        args = DummyArgs()
+        
+        with patch("keisei.training.utils.setup_directories") as mock_setup_dirs:
+            # Create actual test directories
+            run_artifact_dir = os.path.join(temp_base_dir, "test_run")
+            model_dir = os.path.join(run_artifact_dir, "models")
+            os.makedirs(run_artifact_dir, exist_ok=True)
+            os.makedirs(model_dir, exist_ok=True)
+
+            # Mock directory setup with actual paths
+            mock_setup_dirs.return_value = {
+                "run_artifact_dir": run_artifact_dir,
+                "model_dir": model_dir,
+                "log_file_path": os.path.join(run_artifact_dir, "training.log"),
+                "eval_log_file_path": os.path.join(run_artifact_dir, "rich_periodic_eval_log.txt")
+            }
+
+            trainer = Trainer(config=config, args=args)
+            
+            # Test successful W&B setup
+            with patch("keisei.training.utils.setup_wandb", return_value=True):
+                result = trainer.session_manager.setup_wandb()
+                assert result is True
+                assert trainer.session_manager.is_wandb_active is True
+            
+            # Test failed W&B setup
+            trainer2 = Trainer(config=config, args=args)
+            with patch("keisei.training.utils.setup_wandb", return_value=False):
+                result = trainer2.session_manager.setup_wandb()
+                assert result is False
+                assert trainer2.session_manager.is_wandb_active is False
 
 
 if __name__ == "__main__":

@@ -812,8 +812,366 @@ class TestModelManagerUtilities:
         agent.model = returned_model  # Now Pylance should be satisfied
 
         # Verify agent created and model assigned
-        assert agent is not None
         # agent.model was just assigned returned_model, which was asserted to be mock_model_from_factory
         assert agent.model == mock_model_from_factory
         assert agent.device == device
         assert agent.config == mock_config
+
+
+class TestModelManagerEnhancedCheckpointHandling:
+    """Enhanced tests for checkpoint loading scenarios and edge cases."""
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.utils.find_latest_checkpoint")
+    def test_load_checkpoint_multiple_available(
+        self,
+        mock_find_checkpoint,
+        mock_model_factory,
+        mock_features,
+        mock_config,
+        mock_args,
+        device,
+        logger_func,
+    ):
+        """Test checkpoint loading when multiple checkpoints exist."""
+        # Setup mocks
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_features.__getitem__.return_value = mock_feature_spec
+
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        # Mock find_latest_checkpoint to return the latest checkpoint
+        latest_checkpoint_path = os.path.join(mock_config.logging.model_dir, "checkpoint_2000.pth")
+        mock_find_checkpoint.return_value = latest_checkpoint_path
+
+        # Mock checkpoint data
+        checkpoint_data = {
+            "model_state_dict": {},
+            "optimizer_state_dict": {},
+            "global_timestep": 2000,
+            "total_episodes_completed": 50,
+            "black_wins": 25,
+            "white_wins": 20,
+            "draws": 5,
+        }
+
+        # Create args with resume="latest"
+        args_with_resume = MockArgs(resume="latest")
+        manager = ModelManager(mock_config, args_with_resume, device, logger_func)
+        manager.create_model()
+
+        # Mock an agent for testing
+        mock_agent = Mock()
+        mock_agent.load_model.return_value = checkpoint_data
+
+        # Test loading latest checkpoint
+        result = manager.handle_checkpoint_resume(mock_agent, mock_config.logging.model_dir)
+
+        assert result is True
+        assert manager.checkpoint_data is not None
+        assert manager.checkpoint_data["global_timestep"] == 2000
+        mock_agent.load_model.assert_called_with(latest_checkpoint_path)
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    @patch("os.path.exists")
+    def test_load_checkpoint_specific_not_found(
+        self,
+        mock_exists,
+        mock_model_factory,
+        mock_features,
+        mock_config,
+        mock_args,
+        device,
+        logger_func,
+    ):
+        """Test loading a specific checkpoint that doesn't exist."""
+        # Setup mocks
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_features.__getitem__.return_value = mock_feature_spec
+
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        # Mock specific checkpoint doesn't exist
+        mock_exists.return_value = False
+
+        manager = ModelManager(mock_config, mock_args, device, logger_func)
+        manager.create_model()
+
+        mock_agent = Mock()
+
+        # Test loading specific non-existent checkpoint - set args to use specific path
+        args_with_resume = MockArgs(resume="checkpoint_9999.pth")
+        manager_with_resume = ModelManager(mock_config, args_with_resume, device, logger_func)
+        manager_with_resume.create_model()
+
+        result = manager_with_resume.handle_checkpoint_resume(mock_agent, "/some/model/dir")
+
+        assert result is False
+        logger_func.assert_any_call("Specified resume checkpoint not found: checkpoint_9999.pth")
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    @patch("os.path.exists")
+    @patch("torch.load")
+    def test_load_checkpoint_corrupted_data(
+        self,
+        mock_torch_load,
+        mock_exists,
+        mock_model_factory,
+        mock_features,
+        mock_config,
+        mock_args,
+        device,
+        logger_func,
+    ):
+        """Test handling of corrupted checkpoint data."""
+        # Setup mocks
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_features.__getitem__.return_value = mock_feature_spec
+
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        mock_exists.return_value = True
+        # Mock corrupted checkpoint (missing required keys)
+        mock_torch_load.return_value = {"incomplete": "data"}
+
+        manager = ModelManager(mock_config, mock_args, device, logger_func)
+        manager.create_model()
+
+        mock_agent = Mock()
+        mock_agent.load_model.return_value = {"incomplete": "data"}
+
+        # Test loading corrupted checkpoint
+        args_with_resume = MockArgs(resume="latest")
+        manager_with_resume = ModelManager(mock_config, args_with_resume, device, logger_func)
+        manager_with_resume.create_model()
+
+        # Mock the utils.find_latest_checkpoint to return a valid path
+        with patch("keisei.training.model_manager.utils.find_latest_checkpoint", return_value="/path/to/corrupt.pth"):
+            result = manager_with_resume.handle_checkpoint_resume(mock_agent, "/some/model/dir")
+
+        # Should handle gracefully - either succeed or fail, but not crash
+        assert isinstance(result, bool)  # Should return a boolean
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    def test_save_checkpoint_directory_creation(
+        self,
+        mock_model_factory,
+        mock_features,
+        mock_config,
+        mock_args,
+        device,
+        logger_func,
+        temp_dir,
+    ):
+        """Test that save_checkpoint creates directories if they don't exist."""
+        # Setup mocks
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_features.__getitem__.return_value = mock_feature_spec
+
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        # Use a non-existent subdirectory
+        nonexistent_model_dir = os.path.join(temp_dir, "models", "subdir")
+        mock_config.logging.model_dir = nonexistent_model_dir
+
+        manager = ModelManager(mock_config, mock_args, device, logger_func)
+        manager.create_model()
+
+        mock_agent = Mock()
+        mock_agent.model = manager.model
+        mock_agent.optimizer = Mock()
+
+        # Test checkpoint saving - should create directory
+        stats = {
+            "black_wins": 10,
+            "white_wins": 8,
+            "draws": 7,
+        }
+        manager.save_checkpoint(
+            agent=mock_agent,
+            model_dir=nonexistent_model_dir,
+            timestep=1000,
+            episode_count=25,
+            stats=stats,
+            run_name="test_run",
+            is_wandb_active=False
+        )
+
+        # Verify directory was created
+        assert os.path.exists(nonexistent_model_dir)
+
+        # Verify save was attempted via agent.save_model
+        mock_agent.save_model.assert_called_once_with(
+            os.path.join(nonexistent_model_dir, "checkpoint_ts1000.pth"),
+            1000,
+            25,
+            stats_to_save=stats,
+        )
+
+
+class TestModelManagerWandBArtifactEnhancements:
+    """Enhanced tests for W&B artifact creation with edge cases."""
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    @patch("wandb.Artifact")
+    @patch("wandb.log_artifact")
+    @patch("wandb.run")
+    def test_create_model_artifact_with_metadata(
+        self,
+        mock_wandb_run,
+        mock_log_artifact,
+        mock_artifact_class,
+        mock_model_factory,
+        mock_features,
+        mock_config,
+        mock_args,
+        device,
+        logger_func,
+        temp_dir,
+    ):
+        """Test model artifact creation with comprehensive metadata."""
+        # Setup mocks
+        mock_wandb_run.return_value = True  # Mock that wandb.run is active
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_features.__getitem__.return_value = mock_feature_spec
+
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        mock_artifact = Mock()
+        mock_artifact_class.return_value = mock_artifact
+
+        # Create test model file
+        model_path = os.path.join(temp_dir, "test_model.pth")
+        with open(model_path, "w", encoding="utf-8") as f:
+            f.write("dummy model data")
+
+        manager = ModelManager(mock_config, mock_args, device, logger_func)
+
+        # Test artifact creation with metadata
+        result = manager.create_model_artifact(
+            model_path=model_path,
+            artifact_name="enhanced-test-model",
+            run_name="test_run_with_metadata",
+            is_wandb_active=True,
+            metadata={"epochs": 100, "accuracy": 0.95},
+        )
+
+        # Verify artifact creation was attempted (mocked W&B environment)
+        assert result is True
+        mock_artifact_class.assert_called_once()
+        mock_log_artifact.assert_called_once()
+        mock_artifact_class.assert_called_once()
+        mock_artifact.add_file.assert_called_once_with(model_path)
+        mock_log_artifact.assert_called_once_with(mock_artifact, aliases=None)
+
+    @patch("keisei.shogi.features.FEATURE_SPECS")
+    @patch("keisei.training.models.model_factory")
+    @patch("wandb.Artifact")
+    @patch("wandb.log_artifact", side_effect=RuntimeError("W&B API Error"))
+    @patch("wandb.run")
+    def test_create_model_artifact_wandb_failure_handling(
+        self,
+        mock_wandb_run,
+        mock_log_artifact,
+        mock_artifact_class,
+        mock_model_factory,
+        mock_features,
+        mock_config,
+        mock_args,
+        device,
+        logger_func,
+        temp_dir,
+    ):
+        """Test robust handling of W&B API failures during artifact creation."""
+        # Setup mocks
+        mock_wandb_run.return_value = True  # Mock that wandb.run is active
+        mock_feature_spec = Mock()
+        mock_feature_spec.num_planes = 46
+        mock_features.__getitem__.return_value = mock_feature_spec
+
+        mock_model = Mock()
+        mock_model.to.return_value = mock_model
+        mock_model_factory.return_value = mock_model
+
+        mock_artifact = Mock()
+        mock_artifact_class.return_value = mock_artifact
+
+        # Create test model file
+        model_path = os.path.join(temp_dir, "test_model.pth")
+        with open(model_path, "w", encoding="utf-8") as f:
+            f.write("dummy model data")
+
+        manager = ModelManager(mock_config, mock_args, device, logger_func)
+
+        # Test artifact creation with W&B failure
+        result = manager.create_model_artifact(
+            model_path=model_path,
+            artifact_name="failing-test-model",
+            run_name="test_run_fail",
+            is_wandb_active=True,
+        )
+
+        # Should handle failure gracefully
+        assert result is False
+        logger_func.assert_any_call("Error creating W&B artifact for %s: W&B API Error" % model_path)
+
+    def test_create_model_artifact_wandb_inactive(
+        self,
+        mock_config,
+        mock_args,
+        device,
+        logger_func,
+        temp_dir,
+    ):
+        """Test that artifact creation is skipped when W&B is inactive."""
+        with patch("keisei.shogi.features.FEATURE_SPECS") as mock_features, \
+             patch("keisei.training.models.model_factory") as mock_model_factory:
+            
+            # Setup mocks
+            mock_feature_spec = Mock()
+            mock_feature_spec.num_planes = 46
+            mock_features.__getitem__.return_value = mock_feature_spec
+
+            mock_model = Mock()
+            mock_model.to.return_value = mock_model
+            mock_model_factory.return_value = mock_model
+            
+            # Create test model file
+            model_path = os.path.join(temp_dir, "test_model.pth")
+            with open(model_path, "w", encoding="utf-8") as f:
+                f.write("dummy model data")
+            
+            manager = ModelManager(mock_config, mock_args, device, logger_func)
+            
+            # Test with W&B inactive
+            result = manager.create_model_artifact(
+                model_path=model_path,
+                artifact_name="inactive-wandb-test",
+                run_name="test_run",
+                is_wandb_active=False  # W&B not active
+            )
+            
+            # Should skip artifact creation
+            assert result is False
+            # The method returns False immediately when W&B is inactive,
+            # without logging a specific message

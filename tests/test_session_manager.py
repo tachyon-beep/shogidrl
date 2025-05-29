@@ -6,6 +6,8 @@ initialization, lifecycle management (directory, WandB setup, config saving),
 logging, and error handling.
 """
 
+import os
+import tempfile
 from unittest.mock import MagicMock, Mock, mock_open, patch
 
 import pytest
@@ -100,6 +102,166 @@ def mock_app_config():
 def mock_cli_args():
     """Create mock command-line arguments."""
     return MockArgs(resume=None)
+
+
+@pytest.fixture
+def temp_base_dir():
+    """Create a temporary directory for testing directory operations."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        yield tmpdir
+
+
+# Enhanced Unit Tests for SessionManager
+class TestSessionManagerDirectoryOperations:
+    """Test SessionManager directory creation and path handling robustness."""
+
+    def test_directory_setup_creates_missing_directories(
+        self, mock_app_config, mock_cli_args, temp_base_dir
+    ):
+        """Test that directory setup correctly creates all necessary directories."""
+        run_artifact_path = os.path.join(temp_base_dir, "run_artifacts", "test_run")
+        models_path = os.path.join(run_artifact_path, "models")
+
+        def mock_setup_directories_side_effect(config, run_name):
+            """Mock side effect that creates directories like the real function."""
+            os.makedirs(run_artifact_path, exist_ok=True)
+            os.makedirs(models_path, exist_ok=True)
+            return {
+                "run_artifact_dir": run_artifact_path,
+                "model_dir": models_path,
+                "log_file_path": os.path.join(run_artifact_path, "training.log"),
+                "eval_log_file_path": os.path.join(run_artifact_path, "rich_periodic_eval_log.txt"),
+            }
+
+        with patch(
+            "keisei.training.utils.setup_directories",
+            side_effect=mock_setup_directories_side_effect,
+        ):
+            manager = SessionManager(mock_app_config, mock_cli_args, run_name="test_run")
+            manager.setup_directories()
+
+            # Verify directories were created
+            assert os.path.exists(run_artifact_path)
+            assert os.path.exists(models_path)
+
+            # Verify SessionManager properties work
+            assert manager.run_artifact_dir == run_artifact_path
+            assert manager.model_dir == models_path
+
+    def test_save_effective_config_with_missing_directory(
+        self, mock_app_config, mock_cli_args, temp_base_dir
+    ):
+        """Test that save_effective_config handles missing run_artifact_dir correctly."""
+        run_artifact_path = os.path.join(temp_base_dir, "nonexistent", "test_run")
+
+        def mock_setup_directories_side_effect(config, run_name):
+            """Mock that doesn't create the directory initially."""
+            return {
+                "run_artifact_dir": run_artifact_path,
+                "model_dir": os.path.join(run_artifact_path, "models"),
+                "log_file_path": os.path.join(run_artifact_path, "training.log"),
+                "eval_log_file_path": os.path.join(run_artifact_path, "rich_periodic_eval_log.txt"),
+            }
+
+        def mock_serialize_config(config):
+            """Mock config serialization."""
+            return {"mocked": "config"}
+
+        with patch(
+            "keisei.training.utils.setup_directories",
+            side_effect=mock_setup_directories_side_effect,
+        ), patch(
+            "keisei.training.utils.serialize_config", side_effect=mock_serialize_config
+        ), patch("builtins.open", mock_open()) as mock_file:
+
+            manager = SessionManager(mock_app_config, mock_cli_args, run_name="test_run")
+            manager.setup_directories()
+
+            # Ensure the directory doesn't exist initially
+            assert not os.path.exists(run_artifact_path)
+
+            # This should create the directory and save the config
+            manager.save_effective_config()
+
+            # Verify directory was created
+            assert os.path.exists(run_artifact_path)
+
+            # Verify file was opened for writing
+            expected_config_path = os.path.join(run_artifact_path, "effective_config.json")
+            mock_file.assert_called_with(expected_config_path, "w", encoding="utf-8")
+
+    def test_wandb_enabled_directory_consistency(
+        self, mock_app_config, mock_cli_args, temp_base_dir
+    ):
+        """Test that W&B enabled/disabled scenarios maintain directory consistency."""
+        # Test with W&B enabled
+        mock_app_config.wandb.enabled = True
+        run_artifact_path = os.path.join(temp_base_dir, "wandb_test_run")
+
+        def mock_setup_directories_wandb(config, run_name):
+            os.makedirs(run_artifact_path, exist_ok=True)
+            return {
+                "run_artifact_dir": run_artifact_path,
+                "model_dir": os.path.join(run_artifact_path, "models"),
+                "log_file_path": os.path.join(run_artifact_path, "training.log"),
+                "eval_log_file_path": os.path.join(run_artifact_path, "rich_periodic_eval_log.txt"),
+            }
+
+        def mock_setup_wandb_success(config, run_name, run_artifact_dir):
+            return True
+
+        with patch(
+            "keisei.training.utils.setup_directories",
+            side_effect=mock_setup_directories_wandb,
+        ), patch(
+            "keisei.training.utils.setup_wandb", side_effect=mock_setup_wandb_success
+        ):
+            manager = SessionManager(mock_app_config, mock_cli_args, run_name="wandb_test")
+            manager.setup_directories()
+            wandb_result = manager.setup_wandb()
+
+            assert wandb_result is True
+            assert manager.is_wandb_active is True
+            assert os.path.exists(run_artifact_path)
+
+    def test_multiple_session_managers_different_directories(
+        self, mock_app_config, mock_cli_args, temp_base_dir
+    ):
+        """Test that multiple SessionManager instances can coexist with different directories."""
+        run1_path = os.path.join(temp_base_dir, "run1")
+        run2_path = os.path.join(temp_base_dir, "run2")
+
+        def mock_setup_run1(config, run_name):
+            os.makedirs(run1_path, exist_ok=True)
+            return {
+                "run_artifact_dir": run1_path,
+                "model_dir": os.path.join(run1_path, "models"),
+                "log_file_path": os.path.join(run1_path, "training.log"),
+                "eval_log_file_path": os.path.join(run1_path, "rich_periodic_eval_log.txt"),
+            }
+
+        def mock_setup_run2(config, run_name):
+            os.makedirs(run2_path, exist_ok=True)
+            return {
+                "run_artifact_dir": run2_path,
+                "model_dir": os.path.join(run2_path, "models"),
+                "log_file_path": os.path.join(run2_path, "training.log"),
+                "eval_log_file_path": os.path.join(run2_path, "rich_periodic_eval_log.txt"),
+            }
+
+        with patch("keisei.training.utils.setup_directories", side_effect=mock_setup_run1):
+            manager1 = SessionManager(mock_app_config, mock_cli_args, run_name="run1")
+            manager1.setup_directories()
+
+        with patch("keisei.training.utils.setup_directories", side_effect=mock_setup_run2):
+            manager2 = SessionManager(mock_app_config, mock_cli_args, run_name="run2")
+            manager2.setup_directories()
+
+        # Verify both managers have different, correct paths
+        assert manager1.run_artifact_dir == run1_path
+        assert manager2.run_artifact_dir == run2_path
+        assert os.path.exists(run1_path)
+        assert os.path.exists(run2_path)
 
 
 # Unit Tests for SessionManager

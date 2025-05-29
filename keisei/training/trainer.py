@@ -5,7 +5,6 @@ trainer.py: Contains the Trainer class for managing the Shogi RL training loop (
 import json
 import os
 import sys
-import time
 from datetime import datetime
 from typing import (  # pylint: disable=unused-import
     TYPE_CHECKING,
@@ -31,9 +30,7 @@ from keisei.core.experience_buffer import ExperienceBuffer
 # Backwards compatibility imports for tests (these classes are now used in managers)
 from keisei.core.ppo_agent import PPOAgent
 from keisei.evaluation.evaluate import execute_full_evaluation_run
-from keisei.shogi import ShogiGame
 from keisei.utils import (
-    PolicyOutputMapper,
     TrainingLogger,
 )
 
