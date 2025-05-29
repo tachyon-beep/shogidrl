@@ -6,7 +6,7 @@ from typing import Optional, TypedDict, Union
 
 from keisei.core.ppo_agent import PPOAgent
 from keisei.shogi.shogi_core_definitions import MoveTuple
-from keisei.utils import BaseOpponent, EvaluationLogger
+from keisei.utils import BaseOpponent, EvaluationLogger, PolicyOutputMapper
 
 
 class ResultsDict(TypedDict):
@@ -53,8 +53,10 @@ def run_evaluation_loop(
             if not legal_moves:
                 game.game_over = True
                 break
-            # Always pass a dummy legal_mask tensor (all ones) for select_action
-            legal_mask = torch.ones(len(legal_moves), dtype=torch.bool)
+            # Create proper legal mask using PolicyOutputMapper  
+            policy_mapper = PolicyOutputMapper()
+            device = agent_to_eval.device  # Use agent's device for consistency
+            legal_mask = policy_mapper.get_legal_mask(legal_moves, device)
             move = None  # type: ignore
             if game.current_player == 0:  # Sente (Black) - agent
                 move_tuple = agent_to_eval.select_action(
