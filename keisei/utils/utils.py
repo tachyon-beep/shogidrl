@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import logging
 import os
 import sys
 from abc import ABC, abstractmethod
@@ -309,12 +310,14 @@ class PolicyOutputMapper:
             try:
                 idx = self.shogi_move_to_policy_index(move)
                 mask[idx] = True
-            except ValueError:
-                # This can happen if a move from the game isn't in the mapper.
-                # This should ideally not occur if the mapper covers all possible moves
-                # and the game generates valid moves.
-                # Consider logging this if it becomes an issue.
-                pass  # Ignore moves not recognized by the mapper for now.
+            except ValueError as e:
+                # Hard crash on unmapped moves to prevent corrupted experiments
+                raise ValueError(
+                    f"CRITICAL: Legal move {move} could not be mapped to policy index. "
+                    f"This indicates incomplete move coverage in PolicyOutputMapper which will corrupt experiments. "
+                    f"Original error: {e}"
+                ) from e
+        
         return mask
 
     def _usi_sq(self, r: int, c: int) -> str:

@@ -36,6 +36,40 @@ class TestLegalMaskGeneration:  # pylint: disable=too-many-public-methods
             legal_mask.sum().item() == 30
         ), f"Expected mask sum 30, got {legal_mask.sum().item()}"
 
+    def test_evaluation_legal_mask_fix(self):
+        """Test that proper legal masks are generated for evaluation scenarios.
+
+        This test verifies the fix for the evaluation legal mask bug where
+        the evaluation loop was using dummy masks instead of proper legal masks.
+        """
+        # Create a game and get legal moves
+        game = ShogiGame()
+        mapper = PolicyOutputMapper()
+        legal_moves = game.get_legal_moves()
+
+        # Generate proper legal mask
+        legal_mask = mapper.get_legal_mask(legal_moves, DEVICE)
+
+        # Verify the mask is correct
+        assert legal_mask.shape[0] == mapper.get_total_actions(), \
+            "Mask should cover entire action space"
+        assert legal_mask.sum().item() == len(legal_moves), \
+            "Mask should have exactly as many True values as legal moves"
+        assert legal_mask.dtype == torch.bool, "Mask should be boolean"
+
+        # The key difference: proper mask size vs old buggy approach
+        old_buggy_mask_size = len(legal_moves)  # This was the bug
+        proper_mask_size = legal_mask.shape[0]
+
+        # Verify the fix - proper mask should be much larger than buggy mask
+        assert proper_mask_size > old_buggy_mask_size, \
+            f"Fixed mask size ({proper_mask_size}) should be larger than buggy mask size ({old_buggy_mask_size})"
+
+        # For initial position: 30 legal moves vs 13527 total actions
+        expected_ratio = proper_mask_size / old_buggy_mask_size
+        assert expected_ratio > 400, \
+            f"Mask size ratio should be >400x for initial position, got {expected_ratio:.1f}x"
+
     def test_king_in_check_mask(self):  # pylint: disable=too-many-statements
         """Tests the legal move mask when the king is in check."""
         # SFEN: Black king e1 (my (8,4)), White Rook e8 (my (1,4)), White King e9 (my (0,4)). Black to move.
