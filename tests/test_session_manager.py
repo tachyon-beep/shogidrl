@@ -4,10 +4,8 @@ test_session_management.py: Comprehensive tests for SessionManager and its integ
 This file covers the standalone unit tests for the SessionManager class, including
 initialization, lifecycle management (directory, WandB setup, config saving),
 logging, and error handling.
-
-It also includes integration tests to verify that the Trainer class correctly
-utilizes the SessionManager for all session-related tasks.
 """
+
 from unittest.mock import Mock, patch, mock_open, MagicMock
 
 import pytest
@@ -298,7 +296,7 @@ class TestSessionManagerLoggingAndSummary:
         """Test the content of session info logging."""
         manager = SessionManager(mock_app_config, mock_cli_args, run_name="log_test")
         manager._run_artifact_dir = "/tmp/log_test_dir"  # pylint: disable=protected-access
-        manager._is_wandb_active = False               # pylint: disable=protected-access
+        manager._is_wandb_active = False              # pylint: disable=protected-access
 
         logged_messages = []
         def mock_logger(msg):
@@ -336,76 +334,70 @@ class TestTrainerIntegration:
     """Test the integration of SessionManager within the Trainer class."""
 
     @pytest.fixture
-    def setup_trainer_mocks(self):
+    def setup_trainer_mocks(self, mock_app_config):
         """A fixture to set up all necessary mocks for Trainer initialization."""
+        # Use autospec=True to ensure mocks have the same signature as the real methods.
         # Patch where modules are LOOKED UP, not where they are defined.
-        with patch("keisei.training.env_manager.ShogiGame") as mock_shogi_game_class, \
-             patch("keisei.training.env_manager.PolicyOutputMapper") as mock_policy_mapper_class, \
-             patch("keisei.training.models.model_factory") as mock_model_factory_for_mm, \
-             patch("keisei.training.trainer.PPOAgent") as mock_ppo_agent_in_trainer, \
+        with patch("keisei.training.env_manager.ShogiGame", autospec=True) as mock_shogi_game_class, \
+             patch("keisei.training.env_manager.PolicyOutputMapper", autospec=True) as mock_policy_mapper_class, \
+             patch("keisei.training.models.model_factory", autospec=True) as mock_model_factory, \
+             patch("keisei.training.trainer.PPOAgent", autospec=True) as mock_ppo_agent_class, \
              patch("keisei.shogi.features.FEATURE_SPECS", new_callable=dict) as mock_feature_specs, \
-             patch("keisei.training.session_manager.SessionManager.setup_directories") as mock_setup_dirs, \
-             patch("keisei.training.session_manager.SessionManager.setup_wandb") as mock_setup_wandb, \
-             patch("keisei.training.session_manager.SessionManager.save_effective_config") as mock_save_config, \
-             patch("keisei.training.session_manager.SessionManager.setup_seeding") as mock_setup_seeding, \
-             patch("keisei.training.session_manager.SessionManager._generate_run_name") as mock_generate_run_name, \
+             patch("keisei.training.session_manager.SessionManager.setup_directories", autospec=True) as mock_setup_dirs, \
+             patch("keisei.training.session_manager.SessionManager.setup_wandb", autospec=True) as mock_setup_wandb, \
+             patch("keisei.training.session_manager.SessionManager.save_effective_config", autospec=True) as mock_save_config, \
+             patch("keisei.training.session_manager.SessionManager.setup_seeding", autospec=True) as mock_setup_seeding, \
+             patch("keisei.training.session_manager.generate_run_name", return_value="mocked_auto_run_name") as mock_gen_name, \
              patch("builtins.open", new_callable=mock_open), \
              patch("os.path.join", side_effect=lambda *args: "/".join(args)), \
              patch("glob.glob", return_value=[]), \
              patch("os.path.exists", return_value=True):
 
-            # Mocks for EnvManager dependencies
-            mock_game_instance = Mock(name="MockShogiGameInstance")
-            mock_game_instance.seed = Mock()
-            # EnvManager's get_observation will be called by Trainer via EnvManager.initialize_game_state -> game.reset -> game.get_observation
+            # --- Mock SessionManager side effects ---
+            def mock_setup_directories_impl(session_manager_self):
+                dirs = {
+                    "run_artifact_dir": "/tmp/trainer_run",
+                    "model_dir": "/tmp/trainer_run/models",
+                    "log_file_path": "/tmp/trainer_run/training.log",
+                    "eval_log_file_path": "/tmp/trainer_run/eval.log",
+                }
+                session_manager_self._run_artifact_dir = dirs["run_artifact_dir"]
+                session_manager_self._model_dir = dirs["model_dir"]
+                session_manager_self._log_file_path = dirs["log_file_path"]
+                session_manager_self._eval_log_file_path = dirs["eval_log_file_path"]
+                return dirs
+
+            def mock_setup_wandb_impl(session_manager_self):
+                session_manager_self._is_wandb_active = False
+                return False
+
+            mock_setup_dirs.side_effect = mock_setup_directories_impl
+            mock_setup_wandb.side_effect = mock_setup_wandb_impl
+
+            # --- Mock other dependencies ---
+            mock_game_instance = mock_shogi_game_class.return_value
             mock_game_instance.get_observation.return_value = Mock(name="MockObservation")
-            mock_game_instance.reset.return_value = mock_game_instance.get_observation.return_value # reset returns observation
-            mock_shogi_game_class.return_value = mock_game_instance
-            
-            mock_mapper_instance = Mock(name="MockPolicyMapperInstance")
-            mock_mapper_instance.get_total_actions.return_value = 13527 # From mock_app_config
-            mock_policy_mapper_class.return_value = mock_mapper_instance
+            mock_game_instance.reset.return_value = mock_game_instance.get_observation.return_value
 
-            # Mocks for ModelManager dependencies
-            mock_model_instance = Mock(name="MockModelInstance")
+            mock_policy_mapper_class.return_value.get_total_actions.return_value = mock_app_config.env.num_actions_total
+
+            mock_model_instance = mock_model_factory.return_value
             mock_model_instance.to.return_value = mock_model_instance
-            mock_model_factory_for_mm.return_value = mock_model_instance
-            
-            # Mock for FEATURE_SPECS used by ModelManager
-            mock_feature_spec_item = Mock()
-            mock_feature_spec_item.num_planes = 46 # from mock_app_config
-            mock_feature_specs["core46"] = mock_feature_spec_item
+            mock_feature_specs["core46"] = Mock(num_planes=mock_app_config.env.input_channels)
 
+            # FIX: Configure the PPOAgent mock instance with a 'name' attribute
+            mock_agent_instance = mock_ppo_agent_class.return_value
+            mock_agent_instance.model = mock_model_instance
+            mock_agent_instance.name = "TestAgent"
 
-            # Common return values for SessionManager mocks
-            mock_setup_dirs.return_value = {
-                "run_artifact_dir": "/tmp/trainer_run",
-                "model_dir": "/tmp/trainer_run/models",
-                "log_file_path": "/tmp/trainer_run/training.log",
-                "eval_log_file_path": "/tmp/trainer_run/eval.log",
-            }
-            mock_setup_wandb.return_value = False # Corresponds to is_train_wandb_active = False
-            mock_generate_run_name.return_value = "mocked_auto_run_name"
-
-
-            # Mock for PPOAgent created in Trainer
-            mock_agent_created_by_trainer = Mock(name="TestAgent")
-            # PPOAgent constructor creates a default model, then Trainer replaces it.
-            # So, the mock_ppo_agent_in_trainer.return_value should have a 'model' attribute.
-            mock_agent_created_by_trainer.model = mock_model_instance
-            mock_ppo_agent_in_trainer.return_value = mock_agent_created_by_trainer
-
-
+            # Yield all necessary mocks for assertions in the tests.
             yield {
-                "setup_dirs": mock_setup_dirs,
-                "setup_wandb": mock_setup_wandb,
-                "save_config": mock_save_config, # Changed from serialize
-                "setup_seeding": mock_setup_seeding,
-                "generate_run_name": mock_generate_run_name,
-                "mock_ppo_agent": mock_ppo_agent_in_trainer,
-                "mock_model_factory": mock_model_factory_for_mm,
-                "mock_shogi_game_class": mock_shogi_game_class,
-                "mock_policy_mapper_class": mock_policy_mapper_class,
+                "mock_setup_dirs": mock_setup_dirs,
+                "mock_setup_wandb": mock_setup_wandb,
+                "mock_save_config": mock_save_config,
+                "mock_setup_seeding": mock_setup_seeding,
+                "mock_ppo_agent_class": mock_ppo_agent_class,
+                "mock_generate_run_name": mock_gen_name,
             }
 
     def test_trainer_initializes_and_uses_session_manager(self, setup_trainer_mocks, mock_app_config, mock_cli_args):
@@ -416,40 +408,37 @@ class TestTrainerIntegration:
         assert hasattr(trainer, "session_manager")
         assert isinstance(trainer.session_manager, SessionManager)
 
-        # Verify setup methods from SessionManager were called during Trainer init
-        setup_trainer_mocks["setup_seeding"].assert_called_once()
-        setup_trainer_mocks["setup_dirs"].assert_called_once()
-        setup_trainer_mocks["setup_wandb"].assert_called_once()
-        setup_trainer_mocks["save_config"].assert_called_once() # Changed from serialize
+        # Assert calls on the mock objects from the fixture
+        setup_trainer_mocks["mock_setup_dirs"].assert_called_once()
+        setup_trainer_mocks["mock_setup_wandb"].assert_called_once()
+        setup_trainer_mocks["mock_save_config"].assert_called_once()
+        setup_trainer_mocks["mock_setup_seeding"].assert_called_once()
+        setup_trainer_mocks["mock_generate_run_name"].assert_called_once()
 
         # Verify session properties are correctly accessed from the manager
-        # run_name is generated or taken from args/config by SessionManager constructor
-        # The mock_generate_run_name will be used if no other name is provided.
-        assert trainer.run_name == "mocked_auto_run_name" # or specific name if set in mock_cli_args/mock_app_config for this test
+        assert trainer.run_name == "mocked_auto_run_name"
         assert trainer.run_artifact_dir == "/tmp/trainer_run"
         assert trainer.model_dir == "/tmp/trainer_run/models"
         assert trainer.log_file_path == "/tmp/trainer_run/training.log"
-        assert trainer.is_train_wandb_active is False # Based on mock_setup_wandb.return_value
+        assert trainer.is_train_wandb_active is False
 
     def test_trainer_delegates_info_logging_to_session_manager(self, setup_trainer_mocks, mock_app_config, mock_cli_args):
         """Test that Trainer uses SessionManager for logging run information."""
         trainer = Trainer(mock_app_config, mock_cli_args)
 
-        def mock_log_both(_msg, also_to_wandb=False, wandb_data=None): # Match new signature
-            pass  # Dummy logger
+        # Create a mock logger function
+        mock_log_both = Mock()
 
-        # Patch the session manager's method to spy on the call
+        # Spy on the SessionManager's log_session_info method
         with patch.object(trainer.session_manager, "log_session_info") as mock_log_session:
             trainer._log_run_info(mock_log_both)  # pylint: disable=protected-access
 
-            # Verify SessionManager's log_session_info was called once
+            # Verify SessionManager's method was called once
             mock_log_session.assert_called_once()
 
-            # Verify it was called with the correct information from the trainer
-            call_args = mock_log_session.call_args
-            # The agent name might be "N/A" if getattr fails or agent is None,
-            # or "TestAgent" if the mock_ppo_agent_in_trainer is correctly set up.
-            # Based on setup_trainer_mocks, trainer.agent will be the mock_ppo_agent_in_trainer.return_value
-            assert call_args[1]["agent_info"]["name"] == "TestAgent"
-            assert call_args[1]["global_timestep"] == 0
-            assert call_args[1]["total_episodes_completed"] == 0
+            # Verify it was called with the correct info from the trainer
+            call_kwargs = mock_log_session.call_args.kwargs
+            # FIX: The agent instance mock now has the 'name' attribute configured
+            assert call_kwargs["agent_info"]["name"] == "TestAgent"
+            assert call_kwargs["global_timestep"] == 0
+            assert call_kwargs["total_episodes_completed"] == 0

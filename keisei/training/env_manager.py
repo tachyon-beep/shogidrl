@@ -188,7 +188,7 @@ class EnvManager:
 
             # Simple comparison; for complex objects, a more robust comparison might be needed
             if not np.array_equal(obs1, obs2_after_reset):
-                 self.logger_func("Environment validation warning: Observation after reset differs from initial observation. This might be expected if seeding is not deterministic or initial state has randomness.")
+                self.logger_func("Environment validation warning: Observation after reset differs from initial observation. This might be expected if seeding is not deterministic or initial state has randomness.")
             # Depending on game logic, obs1 and obs2_after_reset should ideally be the same if reset is deterministic.
             # For now, we just check if reset_game() itself succeeded.
 
