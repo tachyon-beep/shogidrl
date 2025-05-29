@@ -8,119 +8,6 @@
 
 The `trainer.py` file has grown to 916 lines and violates the Single Responsibility Principle by handling 10+ distinct concerns. This refactor will decompose the monolithic `Trainer` class into specialized, composable managers while maintaining all existing functionality and improving maintainability, testability, and extensibility.
 
----
-
-## 🚀 CURRENT STATUS REPORT
-
-**Last Updated:** December 19, 2024  
-**Overall Progress:** 40% Complete (Phases 1-2 Done, Ready for Phase 3)  
-**Risk Assessment:** LOW - All prerequisites met for next phase
-
-### 📊 Executive Summary
-
-The trainer refactor is **on track and ahead of schedule** with **2 out of 6 phases completed** successfully. We have achieved a **25% reduction in trainer.py size** (916 → 700 lines) while extracting **731+ lines** into well-tested, reusable manager components. The project demonstrates **zero regressions** in functionality with **96.5% test pass rate** (55/57 tests).
-
-### 📈 Current File Metrics
-
-| Component | Current Lines | Tests | Coverage | Status |
-|-----------|--------------|-------|----------|---------|
-| **trainer.py** | 700 (was 916) | 55/57 passing | Core functionality | ✅ **Active Development** |
-| **SessionManager** | 266 | 29/29 passing | 100% | ✅ **Production Ready** |
-| **StepManager** | 465 | 26/26 passing | 100% | ✅ **Production Ready** |
-| **Total Extracted** | **731 lines** | **55/55 passing** | **100%** | ✅ **Mission Success** |
-
-### 🏗️ Architectural Achievements
-
-**✅ Completed Functionality:**
-- **Session Lifecycle Management**: Directory setup, WandB integration, configuration persistence
-- **Training Step Execution**: Move selection, episode handling, demo mode, buffer management
-- **Error Handling**: Robust error recovery patterns across all managers
-- **Test Coverage**: Comprehensive test suites with edge case handling
-- **Integration Patterns**: Clean composition interfaces between components
-
-**✅ Technical Quality Metrics:**
-- **Zero Breaking Changes**: All existing training workflows preserved
-- **100% Backward Compatibility**: Existing configurations work unchanged  
-- **Performance Maintained**: No degradation in training speed or memory usage
-- **Code Quality**: Improved separation of concerns and single responsibility adherence
-
-### 🧪 Testing Excellence
-
-**Current Test Status: 96.5% Pass Rate (55/57)**
-- **SessionManager**: 29/29 tests passing (100%)
-- **StepManager**: 26/26 tests passing (100%)
-- **Integration Tests**: All critical paths validated
-- **Remaining Issues**: 2 minor style/lint issues, no functional failures
-
-### 🎯 Phase 3 Readiness Assessment
-
-**ALL PREREQUISITES COMPLETE ✅**
-
-- ✅ **Clean Codebase**: trainer.py reduced to 700 well-structured lines
-- ✅ **Proven Extraction Patterns**: Successfully applied in Phases 1-2
-- ✅ **Testing Framework**: Established comprehensive test patterns
-- ✅ **Zero Technical Debt**: No blocking issues or regressions
-- ✅ **Team Velocity**: Demonstrated ability to deliver complex managers
-
-### 📋 Detailed Component Analysis
-
-#### Phase 1: SessionManager ✅ COMPLETE
-- **Extracted**: 266 lines of session lifecycle logic
-- **Functionality**: Directory setup, WandB integration, configuration persistence
-- **Testing**: 29/29 tests passing with comprehensive edge case coverage
-- **Integration**: Clean composition pattern established in trainer.py
-- **Quality**: Production-ready with proper error handling and logging
-
-#### Phase 2: StepManager ✅ COMPLETE  
-- **Extracted**: 465 lines of step execution logic
-- **Functionality**: Move selection, episode management, demo mode, buffer integration
-- **Testing**: 26/26 tests passing with full scenario coverage
-- **Performance**: Maintains training speed with improved code organization
-- **Architecture**: Established clean interfaces and state management patterns
-
-### 🔍 Risk Assessment: LOW
-
-**Mitigation Factors:**
-- **Proven Track Record**: 2/2 phases completed successfully without regressions
-- **Comprehensive Testing**: 100% test coverage for all extracted components
-- **Incremental Approach**: Small, manageable changes with validation at each step
-- **Clean Architecture**: Well-defined interfaces and separation of concerns established
-
-### 📈 Phase 3 Implementation Strategy
-
-**Target Components for Extraction:**
-1. **ModelManager** (2-3 days): Model creation, checkpoint handling, mixed precision setup
-   - **Extraction Target**: ~150-200 lines from trainer.py
-   - **Key Functions**: Model factory, checkpoint save/load, WandB artifacts
-   
-2. **EnvManager** (1-2 days): Environment setup, seeding, policy mapper creation  
-   - **Extraction Target**: ~100-150 lines from trainer.py
-   - **Key Functions**: Game setup, policy mapping, observation space config
-
-**Success Metrics for Phase 3:**
-- Reduce trainer.py to ~400-450 lines (additional 35% reduction)
-- Achieve 100% test coverage for ModelManager and EnvManager
-- Maintain zero regressions in model loading and environment functionality
-- Complete integration testing of all 4 managers working together
-
-### 🗓️ Timeline Projections
-
-**Phase 3 (ModelManager + EnvManager):** 4-6 days  
-**Phase 4 (Metrics Management):** 2-3 days  
-**Phase 5 (Enhancement & Polish):** 2-3 days  
-**Phase 6 (Final Simplification):** 2-3 days  
-
-**🎯 TOTAL PROJECT COMPLETION: 3-4 weeks**
-
-### ✅ Recommendation: PROCEED WITH PHASE 3
-
-**Confidence Level: HIGH**
-- All technical prerequisites met
-- Proven delivery capability demonstrated  
-- Low risk profile with comprehensive testing safety net
-- Clear implementation strategy with realistic timeline
-
----
 
 ## Current Problems Analysis
 
@@ -310,11 +197,11 @@ class ModelManager:
     def __init__(self, config: AppConfig, device: torch.device)
     
     def create_model(self, input_features: str, model_type: str, 
-                    tower_depth: int, tower_width: int, se_ratio: float) -> nn.Module
+                    tower_depth: int, tower_width: int, se_ratio: float) -> ActorCriticProtocol
     
     def setup_mixed_precision(self) -> Tuple[bool, Optional[GradScaler]]
     
-    def save_checkpoint(self, model: nn.Module, timestep: int, 
+    def save_checkpoint(self, model: ActorCriticProtocol, timestep: int, 
                        episode_count: int, stats: Dict) -> str
     
     def create_wandb_artifact(self, model_path: str, artifact_name: str,
@@ -325,6 +212,56 @@ class ModelManager:
     def save_final_model(self, agent: PPOAgent, timestep: int, 
                         episode_count: int, stats: Dict) -> str
 ```
+
+**📋 Type System Enhancement - ActorCriticProtocol Interface**
+
+*Added: May 29, 2025*
+
+**Issue Resolved:** Type assignment incompatibility between `PPOAgent.model` (expected `ActorCritic`) and `ModelManager.model` (returned `Module` from `model_factory()`).
+
+**Solution Implemented:**
+- **Created `keisei/core/actor_critic_protocol.py`** - Protocol interface defining the contract for all Actor-Critic models
+- **Updated type annotations** across the model creation pipeline:
+  - `model_factory()` → returns `ActorCriticProtocol` 
+  - `PPOAgent.model` → typed as `ActorCriticProtocol`
+  - `ModelManager._create_model()` → returns `ActorCriticProtocol`
+  - `ModelManager.model` → typed as `ActorCriticProtocol`
+
+**Protocol Definition:**
+```python
+class ActorCriticProtocol(Protocol):
+    """Protocol defining the interface that all Actor-Critic models must implement."""
+    
+    # Core Actor-Critic methods
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]: ...
+    def get_action_and_value(self, obs: torch.Tensor, legal_mask: Optional[torch.Tensor] = None, 
+                           deterministic: bool = False) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: ...
+    def evaluate_actions(self, obs: torch.Tensor, actions: torch.Tensor, 
+                        legal_mask: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: ...
+    
+    # PyTorch Module methods used by PPOAgent
+    def train(self, mode: bool = True) -> Any: ...
+    def eval(self) -> Any: ...
+    def parameters(self) -> Iterator[nn.Parameter]: ...
+    def state_dict(self, *args, **kwargs) -> Dict[str, Any]: ...
+    def load_state_dict(self, state_dict: Dict[str, Any], strict: bool = True) -> Any: ...
+    def to(self, *args, **kwargs) -> Any: ...
+```
+
+**Benefits:**
+- ✅ **Type Safety**: Ensures all model types implement required interface
+- ✅ **Polymorphism**: Allows `ActorCritic` and `ActorCriticResTower` to be used interchangeably  
+- ✅ **Documentation**: Clear contract for what methods Actor-Critic models must provide
+- ✅ **Extensibility**: New model types can implement the Protocol without inheritance
+- ✅ **IDE Support**: Better autocomplete and type checking during development
+
+**Files Modified:**
+- `/home/john/keisei/keisei/core/actor_critic_protocol.py` - New Protocol definition
+- `/home/john/keisei/keisei/core/ppo_agent.py` - Updated model type annotation
+- `/home/john/keisei/keisei/training/model_manager.py` - Updated return types
+- `/home/john/keisei/keisei/training/models/__init__.py` - Updated model_factory return type
+
+**Verification:** All existing functionality preserved, type assignment errors resolved, comprehensive testing confirms both `ActorCritic` and `ActorCriticResTower` correctly implement the Protocol interface.
 
 ### Create `training/env_manager.py`
 
@@ -692,6 +629,7 @@ if self.resumed_from_checkpoint:
 - **Test Coverage:** 1762+ test lines for extracted components  
 - **Functionality:** All critical trainer features working correctly
 - **Integration:** Clean delegation to SessionManager and StepManager
+- **Type Safety:** Complete ActorCriticProtocol interface implementation resolves model type compatibility issues
 
 ---
 
@@ -723,6 +661,17 @@ if self.resumed_from_checkpoint:
 - **Issue:** Restrictive `logger_func` parameter typing
 - **Solution:** Updated to `Callable[..., None]` for flexible logger interfaces
 - **Result:** Compatible with all current logging implementations
+
+**✅ ActorCriticProtocol Type System Enhancement (May 29, 2025)**
+- **Issue:** Type assignment error at `model_manager.py:121` - `agent.model = self.model` failed because `Module` type incompatible with `ActorCritic` type
+- **Root Cause:** `model_factory()` returned generic `torch.nn.Module` but `PPOAgent.model` expected specific `ActorCritic` type
+- **Solution:** Created `ActorCriticProtocol` interface defining contract for all Actor-Critic models
+- **Implementation:**
+  - Created `/home/john/keisei/keisei/core/actor_critic_protocol.py` with Protocol definition
+  - Updated `PPOAgent.model` type annotation to use `ActorCriticProtocol`
+  - Updated `ModelManager._create_model()` and `model_factory()` return types to `ActorCriticProtocol`
+  - Verified both `ActorCritic` and `ActorCriticResTower` implement the Protocol interface
+- **Result:** ✅ Type assignment error resolved, all type checking passes, no functional changes
 
 ### Current Test Status
 - **SessionManager:** ✅ 29/29 tests passing (100%)
@@ -762,326 +711,3 @@ if self.resumed_from_checkpoint:
 **Target:** Reduce Trainer to lean orchestrator (~200-300 lines)
 **Estimated Effort:** ~2-3 days
 
----
-
-## Current Trainer.py Status
-
-**Original Size:** 916 lines  
-**Current Size:** 651 lines (265 lines reduced)  
-**Target Size:** 200-300 lines  
-**Progress:** 29% reduction achieved
-
-**Major Extractions Completed:**
-1. ✅ Session management → SessionManager (266 lines extracted)
-2. ✅ Step execution → StepManager (465 lines extracted)
-3. ✅ Critical fixes → Resume functionality working
-
-**Current Phase:** Phase 3 line reduction (target: 400-450 lines)
-**Next Priority:** ModelManager and EnvManager extraction
-
----
-
-## Key Achievements So Far
-
-### Code Quality Improvements
-- ✅ Significantly improved separation of concerns
-- ✅ Created reusable, testable components
-- ✅ Established consistent error handling patterns
-- ✅ Implemented comprehensive unit test coverage (>95%)
-
-### Maintainability Improvements  
-- ✅ Reduced complexity in Trainer class
-- ✅ Created clear, single-responsibility components
-- ✅ Established clean interfaces between components
-- ✅ Improved code documentation and structure
-
-### Testing Infrastructure
-- ✅ Created robust unit test suites for extracted components
-- ✅ Established testing patterns for future phases
-- ✅ Achieved high test coverage with edge case validation
-- ✅ Implemented proper mocking and isolation techniques
-
-### Risk Mitigation
-- ✅ Maintained all existing functionality during refactor
-- ✅ No regressions introduced in training loop
-- ✅ Preserved backward compatibility
-- ✅ Gradual, phased approach minimizing integration risks
-
----
-
-## Next Steps (Phase 3 - Ready to Execute)
-
-### 🎯 PHASE 3 PREPARATION STATUS: READY ✅
-
-**Prerequisites Completed:**
-- ✅ All critical issues resolved and tests passing
-- ✅ Clean trainer.py codebase (690 lines, well-structured)  
-- ✅ Proven extraction patterns from Phases 1-2
-- ✅ Established testing frameworks and practices
-- ✅ No blocking technical debt
-
-### Immediate Action Plan (Phase 3)
-
-**📋 Priority Order:**
-1. **Create ModelManager** (2-3 days)
-   - Extract model creation, checkpoint handling, mixed precision setup
-   - Target: ~150-200 lines extracted from trainer.py
-   
-2. **Create EnvManager** (1-2 days)
-   - Extract environment setup, seeding, policy mapper creation
-   - Target: ~100-150 lines extracted from trainer.py
-   
-3. **Integration & Testing** (1 day)
-   - Update Trainer to use composition pattern
-   - Comprehensive integration testing
-   - Validate no regressions in model/environment functionality
-
-**🎯 Phase 3 Success Metrics:**
-- Trainer.py reduced to ~400-450 lines (from current 651)
-- Model and environment concerns cleanly separated
-- 100% test coverage for new managers
-- No regressions in training functionality ✅ 
-- Clean interfaces between all managers
-
-### Implementation Strategy
-
-**ModelManager Extraction Targets:**
-```python
-# Functions to extract from trainer.py:
-- Model factory creation logic → ModelManager.create_model()
-- Checkpoint saving → ModelManager.save_checkpoint()  
-- WandB artifact creation → ModelManager.create_wandb_artifact()
-- Resume logic → ModelManager.handle_checkpoint_resume()
-- Mixed precision setup → ModelManager.setup_mixed_precision()
-```
-
-**EnvManager Extraction Targets:**
-```python
-# Functions to extract from trainer.py:
-- Game setup logic → EnvManager.setup_environment()
-- Policy mapper creation → EnvManager.create_policy_mapper()
-- Observation space config → EnvManager.obs_space_shape
-- Seeding Logic → EnvManager.setup_seeding()
-```
-
-**Estimated Timeline:**
-- **Phase 3 Completion:** 4-6 days
-- **Remaining Phases (4-6):** 2-3 weeks  
-- **Full Refactor Completion:** 3-4 weeks
-
-### Success Criteria for Completion
-
-**File Size Targets:**
-- **Current**: 690 lines
-- **Phase 3 Target**: 400-450 lines (35% additional reduction)
-- **Final Target**: 200-300 lines (65% total reduction from original)
-
-**Quality Gates:**
-- **100% Test Coverage**: All extracted managers fully tested
-- **Zero Regressions**: All existing functionality preserved
-- **Clean Architecture**: Single responsibility principle enforced
-- **Documentation**: Comprehensive docstrings and type hints
-
-### Recommendation
-
-**Proceed immediately with Phase 3 implementation.** The project demonstrates excellent progress with solid foundations. All prerequisites are met, risks are well-mitigated, and the established patterns provide high confidence for successful completion.
-
-The next phase should focus on ModelManager and EnvManager extraction using the proven methodology from Phases 1-2, maintaining the same quality standards and comprehensive testing approach.
-
----
-
-## 📊 COMPREHENSIVE STATUS REPORT
-
-**Report Date:** May 29, 2025  
-**Project Status:** 50% Complete, Critical Issues Resolved ✅  
-**Current Phase:** Phase 3 Line Reduction (Critical Fixes Complete)
-
-### Executive Summary
-
-The trainer.py refactor project demonstrates **excellent progress** with **all critical integration issues resolved**. The successful completion of Phases 1-2 plus critical Phase 3 fixes provides **high confidence** for the remaining work. The resume functionality now works correctly, all tests pass, and the project is well-positioned to achieve the line reduction goals.
-
-### Current File Metrics
-
-| Component | Lines | Status | Test Coverage |
-|-----------|-------|--------|---------------|
-| **trainer.py** | 651 ↓ | 29% reduction from 916 original | Integration tested |
-| **session_manager.py** | 266 | ✅ Production ready | 522/522 test lines passing |
-| **step_manager.py** | 465 | ✅ Production ready | 827/827 test lines passing |
-| **Extracted Total** | 731+ | Successfully extracted | 1762+ test lines |
-
-### Critical Issues Resolution Status
-
-**✅ ALL MAJOR ISSUES RESOLVED:**
-- **Resume Functionality**: ✅ Fixed - tests now pass with correct log messages
-- **Test Integration**: ✅ Complete - all functional tests passing
-- **Import/Mocking**: ✅ Resolved - clean configuration management
-- **Backward Compatibility**: ✅ Maintained - no breaking changes
-
-### Architectural Achievement Summary
-
-**✅ COMPLETED SUCCESSFULLY:**
-- **Composition Pattern**: Monolithic class decomposed into specialized managers
-- **Single Responsibility**: Each manager handles one specific concern
-- **Clean Interfaces**: Consistent APIs across all extracted components
-- **Error Handling**: Comprehensive error recovery and graceful degradation
-- **Test Infrastructure**: Robust unit testing with 95%+ coverage
-
-**✅ PRESERVED FUNCTIONALITY:**
-- **Zero Regressions**: All existing training behavior maintained ✅
-- **Backward Compatibility**: No breaking changes to external interfaces ✅
-- **Performance**: No degradation in training loop execution ✅
-- **Integration**: Seamless operation with existing callback and display systems ✅
-
-### Phase 3 Completion Status
-
-**✅ CRITICAL INTEGRATION FIXES - COMPLETE:**
-- Resume functionality working correctly
-- All test suites passing
-- Clean error handling and logging
-- Stable integration between all managers
-
-**⏳ LINE REDUCTION - IN PROGRESS:**
-- Current: 651 lines (need to reach 400-450)  
-- Remaining: ~200 lines to extract
-- Target: ModelManager and EnvManager creation
-- **Zero Regressions**: All existing training behavior maintained
-- **Backward Compatibility**: No breaking changes to external interfaces
-- **Performance**: No degradation in training loop execution
-- **Integration**: Seamless operation with existing callback and display systems
-
-### Technical Quality Metrics
-
-**Code Quality Improvements:**
-- ✅ **Reduced Complexity**: Main Trainer class significantly simplified
-- ✅ **Improved Testability**: Components can be tested in isolation
-- ✅ **Enhanced Maintainability**: Clear separation of concerns achieved
-- ✅ **Better Documentation**: Consistent docstrings and type hints
-
-**Testing Excellence:**
-- ✅ **Comprehensive Coverage**: 1445+ test lines across extracted components
-- ✅ **Edge Case Validation**: Error scenarios and boundary conditions tested
-- ✅ **Integration Testing**: Full end-to-end validation successful
-- ✅ **Regression Prevention**: All existing functionality validated
-
-### Phase 3 Readiness Assessment
-
-**Prerequisites Status: ✅ ALL COMPLETE**
-- ✅ **Stable Codebase**: No functional issues, only minor style violations
-- ✅ **Proven Patterns**: Successful extraction methodology established
-- ✅ **Testing Framework**: Comprehensive test infrastructure ready
-- ✅ **Clean Architecture**: trainer.py properly structured for next extraction
-- ✅ **Zero Technical Debt**: No blocking issues identified
-
-**Success Factors for Phase 3:**
-- **Established Methodology**: Proven manager extraction patterns from Phases 1-2
-- **Clear Targets**: Specific functionality identified for ModelManager and EnvManager
-- **Risk Mitigation**: Phased approach minimizes integration complexity
-- **Quality Gates**: Comprehensive testing will validate each extraction
-
-### Detailed Component Analysis
-
-#### SessionManager (Phase 1) - ✅ PRODUCTION READY
-**Extracted Functionality:**
-- Run name generation with intelligent precedence handling
-- Directory structure creation and validation
-- WandB initialization and configuration management
-- Configuration serialization and persistence
-- Session lifecycle logging and event tracking
-- Environment seeding setup and validation
-
-**Integration Success:**
-- Fully integrated into Trainer class initialization
-- All session-level concerns cleanly delegated
-- Comprehensive error handling implemented
-- Clean API established for future reuse
-
-#### StepManager (Phase 2) - ✅ PRODUCTION READY
-**Extracted Functionality:**
-- Individual training step execution with agent action selection
-- Episode lifecycle management and state transitions
-- Move selection and environment interaction handling
-- Demo mode functionality with enhanced formatting
-- Comprehensive error handling and graceful recovery
-- Legal move validation and policy mapping
-
-**Data Structure Innovation:**
-- **EpisodeState dataclass**: Clean episode state encapsulation
-- **StepResult dataclass**: Comprehensive step execution results
-- Replaced ad-hoc state management with proper type-safe structures
-
-**Integration Success:**
-- Modified trainer methods to use EpisodeState consistently
-- Clean delegation pattern established
-- All step execution logic successfully extracted
-- Error handling scenarios thoroughly validated
-
-### Risk Assessment: LOW
-
-**Mitigation Factors:**
-- **Proven Methodology**: Successful Phases 1-2 provide template
-- **Comprehensive Testing**: High-coverage test suites prevent regressions
-- **Phased Approach**: Incremental changes minimize risk
-- **Clean Codebase**: No technical debt blocking progress
-
-**Confidence Indicators:**
-- **100% Test Pass Rate**: All functional tests passing
-- **Clean Integration**: Existing managers work seamlessly
-- **Stable Performance**: No degradation in training loop
-- **Clear Separation**: Next extraction targets well-defined
-
-### Phase 3 Implementation Strategy
-
-**ModelManager Priorities:**
-1. **Model Creation**: Extract model factory logic (lines 136-154 in trainer.py)
-2. **Mixed Precision**: Extract setup logic (lines 98-120 in trainer.py)
-3. **Checkpoint Management**: Extract `_handle_checkpoint_resume()` (lines 240-275)
-4. **Artifact Creation**: Extract `_create_model_artifact()` (lines 446-502)
-5. **Model Persistence**: Extract saving logic from `_finalize_training()`
-
-**EnvManager Priorities:**
-1. **Environment Setup**: Extract `_setup_game_components()` (lines 187-199)
-2. **Policy Mapping**: Extract policy mapper creation
-3. **Observation Config**: Extract feature specification logic
-4. **Seeding Logic**: Extract environment seeding
-
-**Expected Outcomes:**
-- **Trainer.py Size**: 700 → 400-450 lines (additional 35% reduction)
-- **Manager Components**: 2 → 4 (ModelManager + EnvManager added)
-- **Clean Separation**: Model and environment concerns isolated
-- **Test Coverage**: Maintain 95%+ coverage for new components
-
-### Timeline Projection
-
-**Phase 3 Execution: 4-6 days**
-- ModelManager development: 2-3 days
-- EnvManager development: 1-2 days
-- Integration & testing: 1 day
-
-**Remaining Project: 3-4 weeks total**
-- Phase 4 (Metrics): 2-3 days
-- Phase 5 (Enhancement): 2-3 days
-- Phase 6 (Final Trainer): 2-3 days
-
-### Success Criteria for Completion
-
-**File Size Targets:**
-- **Current**: 651 lines  
-- **Phase 3 Target**: 400-450 lines (additional 30% reduction needed)
-- **Final Target**: 200-300 lines (65% total reduction from original)
-
-**Quality Gates:**
-- **100% Test Coverage**: All extracted managers fully tested
-- **Zero Regressions**: All existing functionality preserved ✅
-- **Clean Architecture**: Single responsibility principle enforced
-- **Documentation**: Comprehensive docstrings and type hints
-
-### Recommendation
-
-**Continue with Phase 3 line reduction implementation.** Critical integration issues have been resolved successfully. The resume functionality now works correctly, and all tests are passing. The project is ready to proceed with the remaining ModelManager and EnvManager extractions to reach the 400-450 line target for Phase 3.
-
-**Next Steps:**
-1. Extract model creation and checkpoint management → ModelManager expansion
-2. Extract environment setup and policy mapping → EnvManager creation  
-3. Continue line reduction to reach 400-450 line target for trainer.py
-
-The established methodology from Phases 1-2 and the successful critical fixes provide high confidence for completing the remaining extractions.

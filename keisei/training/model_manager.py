@@ -20,6 +20,7 @@ from torch.cuda.amp import GradScaler
 import wandb
 from keisei.config_schema import AppConfig
 from keisei.core.ppo_agent import PPOAgent
+from keisei.core.actor_critic_protocol import ActorCriticProtocol
 
 from . import utils
 
@@ -63,8 +64,8 @@ class ModelManager:
         # Initialize mixed precision
         self._setup_mixed_precision()
 
-        # Create the model
-        self.model = self._create_model()
+        # Model will be created by explicit call to create_model()
+        self.model: Optional[ActorCriticProtocol] = None
 
         # Track checkpoint resume status
         self.resumed_from_checkpoint: Optional[str] = None
@@ -96,11 +97,14 @@ class ModelManager:
         else:
             self.scaler = None
 
-    def _create_model(self) -> torch.nn.Module:
-        """Create the model using the model factory."""
+    def create_model(self) -> ActorCriticProtocol:
+        """Create the model using the model factory and sets it to self.model.
+        Raises RuntimeError if model creation fails.
+        """
         from keisei.training.models import model_factory
 
-        model = model_factory(
+        # Call model_factory once and assign to a temporary variable
+        created_model = model_factory(
             model_type=self.model_type,
             obs_shape=self.obs_shape,
             num_actions=self.config.env.num_actions_total,
@@ -109,19 +113,22 @@ class ModelManager:
             se_ratio=self.se_ratio if self.se_ratio > 0 else None,
         )
 
-        return model.to(self.device)
+        if not created_model: # Check if model_factory returned a valid model
+            raise RuntimeError("Model factory returned None, failed to create model.")
 
-    def create_agent(self) -> PPOAgent:
-        """Create a PPO agent with the configured model."""
-        agent = PPOAgent(
-            config=self.config,
-            device=self.device,
-        )
-        # Replace the agent's default model with our configured model
-        agent.model = self.model
-        return agent
+        # Assign to self.model after moving to device
+        self.model = created_model.to(self.device)
+        
+        if self.model is None: # Should not happen if .to() raises on error or created_model was None
+             raise RuntimeError("Failed to create model or move model to device.")
+        
+        return self.model
 
-    def handle_checkpoint_resume(self, agent: PPOAgent, model_dir: str) -> bool:
+    # create_agent method removed as Trainer will instantiate the agent
+
+    def handle_checkpoint_resume(
+        self, agent: PPOAgent, model_dir: str, resume_path_override: Optional[str] = None
+    ) -> bool:
         """
         Handle resuming from checkpoint if specified or auto-detected.
 
@@ -132,42 +139,48 @@ class ModelManager:
         Returns:
             bool: True if resumed from checkpoint, False otherwise
         """
-        resume_path = self.args.resume
+        actual_resume_path = resume_path_override if resume_path_override is not None else self.args.resume
 
         def find_ckpt_in_dir(directory):
             return utils.find_latest_checkpoint(directory)
 
-        if resume_path == "latest" or resume_path is None:
+        if actual_resume_path == "latest" or actual_resume_path is None:
             # Try to find latest checkpoint in the run's model_dir
             latest_ckpt = find_ckpt_in_dir(model_dir)
             # If not found, try the parent directory (savedir)
-            if not latest_ckpt:
-                parent_dir = os.path.dirname(model_dir.rstrip(os.sep))
-                parent_ckpt = find_ckpt_in_dir(parent_dir)
-                if parent_ckpt:
-                    # Copy the checkpoint into the run's model_dir for consistency
-                    dest_ckpt = os.path.join(model_dir, os.path.basename(parent_ckpt))
-                    shutil.copy2(parent_ckpt, dest_ckpt)
-                    latest_ckpt = dest_ckpt
-
+            if not latest_ckpt and model_dir: # Ensure model_dir is not empty
+                parent_dir_path = os.path.dirname(model_dir.rstrip(os.sep))
+                if parent_dir_path and parent_dir_path != model_dir : # Check if parent_dir is different and valid
+                    parent_ckpt = find_ckpt_in_dir(parent_dir_path)
+                    if parent_ckpt:
+                        # Copy the checkpoint into the run's model_dir for consistency
+                        dest_ckpt = os.path.join(model_dir, os.path.basename(parent_ckpt))
+                        shutil.copy2(parent_ckpt, dest_ckpt)
+                        latest_ckpt = dest_ckpt
+            
             if latest_ckpt:
-                checkpoint_data = agent.load_model(latest_ckpt)
+                self.checkpoint_data = agent.load_model(latest_ckpt)
                 self.resumed_from_checkpoint = latest_ckpt
-                self.checkpoint_data = checkpoint_data
-                # Resume logging will be handled by trainer's run_training_loop
+                self.logger_func(f"Resumed from latest checkpoint: {latest_ckpt}")
                 return True
             else:
                 self.resumed_from_checkpoint = None
                 self.checkpoint_data = None
+                self.logger_func("No checkpoint found to resume from (searched latest).")
                 return False
 
-        elif resume_path:
-            checkpoint_data = agent.load_model(resume_path)
-            self.resumed_from_checkpoint = resume_path
-            self.checkpoint_data = checkpoint_data
-            # Resume logging will be handled by trainer's run_training_loop
-            return True
-        else:
+        elif actual_resume_path: # A specific path is provided
+            if os.path.exists(actual_resume_path):
+                self.checkpoint_data = agent.load_model(actual_resume_path)
+                self.resumed_from_checkpoint = actual_resume_path
+                self.logger_func(f"Resumed from specified checkpoint: {actual_resume_path}")
+                return True
+            else:
+                self.logger_func(f"Specified resume checkpoint not found: {actual_resume_path}")
+                self.resumed_from_checkpoint = None
+                self.checkpoint_data = None
+                return False
+        else: # No resume path specified or found
             self.resumed_from_checkpoint = None
             self.checkpoint_data = None
             return False
@@ -296,6 +309,87 @@ class ModelManager:
 
         except (OSError, RuntimeError) as e:
             self.logger_func(f"Error saving final model {final_model_path}: {e}")
+            return False, None
+
+    def save_checkpoint(
+        self,
+        agent: PPOAgent,
+        model_dir: str,
+        timestep: int,
+        episode_count: int,
+        stats: Dict[str, Any],
+        run_name: str,
+        is_wandb_active: bool,
+        checkpoint_name_prefix: str = "checkpoint_ts"
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Save a model checkpoint periodically.
+
+        Args:
+            agent: PPO agent to save.
+            model_dir: Directory to save checkpoint in.
+            timestep: Current training timestep.
+            episode_count: Total episodes completed.
+            stats: Dictionary with game statistics (e.g., black_wins, white_wins, draws).
+            run_name: Current run name for artifact naming.
+            is_wandb_active: Whether WandB is active.
+            checkpoint_name_prefix: Prefix for the checkpoint filename.
+
+        Returns:
+            Tuple[bool, Optional[str]]: (success, checkpoint_path)
+        """
+        if timestep <= 0:
+            self.logger_func("Skipping checkpoint save for timestep <= 0.")
+            return False, None
+
+        checkpoint_filename = os.path.join(
+            model_dir, f"{checkpoint_name_prefix}{timestep}.pth"
+        )
+
+        # Don't save if checkpoint already exists (e.g. if called multiple times for same step)
+        if os.path.exists(checkpoint_filename):
+            self.logger_func(f"Checkpoint {checkpoint_filename} already exists. Skipping save.")
+            return True, checkpoint_filename
+        
+        try:
+            os.makedirs(model_dir, exist_ok=True) # Ensure model_dir exists
+            agent.save_model(
+                checkpoint_filename,
+                timestep,
+                episode_count,
+                stats_to_save=stats,
+            )
+            self.logger_func(f"Checkpoint saved to {checkpoint_filename}")
+
+            # Create W&B artifact for this checkpoint
+            checkpoint_metadata = {
+                "training_timesteps": timestep,
+                "total_episodes": episode_count,
+                **stats, # Merge game stats
+                "checkpoint_type": "periodic",
+                "model_type": self.model_type,
+                "feature_set": self.input_features, # Assuming input_features is the feature_set
+            }
+
+            artifact_created = self.create_model_artifact(
+                model_path=checkpoint_filename,
+                artifact_name=f"checkpoint-ts{timestep}",
+                run_name=run_name,
+                is_wandb_active=is_wandb_active,
+                description=f"Periodic checkpoint at timestep {timestep}",
+                metadata=checkpoint_metadata,
+                aliases=[f"ts-{timestep}"], # Add a timestep specific alias
+            )
+            if not artifact_created and is_wandb_active:
+                 self.logger_func(f"Warning: Failed to create WandB artifact for {checkpoint_filename}")
+
+
+            return True, checkpoint_filename
+
+        except (OSError, RuntimeError) as e:
+            self.logger_func(
+                f"Error saving checkpoint {checkpoint_filename}: {e}"
+            )
             return False, None
 
     def save_final_checkpoint(

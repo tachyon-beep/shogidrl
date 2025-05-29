@@ -23,53 +23,37 @@ class CheckpointCallback(Callback):
 
     def on_step_end(self, trainer: "Trainer"):
         if (trainer.global_timestep + 1) % self.interval == 0:
-            ckpt_save_path = os.path.join(
-                self.model_dir, f"checkpoint_ts{trainer.global_timestep+1}.pth"
-            )
-            try:
-                trainer.agent.save_model(
-                    ckpt_save_path,
-                    trainer.global_timestep + 1,
-                    trainer.total_episodes_completed,
-                    stats_to_save={
-                        "black_wins": trainer.black_wins,
-                        "white_wins": trainer.white_wins,
-                        "draws": trainer.draws,
-                    },
-                )
-                if trainer.log_both is not None:
-                    trainer.log_both(
-                        f"Checkpoint saved to {ckpt_save_path}", also_to_wandb=True
-                    )
+            if not trainer.agent:
+                if trainer.log_both:
+                    trainer.log_both("[ERROR] CheckpointCallback: Agent not initialized, cannot save checkpoint.", also_to_wandb=True)
+                return
 
-                # Create W&B artifact for periodic checkpoint using ModelManager
-                checkpoint_metadata = {
-                    "training_timesteps": trainer.global_timestep + 1,
-                    "total_episodes": trainer.total_episodes_completed,
-                    "black_wins": trainer.black_wins,
-                    "white_wins": trainer.white_wins,
-                    "draws": trainer.draws,
-                    "checkpoint_type": "periodic",
-                    "checkpoint_interval": self.interval,
-                    "model_type": getattr(
-                        trainer.config.training, "model_type", "resnet"
-                    ),
-                    "feature_set": getattr(trainer.config.env, "feature_set", "core"),
-                }
-                trainer.model_manager.create_model_artifact(
-                    model_path=ckpt_save_path,
-                    artifact_name=f"checkpoint-ts{trainer.global_timestep+1}",
-                    run_name=trainer.run_name,
-                    is_wandb_active=trainer.is_train_wandb_active,
-                    description=f"Periodic checkpoint at timestep {trainer.global_timestep+1}",
-                    metadata=checkpoint_metadata,
-                    aliases=["latest-periodic"],
-                )
-            except (OSError, RuntimeError) as e:
-                if trainer.log_both is not None:
+            game_stats = {
+                "black_wins": trainer.black_wins,
+                "white_wins": trainer.white_wins,
+                "draws": trainer.draws,
+            }
+
+            # Use the consolidated save_checkpoint method from ModelManager
+            success, ckpt_save_path = trainer.model_manager.save_checkpoint(
+                agent=trainer.agent,
+                model_dir=self.model_dir, # model_dir is part of CheckpointCallback's state
+                timestep=trainer.global_timestep + 1,
+                episode_count=trainer.total_episodes_completed,
+                stats=game_stats,
+                run_name=trainer.run_name,
+                is_wandb_active=trainer.is_train_wandb_active
+            )
+
+            if success:
+                if trainer.log_both and ckpt_save_path:
                     trainer.log_both(
-                        f"Error saving checkpoint {ckpt_save_path}: {e}",
-                        log_level="error",
+                        f"Checkpoint saved via ModelManager to {ckpt_save_path}", also_to_wandb=True
+                    )
+            else:
+                if trainer.log_both:
+                    trainer.log_both(
+                        f"[ERROR] CheckpointCallback: Failed to save checkpoint via ModelManager for timestep {trainer.global_timestep + 1}.",
                         also_to_wandb=True,
                     )
 
@@ -83,23 +67,42 @@ class EvaluationCallback(Callback):
         if not getattr(self.eval_cfg, "enable_periodic_evaluation", False):
             return
         if (trainer.global_timestep + 1) % self.interval == 0:
+            if not trainer.agent:
+                if trainer.log_both:
+                    trainer.log_both("[ERROR] EvaluationCallback: Agent not initialized, cannot run evaluation.", also_to_wandb=True)
+                return
+            
+            # Ensure the model to be evaluated exists and is accessible
+            # The Trainer now owns self.model directly.
+            # PPOAgent also has a self.model attribute.
+            # For evaluation, we typically want the agent's current model state.
+            current_model = trainer.agent.model
+            if not current_model:
+                if trainer.log_both:
+                    trainer.log_both("[ERROR] EvaluationCallback: Agent's model not found.", also_to_wandb=True)
+                return
+
             eval_ckpt_path = os.path.join(
                 trainer.model_dir, f"eval_checkpoint_ts{trainer.global_timestep+1}.pth"
             )
+            
+            # Save the current agent state for evaluation
             trainer.agent.save_model(
                 eval_ckpt_path,
                 trainer.global_timestep + 1,
                 trainer.total_episodes_completed,
             )
+
             if trainer.log_both is not None:
                 trainer.log_both(
                     f"Starting periodic evaluation at timestep {trainer.global_timestep + 1}...",
                     also_to_wandb=True,
                 )
-            trainer.agent.model.eval()
+            
+            current_model.eval() # Set the agent's model to eval mode
             if trainer.execute_full_evaluation_run is not None:
                 eval_results = trainer.execute_full_evaluation_run(
-                    agent_checkpoint_path=eval_ckpt_path,
+                    agent_checkpoint_path=eval_ckpt_path, # Use the saved checkpoint for eval
                     opponent_type=getattr(self.eval_cfg, "opponent_type", "random"),
                     opponent_checkpoint_path=getattr(
                         self.eval_cfg, "opponent_checkpoint_path", None
@@ -118,7 +121,7 @@ class EvaluationCallback(Callback):
                     wandb_reinit=True,
                     logger_also_stdout=False,
                 )
-                trainer.agent.model.train()
+                current_model.train() # Set model back to train mode
                 if trainer.log_both is not None:
                     trainer.log_both(
                         f"Periodic evaluation finished. Results: {eval_results}",
@@ -129,5 +132,5 @@ class EvaluationCallback(Callback):
                             else {"eval_summary": str(eval_results)}
                         ),
                     )
-            else:
-                trainer.agent.model.train()
+            else: # if execute_full_evaluation_run is None
+                current_model.train() # Ensure model is set back to train mode

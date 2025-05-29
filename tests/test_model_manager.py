@@ -149,6 +149,9 @@ class TestModelManagerInitialization:
 
         # Create ModelManager
         manager = ModelManager(mock_config, mock_args, device, logger_func)
+        
+        # Explicitly create model after manager initialization
+        created_model = manager.create_model()
 
         # Verify initialization
         assert manager.config == mock_config
@@ -163,7 +166,8 @@ class TestModelManagerInitialization:
         assert manager.obs_shape == (46, 9, 9)
         assert manager.use_mixed_precision is False
         assert manager.scaler is None
-        assert manager.model == mock_model
+        assert manager.model == mock_model # model_factory was mocked to return mock_model
+        assert created_model == mock_model # create_model should return the created model
 
     @patch("keisei.shogi.features.FEATURE_SPECS")
     @patch("keisei.training.models.model_factory")
@@ -748,37 +752,58 @@ class TestModelManagerUtilities:
 
     @patch("keisei.shogi.features.FEATURE_SPECS")
     @patch("keisei.training.models.model_factory")
-    @patch("keisei.training.model_manager.PPOAgent")
-    def test_create_agent(
+    # PPOAgent patch is removed as we instantiate it directly.
+    def test_model_creation_and_agent_instantiation( # Renamed test
         self,
-        mock_ppo_agent,
+        # mock_ppo_agent, # Removed
         mock_model_factory,
-        mock_features,
+        mock_features, # This is the patch object for 'keisei.shogi.features.FEATURE_SPECS'
         mock_config,
         mock_args,
         device,
         logger_func,
     ):  # pylint: disable=too-many-positional-arguments
-        """Test PPO agent creation."""
-        # Setup mocks
-        mock_feature_spec = Mock()
-        mock_feature_spec.num_planes = 46
-        mock_features.__getitem__.return_value = mock_feature_spec
+        """Test model creation via ModelManager and subsequent PPOAgent instantiation."""
+        from keisei.core.ppo_agent import PPOAgent # Import for direct instantiation
 
-        mock_model = Mock()
-        mock_model.to.return_value = mock_model
-        mock_model_factory.return_value = mock_model
+        # Setup mocks for model creation
+        mock_feature_spec_instance = Mock(name="MockFeatureSpecInstance")
+        mock_feature_spec_instance.num_planes = 46
+        # mock_features is the patch object for 'keisei.shogi.features.FEATURE_SPECS'
+        # We need to mock its __getitem__ if it's a dict-like access.
+        mock_features.__getitem__.return_value = mock_feature_spec_instance
 
-        mock_agent = Mock()
-        mock_ppo_agent.return_value = mock_agent
+
+        # This is the model that model_factory will return
+        mock_model_from_factory = Mock(name="MockModelFromFactory")
+        mock_model_from_factory.to.return_value = mock_model_from_factory
+        mock_model_factory.return_value = mock_model_from_factory
 
         # Create ModelManager
         manager = ModelManager(mock_config, mock_args, device, logger_func)
 
-        # Create agent
-        agent = manager.create_agent()
+        # 1. Create model using ModelManager
+        # This call will set manager.model internally and return the model
+        returned_model = manager.create_model()
+        assert returned_model == mock_model_from_factory
+        assert manager.model == mock_model_from_factory # Verify internal state
+
+        # 2. Instantiate PPOAgent (as Trainer would do)
+        # We instantiate PPOAgent directly.
+        agent = PPOAgent(
+            config=mock_config,
+            device=device,
+        )
+        # Assign the model created by ModelManager to the agent
+        # We use returned_model here, which is confirmed to be mock_model_from_factory (an ActorCriticProtocol mock)
+        # and manager.model is also asserted to be this.
+        if returned_model is None:
+            raise AssertionError("manager.create_model() returned None unexpectedly in test")
+        agent.model = returned_model
+
 
         # Verify agent created and model assigned
-        assert agent == mock_agent
-        assert agent.model == mock_model
-        mock_ppo_agent.assert_called_once_with(config=mock_config, device=device)
+        assert agent is not None
+        assert agent.model == mock_model_from_factory # Agent should have the model from ModelManager
+        assert agent.device == device
+        assert agent.config == mock_config

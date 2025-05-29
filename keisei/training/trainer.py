@@ -24,6 +24,7 @@ from rich.console import Console, Text
 import wandb
 from keisei.config_schema import AppConfig
 from keisei.core.experience_buffer import ExperienceBuffer
+from keisei.core.actor_critic_protocol import ActorCriticProtocol # Import ActorCriticProtocol
 
 # Backwards compatibility imports for tests (these classes are now used in managers)
 from keisei.core.ppo_agent import PPOAgent
@@ -65,9 +66,12 @@ class Trainer:
         self.config = config
         self.args = args
 
-        # Initialize attributes that will be set later (to avoid pylint errors)
+        # Declare instance attributes that will be set up
+        self.model: Optional[ActorCriticProtocol] = None # Model instance
+        self.agent: Optional[PPOAgent] = None # Agent instance
         self.log_both: Optional[Callable] = None
         self.execute_full_evaluation_run: Optional[Callable] = None
+
 
         # Initialize session manager for session-level concerns
         self.session_manager = SessionManager(config, args)
@@ -149,9 +153,19 @@ class Trainer:
             raise RuntimeError(f"Failed to initialize game components: {e}") from e
 
     def _setup_training_components(self):
-        """Initialize PPO agent and experience buffer using ModelManager."""
-        # Create agent using ModelManager
-        self.agent = self.model_manager.create_agent()
+        """Initialize PPO agent and experience buffer."""
+        # Create model using ModelManager
+        self.model = self.model_manager.create_model() # Get the model instance
+
+        # Initialize PPOAgent and assign the model
+        self.agent = PPOAgent(
+            config=self.config,
+            device=self.device,
+        )
+        if self.model is None:
+            # This should ideally not happen if model_manager.create_model() raises an error on failure
+            raise RuntimeError("Model was not created successfully before agent initialization.")
+        self.agent.model = self.model # self.model is now confirmed to be ActorCriticProtocol
 
         self.experience_buffer = ExperienceBuffer(
             buffer_size=self.config.training.steps_per_epoch,
@@ -182,9 +196,16 @@ class Trainer:
 
     def _handle_checkpoint_resume(self):
         """Handle resuming from checkpoint using ModelManager."""
+        if not self.agent:
+            self.logger.log("[ERROR] Agent not initialized before handling checkpoint resume. This should not happen.")
+            # Or raise an error, as this indicates a logic flaw
+            raise RuntimeError("Agent not initialized before _handle_checkpoint_resume")
+
+        # self.agent is confirmed to be not None by the check above.
         self.model_manager.handle_checkpoint_resume(
             agent=self.agent,
             model_dir=self.model_dir,
+            # resume_path_override can be passed here if needed, e.g., from self.args
         )
         self.resumed_from_checkpoint = self.model_manager.resumed_from_checkpoint
 
@@ -206,7 +227,14 @@ class Trainer:
     def _log_run_info(self, log_both):
         """Log run information at the start of training."""
         # Delegate session info logging to SessionManager
-        agent_info = {"type": type(self.agent).__name__, "name": self.agent.name}
+        agent_name = "N/A"
+        agent_type_name = "N/A"
+        if self.agent: # Check if agent is initialized
+            agent_name = getattr(self.agent, "name", "N/A") # PPOAgent might not have a 'name' attribute
+            agent_type_name = type(self.agent).__name__
+        
+        agent_info = {"type": agent_type_name, "name": agent_name}
+
 
         def log_wrapper(msg):
             log_both(msg)
@@ -334,6 +362,10 @@ class Trainer:
 
     def _perform_ppo_update(self, current_obs_np, log_both):
         """Perform a PPO update."""
+        if not self.agent:
+            log_both("[ERROR] PPO update called but agent is not initialized.", also_to_wandb=True)
+            return
+
         with torch.no_grad():
             last_value_pred_for_gae = self.agent.get_value(current_obs_np)
 
@@ -365,103 +397,69 @@ class Trainer:
         )
 
     def _finalize_training(self, log_both):
-        """Finalize training and save final model."""
+        """Finalize training and save final model and checkpoint via ModelManager."""
         log_both(
             f"Training loop finished at timestep {self.global_timestep}. Total episodes: {self.total_episodes_completed}.",
             also_to_wandb=True,
         )
 
+        if not self.agent:
+            log_both("[ERROR] Finalize training: Agent not initialized. Cannot save model or checkpoint.", also_to_wandb=True)
+            if self.is_train_wandb_active and wandb.run: # Ensure WandB is finalized if active
+                self.session_manager.finalize_session()
+                log_both("Weights & Biases run finished due to error.")
+            return
+
+        game_stats = {
+            "black_wins": self.black_wins,
+            "white_wins": self.white_wins,
+            "draws": self.draws,
+        }
+
         if self.global_timestep >= self.config.training.total_timesteps:
             log_both(
-                "Training successfully completed all timesteps.", also_to_wandb=True
+                "Training successfully completed all timesteps. Saving final model.", also_to_wandb=True
             )
-            final_model_path = os.path.join(self.model_dir, "final_model.pth")
-            try:
-                self.agent.save_model(
-                    final_model_path,
-                    self.global_timestep,
-                    self.total_episodes_completed,
-                )
-                log_both(f"Final model saved to {final_model_path}", also_to_wandb=True)
-
-                # Create W&B artifact for final model using ModelManager
-                final_metadata = {
-                    "training_timesteps": self.global_timestep,
-                    "total_episodes": self.total_episodes_completed,
-                    "black_wins": self.black_wins,
-                    "white_wins": self.white_wins,
-                    "draws": self.draws,
-                    "training_completed": True,
-                    "model_type": getattr(self.config.training, "model_type", "resnet"),
-                    "feature_set": getattr(self.config.env, "feature_set", "core"),
-                }
-                self.model_manager.create_model_artifact(
-                    model_path=final_model_path,
-                    artifact_name="final-model",
-                    run_name=self.run_name,
-                    is_wandb_active=self.is_train_wandb_active,
-                    description=f"Final trained model after {self.global_timestep} timesteps",
-                    metadata=final_metadata,
-                    aliases=["latest", "final"],
-                )
-
-                if self.is_train_wandb_active and wandb.run:
-                    wandb.finish()
-            except (OSError, RuntimeError) as e:
-                log_both(
-                    f"Error saving final model {final_model_path}: {e}",
-                    log_level="error",
-                    also_to_wandb=True,
-                )
+            success, final_model_path = self.model_manager.save_final_model(
+                agent=self.agent,
+                model_dir=self.model_dir,
+                global_timestep=self.global_timestep,
+                total_episodes_completed=self.total_episodes_completed,
+                game_stats=game_stats,
+                run_name=self.run_name,
+                is_wandb_active=self.is_train_wandb_active,
+            )
+            if success and final_model_path:
+                log_both(f"Final model processing (save & artifact) successful: {final_model_path}", also_to_wandb=True)
+            else:
+                log_both(f"[ERROR] Failed to save/artifact final model for timestep {self.global_timestep}.", also_to_wandb=True)
+            
+            # WandB finishing is handled by SessionManager or after all save attempts
         else:
             log_both(
-                f"Training interrupted at timestep {self.global_timestep} (before {self.config.training.total_timesteps} total).",
-                log_level="warning",
+                f"[WARNING] Training interrupted at timestep {self.global_timestep} (before {self.config.training.total_timesteps} total).",
                 also_to_wandb=True,
             )
 
-        # Always save a final checkpoint if one was not just saved at the last step
-        last_ckpt_filename = os.path.join(
-            self.model_dir, f"checkpoint_ts{self.global_timestep}.pth"
+        # Always attempt to save a final checkpoint
+        log_both(f"Attempting to save final checkpoint at timestep {self.global_timestep}.", also_to_wandb=False)
+        ckpt_success, final_ckpt_path = self.model_manager.save_final_checkpoint(
+            agent=self.agent,
+            model_dir=self.model_dir,
+            global_timestep=self.global_timestep,
+            total_episodes_completed=self.total_episodes_completed,
+            game_stats=game_stats,
+            run_name=self.run_name,
+            is_wandb_active=self.is_train_wandb_active,
         )
-        if self.global_timestep > 0 and not os.path.exists(last_ckpt_filename):
-            self.agent.save_model(
-                last_ckpt_filename,
-                self.global_timestep,
-                self.total_episodes_completed,
-                stats_to_save={
-                    "black_wins": self.black_wins,
-                    "white_wins": self.white_wins,
-                    "draws": self.draws,
-                },
-            )
-            log_both(
-                f"Final checkpoint saved to {last_ckpt_filename}", also_to_wandb=True
-            )
+        if ckpt_success and final_ckpt_path:
+            log_both(f"Final checkpoint processing (save & artifact) successful: {final_ckpt_path}", also_to_wandb=True)
+        elif self.global_timestep > 0 : # Only log error if a checkpoint was expected
+            log_both(f"[ERROR] Failed to save/artifact final checkpoint for timestep {self.global_timestep}.", also_to_wandb=True)
 
-            # Create W&B artifact for final checkpoint using ModelManager
-            checkpoint_metadata = {
-                "training_timesteps": self.global_timestep,
-                "total_episodes": self.total_episodes_completed,
-                "black_wins": self.black_wins,
-                "white_wins": self.white_wins,
-                "draws": self.draws,
-                "checkpoint_type": "final",
-                "model_type": getattr(self.config.training, "model_type", "resnet"),
-                "feature_set": getattr(self.config.env, "feature_set", "core"),
-            }
-            self.model_manager.create_model_artifact(
-                model_path=last_ckpt_filename,
-                artifact_name="final-checkpoint",
-                run_name=self.run_name,
-                is_wandb_active=self.is_train_wandb_active,
-                description=f"Final checkpoint at timestep {self.global_timestep}",
-                metadata=checkpoint_metadata,
-                aliases=["latest-checkpoint"],
-            )
 
         if self.is_train_wandb_active and wandb.run:
-            self.session_manager.finalize_session()
+            self.session_manager.finalize_session() # Finalize session after all save attempts
             log_both("Weights & Biases run finished.")
 
         # Save the full console log from Rich
@@ -570,13 +568,12 @@ class Trainer:
                 # End of training loop
                 self._finalize_training(log_both)
 
-    # Property accessors for backward compatibility
-    @property
-    def model(self):
-        """Access the model through ModelManager."""
-        return (
-            self.model_manager.model if hasattr(self.model_manager, "model") else None
-        )
+    # The @property for model was removed to allow direct assignment to self.model.
+    # The instance attribute self.model (Optional[ActorCriticProtocol]) should be used directly.
+    # Other properties like feature_spec, obs_shape etc., might need adjustment
+    # if they previously relied on a self.model property that accessed self.agent.model,
+    # or if they should now access self.model directly (after checking it's not None).
+    # For now, only the conflicting 'model' property is fully removed.
 
     @property
     def feature_spec(self):
