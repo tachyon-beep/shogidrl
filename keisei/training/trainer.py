@@ -42,6 +42,7 @@ from .env_manager import EnvManager
 from .model_manager import ModelManager
 from .session_manager import SessionManager
 from .step_manager import EpisodeState, StepManager
+from .training_loop_manager import TrainingLoopManager  # Added import
 
 
 class Trainer:
@@ -138,6 +139,9 @@ class Trainer:
             callbacks.EvaluationCallback(eval_cfg, eval_interval),
         ]
 
+        # Initialize TrainingLoopManager
+        self.training_loop_manager = TrainingLoopManager(trainer=self)
+
     def _setup_game_components(self):
         """Initialize game environment and policy mapper using EnvManager."""
         try:
@@ -193,7 +197,7 @@ class Trainer:
         self.step_manager = StepManager(
             config=self.config,
             game=self.game,
-            agent=self.agent,
+            agent=self.agent,  # Agent is now guaranteed to be initialized
             policy_mapper=self.policy_output_mapper,
             experience_buffer=self.experience_buffer,
         )
@@ -286,97 +290,8 @@ class Trainer:
                 wandb.finish(exit_code=1)
             raise RuntimeError(f"Game initialization error: {e}") from e
 
-    def _execute_training_step(
-        self,
-        episode_state: EpisodeState,
-        log_both,
-    ) -> EpisodeState:
-        """Execute a single training step using StepManager."""
-        # Execute the step using StepManager
-        step_result = self.step_manager.execute_step(
-            episode_state=episode_state,
-            global_timestep=self.global_timestep,
-            logger_func=log_both,
-        )
-
-        # Handle step failure by returning reset episode state
-        if not step_result.success:
-            return self.step_manager.reset_episode()
-
-        # Update episode state with step results
-        updated_episode_state = self.step_manager.update_episode_state(
-            episode_state, step_result
-        )
-
-        # Handle episode end
-        if step_result.done:
-            # Update game statistics based on outcome
-            if step_result.info and "winner" in step_result.info:
-                winner = step_result.info["winner"]
-                if winner == "black":
-                    self.black_wins += 1
-                elif winner == "white":
-                    self.white_wins += 1
-                else:
-                    self.draws += 1
-            else:
-                self.draws += 1
-
-            # Create game stats dict for StepManager
-            game_stats = {
-                "black_wins": self.black_wins,
-                "white_wins": self.white_wins,
-                "draws": self.draws,
-            }
-
-            # Handle episode end using StepManager
-            new_episode_state = self.step_manager.handle_episode_end(
-                updated_episode_state,
-                step_result,
-                game_stats,
-                self.total_episodes_completed,
-                log_both,
-            )
-
-            # Update trainer statistics
-            self.total_episodes_completed += 1
-
-            # Store pending progress updates for display
-            ep_metrics_str = f"L:{updated_episode_state.episode_length} R:{updated_episode_state.episode_reward:.2f}"
-
-            # Calculate win rates for display
-            total_games = self.black_wins + self.white_wins + self.draws
-            current_black_win_rate = (
-                self.black_wins / total_games if total_games > 0 else 0.0
-            )
-            current_white_win_rate = (
-                self.white_wins / total_games if total_games > 0 else 0.0
-            )
-            current_draw_rate = self.draws / total_games if total_games > 0 else 0.0
-
-            # Store episode metrics for next throttled update (WP-2)
-            self.pending_progress_updates.update(
-                {
-                    "ep_metrics": ep_metrics_str,
-                    "black_wins_cum": self.black_wins,
-                    "white_wins_cum": self.white_wins,
-                    "draws_cum": self.draws,
-                    "black_win_rate": current_black_win_rate,
-                    "white_win_rate": current_white_win_rate,
-                    "draw_rate": current_draw_rate,
-                }
-            )
-
-            return new_episode_state
-
-        # PPO Update check
-        if (
-            (self.global_timestep + 1) % self.config.training.steps_per_epoch == 0
-            and self.experience_buffer.ptr == self.config.training.steps_per_epoch
-        ):
-            self._perform_ppo_update(updated_episode_state.current_obs, log_both)
-
-        return updated_episode_state
+    # _execute_training_step is removed as its logic is now in TrainingLoopManager._run_epoch
+    # def _execute_training_step(...)
 
     def _perform_ppo_update(self, current_obs_np, log_both):
         """Perform a PPO update."""
@@ -523,91 +438,71 @@ class Trainer:
         self.rich_console.print(f"Output and logs are in: {self.run_artifact_dir}")
 
     def run_training_loop(self):
-        """Executes the main training loop."""
-        # Log session start using SessionManager
+        """Executes the main training loop by delegating to TrainingLoopManager."""
         self.session_manager.log_session_start()
 
-        # TrainingLogger context manager
         with TrainingLogger(
             self.log_file_path,
             rich_console=self.rich_console,
             rich_log_panel=self.rich_log_messages,
         ) as logger:
-
-            def log_both(
+            def log_both_impl(
                 message: str,
                 also_to_wandb: bool = False,
                 wandb_data: Optional[Dict] = None,
-                log_level: str = "info",  # pylint: disable=unused-argument
+                log_level: str = "info",  # Parameter for log level (unused by current TrainingLogger.log)
             ):
-                # Note: log_level parameter is available for future use if needed
-                logger.log(message)
+                logger.log(message)  # Current TrainingLogger.log does not take level
                 if self.is_train_wandb_active and also_to_wandb and wandb.run:
                     log_payload = {"train_message": message}
                     if wandb_data:
                         log_payload.update(wandb_data)
                     wandb.log(log_payload, step=self.global_timestep)
 
-            self.log_both = log_both  # Expose for callbacks
-            self.execute_full_evaluation_run = (
-                execute_full_evaluation_run  # Expose for callbacks
-            )
+            self.log_both = log_both_impl
+            self.execute_full_evaluation_run = execute_full_evaluation_run
 
-            # Log session start
             session_start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            log_both(f"--- SESSION START: {self.run_name} at {session_start_time} ---")
+            self.log_both(f"--- SESSION START: {self.run_name} at {session_start_time} ---")
 
             # Setup run information logging
-            self._log_run_info(log_both)
+            self._log_run_info(self.log_both)
 
             # Log checkpoint resume status
             if self.resumed_from_checkpoint:
-                log_both(
+                self.log_both(
                     f"Resumed training from checkpoint: {self.resumed_from_checkpoint}"
                 )
+            
+            initial_episode_state = self._initialize_game_state(self.log_both)
+            self.training_loop_manager.set_initial_episode_state(initial_episode_state)
 
-            last_time = time.time()
-            steps_since_last_time = 0
-            episode_state = self._initialize_game_state(log_both)
+            # The display.start() context manager should wrap the loop execution
+            # It's currently managed by the TrainingDisplay class itself if it uses a Live display.
+            # If direct management is needed here, it would be: `with self.display.start() as ...:`
+            # For now, assuming display manages its own lifecycle based on its methods.
+            # If display.start() is a context manager that needs to wrap the loop:
+            # with self.display.start() as _:
+            #    self.training_loop_manager.run()
+            # else, if display.start() just initializes and run() handles updates:
+            # self.display.start() # Or similar initialization if needed
+            
+            # The TrainingDisplay.start() method in the current `display.py` (not shown here but assumed)
+            # likely sets up the Rich Live display. The TrainingLoopManager will then call
+            # display.update_progress and display.update_log_panel.
 
-            with self.display.start() as _:
-                while self.global_timestep < self.config.training.total_timesteps:
-                    episode_state = self._execute_training_step(
-                        episode_state,
-                        log_both,
-                    )
-
-                    # Update step counters
-                    self.global_timestep += 1
-                    steps_since_last_time += 1
-
-                    # Display updates
-                    if (
-                        self.global_timestep % self.config.training.render_every_steps
-                    ) == 0:
-                        self.display.update_log_panel(self)
-
-                    current_time = time.time()
-                    time_delta = current_time - last_time
-                    current_speed = (
-                        steps_since_last_time / time_delta if time_delta > 0 else 0.0
-                    )
-
-                    if time_delta > 0.1:  # Update speed roughly every 100ms
-                        last_time = current_time
-                        steps_since_last_time = 0
-
-                    self.display.update_progress(
-                        self, current_speed, self.pending_progress_updates
-                    )
-                    self.pending_progress_updates.clear()
-
-                    # Callbacks
-                    for callback in self.callbacks:
-                        callback.on_step_end(self)
-
-                # End of training loop
-                self._finalize_training(log_both)
+            try:
+                self.training_loop_manager.run()  # Delegate the loop execution
+            except KeyboardInterrupt:
+                # This is already logged by TrainingLoopManager, but we ensure finalization.
+                self.log_both("Trainer caught KeyboardInterrupt from TrainingLoopManager. Finalizing.", also_to_wandb=True)
+            except Exception as e:
+                # This is already logged by TrainingLoopManager.
+                self.log_both(f"Trainer caught unhandled exception from TrainingLoopManager: {e}. Finalizing.", also_to_wandb=True)
+                # Optionally, re-raise if higher-level handling is needed: raise
+            finally:
+                # Finalization is critical and should always run.
+                self._finalize_training(self.log_both)
 
     # The @property for model was removed to allow direct assignment to self.model.
     # The instance attribute self.model (Optional[ActorCriticProtocol]) should be used directly.
