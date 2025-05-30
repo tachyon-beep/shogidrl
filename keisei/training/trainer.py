@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Callable, Dict, Optional
 
 import torch
+
 import wandb
 from keisei.config_schema import AppConfig
 from keisei.core.actor_critic_protocol import ActorCriticProtocol
@@ -98,14 +99,18 @@ class Trainer(CompatibilityMixin):
     def _initialize_components(self):
         """Initialize all training components using SetupManager."""
         # Setup game components
-        (self.game, self.policy_output_mapper, 
-         self.action_space_size, self.obs_space_shape) = self.setup_manager.setup_game_components(
+        (
+            self.game,
+            self.policy_output_mapper,
+            self.action_space_size,
+            self.obs_space_shape,
+        ) = self.setup_manager.setup_game_components(
             self.env_manager, self.rich_console
         )
 
         # Setup training components
-        self.model, self.agent, self.experience_buffer = self.setup_manager.setup_training_components(
-            self.model_manager
+        self.model, self.agent, self.experience_buffer = (
+            self.setup_manager.setup_training_components(self.model_manager)
         )
 
         # Setup step manager
@@ -115,8 +120,12 @@ class Trainer(CompatibilityMixin):
 
         # Handle checkpoint resume
         self.resumed_from_checkpoint = self.setup_manager.handle_checkpoint_resume(
-            self.model_manager, self.agent, self.model_dir, self.args.resume,
-            self.metrics_manager, self.logger
+            self.model_manager,
+            self.agent,
+            self.model_dir,
+            self.args.resume,
+            self.metrics_manager,
+            self.logger,
         )
 
     def _initialize_game_state(self, log_both) -> EpisodeState:
@@ -156,7 +165,9 @@ class Trainer(CompatibilityMixin):
         self.metrics_manager.update_progress_metrics("ppo_metrics", ppo_metrics_display)
 
         # Format detailed metrics for logging
-        ppo_metrics_log = self.metrics_manager.format_ppo_metrics_for_logging(learn_metrics)
+        ppo_metrics_log = self.metrics_manager.format_ppo_metrics_for_logging(
+            learn_metrics
+        )
 
         log_both(
             f"PPO Update @ ts {self.metrics_manager.global_timestep+1}. Metrics: {ppo_metrics_log}",
@@ -167,8 +178,11 @@ class Trainer(CompatibilityMixin):
     def _log_run_info(self, log_both):
         """Log run information at the start of training using SetupManager."""
         self.setup_manager.log_run_info(
-            self.session_manager, self.model_manager, self.agent, 
-            self.metrics_manager, log_both
+            self.session_manager,
+            self.model_manager,
+            self.agent,
+            self.metrics_manager,
+            log_both,
         )
 
     def _finalize_training(self, log_both):
@@ -243,7 +257,9 @@ class Trainer(CompatibilityMixin):
                 f"Final checkpoint processing (save & artifact) successful: {final_ckpt_path}",
                 also_to_wandb=True,
             )
-        elif self.metrics_manager.global_timestep > 0:  # Only log error if a checkpoint was expected
+        elif (
+            self.metrics_manager.global_timestep > 0
+        ):  # Only log error if a checkpoint was expected
             log_both(
                 f"[ERROR] Failed to save/artifact final checkpoint for timestep {self.metrics_manager.global_timestep}.",
                 also_to_wandb=True,
@@ -319,24 +335,28 @@ class Trainer(CompatibilityMixin):
     def _handle_checkpoint_resume(self):
         """
         Handle checkpoint resume for backward compatibility.
-        
+
         This method delegates to SetupManager for consistency with the refactored architecture.
         """
         if not self.agent:
             raise RuntimeError("Agent not initialized before _handle_checkpoint_resume")
-            
+
         # Delegate to SetupManager
         result = self.setup_manager.handle_checkpoint_resume(
-            self.model_manager, self.agent, self.model_dir, self.args.resume,
-            self.metrics_manager, self.logger
+            self.model_manager,
+            self.agent,
+            self.model_dir,
+            self.args.resume,
+            self.metrics_manager,
+            self.logger,
         )
-        
+
         # Update trainer's state to match the result
         self.resumed_from_checkpoint = result
-        
+
         return result
-        
+
         # Update trainer's state to match the result
         self.resumed_from_checkpoint = result
-        
+
         return result

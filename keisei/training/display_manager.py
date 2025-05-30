@@ -3,7 +3,7 @@ training/display_manager.py: Manages Rich UI display components and logging.
 """
 
 import sys
-from typing import List, Optional, Any
+from typing import Any, List, Optional
 
 from rich.console import Console, Text
 from rich.live import Live
@@ -24,11 +24,11 @@ class DisplayManager:
         """
         self.config = config
         self.log_file_path = log_file_path
-        
+
         # Initialize Rich console components
         self.rich_console = Console(file=sys.stderr, record=True)
         self.rich_log_messages: List[Text] = []
-        
+
         # Display will be initialized when needed
         self.display: Optional[display.TrainingDisplay] = None
 
@@ -42,9 +42,7 @@ class DisplayManager:
         Returns:
             The configured TrainingDisplay
         """
-        self.display = display.TrainingDisplay(
-            self.config, trainer, self.rich_console
-        )
+        self.display = display.TrainingDisplay(self.config, trainer, self.rich_console)
         return self.display
 
     def get_console(self) -> Console:
@@ -120,11 +118,11 @@ class DisplayManager:
         """
         try:
             import os
+
             console_log_path = os.path.join(output_dir, "full_console_output_rich.html")
             self.rich_console.save_html(console_log_path)
             print(
-                f"Full Rich console output saved to {console_log_path}", 
-                file=sys.stderr
+                f"Full Rich console output saved to {console_log_path}", file=sys.stderr
             )
             return True
         except OSError as e:
@@ -161,7 +159,7 @@ class DisplayManager:
         """
         # Save console output
         self.save_console_output(run_artifact_dir)
-        
+
         # Final messages
         self.print_rule("Run Finished")
         self.print_message(f"Run '{run_name}' processing finished.")

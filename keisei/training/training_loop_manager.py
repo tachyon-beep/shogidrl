@@ -192,12 +192,20 @@ class TrainingLoopManager:
                     + self.trainer.metrics_manager.draws
                 )
                 bw_rate = (
-                    self.trainer.metrics_manager.black_wins / total_games if total_games > 0 else 0.0
+                    self.trainer.metrics_manager.black_wins / total_games
+                    if total_games > 0
+                    else 0.0
                 )
                 ww_rate = (
-                    self.trainer.metrics_manager.white_wins / total_games if total_games > 0 else 0.0
+                    self.trainer.metrics_manager.white_wins / total_games
+                    if total_games > 0
+                    else 0.0
                 )
-                d_rate = self.trainer.metrics_manager.draws / total_games if total_games > 0 else 0.0
+                d_rate = (
+                    self.trainer.metrics_manager.draws / total_games
+                    if total_games > 0
+                    else 0.0
+                )
 
                 self.trainer.metrics_manager.pending_progress_updates.update(
                     {

@@ -2,7 +2,7 @@
 training/callback_manager.py: Manages training callbacks and their execution.
 """
 
-from typing import TYPE_CHECKING, List, Any
+from typing import TYPE_CHECKING, Any, List
 
 from . import callbacks
 
@@ -44,12 +44,10 @@ class CallbackManager:
         eval_cfg = getattr(self.config, "evaluation", None)
         eval_interval = (
             eval_cfg.evaluation_interval_timesteps
-            if eval_cfg and hasattr(eval_cfg, 'evaluation_interval_timesteps')
-            else getattr(self.config.training, 'evaluation_interval_timesteps', 1000)
+            if eval_cfg and hasattr(eval_cfg, "evaluation_interval_timesteps")
+            else getattr(self.config.training, "evaluation_interval_timesteps", 1000)
         )
-        callback_list.append(
-            callbacks.EvaluationCallback(eval_cfg, eval_interval)
-        )
+        callback_list.append(callbacks.EvaluationCallback(eval_cfg, eval_interval))
 
         self.callbacks = callback_list
         return callback_list
@@ -66,10 +64,10 @@ class CallbackManager:
                 callback.on_step_end(trainer)
             except Exception as e:
                 # Log error but don't stop training
-                if hasattr(trainer, 'log_both') and trainer.log_both:
+                if hasattr(trainer, "log_both") and trainer.log_both:
                     trainer.log_both(
                         f"[ERROR] Callback {type(callback).__name__} failed: {e}",
-                        also_to_wandb=False
+                        also_to_wandb=False,
                     )
 
     def add_callback(self, callback: callbacks.Callback) -> None:
@@ -92,7 +90,9 @@ class CallbackManager:
             True if any callbacks were removed, False otherwise
         """
         original_count = len(self.callbacks)
-        self.callbacks = [cb for cb in self.callbacks if not isinstance(cb, callback_type)]
+        self.callbacks = [
+            cb for cb in self.callbacks if not isinstance(cb, callback_type)
+        ]
         return len(self.callbacks) < original_count
 
     def get_callbacks(self) -> List[callbacks.Callback]:

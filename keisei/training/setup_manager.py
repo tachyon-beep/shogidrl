@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any, Optional, Tuple
 
 import torch
+
 from keisei.config_schema import AppConfig
 from keisei.core.actor_critic_protocol import ActorCriticProtocol
 from keisei.core.experience_buffer import ExperienceBuffer
@@ -36,11 +37,11 @@ class SetupManager:
     def setup_game_components(self, env_manager, rich_console):
         """
         Initialize game environment and policy mapper using EnvManager.
-        
+
         Args:
             env_manager: Environment manager instance
             rich_console: Rich console for error display
-            
+
         Returns:
             Tuple of (game, policy_output_mapper, action_space_size, obs_space_shape)
         """
@@ -68,15 +69,15 @@ class SetupManager:
     def setup_training_components(self, model_manager):
         """
         Initialize PPO agent and experience buffer.
-        
+
         Args:
             model_manager: Model manager instance
-            
+
         Returns:
             Tuple of (model, agent, experience_buffer)
         """
         print("DEBUG: setup_training_components called")
-        
+
         # Create model using ModelManager
         print("DEBUG: About to call model_manager.create_model()")
         model = model_manager.create_model()
@@ -94,10 +95,10 @@ class SetupManager:
             raise RuntimeError(
                 "Model was not created successfully before agent initialization."
             )
-        
+
         agent.model = model
         print("DEBUG: About to create ExperienceBuffer")
-        
+
         experience_buffer = ExperienceBuffer(
             buffer_size=self.config.training.steps_per_epoch,
             gamma=self.config.training.gamma,
@@ -112,13 +113,13 @@ class SetupManager:
     def setup_step_manager(self, game, agent, policy_output_mapper, experience_buffer):
         """
         Initialize StepManager for step execution and episode management.
-        
+
         Args:
             game: Game environment instance
             agent: PPO agent instance
             policy_output_mapper: Policy output mapper
             experience_buffer: Experience buffer instance
-            
+
         Returns:
             Configured StepManager instance
         """
@@ -133,11 +134,18 @@ class SetupManager:
         print(f"DEBUG: Created step_manager: {step_manager}")
         return step_manager
 
-    def handle_checkpoint_resume(self, model_manager, agent, model_dir, resume_path_override, 
-                                metrics_manager, logger):
+    def handle_checkpoint_resume(
+        self,
+        model_manager,
+        agent,
+        model_dir,
+        resume_path_override,
+        metrics_manager,
+        logger,
+    ):
         """
         Handle resuming from checkpoint using ModelManager.
-        
+
         Args:
             model_manager: Model manager instance
             agent: PPO agent instance
@@ -145,7 +153,7 @@ class SetupManager:
             resume_path_override: Optional resume path override
             metrics_manager: Metrics manager instance
             logger: Logger instance
-            
+
         Returns:
             True if resumed from checkpoint, False otherwise
         """
@@ -179,7 +187,9 @@ class SetupManager:
         except (OSError, IOError) as e:
             print(f"[SetupManager] Failed to log event: {e}", file=sys.stderr)
 
-    def log_run_info(self, session_manager, model_manager, agent, metrics_manager, log_both):
+    def log_run_info(
+        self, session_manager, model_manager, agent, metrics_manager, log_both
+    ):
         """Log run information at the start of training."""
         # Delegate session info logging to SessionManager
         agent_name = "N/A"
@@ -204,6 +214,6 @@ class SetupManager:
         # Log model structure using ModelManager
         model_info = model_manager.get_model_info()
         log_both(f"Model Structure:\n{model_info}", also_to_wandb=False)
-        
+
         # Log to main training log file
         self.log_event(f"Model Structure:\n{model_info}", session_manager.log_file_path)
