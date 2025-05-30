@@ -4,7 +4,7 @@ Okay, this is an excellent consolidation of requirements and design consideratio
 
 **1. Core Philosophy: "Learn from Scratch"**
 
-*   No hardcoded opening books.
+*   No hardcoded open*   `reset(self)`: Initializes board to starting position (see **4.A.1 Initial Board Setup**), clears hands, sets `current_player` to 0 (Black), clears `move_history`, `game_over` to False, `winner` to None, `move_count` to 0.ng books.
 *   No human-designed evaluation functions (other than win/loss/draw for rewards).
 *   The AI should discover strategies solely through self-play and reinforcement learning.
 
@@ -34,9 +34,242 @@ The system revolves around the standard Reinforcement Learning (RL) loop using P
                                +---------------------+
 ```
 
-**3. Modules and Key Components**
+**3. Configuration Architecture**
 
-**3.A. `shogi_engine.py` (The Game Environment)**
+The Keisei system employs a sophisticated Pydantic-based configuration architecture that provides type safety, validation, and comprehensive control over all aspects of training, evaluation, and game management. This configuration system supports advanced features including mixed precision training, distributed data parallel (DDP), gradient clipping, and comprehensive experiment tracking.
+
+**3.A. Configuration Schema (`config_schema.py`)**
+
+The configuration system is built around six main configuration sections, each managed by dedicated Pydantic models:
+
+**3.A.1. Environment Configuration (`EnvConfig`)**
+```python
+class EnvConfig(BaseModel):
+    device: str = "cuda"
+    input_channels: int = 46
+    action_space_size: int = 6480
+    seed: Optional[int] = None
+    max_moves_per_game: int = 500
+```
+
+Controls the fundamental environment parameters:
+- **Device Management**: Automatic GPU/CPU detection and allocation
+- **Observation Space**: 46-channel board representation (9x9x46 tensor)
+- **Action Space**: 6,480 possible moves covering all legal Shogi moves
+- **Game Limits**: Configurable maximum moves per game to prevent infinite games
+- **Reproducibility**: Optional seeding for deterministic training runs
+
+**3.A.2. Training Configuration (`TrainingConfig`)**
+```python
+class TrainingConfig(BaseModel):
+    learning_rate: float = 3e-4
+    gamma: float = 0.99
+    clip_epsilon: float = 0.2
+    ppo_epochs: int = 10
+    minibatch_size: int = 64
+    entropy_coeff: float = 0.01
+    lambda_gae: float = 0.95
+    gradient_clip_norm: float = 0.5
+    mixed_precision: bool = False
+    distributed: bool = False
+    checkpoint_interval: int = 1000
+```
+
+Provides comprehensive control over the PPO training algorithm:
+- **Core PPO Parameters**: Learning rate, clipping, GAE lambda
+- **Advanced Features**: Mixed precision (AMP), distributed training (DDP)
+- **Stability Controls**: Gradient clipping, entropy regularization
+- **Checkpoint Management**: Automatic model saving intervals
+
+**3.A.3. Evaluation Configuration (`EvaluationConfig`)**
+```python
+class EvaluationConfig(BaseModel):
+    eval_interval: int = 100
+    eval_games: int = 10
+    eval_timeout: float = 300.0
+    save_eval_games: bool = True
+```
+
+Controls evaluation and validation processes:
+- **Evaluation Frequency**: How often to run evaluation during training
+- **Sample Size**: Number of games to play for statistical significance
+- **Performance Monitoring**: Timeout controls and game saving options
+
+**3.A.4. Logging Configuration (`LoggingConfig`)**
+```python
+class LoggingConfig(BaseModel):
+    model_dir: str = "models"
+    log_file: Optional[str] = None
+    log_level: str = "INFO"
+```
+
+Manages experiment tracking and output:
+- **Model Storage**: Centralized model checkpoint directory
+- **Debug Information**: Configurable logging levels and file output
+- **Experiment Organization**: Structured directory naming with timestamps
+
+**3.A.5. Weights & Biases Configuration (`WandBConfig`)**
+```python
+class WandBConfig(BaseModel):
+    enabled: bool = False
+    project: str = "keisei-shogi"
+    entity: Optional[str] = None
+    run_name: Optional[str] = None
+    tags: List[str] = []
+    notes: Optional[str] = None
+```
+
+Comprehensive experiment tracking integration:
+- **Cloud Logging**: Automatic metrics, loss, and performance tracking
+- **Experiment Management**: Project organization, tagging, and documentation
+- **Visualization**: Real-time training curves and model comparison tools
+
+**3.A.6. Demo Configuration (`DemoConfig`)**
+```python
+class DemoConfig(BaseModel):
+    enabled: bool = False
+    model_path: Optional[str] = None
+    interactive: bool = True
+```
+
+Controls demonstration and inference modes:
+- **Model Loading**: Specify trained models for gameplay demonstrations
+- **Interaction Modes**: Human vs AI or AI vs AI gameplay options
+
+**3.B. Trainer Manager Architecture**
+
+The training system has been refactored into nine specialized managers, each responsible for specific aspects of the training pipeline. This modular architecture provides clean separation of concerns and enables advanced features like distributed training and mixed precision.
+
+**3.B.1. Session Manager (`session_manager.py`)**
+- **Responsibility**: Overall training session lifecycle management
+- **Key Features**:
+  - Run directory creation with timestamps
+  - Weights & Biases integration and setup
+  - Configuration validation and persistence
+  - Session state management and cleanup
+
+**3.B.2. Model Manager (`model_manager.py`)**
+- **Responsibility**: Neural network and optimizer management
+- **Key Features**:
+  - Model instantiation and device placement
+  - Checkpoint saving and loading with versioning
+  - Mixed precision (AMP) scaler management
+  - Model state validation and recovery
+
+**3.B.3. Environment Manager (`env_manager.py`)**
+- **Responsibility**: Game environment and policy mapping
+- **Key Features**:
+  - Shogi game instance creation and configuration
+  - Policy output mapper initialization
+  - Environment seeding and reproducibility
+  - Action space validation
+
+**3.B.4. Step Manager (`step_manager.py`)**
+- **Responsibility**: Individual training step execution
+- **Key Features**:
+  - Action selection with legal move filtering
+  - Environment interaction and state transitions
+  - Experience collection and storage
+  - Reward calculation and processing
+
+**3.B.5. Metrics Manager (`metrics_manager.py`)**
+- **Responsibility**: Training statistics and performance tracking
+- **Key Features**:
+  - Loss component tracking (policy, value, entropy)
+  - Performance metrics (episode length, rewards)
+  - Learning rate scheduling and monitoring
+  - Statistical aggregation and reporting
+
+**3.B.6. Training Loop Manager (`training_loop_manager.py`)**
+- **Responsibility**: Main training algorithm orchestration
+- **Key Features**:
+  - PPO algorithm implementation with clipping
+  - Experience buffer management and GAE computation
+  - Minibatch processing and gradient updates
+  - Advanced training features (DDP, mixed precision)
+
+**3.B.7. Setup Manager (`setup_manager.py`)**
+- **Responsibility**: Component initialization and validation
+- **Key Features**:
+  - Configuration loading and validation
+  - Device detection and allocation
+  - Component dependency resolution
+  - Error handling and recovery
+
+**3.B.8. Display Manager (`display_manager.py`)**
+- **Responsibility**: User interface and progress monitoring
+- **Key Features**:
+  - Training progress visualization
+  - Real-time metrics display
+  - Game state rendering
+  - Performance monitoring dashboards
+
+**3.B.9. Callback Manager (`callback_manager.py`)**
+- **Responsibility**: Event-driven training customization
+- **Key Features**:
+  - Training event hooks (epoch start/end, checkpoint)
+  - Custom evaluation schedules
+  - Early stopping and learning rate scheduling
+  - Extensible callback system for research experiments
+
+**3.C. Shogi Game Manager Configuration**
+
+The `ShogiGame` class integrates seamlessly with the configuration system, providing configurable game parameters while maintaining strict rule compliance.
+
+**3.C.1. Game Configuration Parameters**
+```python
+class ShogiGame:
+    def __init__(self, max_moves_per_game: int = 500, seed: Optional[int] = None):
+        self.max_moves_per_game = max_moves_per_game
+        self.move_count = 0
+        # ... other initialization
+```
+
+**Key Features**:
+- **Move Limits**: Configurable maximum moves to prevent infinite games
+- **Seeding**: Deterministic game sequences for reproducible training
+- **SFEN Support**: Standard Forsyth-Edwards Notation for position serialization
+- **Observation Space**: 46-channel board representation with piece positions, captured pieces, and game state
+
+**3.C.2. Configuration Integration**
+The game manager receives configuration from the `EnvConfig` section:
+- `max_moves_per_game`: Prevents runaway games during training
+- `seed`: Ensures reproducible training runs when specified
+- `input_channels`: Validates observation space dimensions (46 channels)
+- `action_space_size`: Validates action space coverage (6,480 moves)
+
+**3.D. Configuration Usage Patterns**
+
+**3.D.1. Configuration Loading**
+```python
+from keisei.config_schema import KeseiConfig
+
+# Load from YAML file
+config = KeiiseiConfig.from_yaml("config.yaml")
+
+# Override specific parameters
+config.training.learning_rate = 1e-4
+config.training.mixed_precision = True
+config.wandb.enabled = True
+```
+
+**3.D.2. Manager Integration**
+```python
+# Managers receive relevant configuration sections
+session_manager = SessionManager(config.logging, config.wandb)
+model_manager = ModelManager(config.training, config.env)
+training_loop = TrainingLoopManager(config.training)
+```
+
+**3.D.3. Advanced Configuration Features**
+- **Validation**: Pydantic ensures type safety and value constraints
+- **Documentation**: Built-in help and parameter descriptions
+- **Environment Variables**: Support for runtime configuration overrides
+- **CLI Integration**: Command-line parameter parsing and validation
+
+**4. Modules and Key Components**
+
+**4.A. `shogi_engine.py` (The Game Environment)**
 
 This module is responsible for Shogi rules, game state, and move validation.
 
@@ -59,7 +292,7 @@ This module is responsible for Shogi rules, game state, and move validation.
         *   `self.game_over`: Boolean.
         *   `self.winner`: 0 (Black), 1 (White), or `None`/2 (Draw).
         *   `self.move_count`: Integer.
-    *   `reset(self)`: Initializes board to starting position (see **3.A.1 Initial Board Setup**), clears hands, sets `current_player` to 0 (Black), clears `move_history`, `game_over` to False, `winner` to None, `move_count` to 0.
+    *   `reset(self)`: Initializes board to starting position (see **4.A.1 Initial Board Setup**), clears hands, sets `current_player` to 0 (Black), clears `move_history`, `game_over` to False, `winner` to None, `move_count` to 0.
     *   `get_piece(self, row, col)`: Returns piece at `(row, col)`.
     *   `set_piece(self, row, col, piece)`: Sets piece at `(row, col)`.
     *   `_is_on_board(self, row, col)`: Helper: `0 <= row <= 8 and 0 <= col <= 8`.
@@ -67,14 +300,14 @@ This module is responsible for Shogi rules, game state, and move validation.
         *   Returns list of `(r_to, c_to)` tuples for a piece, considering *only* its fundamental movement rules (not checks, board boundaries, or captures on own pieces). Handles promoted pieces.
     *   `get_legal_moves(self)`:
         *   **CRITICAL FUNCTION.**
-        *   Generates all possible moves for `self.current_player`. Returns a list of `move_tuple` (see **3.A.2 Precise Internal Move Representation**).
+        *   Generates all possible moves for `self.current_player`. Returns a list of `move_tuple` (see **4.A.2 Precise Internal Move Representation**).
         *   **Board moves:**
             *   Iterate through `self.current_player`'s pieces on `self.board`.
             *   For each, call `_get_individual_piece_moves`.
             *   For each potential `(r_to, c_to)`:
                 *   Check if `(r_to, c_to)` is on board.
                 *   Check if `(r_to, c_to)` is occupied by own piece (illegal).
-                *   Determine promotion options based on `_can_promote()` (see **3.A.3 Promotion Rules**). If promotion is optional, generate moves for both promoted and unpromoted states. If mandatory, only the promoted move.
+                *   Determine promotion options based on `_can_promote()` (see **4.A.3 Promotion Rules**). If promotion is optional, generate moves for both promoted and unpromoted states. If mandatory, only the promoted move.
         *   **Drop moves:**
             *   Iterate through `piece_type_int` in `self.hands[self.current_player]` with `count > 0`.
             *   For each piece type, iterate through all 81 squares `(r_to, c_to)`.
@@ -82,23 +315,23 @@ This module is responsible for Shogi rules, game state, and move validation.
             *   Illegal drop checks:
                 *   Pawn/Lance cannot be dropped on the last rank.
                 *   Knight cannot be dropped on the last two ranks.
-                *   Nifu (Two Pawns): No two unpromoted pawns of the current player can be in the same file. (See **3.A.4 Illegal Move Checks**).
+                *   Nifu (Two Pawns): No two unpromoted pawns of the current player can be in the same file. (See **4.A.4 Illegal Move Checks**).
         *   **Universal Legality Checks for each generated move (board or drop):**
             *   Simulate the move temporarily.
             *   Check if it results in the `self.current_player`'s king being in check (illegal). Revert simulation.
-            *   Uchi Fu Zume (Dropping Pawn for Checkmate): If the move is a pawn drop that results in checkmate, it's illegal. (See **3.A.4 Illegal Move Checks** - can be a stretch goal for initial implementation).
+            *   Uchi Fu Zume (Dropping Pawn for Checkmate): If the move is a pawn drop that results in checkmate, it's illegal. (See **4.A.4 Illegal Move Checks** - can be a stretch goal for initial implementation).
     *   `make_move(self, move_tuple)`:
         *   Takes a `move_tuple` (as returned by `get_legal_moves`).
         *   Updates `self.board`, `self.hands`.
         *   Handles captures: captured piece (reverted to unpromoted state) is added to opponent's hand.
-        *   Handles promotions: based on `promotion_choice` in `move_tuple` or mandatory promotion rules (see **3.A.3 Promotion Rules**).
+        *   Handles promotions: based on `promotion_choice` in `move_tuple` or mandatory promotion rules (see **4.A.3 Promotion Rules**).
         *   Updates `self.current_player`.
         *   Updates `self.move_history` with a hash of `(self.board, self.hands, self.current_player)`.
         *   Increments `self.move_count`.
         *   Checks for game end conditions (updates `self.game_over`, `self.winner`):
             *   Checkmate (`_is_checkmate`).
-            *   Sennichite (Repetition - see **3.A.5 Game Termination**).
-            *   Max moves reached (see **3.A.5 Game Termination**).
+            *   Sennichite (Repetition - see **4.A.5 Game Termination**).
+            *   Max moves reached (see **4.A.5 Game Termination**).
     *   `_is_in_check(self, player_color_int)`: Checks if `player_color_int`'s king is attacked by any opponent piece.
     *   `_is_checkmate(self, player_color_int)`: Checks if `player_color_int` is checkmated (is in check and `get_legal_moves()` for `player_color_int` returns an empty list).
     *   `_can_promote(self, piece_type_int, r_from, r_to, player_color_int)`:
@@ -182,7 +415,7 @@ This module is responsible for Shogi rules, game state, and move validation.
         *   **Total Channels (Example with Alt B for hands, 3 repetition planes):** 28 (board) + 14 (hands) + 1 (player) + 3 (repetition) = **46 channels**. This needs to be fixed and consistently used.
         *   **Normalization:** Binary planes are 0/1. Hand count planes are normalized 0-1. Repetition planes are 0/1. Player-to-move plane 0/1.
 
-**3.B. `neural_network.py` (Policy and Value Networks)**
+**4.B. `neural_network.py` (Policy and Value Networks)**
 
 *   **Class `ActorCritic(nn.Module)`** (using PyTorch `torch.nn`):
     *   `__init__(self, input_channels, num_actions_total)`:
@@ -206,7 +439,7 @@ This module is responsible for Shogi rules, game state, and move validation.
         *   Value path: Pass shared features through `value_head_conv`, flatten, then `value_head_fc1`, then `value_head_fc2` to get `value`. Apply `torch.tanh(value)` to constrain value output to [-1, 1].
         *   Return `action_logits`, `value`.
 
-**3.C. `ppo_agent.py` (The Learning Agent)**
+**4.C. `ppo_agent.py` (The Learning Agent)**
 
 *   **Class `PPOAgent`**:
     *   `__init__(self, input_channels, num_actions_total, policy_output_mapper, learning_rate, gamma, clip_epsilon, ppo_epochs, minibatch_size, entropy_coeff, lambda_gae)`:
@@ -263,7 +496,7 @@ This module is responsible for Shogi rules, game state, and move validation.
     *   `save_model(self, path)`: Saves `actor_critic.state_dict()` and `optimizer.state_dict()`.
     *   `load_model(self, path)`: Loads `actor_critic.state_dict()` and `optimizer.state_dict()`.
 
-**3.D. `experience_buffer.py` (Stores Self-Play Data)**
+**4.D. `experience_buffer.py` (Stores Self-Play Data)**
 
 *   **Class `ExperienceBuffer`**:
     *   `__init__(self, buffer_size, device)`
@@ -287,7 +520,7 @@ This module is responsible for Shogi rules, game state, and move validation.
         *   Clears the buffer (`self.ptr = 0`, `self.path_start_idx = 0`).
     *   `__len__(self)`: Returns `self.ptr`.
 
-**3.E. `train.py` (Main Training Loop)**
+**4.E. `train.py` (Main Training Loop)**
 
 *   **Hyperparameters (from `config.py` or CLI):**
     *   `TOTAL_TIMESTEPS`: e.g., 10e6, 50e6 or more.
@@ -517,7 +750,7 @@ This module is responsible for Shogi rules, game state, and move validation.
     ```
     (Use standard Shogi notation: Black at bottom, White at top. Ranks 1-9, Files 9-1.)
 
-**4. Development Environment & Dependencies**
+**5. Development Environment & Dependencies**
 
 *   Python: 3.8+
 *   PyTorch: 1.10+ (or latest stable)
@@ -525,7 +758,7 @@ This module is responsible for Shogi rules, game state, and move validation.
 *   Version Control: Git
 *   (Optional) TensorBoard for richer logging.
 
-**5. Project Structure (Suggested Directory Layout)**
+**6. Project Structure (Suggested Directory Layout)**
 
 ```
 shogi_drl/
@@ -542,7 +775,7 @@ shogi_drl/
 └── logs/                   # To save training logs (e.g., shogi_training_log.txt)
 ```
 
-**6. Phased Approach for Coder**
+**7. Phased Approach for Coder**
 
 1.  **Phase 1: `shogi_engine.py` - Core Game Mechanics.**
     *   Implement `Piece` class.
@@ -589,328 +822,3 @@ shogi_drl/
     *   Implement model saving/loading and evaluation against checkpoints.
 
 This comprehensive document should provide a solid foundation for development. The most challenging parts will be the bug-free implementation of `ShogiGame` (especially `get_legal_moves`), the `PolicyOutputMapper`, and correctly implementing the PPO algorithm.
-
----
-
-## 6. Advanced Configuration System
-
-The Keisei project implements a sophisticated, type-safe configuration system using Pydantic models that provides comprehensive control over all aspects of training, evaluation, and environment setup.
-
-### 6.1 Configuration Architecture Overview
-
-The configuration system is built around a central `config_schema.py` file that defines six main configuration sections:
-
-```
-Configuration Schema
-├── EnvConfig: Environment and game setup
-├── TrainingConfig: Advanced training features and optimization
-├── EvaluationConfig: Model evaluation parameters
-├── LoggingConfig: Output directories and logging
-├── WandBConfig: Weights & Biases integration
-└── DemoConfig: Demo mode configuration
-```
-
-### 6.2 Environment Configuration (EnvConfig)
-
-Controls the core game environment and neural network setup:
-
-- **Device Management**: Automatic GPU detection with fallback to CPU
-- **Input Channels**: Configurable observation space (default: 46 channels for 9x9 Shogi board)
-- **Action Space**: Total possible actions in the policy output space
-- **Seeding**: Reproducible training runs with configurable random seeds
-- **Game Parameters**: 
-  - `max_moves_per_game`: Maximum moves before draw (default: 500)
-  - Board representation and SFEN serialization support
-
-### 6.3 Advanced Training Configuration (TrainingConfig)
-
-Provides comprehensive control over modern deep learning training techniques:
-
-**Core Training Parameters:**
-- Learning rate scheduling and optimization
-- Batch size management for different hardware configurations
-- Total timesteps and training duration control
-
-**Advanced Features:**
-- **Mixed Precision Training**: Automatic mixed precision (AMP) support for faster training on modern GPUs
-- **Distributed Data Parallel (DDP)**: Multi-GPU training coordination
-- **Gradient Management**: 
-  - Gradient clipping with configurable thresholds
-  - Gradient accumulation for effective larger batch sizes
-- **GAE Configuration**: Generalized Advantage Estimation parameters (lambda, gamma)
-- **PPO Hyperparameters**: Clip epsilon, entropy coefficients, value function coefficients
-
-**Checkpoint and Resume:**
-- Configurable checkpoint intervals
-- Automatic model saving and loading
-- Training resume capabilities with state preservation
-
-### 6.4 Evaluation Configuration (EvaluationConfig)
-
-Controls model assessment and performance monitoring:
-
-- **Evaluation Frequency**: Configurable intervals for model evaluation
-- **Opponent Selection**: Self-play against previous model versions
-- **Performance Metrics**: Win rate tracking, game length analysis
-- **Statistical Analysis**: Confidence intervals and significance testing
-
-### 6.5 Logging and Monitoring (LoggingConfig)
-
-Comprehensive logging system configuration:
-
-- **Directory Management**: Automatic creation of timestamped run directories
-- **Log Levels**: Configurable verbosity for different components
-- **File Organization**: Structured output for models, logs, and artifacts
-- **Performance Logging**: Training metrics, loss curves, and system statistics
-
-### 6.6 Weights & Biases Integration (WandBConfig)
-
-Full integration with W&B for experiment tracking:
-
-- **Project Organization**: Configurable project names and entity settings
-- **Experiment Tracking**: Automatic logging of hyperparameters, metrics, and artifacts
-- **Model Versioning**: Integration with W&B model registry
-- **Visualization**: Real-time training curves and performance dashboards
-- **Collaboration**: Team sharing and experiment comparison
-
-### 6.7 Demo Mode Configuration (DemoConfig)
-
-Specialized configuration for demonstration and testing:
-
-- **Interactive Play**: Human vs AI game modes
-- **Visualization**: Board state rendering and move highlighting
-- **Performance Testing**: Benchmarking and profiling modes
-
----
-
-## 7. Refactored Trainer Architecture
-
-The training system has been completely refactored into a modular, manager-based architecture that separates concerns and provides clean interfaces between components.
-
-### 7.1 Manager System Overview
-
-The trainer is organized into 9 specialized managers, each responsible for a specific aspect of the training process:
-
-```
-Trainer Architecture
-├── SessionManager: Run lifecycle and directory management
-├── ModelManager: Neural network and checkpoint handling
-├── EnvManager: Game environment and policy mapping
-├── StepManager: Individual training step execution
-├── MetricsManager: Statistics collection and analysis
-├── TrainingLoopManager: Main training orchestration
-├── SetupManager: Component initialization and validation
-├── DisplayManager: User interface and progress visualization
-└── CallbackManager: Event-driven callback system
-```
-
-### 7.2 SessionManager
-
-**Responsibilities:**
-- Training session lifecycle management
-- Directory structure creation and organization
-- Weights & Biases session initialization and cleanup
-- Configuration validation and environment setup
-
-**Key Features:**
-- Automatic timestamped run directory creation
-- W&B experiment tracking integration
-- Configuration serialization and backup
-- Resource cleanup and graceful shutdown
-
-**Configuration Integration:**
-- Uses `LoggingConfig` for directory management
-- Integrates with `WandBConfig` for experiment tracking
-- Validates all configuration sections before session start
-
-### 7.3 ModelManager
-
-**Responsibilities:**
-- Neural network instantiation and management
-- Model checkpointing and loading
-- Mixed precision training coordination
-- Optimizer state management
-
-**Advanced Features:**
-- **Mixed Precision Support**: Automatic mixed precision (AMP) integration
-- **Checkpoint Management**: Configurable save intervals and retention policies
-- **Model Versioning**: Integration with experiment tracking systems
-- **State Preservation**: Complete training state serialization
-
-**Configuration Integration:**
-- Uses `TrainingConfig` for mixed precision and checkpoint settings
-- Implements device management from `EnvConfig`
-- Supports distributed training coordination
-
-### 7.4 EnvManager
-
-**Responsibilities:**
-- Shogi game environment initialization
-- Policy output mapper configuration
-- Environment reset and state management
-- Action space validation
-
-**Shogi Game Configuration:**
-- Configurable `max_moves_per_game` parameter
-- SFEN notation support for game state serialization
-- Seeding capabilities for reproducible games
-- Observation space configuration (46 channels, 9x9 board)
-
-**Policy Integration:**
-- Action space mapping between Shogi moves and neural network outputs
-- Legal move filtering and validation
-- Move encoding/decoding for network communication
-
-### 7.5 StepManager
-
-**Responsibilities:**
-- Individual training step execution
-- Experience collection and batching
-- Reward calculation and processing
-- Transition state management
-
-**Features:**
-- Efficient batch processing of game experiences
-- Automatic advantage estimation (GAE) calculation
-- Reward normalization and scaling
-- Memory-efficient experience buffering
-
-### 7.6 MetricsManager
-
-**Responsibilities:**
-- Training statistics collection and aggregation
-- Performance metric calculation
-- Loss tracking and analysis
-- System resource monitoring
-
-**Metrics Tracked:**
-- Policy and value loss components
-- Entropy and exploration metrics
-- Game outcome statistics (win/loss/draw rates)
-- Training performance (steps/second, GPU utilization)
-- System metrics (memory usage, CPU load)
-
-### 7.7 TrainingLoopManager
-
-**Responsibilities:**
-- Main training loop orchestration
-- Component coordination and scheduling
-- Training phase management
-- Error handling and recovery
-
-**Advanced Features:**
-- **Distributed Training**: Multi-GPU coordination when using DDP
-- **Dynamic Scheduling**: Adaptive learning rate and batch size management
-- **Fault Tolerance**: Automatic recovery from training interruptions
-- **Resource Management**: Memory optimization and cleanup
-
-### 7.8 SetupManager
-
-**Responsibilities:**
-- Component initialization and dependency injection
-- Configuration validation and consistency checking
-- Hardware detection and optimization
-- Pre-training system validation
-
-**Validation Features:**
-- Configuration schema validation using Pydantic
-- Hardware capability detection (GPU, memory, CUDA)
-- Dependency version checking
-- Pre-flight system tests
-
-### 7.9 DisplayManager
-
-**Responsibilities:**
-- Training progress visualization
-- Real-time metrics display
-- User interface coordination
-- Progress reporting and notifications
-
-**Features:**
-- Rich terminal interface with progress bars
-- Real-time loss and metric visualization
-- Training time estimation and completion forecasting
-- Interactive training control (pause/resume)
-
-### 7.10 CallbackManager
-
-**Responsibilities:**
-- Event-driven callback system
-- Custom hook integration
-- Training event handling
-- Extension point management
-
-**Callback Types:**
-- Training phase callbacks (epoch start/end, batch processing)
-- Model callbacks (checkpoint save/load, evaluation)
-- Metrics callbacks (logging, visualization updates)
-- Custom user-defined callbacks
-
----
-
-## 8. Configuration and Manager Integration
-
-### 8.1 Configuration Flow
-
-The configuration system integrates seamlessly with the manager architecture:
-
-1. **Schema Validation**: Pydantic models validate all configuration parameters
-2. **Manager Injection**: Configuration sections are injected into relevant managers
-3. **Runtime Adaptation**: Managers adapt behavior based on configuration settings
-4. **State Persistence**: Configuration state is preserved across training resumption
-
-### 8.2 Manager Communication
-
-Managers communicate through well-defined interfaces:
-
-- **Event System**: Managers publish and subscribe to training events
-- **Shared State**: Thread-safe shared state objects for coordination
-- **Configuration Registry**: Centralized configuration access
-- **Dependency Injection**: Automatic dependency resolution between managers
-
-### 8.3 Extensibility and Customization
-
-The architecture supports extensive customization:
-
-- **Custom Managers**: Easy addition of new manager types
-- **Configuration Extensions**: Plugin-based configuration schema extensions
-- **Callback Hooks**: User-defined callbacks for custom training logic
-- **Component Replacement**: Swappable implementations for core components
-
----
-
-## 9. Modern Training Features
-
-### 9.1 Mixed Precision Training
-
-Automatic mixed precision (AMP) support provides:
-- **Performance**: 1.5-2x training speedup on modern GPUs
-- **Memory Efficiency**: Reduced GPU memory usage
-- **Numerical Stability**: Automatic loss scaling and overflow detection
-- **Backward Compatibility**: Graceful fallback for older hardware
-
-### 9.2 Distributed Training
-
-Multi-GPU training support includes:
-- **Data Parallel**: Distributed data parallel (DDP) training
-- **Gradient Synchronization**: Efficient gradient aggregation across GPUs
-- **Load Balancing**: Automatic batch distribution and workload balancing
-- **Fault Tolerance**: Resilient training with node failure recovery
-
-### 9.3 Advanced Optimization
-
-Sophisticated optimization features:
-- **Gradient Clipping**: Configurable gradient norm clipping
-- **Learning Rate Scheduling**: Adaptive learning rate adjustment
-- **Batch Size Scaling**: Dynamic batch size optimization
-- **Memory Management**: Efficient memory usage and garbage collection
-
-### 9.4 Checkpoint and Resume
-
-Comprehensive training state management:
-- **Full State Preservation**: Complete training state serialization
-- **Incremental Checkpoints**: Efficient incremental state saving
-- **Version Compatibility**: Forward and backward compatible checkpoint formats
-- **Cloud Integration**: Support for cloud-based checkpoint storage
-
-This advanced configuration and training system provides a robust foundation for scalable, reproducible, and efficient deep reinforcement learning training for Shogi AI development.
