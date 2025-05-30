@@ -2,7 +2,7 @@
 training/callback_manager.py: Manages training callbacks and their execution.
 """
 
-from typing import TYPE_CHECKING, List, Optional, Any
+from typing import TYPE_CHECKING, List, Any
 
 from . import callbacks
 
@@ -32,7 +32,7 @@ class CallbackManager:
         Returns:
             List of configured callbacks
         """
-        callback_list = []
+        callback_list: List[callbacks.Callback] = []
 
         # Checkpoint callback
         checkpoint_interval = self.config.training.checkpoint_interval_timesteps
@@ -44,8 +44,8 @@ class CallbackManager:
         eval_cfg = getattr(self.config, "evaluation", None)
         eval_interval = (
             eval_cfg.evaluation_interval_timesteps
-            if eval_cfg
-            else self.config.training.evaluation_interval_timesteps
+            if eval_cfg and hasattr(eval_cfg, 'evaluation_interval_timesteps')
+            else getattr(self.config.training, 'evaluation_interval_timesteps', 1000)
         )
         callback_list.append(
             callbacks.EvaluationCallback(eval_cfg, eval_interval)

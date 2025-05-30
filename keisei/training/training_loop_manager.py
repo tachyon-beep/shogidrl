@@ -3,9 +3,7 @@
 Manages the main training loop execution, previously part of the Trainer class.
 """
 import time
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
-
-import torch  # Add missing torch import
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from keisei.config_schema import AppConfig
@@ -122,6 +120,8 @@ class TrainingLoopManager:
                     "[ERROR] Episode state is None at the start of a step collection. Resetting.",
                     also_to_wandb=True,
                 )
+                if self.step_manager is None:
+                    raise RuntimeError("StepManager is not available")
                 self.episode_state = self.step_manager.reset_episode()
                 if self.episode_state is None:
                     raise RuntimeError(
@@ -129,6 +129,8 @@ class TrainingLoopManager:
                     )
                 continue
 
+            if self.step_manager is None:
+                raise RuntimeError("StepManager is not available")
             step_result = self.step_manager.execute_step(
                 episode_state=self.episode_state,
                 global_timestep=self.trainer.global_timestep,
@@ -140,73 +142,80 @@ class TrainingLoopManager:
                     f"[WARNING] Step execution failed at timestep {self.trainer.global_timestep}. Resetting episode.",
                     also_to_wandb=True,
                 )
+                if self.step_manager is None:
+                    raise RuntimeError("StepManager is not available")
                 self.episode_state = self.step_manager.reset_episode()
                 continue
 
+            if self.step_manager is None:
+                raise RuntimeError("StepManager is not available")
             updated_episode_state = self.step_manager.update_episode_state(
                 self.episode_state, step_result
             )
 
             if step_result.done:
+                # Use metrics manager to safely update stats
                 if step_result.info and "winner" in step_result.info:
                     winner = step_result.info["winner"]
                     if winner == "black":
-                        self.trainer.black_wins += 1
+                        self.trainer.metrics_manager.black_wins += 1
                     elif winner == "white":
-                        self.trainer.white_wins += 1
+                        self.trainer.metrics_manager.white_wins += 1
                     else:
-                        self.trainer.draws += 1
+                        self.trainer.metrics_manager.draws += 1
                 else:
-                    self.trainer.draws += 1
+                    self.trainer.metrics_manager.draws += 1
 
                 game_stats_for_sm = {
-                    "black_wins": self.trainer.black_wins,
-                    "white_wins": self.trainer.white_wins,
-                    "draws": self.trainer.draws,
+                    "black_wins": self.trainer.metrics_manager.black_wins,
+                    "white_wins": self.trainer.metrics_manager.white_wins,
+                    "draws": self.trainer.metrics_manager.draws,
                 }
+                if self.step_manager is None:
+                    raise RuntimeError("StepManager is not available")
                 new_episode_state_after_end = self.step_manager.handle_episode_end(
                     updated_episode_state,
                     step_result,
                     game_stats_for_sm,
-                    self.trainer.total_episodes_completed,
+                    self.trainer.metrics_manager.total_episodes_completed,
                     log_both,
                 )
-                self.trainer.total_episodes_completed += 1
+                self.trainer.metrics_manager.total_episodes_completed += 1
 
                 ep_len = updated_episode_state.episode_length
                 ep_rew = updated_episode_state.episode_reward
                 ep_metrics_str = f"L:{ep_len} R:{ep_rew:.2f}"
 
                 total_games = (
-                    self.trainer.black_wins
-                    + self.trainer.white_wins
-                    + self.trainer.draws
+                    self.trainer.metrics_manager.black_wins
+                    + self.trainer.metrics_manager.white_wins
+                    + self.trainer.metrics_manager.draws
                 )
                 bw_rate = (
-                    self.trainer.black_wins / total_games if total_games > 0 else 0.0
+                    self.trainer.metrics_manager.black_wins / total_games if total_games > 0 else 0.0
                 )
                 ww_rate = (
-                    self.trainer.white_wins / total_games if total_games > 0 else 0.0
+                    self.trainer.metrics_manager.white_wins / total_games if total_games > 0 else 0.0
                 )
-                d_rate = self.trainer.draws / total_games if total_games > 0 else 0.0
+                d_rate = self.trainer.metrics_manager.draws / total_games if total_games > 0 else 0.0
 
                 self.trainer.metrics_manager.pending_progress_updates.update(
                     {
                         "ep_metrics": ep_metrics_str,
-                        "black_wins_cum": self.trainer.black_wins,
-                        "white_wins_cum": self.trainer.white_wins,
-                        "draws_cum": self.trainer.draws,
+                        "black_wins_cum": self.trainer.metrics_manager.black_wins,
+                        "white_wins_cum": self.trainer.metrics_manager.white_wins,
+                        "draws_cum": self.trainer.metrics_manager.draws,
                         "black_win_rate": bw_rate,
                         "white_win_rate": ww_rate,
                         "draw_rate": d_rate,
-                        "total_episodes": self.trainer.total_episodes_completed,
+                        "total_episodes": self.trainer.metrics_manager.total_episodes_completed,
                     }
                 )
                 self.episode_state = new_episode_state_after_end
             else:
                 self.episode_state = updated_episode_state
 
-            self.trainer.global_timestep += 1
+            self.trainer.metrics_manager.global_timestep += 1
             num_steps_collected_this_epoch += 1
             self.steps_since_last_time_for_sps += 1
 
