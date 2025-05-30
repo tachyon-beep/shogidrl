@@ -7,14 +7,10 @@ For now, it serves as a placeholder and tests the potential for parallel executi
 """
 
 import multiprocessing
-import tempfile
+import queue
 import time
-from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
-
-from keisei.config_schema import AppConfig
 from keisei.utils import load_config
 
 
@@ -35,7 +31,7 @@ class TestParallelSmoke:
         This ensures the CI environment supports multiprocessing.
         """
         # Create a queue for communication
-        queue: multiprocessing.Queue[Any] = multiprocessing.Queue()
+        queue: "multiprocessing.Queue" = multiprocessing.Queue()
 
         # Start 2 worker processes
         workers = []
@@ -56,7 +52,7 @@ class TestParallelSmoke:
                 results.append(item)
                 if len([r for r in results if "done" in r]) == 2:
                     break  # Both workers finished
-            except Exception:  # Catch timeout and other queue exceptions
+            except Exception:  # Catch timeout and other queue exceptions  # pylint: disable=broad-exception-caught
                 continue
 
         # Clean up processes
@@ -90,7 +86,7 @@ class TestParallelSmoke:
             def reset(self):
                 return MagicMock(), {}  # obs, info
 
-            def step(self, action):
+            def step(self, action):  # pylint: disable=unused-argument
                 return (
                     MagicMock(),
                     0.0,
@@ -144,10 +140,8 @@ class TestParallelSmoke:
         This ensures the design is sound before implementation.
         """
         # Create a simple queue for testing (no multiprocessing)
-        import queue
-
-        result_queue: queue.Queue[Any] = queue.Queue()
-        model_queue: queue.Queue[Any] = queue.Queue()
+        result_queue: "queue.Queue" = queue.Queue()
+        model_queue: "queue.Queue" = queue.Queue()
 
         # Mock the future SelfPlayWorker class
         class MockSelfPlayWorker:
