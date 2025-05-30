@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 from keisei.shogi.shogi_core_definitions import (
+    OBS_CURR_PLAYER_HAND_START,
     OBS_CURR_PLAYER_INDICATOR,
     OBS_CURR_PLAYER_PROMOTED_START,
     OBS_CURR_PLAYER_UNPROMOTED_START,
@@ -296,3 +297,193 @@ def test_get_piece_type_from_sfen_char_handles_all_piece_types_and_promotions():
             ), "+P should be promoted pawn"
         except (ValueError, TypeError):
             pass
+
+
+def test_convert_game_to_text_representation_complex_state():
+    """Text dump of a complex mid–game SFEN should match piece layout and hands."""
+
+    game = ShogiGame.from_sfen(
+        "l2g1k1nl/1r1S2sb1/p1n1p1p1p/1p1pP1P1P/1P1P2P1P/P1P1G1P1P/1N1P1P1P1/1+r5R1/L2K1GSNL b B2Ppl 33"
+    )
+    text_repr = convert_game_to_text_representation(game)
+    lines = text_repr.splitlines()
+
+    # --- meta info ---
+    assert "Turn: BLACK" in text_repr
+    assert "Move: 33" in text_repr
+
+    # Helper to fetch token list for a given printed rank (9..1)
+    def rank_tokens(rank: int) -> list[str]:
+        line = next(l for l in lines if l.startswith(f"{rank} "))
+        return line.split()[1:]  # strip rank number
+
+    # Rank 9 (top) : l2g1k1nl  →  l . . g . k . n l
+    assert rank_tokens(9) == ["l", ".", ".", "g", ".", "k", ".", "n", "l"]
+
+    # Rank 1 (bottom): L2K1GSNL →  L . . K . G S N L
+    assert rank_tokens(1) == ["L", ".", ".", "K", ".", "G", "S", "N", "L"]
+
+    # Rank 7 (row-2): p1n1p1p1p → p . n . p . p . p
+    assert rank_tokens(7) == ["p", ".", "n", ".", "p", ".", "p", ".", "p"]
+
+    # Rank 2 (row-7) with promotions: 1+r5R1 → . +r . . . . . R .
+    rt = rank_tokens(2)
+    assert rt[1] == "+r" and rt[7] == "R"
+
+    # --- hands ---
+    # order-independent checks
+    assert "Black's hand:" in text_repr
+    assert "'BISHOP': 1" in text_repr
+    assert "'PAWN': 2" in text_repr
+    assert "White's hand:" in text_repr
+    assert "'PAWN': 1" in text_repr
+    assert "'LANCE': 1" in text_repr
+
+
+def test_game_to_kif_checkmate_and_hands():
+    """Test KIF export for a game ending in checkmate and with pieces in hand."""
+    # Setup a checkmate position where Black wins
+    # White King 'k' at (0,0) (SFEN: 9a)
+    # Black Gold 'G_guard' at (1,1) (SFEN: 8b) protects the mating square (1,0)
+    # Black Gold 'G_mate' at (2,0) (SFEN: 9c) delivers the mate by moving to (1,0)
+    # (Black King 'K' at (8,0) (SFEN: 9i) for SFEN completeness)
+    # Hands: Black has 1 Pawn, White has 2 Pawns. Black to move.
+    # SFEN representation (0-indexed): k(0,0), G_guard(1,1), G_mate(2,0), K(8,0)
+    game = ShogiGame.from_sfen("k8/1G7/G8/9/9/9/9/9/K8 b P2p 1")
+
+    # Mating move: Black Gold 'G_mate' from (2,0) moves to (1,0).
+    # This checks White King at (0,0).
+    # Escape (0,1) is covered by G_guard(1,1).
+    # Escape (1,1) is occupied by G_guard(1,1).
+    # Capture G_mate(1,0) is not possible as (1,0) is covered by G_guard(1,1).
+    mating_move = (2, 0, 1, 0, False)
+
+    # Verify this move is legal first
+    legal_moves = game.get_legal_moves()
+    if mating_move not in legal_moves:
+        pytest.fail(
+            f"Setup error for KIF test: Mating move {mating_move} not legal. Legal: {legal_moves}. SFEN: {game.to_sfen_string()}"
+        )
+
+    game.make_move(mating_move)
+
+    assert game.game_over
+    assert game.winner == Color.BLACK
+    assert game.termination_reason == "Tsumi"
+
+    with tempfile.NamedTemporaryFile(suffix=".kif", delete=False) as temp_file:
+        filename = temp_file.name
+
+    kif_content_str = game_to_kif(
+        game,
+        filename=None,
+        sente_player_name="SentePlayer",
+        gote_player_name="GotePlayer",
+    )
+    assert kif_content_str is not None
+
+    assert "#KIF version=2.0" in kif_content_str
+    assert "*Player Sente: SentePlayer" in kif_content_str
+    assert "*Player Gote: GotePlayer" in kif_content_str
+    # UPDATED ASSERTIONS to match the verbose KIF output for hands P2p:
+    # Black (Sente) has 1 Pawn, represented as 01FU in the verbose line.
+    assert "P+00HI00KA00KI00GI00KE00KY01FU" in kif_content_str
+    # White (Gote) has 2 Pawns, represented as 02FU in the verbose line.
+    assert "P-00HI00KA00KI00GI00KE00KY02FU" in kif_content_str
+    assert "RESULT:SENTE_WIN" in kif_content_str
+
+    # ---- write to file and verify ----
+    game_to_kif(
+        game,
+        filename=filename,
+        sente_player_name="SentePlayer",
+        gote_player_name="GotePlayer",
+    )
+    with open(filename, "r", encoding="utf-8") as f:
+        file_kif_content = f.read()
+
+    assert "#KIF version=2.0" in file_kif_content
+    assert "RESULT:SENTE_WIN" in file_kif_content
+
+    os.remove(filename)
+
+
+def test_generate_neural_network_observation_max_hands_and_promoted_board():
+    """Test observation with max pieces in hand and many promoted pieces."""
+    game = ShogiGame.from_sfen(
+        "4k4/9/9/9/9/9/9/9/4K4 b 7PR2B2G2S2N2L7pr2b2g2s2n2l 1"  # Corrected hand string
+    )
+    obs = generate_neural_network_observation(game)
+
+    assert obs.shape == (INPUT_CHANNELS, 9, 9)
+
+    # Test for max hands
+    # From the SFEN: Black hand "7PR2B2G2S2N2L", White hand "7pr2b2g2s2n2l"
+    # Black has 7 Pawns, 1 Rook, 2 Bishops, 2 Golds, 2 Silvers, 2 Knights, 2 Lances
+    # White has 7 pawns, 1 rook, 2 bishops, 2 golds, 2 silvers, 2 knights, 2 lances
+
+    # Check Black hand planes (current player hand)
+    # Hand counts are normalized by dividing by 18.0
+    assert np.allclose(obs[OBS_CURR_PLAYER_HAND_START + 0], 7 / 18.0)  # PAWN (7/18)
+    assert np.allclose(obs[OBS_CURR_PLAYER_HAND_START + 4], 2 / 18.0)  # GOLD (2/18)
+    assert np.allclose(obs[OBS_CURR_PLAYER_HAND_START + 5], 2 / 18.0)  # BISHOP (2/18)
+    assert np.allclose(obs[OBS_CURR_PLAYER_HAND_START + 6], 1 / 18.0)  # ROOK (1/18)
+
+    # Check White hand planes (opponent hand)
+    assert np.allclose(obs[OBS_OPP_PLAYER_HAND_START + 0], 7 / 18.0)  # PAWN (7/18)
+    assert np.allclose(obs[OBS_OPP_PLAYER_HAND_START + 4], 2 / 18.0)  # GOLD (2/18)
+    assert np.allclose(obs[OBS_OPP_PLAYER_HAND_START + 5], 2 / 18.0)  # BISHOP (2/18)
+    assert np.allclose(obs[OBS_OPP_PLAYER_HAND_START + 6], 1 / 18.0)  # ROOK (1/18)
+
+
+def test_generate_neural_network_observation_move_count_normalization(
+    basic_game: ShogiGame,
+):
+    """Test OBS_MOVE_COUNT normalization with different max_moves_per_game."""
+    game = basic_game
+    game.move_count = 50
+
+    game._max_moves_this_game = 100  # pylint: disable=protected-access
+    obs100 = generate_neural_network_observation(game)
+    assert np.allclose(obs100[OBS_MOVE_COUNT], 50 / 100.0)
+
+    game._max_moves_this_game = 500  # Default # pylint: disable=protected-access
+    obs500 = generate_neural_network_observation(game)
+    assert np.allclose(obs500[OBS_MOVE_COUNT], 50 / 500.0)
+
+    game.move_count = 0
+    obs_start = generate_neural_network_observation(game)
+    assert np.allclose(obs_start[OBS_MOVE_COUNT], 0.0)
+
+    game.move_count = 499
+    obs_end = generate_neural_network_observation(game)
+    assert np.allclose(obs_end[OBS_MOVE_COUNT], 499 / 500.0)
+
+
+@pytest.mark.parametrize(
+    "invalid_sfen_move",
+    [
+        "7g7f++",
+        "7g7fx",  # Malformed promotion
+        "K*5e",  # Invalid piece for drop (King)
+        "+P*5e",  # Invalid piece for drop (Promoted Pawn)
+        "P*0a",
+        "P*10a",
+        "P*1j",  # Invalid drop squares (out of bounds)
+        "1a0a",
+        "1a10a",
+        "1a1j",  # Invalid board move squares (out of bounds)
+        "P*",
+        "*5e",  # Incomplete drop
+        "B*11",  # Invalid drop square (too short)
+        "L*a1",  # Invalid drop square (wrong order)
+        "S*5ee",  # Invalid drop square (too long)
+    ],
+)
+def test_sfen_to_move_tuple_invalid_formats(invalid_sfen_move):
+    """Test sfen_to_move_tuple with various invalid SFEN move strings."""
+    with (
+        setup_pytorch_mock_environment()
+    ):  # In case PolicyOutputMapper is involved by mistake
+        with pytest.raises(ValueError):
+            sfen_to_move_tuple(invalid_sfen_move)

@@ -100,7 +100,7 @@ class ExperienceBuffer:
         # last_value is V(S_t+1) for the last state in the buffer
         # If the last state was terminal, next_value should be 0, handled by mask.
         next_value_tensor = torch.tensor(
-            [last_value], dtype=torch.float32, device=self.device
+            last_value, dtype=torch.float32, device=self.device
         )
 
         for t in reversed(range(self.ptr)):
@@ -116,8 +116,9 @@ class ExperienceBuffer:
             )
             gae = delta + self.gamma * self.lambda_gae * masks_tensor[t] * gae
 
-            advantages_list[t] = gae  # Store as tensor
-            returns_list[t] = gae + values_tensor[t]  # Store as tensor
+            # Ensure scalar tensors by squeezing any extra dimensions
+            advantages_list[t] = gae.squeeze()  # Store as scalar tensor
+            returns_list[t] = (gae + values_tensor[t]).squeeze()  # Store as scalar tensor
 
         self.advantages = advantages_list
         self.returns = returns_list

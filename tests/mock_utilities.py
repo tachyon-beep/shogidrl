@@ -116,15 +116,20 @@ class MockPolicyOutputMapper:
     def __init__(self, board_size=9):
         """Initialize with same parameters as real mapper."""
         self.board_size = board_size
-        self.action_space_size = 2187
+        self.action_space_size = 13527
+
+    def get_total_actions(self) -> int:
+        """Return the total number of actions, matching real PolicyOutputMapper interface."""
+        return self.action_space_size
 
     def get_valid_moves_mask(self, legal_moves: List[Any]):
         """Create a mock mask tensor from legal moves."""
         mask = np.zeros(self.action_space_size)
         num_moves_to_set = min(len(legal_moves), 20)
         if self.action_space_size > 0 and num_moves_to_set > 0:
+            rng = np.random.default_rng(seed=42)  # Fixed seed for deterministic tests
             for _ in range(num_moves_to_set):
-                idx = np.random.randint(0, self.action_space_size)
+                idx = rng.integers(0, self.action_space_size)
                 mask[idx] = 1.0
         return MockTensor(mask)
 

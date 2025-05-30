@@ -118,7 +118,9 @@ class Trainer:
         self._setup_training_components()
 
         # Handle checkpoint resuming using ModelManager
+        print("DEBUG: About to call _handle_checkpoint_resume()")
         self._handle_checkpoint_resume()
+        print("DEBUG: _handle_checkpoint_resume() completed")
 
         # Display and callbacks
         self.display = display.TrainingDisplay(self.config, self, self.rich_console)
@@ -166,14 +168,20 @@ class Trainer:
 
     def _setup_training_components(self):
         """Initialize PPO agent and experience buffer."""
+        print("DEBUG: _setup_training_components called")
         # Create model using ModelManager
+        print("DEBUG: About to call self.model_manager.create_model()")
         self.model = self.model_manager.create_model()  # Get the model instance
+        print(f"DEBUG: Created model: {self.model}")
 
         # Initialize PPOAgent and assign the model
+        print("DEBUG: About to create PPOAgent")
         self.agent = PPOAgent(
             config=self.config,
             device=self.device,
         )
+        print(f"DEBUG: Created agent: {self.agent}")
+        
         if self.model is None:
             # This should ideally not happen if model_manager.create_model() raises an error on failure
             raise RuntimeError(
@@ -183,14 +191,17 @@ class Trainer:
             self.model
         )  # self.model is now confirmed to be ActorCriticProtocol
 
+        print("DEBUG: About to create ExperienceBuffer")
         self.experience_buffer = ExperienceBuffer(
             buffer_size=self.config.training.steps_per_epoch,
             gamma=self.config.training.gamma,
             lambda_gae=self.config.training.lambda_gae,  # Use config value
             device=self.config.env.device,
         )
+        print(f"DEBUG: Created experience_buffer: {self.experience_buffer}")
 
         # Initialize StepManager for step execution and episode management
+        print("DEBUG: About to create StepManager")
         self.step_manager = StepManager(
             config=self.config,
             game=self.game,
@@ -198,6 +209,8 @@ class Trainer:
             policy_mapper=self.policy_output_mapper,
             experience_buffer=self.experience_buffer,
         )
+        print(f"DEBUG: Created step_manager: {self.step_manager}")
+        print("DEBUG: _setup_training_components completed successfully")
 
     def _log_event(self, message: str):
         """Log important events to the main training log file."""
@@ -223,8 +236,9 @@ class Trainer:
         self.model_manager.handle_checkpoint_resume(
             agent=self.agent,
             model_dir=self.model_dir,
-            # resume_path_override can be passed here if needed, e.g., from self.args
+            resume_path_override=self.args.resume,
         )
+        
         self.resumed_from_checkpoint = self.model_manager.resumed_from_checkpoint
 
         # Restore training state from checkpoint data

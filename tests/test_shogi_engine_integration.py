@@ -1,6 +1,6 @@
 # File renamed from test_shogi_engine.py to test_shogi_engine_integration.py for clarity.
 """
-Unit tests for the Piece class and ShogiGame move generation in shogi_engine.py
+Unit tests for ShogiGame move generation and game logic integration in shogi_engine.py
 """
 
 import numpy as np
@@ -10,38 +10,6 @@ INPUT_CHANNELS = 46  # Use the default from config_schema for tests
 
 from keisei.shogi.shogi_core_definitions import Color, Piece, PieceType
 from keisei.shogi.shogi_game import ShogiGame
-
-# --- Tests for Piece Class ---
-
-
-def test_piece_init():
-    """Test Piece initialization and attributes."""
-    p = Piece(PieceType.PAWN, Color.BLACK)
-    assert p.type == PieceType.PAWN
-    assert p.color == Color.BLACK
-    assert not p.is_promoted
-    p2 = Piece(PieceType.PROMOTED_BISHOP, Color.WHITE)
-    assert p2.type == PieceType.PROMOTED_BISHOP
-    assert p2.color == Color.WHITE
-    assert p2.is_promoted
-
-
-def test_piece_symbol():
-    """Test Piece.symbol() returns correct string for type and color."""
-    # Assuming Black pieces are uppercase by default, White lowercase. Adjust if needed.
-    p = Piece(PieceType.PAWN, Color.BLACK)
-    assert p.symbol() == "P"
-    p2 = Piece(PieceType.PAWN, Color.WHITE)
-    assert p2.symbol() == "p"
-    p3 = Piece(PieceType.PROMOTED_PAWN, Color.BLACK)
-    assert p3.symbol() == "+P"
-    p4 = Piece(PieceType.PROMOTED_PAWN, Color.WHITE)
-    assert p4.symbol() == "+p"
-    p5 = Piece(PieceType.KING, Color.BLACK)
-    assert p5.symbol() == "K"
-    p6 = Piece(PieceType.KING, Color.WHITE)
-    assert p6.symbol() == "k"
-
 
 # --- Fixtures ---
 

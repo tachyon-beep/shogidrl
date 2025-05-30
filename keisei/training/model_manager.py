@@ -185,14 +185,18 @@ class ModelManager:
                 return False
 
         elif actual_resume_path:  # A specific path is provided
+            print(f"DEBUG: Checking if {actual_resume_path} exists...")
             if os.path.exists(actual_resume_path):
+                print(f"DEBUG: Path exists! Calling agent.load_model({actual_resume_path})")
                 self.checkpoint_data = agent.load_model(actual_resume_path)
                 self.resumed_from_checkpoint = actual_resume_path
                 self.logger_func(
                     f"Resumed from specified checkpoint: {actual_resume_path}"
                 )
+                print(f"DEBUG: checkpoint_data set to: {self.checkpoint_data}")
                 return True
             else:
+                print("DEBUG: Path does NOT exist!")
                 self.logger_func(
                     f"Specified resume checkpoint not found: {actual_resume_path}"
                 )
