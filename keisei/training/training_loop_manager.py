@@ -3,8 +3,9 @@
 Manages the main training loop execution, previously part of the Trainer class.
 """
 import time
-import torch  # Add missing torch import
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+import torch  # Add missing torch import
 
 if TYPE_CHECKING:
     from keisei.config_schema import AppConfig

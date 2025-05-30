@@ -2,10 +2,11 @@
 test_resnet_tower.py: Unit tests for keisei/training/models/resnet_tower.py
 """
 
+import io
+from unittest.mock import patch
+
 import pytest
 import torch
-from unittest.mock import patch
-import io
 
 from keisei.training.models.resnet_tower import ActorCriticResTower
 
@@ -117,7 +118,9 @@ class TestGetActionAndValue:
             actions_deterministic.append(action.item())
 
         # Deterministic should always be the same
-        assert len(set(actions_deterministic)) == 1, "Deterministic actions should be identical"
+        assert (
+            len(set(actions_deterministic)) == 1
+        ), "Deterministic actions should be identical"
 
         # Stochastic should have some variation (with high probability)
         # Note: This test might occasionally fail due to randomness, but should be rare
@@ -177,7 +180,7 @@ class TestGetActionAndValue:
 
         # Capture stderr to check for warning message
         captured_stderr = io.StringIO()
-        with patch('sys.stderr', captured_stderr):
+        with patch("sys.stderr", captured_stderr):
             action, log_prob, value = model.get_action_and_value(
                 obs_single, legal_mask=legal_mask, deterministic=False
             )
@@ -197,7 +200,7 @@ class TestGetActionAndValue:
         if not torch.cuda.is_available():
             pytest.skip("CUDA not available")
 
-        device = torch.device('cuda')
+        device = torch.device("cuda")
         model = model.to(device)
         obs = torch.randn(2, 46, 9, 9, device=device)
         legal_mask = torch.ones(2, 100, dtype=torch.bool, device=device)
@@ -266,7 +269,7 @@ class TestEvaluateActions:
 
         # Capture stderr to check for warning message
         captured_stderr = io.StringIO()
-        with patch('sys.stderr', captured_stderr):
+        with patch("sys.stderr", captured_stderr):
             log_probs, entropy, value = model.evaluate_actions(
                 obs_batch, actions, legal_mask=legal_mask
             )
@@ -337,7 +340,7 @@ class TestEvaluateActions:
         if not torch.cuda.is_available():
             pytest.skip("CUDA not available")
 
-        device = torch.device('cuda')
+        device = torch.device("cuda")
         model = model.to(device)
         obs = torch.randn(2, 46, 9, 9, device=device)
         actions = torch.randint(0, 100, (2,), device=device)
@@ -352,17 +355,17 @@ class TestEvaluateActions:
 
 class TestIntegrationAndEdgeCases:
     """Test integration scenarios and edge cases."""
-    
+
     def test_extreme_legal_masks(self, model, obs_single):
         """Test with extreme legal mask configurations."""
         # Single legal action
         legal_mask = torch.zeros(100, dtype=torch.bool)
         legal_mask[42] = True
-        
+
         action, log_prob, value = model.get_action_and_value(
             obs_single, legal_mask=legal_mask, deterministic=True
         )
-        
+
         assert action.item() == 42
         assert not torch.isnan(log_prob).any()
         assert not torch.isnan(value).any()

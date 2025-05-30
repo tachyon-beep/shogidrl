@@ -3,7 +3,7 @@ test_trainer_resume_state.py: Comprehensive tests for Trainer training state res
 
 Tests verify that Trainer properly restores:
 - global_timestep
-- total_episodes_completed  
+- total_episodes_completed
 - black_wins, white_wins, draws
 When resuming from checkpoints through ModelManager integration.
 """
@@ -134,7 +134,7 @@ class TestTrainerResumeState:
         # Mock PPOAgent instance
         mock_agent_instance = Mock()
         mock_ppo_agent_class.return_value = mock_agent_instance
-        
+
         # Mock model and optimizer with proper load_state_dict methods
         mock_agent_instance.model = Mock()
         mock_agent_instance.optimizer = Mock()
@@ -157,11 +157,14 @@ class TestTrainerResumeState:
         mock_model_manager_instance.checkpoint_data = None  # Will be set later
         mock_model_manager_instance.resumed_from_checkpoint = None
 
-        # Mock EnvManager instance  
+        # Mock EnvManager instance
         mock_env_manager_instance = mock_env_manager_class.return_value
         mock_game = Mock()
         mock_policy_mapper = Mock()
-        mock_env_manager_instance.setup_environment.return_value = (mock_game, mock_policy_mapper)
+        mock_env_manager_instance.setup_environment.return_value = (
+            mock_game,
+            mock_policy_mapper,
+        )
         mock_env_manager_instance.action_space_size = 13527
         mock_env_manager_instance.obs_space_shape = (46, 9, 9)
 
@@ -178,33 +181,49 @@ class TestTrainerResumeState:
             "model_state_dict": {},
             "optimizer_state_dict": {},
         }
-        
+
         # Mock load_model to return our checkpoint data
         mock_agent_instance.load_model.return_value = checkpoint_data
 
         # Set up ModelManager to return checkpoint data when handle_checkpoint_resume is called
         def mock_handle_checkpoint_resume(agent, model_dir, resume_path_override=None):
             mock_model_manager_instance.checkpoint_data = checkpoint_data
-            mock_model_manager_instance.resumed_from_checkpoint = "/path/to/checkpoint.pth"
+            mock_model_manager_instance.resumed_from_checkpoint = (
+                "/path/to/checkpoint.pth"
+            )
             return True
-        
-        mock_model_manager_instance.handle_checkpoint_resume.side_effect = mock_handle_checkpoint_resume
+
+        mock_model_manager_instance.handle_checkpoint_resume.side_effect = (
+            mock_handle_checkpoint_resume
+        )
 
         # Mock torch.load to return checkpoint data and os.path.exists
-        with patch("torch.load", return_value=checkpoint_data), \
-             patch("os.path.exists", return_value=True):
+        with (
+            patch("torch.load", return_value=checkpoint_data),
+            patch("os.path.exists", return_value=True),
+        ):
             # Create trainer - checkpoint resume happens during __init__
             trainer = Trainer(mock_config, args)
 
         # Debug prints
         print("DEBUG: After trainer creation:")
         print(f"DEBUG: trainer.global_timestep = {trainer.global_timestep}")
-        print(f"DEBUG: trainer.model_manager.checkpoint_data = {getattr(trainer.model_manager, 'checkpoint_data', 'NOT SET')}")
-        print(f"DEBUG: trainer.model_manager.resumed_from_checkpoint = {getattr(trainer.model_manager, 'resumed_from_checkpoint', 'NOT SET')}")
-        print(f"DEBUG: mock_agent_instance.load_model.called = {mock_agent_instance.load_model.called}")
+        print(
+            f"DEBUG: trainer.model_manager.checkpoint_data = {getattr(trainer.model_manager, 'checkpoint_data', 'NOT SET')}"
+        )
+        print(
+            f"DEBUG: trainer.model_manager.resumed_from_checkpoint = {getattr(trainer.model_manager, 'resumed_from_checkpoint', 'NOT SET')}"
+        )
+        print(
+            f"DEBUG: mock_agent_instance.load_model.called = {mock_agent_instance.load_model.called}"
+        )
         if mock_agent_instance.load_model.called:
-            print(f"DEBUG: mock_agent_instance.load_model.call_args = {mock_agent_instance.load_model.call_args}")
-            print(f"DEBUG: mock_agent_instance.load_model.return_value = {mock_agent_instance.load_model.return_value}")
+            print(
+                f"DEBUG: mock_agent_instance.load_model.call_args = {mock_agent_instance.load_model.call_args}"
+            )
+            print(
+                f"DEBUG: mock_agent_instance.load_model.return_value = {mock_agent_instance.load_model.return_value}"
+            )
 
         # Verify state variables are correctly restored from checkpoint data
         assert trainer.global_timestep == 2500
@@ -250,7 +269,7 @@ class TestTrainerResumeState:
         # Mock PPOAgent instance
         mock_agent_instance = Mock()
         mock_ppo_agent_class.return_value = mock_agent_instance
-        
+
         # Mock model and optimizer with proper load_state_dict methods
         mock_agent_instance.model = Mock()
         mock_agent_instance.optimizer = Mock()
@@ -273,11 +292,14 @@ class TestTrainerResumeState:
         mock_model_manager_instance.checkpoint_data = None  # Will be set later
         mock_model_manager_instance.resumed_from_checkpoint = None
 
-        # Mock EnvManager instance  
+        # Mock EnvManager instance
         mock_env_manager_instance = mock_env_manager_class.return_value
         mock_game = Mock()
         mock_policy_mapper = Mock()
-        mock_env_manager_instance.setup_environment.return_value = (mock_game, mock_policy_mapper)
+        mock_env_manager_instance.setup_environment.return_value = (
+            mock_game,
+            mock_policy_mapper,
+        )
         mock_env_manager_instance.action_space_size = 13527
         mock_env_manager_instance.obs_space_shape = (46, 9, 9)
 
@@ -291,27 +313,35 @@ class TestTrainerResumeState:
             "model_state_dict": {},
             "optimizer_state_dict": {},
         }
-        
+
         # Mock load_model to return our incomplete checkpoint data
         mock_agent_instance.load_model.return_value = incomplete_checkpoint_data
 
         # Set up ModelManager to return checkpoint data when handle_checkpoint_resume is called
         def mock_handle_checkpoint_resume(agent, model_dir, resume_path_override=None):
             mock_model_manager_instance.checkpoint_data = incomplete_checkpoint_data
-            mock_model_manager_instance.resumed_from_checkpoint = "/path/to/incomplete_checkpoint.pth"
+            mock_model_manager_instance.resumed_from_checkpoint = (
+                "/path/to/incomplete_checkpoint.pth"
+            )
             return True
-        
-        mock_model_manager_instance.handle_checkpoint_resume.side_effect = mock_handle_checkpoint_resume
+
+        mock_model_manager_instance.handle_checkpoint_resume.side_effect = (
+            mock_handle_checkpoint_resume
+        )
 
         # Mock torch.load to return incomplete checkpoint data and os.path.exists
-        with patch("torch.load", return_value=incomplete_checkpoint_data), \
-             patch("os.path.exists", return_value=True):
+        with (
+            patch("torch.load", return_value=incomplete_checkpoint_data),
+            patch("os.path.exists", return_value=True),
+        ):
             # Create trainer - checkpoint resume happens during __init__
             trainer = Trainer(mock_config, args)
 
         # Verify that missing fields default to 0 (using dict.get() with default)
         assert trainer.global_timestep == 1000  # Present field
-        assert trainer.total_episodes_completed == 0  # Missing field, should default to 0
+        assert (
+            trainer.total_episodes_completed == 0
+        )  # Missing field, should default to 0
         assert trainer.black_wins == 0  # Missing field, should default to 0
         assert trainer.white_wins == 0  # Missing field, should default to 0
         assert trainer.draws == 0  # Missing field, should default to 0
@@ -352,7 +382,7 @@ class TestTrainerResumeState:
         # Mock PPOAgent instance
         mock_agent_instance = Mock()
         mock_ppo_agent_class.return_value = mock_agent_instance
-        
+
         # Mock model and optimizer with proper load_state_dict methods
         mock_agent_instance.model = Mock()
         mock_agent_instance.optimizer = Mock()
@@ -371,15 +401,20 @@ class TestTrainerResumeState:
         # Mock ModelManager instance
         mock_model_manager_instance = mock_model_manager_class.return_value
         mock_model_manager_instance.create_model.return_value = mock_model
-        mock_model_manager_instance.handle_checkpoint_resume.return_value = False  # No checkpoint
+        mock_model_manager_instance.handle_checkpoint_resume.return_value = (
+            False  # No checkpoint
+        )
         mock_model_manager_instance.checkpoint_data = None
         mock_model_manager_instance.resumed_from_checkpoint = None
 
-        # Mock EnvManager instance  
+        # Mock EnvManager instance
         mock_env_manager_instance = mock_env_manager_class.return_value
         mock_game = Mock()
         mock_policy_mapper = Mock()
-        mock_env_manager_instance.setup_environment.return_value = (mock_game, mock_policy_mapper)
+        mock_env_manager_instance.setup_environment.return_value = (
+            mock_game,
+            mock_policy_mapper,
+        )
         mock_env_manager_instance.action_space_size = 13527
         mock_env_manager_instance.obs_space_shape = (46, 9, 9)
 
@@ -438,7 +473,7 @@ class TestTrainerResumeState:
         # Mock PPOAgent instance
         mock_agent_instance = Mock()
         mock_ppo_agent_class.return_value = mock_agent_instance
-        
+
         # Mock model and optimizer with proper load_state_dict methods
         mock_agent_instance.model = Mock()
         mock_agent_instance.optimizer = Mock()
@@ -461,11 +496,14 @@ class TestTrainerResumeState:
         mock_model_manager_instance.checkpoint_data = None
         mock_model_manager_instance.resumed_from_checkpoint = None
 
-        # Mock EnvManager instance  
+        # Mock EnvManager instance
         mock_env_manager_instance = mock_env_manager_class.return_value
         mock_game = Mock()
         mock_policy_mapper = Mock()
-        mock_env_manager_instance.setup_environment.return_value = (mock_game, mock_policy_mapper)
+        mock_env_manager_instance.setup_environment.return_value = (
+            mock_game,
+            mock_policy_mapper,
+        )
         mock_env_manager_instance.action_space_size = 13527
         mock_env_manager_instance.obs_space_shape = (46, 9, 9)
 
@@ -477,7 +515,9 @@ class TestTrainerResumeState:
         trainer.agent = None
 
         # Should raise RuntimeError when agent is None
-        with pytest.raises(RuntimeError, match="Agent not initialized before _handle_checkpoint_resume"):
+        with pytest.raises(
+            RuntimeError, match="Agent not initialized before _handle_checkpoint_resume"
+        ):
             trainer._handle_checkpoint_resume()
 
     @patch("keisei.training.trainer.EnvManager")
@@ -516,7 +556,7 @@ class TestTrainerResumeState:
         # Mock PPOAgent instance
         mock_agent_instance = Mock()
         mock_ppo_agent_class.return_value = mock_agent_instance
-        
+
         # Mock model and optimizer with proper load_state_dict methods
         mock_agent_instance.model = Mock()
         mock_agent_instance.optimizer = Mock()
@@ -539,11 +579,14 @@ class TestTrainerResumeState:
         mock_model_manager_instance.checkpoint_data = None  # Will be set later
         mock_model_manager_instance.resumed_from_checkpoint = None
 
-        # Mock EnvManager instance  
+        # Mock EnvManager instance
         mock_env_manager_instance = mock_env_manager_class.return_value
         mock_game = Mock()
         mock_policy_mapper = Mock()
-        mock_env_manager_instance.setup_environment.return_value = (mock_game, mock_policy_mapper)
+        mock_env_manager_instance.setup_environment.return_value = (
+            mock_game,
+            mock_policy_mapper,
+        )
         mock_env_manager_instance.action_space_size = 13527
         mock_env_manager_instance.obs_space_shape = (46, 9, 9)
 
@@ -553,10 +596,12 @@ class TestTrainerResumeState:
         trainer = Trainer(mock_config, args)
 
         # Mock the ModelManager.handle_checkpoint_resume method
-        with patch.object(trainer.model_manager, 'handle_checkpoint_resume') as mock_handle_resume:
+        with patch.object(
+            trainer.model_manager, "handle_checkpoint_resume"
+        ) as mock_handle_resume:
             # Setup return value for handle_checkpoint_resume
             mock_handle_resume.return_value = True
-            
+
             # Mock checkpoint data to be set by ModelManager
             test_checkpoint_data = {
                 "global_timestep": 3000,
@@ -626,7 +671,7 @@ class TestTrainerResumeState:
         # Mock PPOAgent instance
         mock_agent_instance = Mock()
         mock_ppo_agent_class.return_value = mock_agent_instance
-        
+
         # Mock model and optimizer with proper load_state_dict methods
         mock_agent_instance.model = Mock()
         mock_agent_instance.optimizer = Mock()
@@ -649,11 +694,14 @@ class TestTrainerResumeState:
         mock_model_manager_instance.checkpoint_data = None  # Will be set later
         mock_model_manager_instance.resumed_from_checkpoint = None
 
-        # Mock EnvManager instance  
+        # Mock EnvManager instance
         mock_env_manager_instance = mock_env_manager_class.return_value
         mock_game = Mock()
         mock_policy_mapper = Mock()
-        mock_env_manager_instance.setup_environment.return_value = (mock_game, mock_policy_mapper)
+        mock_env_manager_instance.setup_environment.return_value = (
+            mock_game,
+            mock_policy_mapper,
+        )
         mock_env_manager_instance.action_space_size = 13527
         mock_env_manager_instance.obs_space_shape = (46, 9, 9)
 
@@ -673,7 +721,7 @@ class TestTrainerResumeState:
             "model_state_dict": {},
             "optimizer_state_dict": {},
         }
-        
+
         # Mock load_model to return our resumed checkpoint data
         mock_agent_instance.load_model.return_value = resumed_checkpoint_data
 
@@ -682,12 +730,16 @@ class TestTrainerResumeState:
             mock_model_manager_instance.checkpoint_data = resumed_checkpoint_data
             mock_model_manager_instance.resumed_from_checkpoint = checkpoint_path
             return True
-        
-        mock_model_manager_instance.handle_checkpoint_resume.side_effect = mock_handle_checkpoint_resume
+
+        mock_model_manager_instance.handle_checkpoint_resume.side_effect = (
+            mock_handle_checkpoint_resume
+        )
 
         # Mock torch.load to return resumed checkpoint data and os.path.exists
-        with patch("torch.load", return_value=resumed_checkpoint_data), \
-             patch("os.path.exists", return_value=True):
+        with (
+            patch("torch.load", return_value=resumed_checkpoint_data),
+            patch("os.path.exists", return_value=True),
+        ):
             # Create trainer - checkpoint resume happens during __init__
             trainer = Trainer(mock_config, args)
 

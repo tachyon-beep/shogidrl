@@ -118,7 +118,9 @@ class ExperienceBuffer:
 
             # Ensure scalar tensors by squeezing any extra dimensions
             advantages_list[t] = gae.squeeze()  # Store as scalar tensor
-            returns_list[t] = (gae + values_tensor[t]).squeeze()  # Store as scalar tensor
+            returns_list[t] = (
+                gae + values_tensor[t]
+            ).squeeze()  # Store as scalar tensor
 
         self.advantages = advantages_list
         self.returns = returns_list

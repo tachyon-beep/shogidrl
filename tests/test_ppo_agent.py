@@ -30,7 +30,7 @@ def create_test_config():
         TrainingConfig,
         WandBConfig,
     )
-    
+
     mapper = PolicyOutputMapper()
     return AppConfig(
         env=EnvConfig(
@@ -51,23 +51,19 @@ def create_test_config():
             entropy_coef=0.01,
         ),
         evaluation=EvaluationConfig(
-            num_games=1, 
-            opponent_type="random",
-            evaluation_interval_timesteps=50000
+            num_games=1, opponent_type="random", evaluation_interval_timesteps=50000
         ),
         logging=LoggingConfig(
-            log_file="/tmp/test.log", 
-            model_dir="/tmp/",
-            run_name="test_run"
+            log_file="/tmp/test.log", model_dir="/tmp/", run_name="test_run"
         ),
         wandb=WandBConfig(
-            enabled=False, 
-            project="test", 
+            enabled=False,
+            project="test",
             entity=None,
             run_name_prefix="test",
             watch_model=False,
             watch_log_freq=1000,
-            watch_log_type="all"
+            watch_log_type="all",
         ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
     )
@@ -230,7 +226,9 @@ def test_ppo_agent_learn_loss_components():
     np.random.seed(42)
 
     dummy_obs_tensor = torch.randn(INPUT_CHANNELS, 9, 9, device="cpu")
-    dummy_legal_mask = torch.ones(agent.num_actions_total, dtype=torch.bool, device="cpu")
+    dummy_legal_mask = torch.ones(
+        agent.num_actions_total, dtype=torch.bool, device="cpu"
+    )
 
     # Create varied rewards and values to test advantage calculation
     rewards = [1.0, -0.5, 2.0, 0.0, 1.5, -1.0, 0.5, 2.5]
@@ -274,7 +272,9 @@ def test_ppo_agent_learn_loss_components():
 
     # Verify reasonable metric ranges
     assert metrics["ppo/learning_rate"] == config.training.learning_rate
-    assert metrics["ppo/entropy"] <= 0.0, "Entropy loss should be negative (entropy bonus)"
+    assert (
+        metrics["ppo/entropy"] <= 0.0
+    ), "Entropy loss should be negative (entropy bonus)"
     assert metrics["ppo/policy_loss"] >= 0.0, "Policy loss should be non-negative"
     assert metrics["ppo/value_loss"] >= 0.0, "Value loss should be non-negative"
 
@@ -319,23 +319,19 @@ def test_ppo_agent_learn_advantage_normalization():
             entropy_coef=0.01,
         ),
         evaluation=EvaluationConfig(
-            num_games=1, 
-            opponent_type="random",
-            evaluation_interval_timesteps=50000
+            num_games=1, opponent_type="random", evaluation_interval_timesteps=50000
         ),
         logging=LoggingConfig(
-            log_file="/tmp/test.log", 
-            model_dir="/tmp/",
-            run_name="test_run"
+            log_file="/tmp/test.log", model_dir="/tmp/", run_name="test_run"
         ),
         wandb=WandBConfig(
-            enabled=False, 
-            project="test", 
+            enabled=False,
+            project="test",
             entity=None,
             run_name_prefix="test",
             watch_model=False,
             watch_log_freq=1000,
-            watch_log_type="all"
+            watch_log_type="all",
         ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
     )
@@ -351,7 +347,9 @@ def test_ppo_agent_learn_advantage_normalization():
 
     # Create data with known advantage distribution
     dummy_obs_tensor = torch.randn(INPUT_CHANNELS, 9, 9, device="cpu")
-    dummy_legal_mask = torch.ones(agent.num_actions_total, dtype=torch.bool, device="cpu")
+    dummy_legal_mask = torch.ones(
+        agent.num_actions_total, dtype=torch.bool, device="cpu"
+    )
 
     # Set high variance in rewards to test normalization
     rewards = [10.0, -5.0, 15.0, -8.0]
@@ -375,7 +373,9 @@ def test_ppo_agent_learn_advantage_normalization():
     raw_advantages = batch_data["advantages"]
 
     # Advantages should have non-zero variance before normalization
-    assert torch.std(raw_advantages, dim=0) > 0.1, "Advantages should have significant variance"
+    assert (
+        torch.std(raw_advantages, dim=0) > 0.1
+    ), "Advantages should have significant variance"
 
     # Call learn - this will normalize advantages internally
     metrics = agent.learn(experience_buffer)
@@ -419,23 +419,19 @@ def test_ppo_agent_learn_gradient_clipping():
             gradient_clip_max_norm=0.5,  # Explicit gradient clipping
         ),
         evaluation=EvaluationConfig(
-            num_games=1, 
-            opponent_type="random",
-            evaluation_interval_timesteps=50000
+            num_games=1, opponent_type="random", evaluation_interval_timesteps=50000
         ),
         logging=LoggingConfig(
-            log_file="/tmp/test.log", 
-            model_dir="/tmp/",
-            run_name="test_run"
+            log_file="/tmp/test.log", model_dir="/tmp/", run_name="test_run"
         ),
         wandb=WandBConfig(
-            enabled=False, 
-            project="test", 
+            enabled=False,
+            project="test",
             entity=None,
             run_name_prefix="test",
             watch_model=False,
             watch_log_freq=1000,
-            watch_log_type="all"
+            watch_log_type="all",
         ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
     )
@@ -451,7 +447,9 @@ def test_ppo_agent_learn_gradient_clipping():
 
     # Create data that might produce large gradients
     dummy_obs_tensor = torch.randn(INPUT_CHANNELS, 9, 9, device="cpu")
-    dummy_legal_mask = torch.ones(agent.num_actions_total, dtype=torch.bool, device="cpu")
+    dummy_legal_mask = torch.ones(
+        agent.num_actions_total, dtype=torch.bool, device="cpu"
+    )
 
     # Extreme reward values to potentially create large policy updates
     rewards = [100.0, -100.0, 50.0, -50.0]
@@ -475,7 +473,9 @@ def test_ppo_agent_learn_gradient_clipping():
     # Verify learning completed successfully
     assert metrics is not None
     assert all(not np.isnan(v) for v in metrics.values()), "No metrics should be NaN"
-    assert all(not np.isinf(v) for v in metrics.values()), "No metrics should be infinite"
+    assert all(
+        not np.isinf(v) for v in metrics.values()
+    ), "No metrics should be infinite"
 
 
 def test_ppo_agent_learn_empty_buffer_handling():
@@ -510,23 +510,19 @@ def test_ppo_agent_learn_empty_buffer_handling():
             entropy_coef=0.01,
         ),
         evaluation=EvaluationConfig(
-            num_games=1, 
-            opponent_type="random",
-            evaluation_interval_timesteps=50000
+            num_games=1, opponent_type="random", evaluation_interval_timesteps=50000
         ),
         logging=LoggingConfig(
-            log_file="/tmp/test.log", 
-            model_dir="/tmp/",
-            run_name="test_run"
+            log_file="/tmp/test.log", model_dir="/tmp/", run_name="test_run"
         ),
         wandb=WandBConfig(
-            enabled=False, 
-            project="test", 
+            enabled=False,
+            project="test",
             entity=None,
             run_name_prefix="test",
             watch_model=False,
             watch_log_freq=1000,
-            watch_log_type="all"
+            watch_log_type="all",
         ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
     )
@@ -594,23 +590,19 @@ def test_ppo_agent_learn_kl_divergence_tracking():
             entropy_coef=0.01,
         ),
         evaluation=EvaluationConfig(
-            num_games=1, 
-            opponent_type="random",
-            evaluation_interval_timesteps=50000
+            num_games=1, opponent_type="random", evaluation_interval_timesteps=50000
         ),
         logging=LoggingConfig(
-            log_file="/tmp/test.log", 
-            model_dir="/tmp/",
-            run_name="test_run"
+            log_file="/tmp/test.log", model_dir="/tmp/", run_name="test_run"
         ),
         wandb=WandBConfig(
-            enabled=False, 
-            project="test", 
+            enabled=False,
+            project="test",
             entity=None,
             run_name_prefix="test",
             watch_model=False,
             watch_log_freq=1000,
-            watch_log_type="all"
+            watch_log_type="all",
         ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
     )
@@ -625,7 +617,9 @@ def test_ppo_agent_learn_kl_divergence_tracking():
     )
 
     dummy_obs_tensor = torch.randn(INPUT_CHANNELS, 9, 9, device="cpu")
-    dummy_legal_mask = torch.ones(agent.num_actions_total, dtype=torch.bool, device="cpu")
+    dummy_legal_mask = torch.ones(
+        agent.num_actions_total, dtype=torch.bool, device="cpu"
+    )
 
     for i in range(buffer_size):
         experience_buffer.add(
@@ -691,23 +685,19 @@ def test_ppo_agent_learn_minibatch_processing():
             entropy_coef=0.01,
         ),
         evaluation=EvaluationConfig(
-            num_games=1, 
-            opponent_type="random",
-            evaluation_interval_timesteps=50000
+            num_games=1, opponent_type="random", evaluation_interval_timesteps=50000
         ),
         logging=LoggingConfig(
-            log_file="/tmp/test.log", 
-            model_dir="/tmp/",
-            run_name="test_run"
+            log_file="/tmp/test.log", model_dir="/tmp/", run_name="test_run"
         ),
         wandb=WandBConfig(
-            enabled=False, 
-            project="test", 
+            enabled=False,
+            project="test",
             entity=None,
             run_name_prefix="test",
             watch_model=False,
             watch_log_freq=1000,
-            watch_log_type="all"
+            watch_log_type="all",
         ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
     )
@@ -722,7 +712,9 @@ def test_ppo_agent_learn_minibatch_processing():
     )
 
     dummy_obs_tensor = torch.randn(INPUT_CHANNELS, 9, 9, device="cpu")
-    dummy_legal_mask = torch.ones(agent.num_actions_total, dtype=torch.bool, device="cpu")
+    dummy_legal_mask = torch.ones(
+        agent.num_actions_total, dtype=torch.bool, device="cpu"
+    )
 
     for i in range(buffer_size):
         experience_buffer.add(

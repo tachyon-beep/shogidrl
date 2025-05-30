@@ -243,21 +243,24 @@ class SessionManager:
             try:
                 # Set a short timeout for WandB finalization to avoid hanging
                 import signal
-                
+
                 def timeout_handler(signum, frame):
                     raise TimeoutError("WandB finalization timed out")
-                
+
                 # Set up timeout (10 seconds)
                 signal.signal(signal.SIGALRM, timeout_handler)
                 signal.alarm(10)
-                
+
                 try:
                     wandb.finish()
                 finally:
                     signal.alarm(0)  # Cancel the alarm
-                    
+
             except (KeyboardInterrupt, TimeoutError):
-                print("Warning: WandB finalization interrupted or timed out", file=sys.stderr)
+                print(
+                    "Warning: WandB finalization interrupted or timed out",
+                    file=sys.stderr,
+                )
                 try:
                     # Force finish without waiting
                     wandb.finish(exit_code=1)

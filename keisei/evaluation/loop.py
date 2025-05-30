@@ -53,7 +53,7 @@ def run_evaluation_loop(
             if not legal_moves:
                 game.game_over = True
                 break
-            # Create proper legal mask using PolicyOutputMapper  
+            # Create proper legal mask using PolicyOutputMapper
             policy_mapper = PolicyOutputMapper()
             device = agent_to_eval.device  # Use agent's device for consistency
             legal_mask = policy_mapper.get_legal_mask(legal_moves, device)

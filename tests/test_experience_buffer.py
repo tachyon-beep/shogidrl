@@ -2,8 +2,8 @@
 Unit tests for ExperienceBuffer in experience_buffer.py
 """
 
-import torch
 import numpy as np
+import torch
 
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.utils import PolicyOutputMapper
@@ -17,7 +17,9 @@ def test_experience_buffer_add_and_len():
     assert len(buf) == 0
     # Create a properly sized dummy legal_mask using PolicyOutputMapper
     mapper = PolicyOutputMapper()
-    dummy_legal_mask = torch.zeros(mapper.get_total_actions(), dtype=torch.bool)  # Proper size (13527)
+    dummy_legal_mask = torch.zeros(
+        mapper.get_total_actions(), dtype=torch.bool
+    )  # Proper size (13527)
 
     buf.add(
         torch.zeros(1), 1, 0.5, 0.0, 0.0, False, dummy_legal_mask
@@ -47,12 +49,12 @@ def test_experience_buffer_compute_advantages_and_returns():
     buf = ExperienceBuffer(buffer_size=3, gamma=gamma, lambda_gae=lambda_gae)
     mapper = PolicyOutputMapper()
     dummy_legal_mask = torch.zeros(mapper.get_total_actions(), dtype=torch.bool)
-    
+
     # Add test data: simple sequence with known rewards and values
     rewards = [1.0, 2.0, 3.0]
     values = [0.5, 1.0, 1.5]
     dones = [False, False, True]  # Last step is terminal
-    
+
     for i in range(3):
         buf.add(
             obs=torch.randn(46, 9, 9),  # Dummy observation
@@ -61,24 +63,24 @@ def test_experience_buffer_compute_advantages_and_returns():
             log_prob=0.1,
             value=values[i],
             done=dones[i],
-            legal_mask=dummy_legal_mask
+            legal_mask=dummy_legal_mask,
         )
-    
+
     # Compute advantages with last_value=0.0 (terminal state)
     last_value = 0.0
     buf.compute_advantages_and_returns(last_value)
-    
+
     # Verify advantages and returns are computed
     assert len(buf.advantages) == 3
     assert len(buf.returns) == 3
-    
+
     # Check that all advantages and returns are tensors
     for i in range(3):
         assert isinstance(buf.advantages[i], torch.Tensor)
         assert isinstance(buf.returns[i], torch.Tensor)
         assert buf.advantages[i].device == buf.device
         assert buf.returns[i].device == buf.device
-    
+
     # Manually verify GAE calculation for the last step (terminal)
     # For t=2 (terminal): delta = reward + gamma * 0 * (1-done) - value = 3.0 + 0 - 1.5 = 1.5
     # GAE = delta = 1.5
@@ -92,10 +94,10 @@ def test_experience_buffer_compute_advantages_and_returns():
 def test_experience_buffer_compute_advantages_empty_buffer():
     """Test compute_advantages_and_returns on empty buffer."""
     buf = ExperienceBuffer(buffer_size=5, gamma=0.99, lambda_gae=0.95)
-    
+
     # Should handle empty buffer gracefully
     buf.compute_advantages_and_returns(0.0)
-    
+
     assert len(buf.advantages) == 0
     assert len(buf.returns) == 0
 
@@ -104,7 +106,7 @@ def test_experience_buffer_get_batch():
     """Test ExperienceBuffer get_batch method."""
     buf = ExperienceBuffer(buffer_size=2, gamma=0.99, lambda_gae=0.95)
     mapper = PolicyOutputMapper()
-    
+
     # Create test data
     obs1 = torch.randn(46, 9, 9)
     obs2 = torch.randn(46, 9, 9)
@@ -112,22 +114,31 @@ def test_experience_buffer_get_batch():
     legal_mask2 = torch.ones(mapper.get_total_actions(), dtype=torch.bool)
     legal_mask1[100] = True  # Make some actions legal
     legal_mask2[200] = False  # Make some actions illegal
-    
+
     # Add experiences
     buf.add(obs1, 1, 1.0, 0.1, 0.5, False, legal_mask1)
     buf.add(obs2, 2, 2.0, 0.2, 1.0, True, legal_mask2)
-    
+
     # Compute advantages
     buf.compute_advantages_and_returns(0.0)
-    
+
     # Get batch
     batch = buf.get_batch()
-    
+
     # Verify batch structure
-    expected_keys = ["obs", "actions", "log_probs", "values", "advantages", "returns", "dones", "legal_masks"]
+    expected_keys = [
+        "obs",
+        "actions",
+        "log_probs",
+        "values",
+        "advantages",
+        "returns",
+        "dones",
+        "legal_masks",
+    ]
     for key in expected_keys:
         assert key in batch, f"Missing key: {key}"
-    
+
     # Verify tensor shapes and types
     assert batch["obs"].shape == (2, 46, 9, 9)
     assert batch["actions"].shape == (2,)
@@ -137,7 +148,7 @@ def test_experience_buffer_get_batch():
     assert batch["returns"].shape == (2,)
     assert batch["dones"].shape == (2,)
     assert batch["legal_masks"].shape == (2, mapper.get_total_actions())
-    
+
     # Verify data types
     assert batch["actions"].dtype == torch.int64
     assert batch["log_probs"].dtype == torch.float32
@@ -146,7 +157,7 @@ def test_experience_buffer_get_batch():
     assert batch["returns"].dtype == torch.float32
     assert batch["dones"].dtype == torch.bool
     assert batch["legal_masks"].dtype == torch.bool
-    
+
     # Verify actual values
     assert torch.equal(batch["actions"], torch.tensor([1, 2]))
     assert torch.allclose(batch["log_probs"], torch.tensor([0.1, 0.2]))
@@ -157,7 +168,7 @@ def test_experience_buffer_get_batch():
 def test_experience_buffer_get_batch_empty():
     """Test get_batch on empty buffer returns empty dict."""
     buf = ExperienceBuffer(buffer_size=5, gamma=0.99, lambda_gae=0.95)
-    
+
     batch = buf.get_batch()
     assert batch == {}
 
@@ -167,14 +178,14 @@ def test_experience_buffer_clear():
     buf = ExperienceBuffer(buffer_size=3, gamma=0.99, lambda_gae=0.95)
     mapper = PolicyOutputMapper()
     dummy_legal_mask = torch.zeros(mapper.get_total_actions(), dtype=torch.bool)
-    
+
     # Add some data
     buf.add(torch.randn(46, 9, 9), 1, 1.0, 0.1, 0.5, False, dummy_legal_mask)
     buf.add(torch.randn(46, 9, 9), 2, 2.0, 0.2, 1.0, False, dummy_legal_mask)
-    
+
     # Compute advantages
     buf.compute_advantages_and_returns(0.0)
-    
+
     # Verify buffer has data
     assert len(buf) == 2
     assert len(buf.obs) == 2
@@ -187,10 +198,10 @@ def test_experience_buffer_clear():
     assert len(buf.advantages) == 2
     assert len(buf.returns) == 2
     assert buf.ptr == 2
-    
+
     # Clear buffer
     buf.clear()
-    
+
     # Verify all data is cleared
     assert len(buf) == 0
     assert len(buf.obs) == 0
@@ -210,16 +221,16 @@ def test_experience_buffer_full_buffer_warning():
     buf = ExperienceBuffer(buffer_size=2, gamma=0.99, lambda_gae=0.95)
     mapper = PolicyOutputMapper()
     dummy_legal_mask = torch.zeros(mapper.get_total_actions(), dtype=torch.bool)
-    
+
     # Fill buffer to capacity
     buf.add(torch.randn(46, 9, 9), 1, 1.0, 0.1, 0.5, False, dummy_legal_mask)
     buf.add(torch.randn(46, 9, 9), 2, 2.0, 0.2, 1.0, False, dummy_legal_mask)
-    
+
     assert len(buf) == 2
-    
+
     # Try to add one more (should not add due to full buffer)
     buf.add(torch.randn(46, 9, 9), 3, 3.0, 0.3, 1.5, True, dummy_legal_mask)
-    
+
     # Buffer should still be size 2, not 3
     assert len(buf) == 2
     assert buf.actions == [1, 2]  # Should not contain the third action
@@ -230,16 +241,20 @@ def test_experience_buffer_device_consistency():
     device = "cpu"  # Use CPU for consistent testing
     buf = ExperienceBuffer(buffer_size=2, gamma=0.99, lambda_gae=0.95, device=device)
     mapper = PolicyOutputMapper()
-    
+
     # Create tensors on the specified device
     obs = torch.randn(46, 9, 9, device=device)
-    legal_mask = torch.zeros(mapper.get_total_actions(), dtype=torch.bool, device=device)
-    
+    legal_mask = torch.zeros(
+        mapper.get_total_actions(), dtype=torch.bool, device=device
+    )
+
     buf.add(obs, 1, 1.0, 0.1, 0.5, False, legal_mask)
     buf.compute_advantages_and_returns(0.0)
     batch = buf.get_batch()
-    
+
     # Verify all tensors in batch are on correct device
     for key, tensor in batch.items():
         if isinstance(tensor, torch.Tensor):
-            assert tensor.device == torch.device(device), f"Tensor {key} on wrong device"
+            assert tensor.device == torch.device(
+                device
+            ), f"Tensor {key} on wrong device"

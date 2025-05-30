@@ -181,7 +181,7 @@ class Trainer:
             device=self.device,
         )
         print(f"DEBUG: Created agent: {self.agent}")
-        
+
         if self.model is None:
             # This should ideally not happen if model_manager.create_model() raises an error on failure
             raise RuntimeError(
@@ -238,7 +238,7 @@ class Trainer:
             model_dir=self.model_dir,
             resume_path_override=self.args.resume,
         )
-        
+
         self.resumed_from_checkpoint = self.model_manager.resumed_from_checkpoint
 
         # Restore training state from checkpoint data

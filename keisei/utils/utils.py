@@ -317,7 +317,7 @@ class PolicyOutputMapper:
                     f"This indicates incomplete move coverage in PolicyOutputMapper which will corrupt experiments. "
                     f"Original error: {e}"
                 ) from e
-        
+
         return mask
 
     def _usi_sq(self, r: int, c: int) -> str:

@@ -187,7 +187,9 @@ class ModelManager:
         elif actual_resume_path:  # A specific path is provided
             print(f"DEBUG: Checking if {actual_resume_path} exists...")
             if os.path.exists(actual_resume_path):
-                print(f"DEBUG: Path exists! Calling agent.load_model({actual_resume_path})")
+                print(
+                    f"DEBUG: Path exists! Calling agent.load_model({actual_resume_path})"
+                )
                 self.checkpoint_data = agent.load_model(actual_resume_path)
                 self.resumed_from_checkpoint = actual_resume_path
                 self.logger_func(
@@ -275,7 +277,9 @@ class ModelManager:
             return False
         except Exception as e:
             # Catch any other WandB-related exceptions (network errors, etc.)
-            self.logger_func(f"Unexpected error during W&B artifact upload for {model_path}: {e}")
+            self.logger_func(
+                f"Unexpected error during W&B artifact upload for {model_path}: {e}"
+            )
             return False
 
     def save_final_model(
