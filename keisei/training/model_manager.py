@@ -11,7 +11,6 @@ This module handles model-related concerns including:
 
 import os
 import shutil
-import sys
 from typing import Any, Dict, List, Optional, Tuple
 
 import torch
@@ -21,6 +20,8 @@ import wandb
 from keisei.config_schema import AppConfig
 from keisei.core.actor_critic_protocol import ActorCriticProtocol
 from keisei.core.ppo_agent import PPOAgent
+from keisei.shogi import features
+from keisei.training.models import model_factory
 
 from . import utils
 
@@ -44,6 +45,9 @@ class ModelManager:
         self.args = args
         self.device = device
         self.logger_func = logger_func or (lambda msg: None)
+
+        # Initialize scaler early to satisfy type checker
+        self.scaler: Optional[GradScaler] = None
 
         # Model configuration from args or config
         self.input_features = (
@@ -73,8 +77,6 @@ class ModelManager:
 
     def _setup_feature_spec(self):
         """Setup feature specification and observation shape."""
-        from keisei.shogi import features
-
         self.feature_spec = features.FEATURE_SPECS[self.input_features]
         self.obs_shape = (self.feature_spec.num_planes, 9, 9)
 
@@ -101,8 +103,6 @@ class ModelManager:
         """Create the model using the model factory and sets it to self.model.
         Raises RuntimeError if model creation fails.
         """
-        from keisei.training.models import model_factory
-
         # Call model_factory once and assign to a temporary variable
         created_model = model_factory(
             model_type=self.model_type,
@@ -150,65 +150,69 @@ class ModelManager:
             else self.args.resume
         )
 
-        def find_ckpt_in_dir(directory):
-            return utils.find_latest_checkpoint(directory)
-
         if actual_resume_path == "latest" or actual_resume_path is None:
-            # Try to find latest checkpoint in the run's model_dir
-            latest_ckpt = find_ckpt_in_dir(model_dir)
-            # If not found, try the parent directory (savedir)
-            if not latest_ckpt and model_dir:  # Ensure model_dir is not empty
-                parent_dir_path = os.path.dirname(model_dir.rstrip(os.sep))
-                if (
-                    parent_dir_path and parent_dir_path != model_dir
-                ):  # Check if parent_dir is different and valid
-                    parent_ckpt = find_ckpt_in_dir(parent_dir_path)
-                    if parent_ckpt:
-                        # Copy the checkpoint into the run's model_dir for consistency
-                        dest_ckpt = os.path.join(
-                            model_dir, os.path.basename(parent_ckpt)
-                        )
-                        shutil.copy2(parent_ckpt, dest_ckpt)
-                        latest_ckpt = dest_ckpt
-
-            if latest_ckpt:
-                self.checkpoint_data = agent.load_model(latest_ckpt)
-                self.resumed_from_checkpoint = latest_ckpt
-                self.logger_func(f"Resumed from latest checkpoint: {latest_ckpt}")
-                return True
-            else:
-                self.resumed_from_checkpoint = None
-                self.checkpoint_data = None
-                self.logger_func(
-                    "No checkpoint found to resume from (searched latest)."
-                )
-                return False
-
-        elif actual_resume_path:  # A specific path is provided
-            print(f"DEBUG: Checking if {actual_resume_path} exists...")
-            if os.path.exists(actual_resume_path):
-                print(
-                    f"DEBUG: Path exists! Calling agent.load_model({actual_resume_path})"
-                )
-                self.checkpoint_data = agent.load_model(actual_resume_path)
-                self.resumed_from_checkpoint = actual_resume_path
-                self.logger_func(
-                    f"Resumed from specified checkpoint: {actual_resume_path}"
-                )
-                print(f"DEBUG: checkpoint_data set to: {self.checkpoint_data}")
-                return True
-            else:
-                print("DEBUG: Path does NOT exist!")
-                self.logger_func(
-                    f"Specified resume checkpoint not found: {actual_resume_path}"
-                )
-                self.resumed_from_checkpoint = None
-                self.checkpoint_data = None
-                return False
-        else:  # No resume path specified or found
-            self.resumed_from_checkpoint = None
-            self.checkpoint_data = None
+            return self._handle_latest_checkpoint_resume(agent, model_dir)
+        elif actual_resume_path:
+            return self._handle_specific_checkpoint_resume(agent, actual_resume_path)
+        else:
+            self._reset_checkpoint_state()
             return False
+
+    def _handle_latest_checkpoint_resume(self, agent: PPOAgent, model_dir: str) -> bool:
+        """Handle resuming from the latest checkpoint."""
+        latest_ckpt = self._find_latest_checkpoint(model_dir)
+        
+        if latest_ckpt:
+            self.checkpoint_data = agent.load_model(latest_ckpt)
+            self.resumed_from_checkpoint = latest_ckpt
+            self.logger_func(f"Resumed from latest checkpoint: {latest_ckpt}")
+            return True
+        else:
+            self._reset_checkpoint_state()
+            self.logger_func("No checkpoint found to resume from (searched latest).")
+            return False
+
+    def _handle_specific_checkpoint_resume(self, agent: PPOAgent, resume_path: str) -> bool:
+        """Handle resuming from a specific checkpoint path."""
+        self.logger_func(f"Checking if {resume_path} exists...")
+        if os.path.exists(resume_path):
+            self.logger_func(f"Path exists! Loading model from {resume_path}")
+            self.checkpoint_data = agent.load_model(resume_path)
+            self.resumed_from_checkpoint = resume_path
+            self.logger_func(f"Resumed from specified checkpoint: {resume_path}")
+            return True
+        else:
+            self.logger_func(f"Specified resume checkpoint not found: {resume_path}")
+            self._reset_checkpoint_state()
+            return False
+
+    def _find_latest_checkpoint(self, model_dir: str) -> Optional[str]:
+        """Find the latest checkpoint in model_dir or parent directory."""
+        # Try to find latest checkpoint in the run's model_dir
+        latest_ckpt = utils.find_latest_checkpoint(model_dir)
+        
+        # If not found, try the parent directory (savedir)
+        if not latest_ckpt and model_dir:
+            latest_ckpt = self._search_parent_directory(model_dir)
+            
+        return latest_ckpt
+
+    def _search_parent_directory(self, model_dir: str) -> Optional[str]:
+        """Search for checkpoint in parent directory and copy if found."""
+        parent_dir_path = os.path.dirname(model_dir.rstrip(os.sep))
+        if parent_dir_path and parent_dir_path != model_dir:
+            parent_ckpt = utils.find_latest_checkpoint(parent_dir_path)
+            if parent_ckpt:
+                # Copy the checkpoint into the run's model_dir for consistency
+                dest_ckpt = os.path.join(model_dir, os.path.basename(parent_ckpt))
+                shutil.copy2(parent_ckpt, dest_ckpt)
+                return dest_ckpt
+        return None
+
+    def _reset_checkpoint_state(self) -> None:
+        """Reset checkpoint-related state variables."""
+        self.resumed_from_checkpoint = None
+        self.checkpoint_data = None
 
     def create_model_artifact(
         self,
@@ -274,12 +278,6 @@ class ModelManager:
             return False
         except (OSError, RuntimeError, TypeError, ValueError) as e:
             self.logger_func(f"Error creating W&B artifact for {model_path}: {e}")
-            return False
-        except Exception as e:
-            # Catch any other WandB-related exceptions (network errors, etc.)
-            self.logger_func(
-                f"Unexpected error during W&B artifact upload for {model_path}: {e}"
-            )
             return False
 
     def save_final_model(

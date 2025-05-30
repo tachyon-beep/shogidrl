@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional
 from unittest.mock import Mock, patch
 
 import pytest
+import wandb
 
 from keisei.config_schema import (
     AppConfig,
@@ -495,8 +496,6 @@ class TestWandBLoggingIntegration:
                 ):
                     mock_logger.log(message)
                     if trainer.is_train_wandb_active and also_to_wandb:
-                        import wandb
-
                         if wandb.run:
                             log_payload = {"train_message": message}
                             if wandb_data:
@@ -552,8 +551,6 @@ class TestWandBLoggingIntegration:
                 ):
                     mock_logger.log(message)
                     if trainer.is_train_wandb_active and also_to_wandb:
-                        import wandb
-
                         if wandb.run:
                             log_payload = {"train_message": message}
                             if wandb_data:
@@ -607,8 +604,6 @@ class TestWandBLoggingIntegration:
                 ):
                     mock_logger.log(message)
                     if trainer.is_train_wandb_active and also_to_wandb:
-                        import wandb
-
                         if wandb.run:
                             log_payload = {"train_message": message}
                             if wandb_data:
@@ -661,8 +656,6 @@ class TestWandBLoggingIntegration:
                 ):
                     mock_logger.log(message)
                     if trainer.is_train_wandb_active and also_to_wandb:
-                        import wandb
-
                         if wandb.run:
                             log_payload = {"train_message": message}
                             if wandb_data:

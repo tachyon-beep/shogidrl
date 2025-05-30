@@ -15,6 +15,8 @@ import wandb  # Ensure wandb is imported for W&B logging
 from keisei.core.ppo_agent import PPOAgent
 from keisei.evaluation.loop import ResultsDict, run_evaluation_loop
 from keisei.utils import BaseOpponent, EvaluationLogger, PolicyOutputMapper
+from keisei.utils.agent_loading import initialize_opponent, load_evaluation_agent
+from keisei.utils.utils import load_config
 
 if TYPE_CHECKING:
     pass  # torch already imported above
@@ -148,18 +150,11 @@ class Evaluator:
             raise RuntimeError(f"Failed to initialize EvaluationLogger: {e}") from e
         # Agent and opponent
         # Load input_channels from config
-        from keisei.utils.utils import load_config
-
         try:
             config = load_config()
             input_channels = config.env.input_channels
         except (OSError, ValueError, TypeError, AttributeError, FileNotFoundError) as e:
             raise RuntimeError(f"Failed to load configuration: {e}") from e
-
-        from keisei.utils.agent_loading import (
-            initialize_opponent,
-            load_evaluation_agent,
-        )
 
         try:
             self._agent = load_evaluation_agent(

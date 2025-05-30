@@ -42,7 +42,8 @@ def profile_training_run(total_timesteps=2048, output_file=None):
     config.training.checkpoint_interval_timesteps = (
         total_timesteps // 2
     )  # One checkpoint
-    config.evaluation.enable_periodic_evaluation = False  # Skip evaluation
+    # Skip periodic evaluation by setting a very large interval
+    config.training.evaluation_interval_timesteps = total_timesteps * 10
     config.wandb.enabled = False  # Disable W&B for clean profiling
     config.demo.enable_demo_mode = False  # Disable demo mode
 
@@ -52,8 +53,15 @@ def profile_training_run(total_timesteps=2048, output_file=None):
 
         def run_training():
             """Training function to be profiled."""
-            trainer = Trainer(config, run_name="profile_run")
-            trainer.train()
+            # Create a simple args object for the Trainer
+            class ProfileArgs:
+                def __init__(self):
+                    self.run_name = "profile_run"
+                    self.resume = None
+            
+            args = ProfileArgs()
+            trainer = Trainer(config, args)
+            trainer.run_training_loop()
 
         # Run with profiler
         cProfile.run("run_training()", output_file)

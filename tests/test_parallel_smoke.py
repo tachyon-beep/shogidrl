@@ -9,6 +9,7 @@ For now, it serves as a placeholder and tests the potential for parallel executi
 import multiprocessing
 import tempfile
 import time
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -34,7 +35,7 @@ class TestParallelSmoke:
         This ensures the CI environment supports multiprocessing.
         """
         # Create a queue for communication
-        queue = multiprocessing.Queue()
+        queue: multiprocessing.Queue[Any] = multiprocessing.Queue()
 
         # Start 2 worker processes
         workers = []
@@ -55,7 +56,7 @@ class TestParallelSmoke:
                 results.append(item)
                 if len([r for r in results if "done" in r]) == 2:
                     break  # Both workers finished
-            except:
+            except Exception:  # Catch timeout and other queue exceptions
                 continue
 
         # Clean up processes
@@ -145,8 +146,8 @@ class TestParallelSmoke:
         # Create a simple queue for testing (no multiprocessing)
         import queue
 
-        result_queue = queue.Queue()
-        model_queue = queue.Queue()
+        result_queue: queue.Queue[Any] = queue.Queue()
+        model_queue: queue.Queue[Any] = queue.Queue()
 
         # Mock the future SelfPlayWorker class
         class MockSelfPlayWorker:

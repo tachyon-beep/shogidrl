@@ -267,10 +267,10 @@ COMMON_MAIN_MOCKS = [
         "keisei.evaluation.evaluate.PolicyOutputMapper"  # This is used by Evaluator, imported into evaluate.py
     ),
     patch(
-        "keisei.utils.agent_loading.load_evaluation_agent"  # Corrected: Patched where Evaluator finds it
+        "keisei.evaluation.evaluate.load_evaluation_agent"  # Patched in evaluate.py namespace where it's imported
     ),
     patch(
-        "keisei.utils.agent_loading.initialize_opponent"  # Corrected: Patched where Evaluator finds it
+        "keisei.evaluation.evaluate.initialize_opponent"  # Patched in evaluate.py namespace where it's imported
     ),
     patch(
         "keisei.evaluation.evaluate.run_evaluation_loop"  # Corrected: Patched in evaluate.py namespace where it's imported
@@ -286,7 +286,7 @@ COMMON_MAIN_MOCKS = [
     patch("numpy.random.seed"),
     patch("torch.manual_seed"),
     patch(
-        "keisei.utils.utils.load_config"  # Mock load_config to prevent setup failures
+        "keisei.evaluation.evaluate.load_config"  # Mock load_config to prevent setup failures - patched in evaluate.py namespace
     ),
 ]
 
@@ -872,11 +872,11 @@ def test_evaluator_class_basic(monkeypatch, tmp_path, policy_mapper):
             return game_instance.get_legal_moves()[0]
 
     monkeypatch.setattr(
-        "keisei.utils.agent_loading.load_evaluation_agent",  # Corrected target
+        "keisei.evaluation.evaluate.load_evaluation_agent",  # Patched in evaluate.py namespace where it's imported
         lambda *a, **kw: DummyAgent(),
     )
     monkeypatch.setattr(
-        "keisei.utils.agent_loading.initialize_opponent",  # Corrected target
+        "keisei.evaluation.evaluate.initialize_opponent",  # Patched in evaluate.py namespace where it's imported
         lambda *a, **kw: DummyOpponent(),
     )
     log_file = tmp_path / "evaluator_test.log"

@@ -126,8 +126,8 @@ def temp_dir():
 class TestModelManagerInitialization:
     """Test ModelManager initialization and configuration."""
 
-    @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
+    @patch("keisei.training.model_manager.model_factory")
     def test_initialization_success(
         self,
         mock_model_factory,
@@ -173,8 +173,8 @@ class TestModelManagerInitialization:
             created_model == mock_model
         )  # create_model should return the created model
 
-    @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
+    @patch("keisei.training.model_manager.model_factory")
     def test_initialization_with_args_override(
         self, mock_model_factory, mock_feature_specs, mock_config, device, logger_func
     ):  # pylint: disable=too-many-positional-arguments
@@ -209,8 +209,8 @@ class TestModelManagerInitialization:
         assert manager.obs_shape == (60, 9, 9)
 
     @patch("keisei.training.model_manager.GradScaler")
-    @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
+    @patch("keisei.training.model_manager.model_factory")
     def test_mixed_precision_cuda_enabled(
         self,
         mock_model_factory,
@@ -227,7 +227,7 @@ class TestModelManagerInitialization:
         # Setup mocks
         mock_feature_spec = Mock()
         mock_feature_spec.num_planes = 46
-        mock_feature_specs["core46"] = mock_feature_spec
+        mock_feature_specs.__getitem__.return_value = mock_feature_spec
 
         mock_model = Mock()
         mock_model.to.return_value = mock_model
@@ -248,8 +248,8 @@ class TestModelManagerInitialization:
         mock_grad_scaler.assert_called_once()
         logger_func.assert_any_call("Mixed precision training enabled (CUDA).")
 
-    @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
+    @patch("keisei.training.model_manager.model_factory")
     def test_mixed_precision_cpu_warning(
         self,
         mock_model_factory,
@@ -287,8 +287,8 @@ class TestModelManagerInitialization:
 class TestModelManagerCheckpointHandling:
     """Test checkpoint loading and resuming functionality."""
 
-    @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
+    @patch("keisei.training.model_manager.model_factory")
     @patch("keisei.training.model_manager.utils.find_latest_checkpoint")
     def test_handle_checkpoint_resume_latest_found(
         self,
@@ -333,8 +333,8 @@ class TestModelManagerCheckpointHandling:
             f"Resumed from latest checkpoint: {checkpoint_path}"
         )
 
-    @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
+    @patch("keisei.training.model_manager.model_factory")
     @patch("keisei.training.model_manager.utils.find_latest_checkpoint")
     def test_handle_checkpoint_resume_not_found(
         self,
@@ -375,8 +375,8 @@ class TestModelManagerCheckpointHandling:
         assert manager.resumed_from_checkpoint is None
         mock_agent.load_model.assert_not_called()
 
-    @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
+    @patch("keisei.training.model_manager.model_factory")
     @patch("os.path.exists")  # Add patch for os.path.exists
     def test_handle_checkpoint_resume_explicit_path(
         self,
@@ -427,8 +427,8 @@ class TestModelManagerCheckpointHandling:
 class TestModelManagerArtifacts:
     """Test WandB artifact creation functionality."""
 
-    @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
+    @patch("keisei.training.model_manager.model_factory")
     @patch("keisei.training.model_manager.wandb")
     def test_create_model_artifact_success(
         self,
@@ -483,8 +483,8 @@ class TestModelManagerArtifacts:
             mock_artifact, aliases=["latest"]
         )
 
-    @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
+    @patch("keisei.training.model_manager.model_factory")
     def test_create_model_artifact_wandb_inactive(
         self,
         mock_model_factory,
@@ -519,8 +519,8 @@ class TestModelManagerArtifacts:
         assert result is False
 
     @patch("keisei.training.model_manager.wandb")
-    @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
+    @patch("keisei.training.model_manager.model_factory")
     def test_create_model_artifact_file_missing(
         self,
         mock_model_factory,
@@ -565,8 +565,8 @@ class TestModelManagerArtifacts:
 class TestModelManagerSaving:
     """Test model and checkpoint saving functionality."""
 
-    @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
+    @patch("keisei.training.model_manager.model_factory")
     def test_save_final_model_success(
         self,
         mock_model_factory,
@@ -615,8 +615,8 @@ class TestModelManagerSaving:
         mock_agent.save_model.assert_called_once_with(model_path, 1000, 17)
         mock_artifact.assert_called_once()
 
-    @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
+    @patch("keisei.training.model_manager.model_factory")
     def test_save_final_checkpoint_success(
         self,
         mock_model_factory,
@@ -668,8 +668,8 @@ class TestModelManagerSaving:
         )
         mock_artifact.assert_called_once()
 
-    @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
+    @patch("keisei.training.model_manager.model_factory")
     def test_save_final_checkpoint_zero_timestep(
         self,
         mock_model_factory,
@@ -718,8 +718,8 @@ class TestModelManagerSaving:
 class TestModelManagerUtilities:
     """Test utility methods and information retrieval."""
 
-    @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
+    @patch("keisei.training.model_manager.model_factory")
     def test_get_model_info(
         self,
         mock_model_factory,
@@ -759,14 +759,14 @@ class TestModelManagerUtilities:
         }
         assert info == expected_info
 
-    @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
+    @patch("keisei.training.model_manager.model_factory")
     # PPOAgent patch is removed as we instantiate it directly.
     def test_model_creation_and_agent_instantiation(  # Renamed test
         self,
         # mock_ppo_agent, # Removed
         mock_model_factory,
-        mock_features,  # This is the patch object for 'keisei.shogi.features.FEATURE_SPECS'
+        mock_features,  # This is the patch object for 'keisei.training.model_manager.features.FEATURE_SPECS'
         mock_config,
         mock_args,
         device,
@@ -821,8 +821,8 @@ class TestModelManagerUtilities:
 class TestModelManagerEnhancedCheckpointHandling:
     """Enhanced tests for checkpoint loading scenarios and edge cases."""
 
-    @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
+    @patch("keisei.training.model_manager.model_factory")
     @patch("keisei.training.model_manager.utils.find_latest_checkpoint")
     def test_load_checkpoint_multiple_available(
         self,
@@ -880,8 +880,8 @@ class TestModelManagerEnhancedCheckpointHandling:
         assert manager.checkpoint_data["global_timestep"] == 2000
         mock_agent.load_model.assert_called_with(latest_checkpoint_path)
 
-    @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
+    @patch("keisei.training.model_manager.model_factory")
     @patch("os.path.exists")
     def test_load_checkpoint_specific_not_found(
         self,
@@ -927,8 +927,8 @@ class TestModelManagerEnhancedCheckpointHandling:
             "Specified resume checkpoint not found: checkpoint_9999.pth"
         )
 
-    @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
+    @patch("keisei.training.model_manager.model_factory")
     @patch("os.path.exists")
     @patch("torch.load")
     def test_load_checkpoint_corrupted_data(
@@ -981,8 +981,8 @@ class TestModelManagerEnhancedCheckpointHandling:
         # Should handle gracefully - either succeed or fail, but not crash
         assert isinstance(result, bool)  # Should return a boolean
 
-    @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
+    @patch("keisei.training.model_manager.model_factory")
     def test_save_checkpoint_directory_creation(
         self,
         mock_model_factory,
@@ -1045,8 +1045,8 @@ class TestModelManagerEnhancedCheckpointHandling:
 class TestModelManagerWandBArtifactEnhancements:
     """Enhanced tests for W&B artifact creation with edge cases."""
 
-    @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
+    @patch("keisei.training.model_manager.model_factory")
     @patch("wandb.Artifact")
     @patch("wandb.log_artifact")
     @patch("wandb.run")
@@ -1101,8 +1101,8 @@ class TestModelManagerWandBArtifactEnhancements:
         mock_artifact.add_file.assert_called_once_with(model_path)
         mock_log_artifact.assert_called_once_with(mock_artifact, aliases=None)
 
-    @patch("keisei.shogi.features.FEATURE_SPECS")
-    @patch("keisei.training.models.model_factory")
+    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
+    @patch("keisei.training.model_manager.model_factory")
     @patch("wandb.Artifact")
     @patch("wandb.log_artifact", side_effect=RuntimeError("W&B API Error"))
     @patch("wandb.run")
