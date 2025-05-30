@@ -589,3 +589,328 @@ shogi_drl/
     *   Implement model saving/loading and evaluation against checkpoints.
 
 This comprehensive document should provide a solid foundation for development. The most challenging parts will be the bug-free implementation of `ShogiGame` (especially `get_legal_moves`), the `PolicyOutputMapper`, and correctly implementing the PPO algorithm.
+
+---
+
+## 6. Advanced Configuration System
+
+The Keisei project implements a sophisticated, type-safe configuration system using Pydantic models that provides comprehensive control over all aspects of training, evaluation, and environment setup.
+
+### 6.1 Configuration Architecture Overview
+
+The configuration system is built around a central `config_schema.py` file that defines six main configuration sections:
+
+```
+Configuration Schema
+├── EnvConfig: Environment and game setup
+├── TrainingConfig: Advanced training features and optimization
+├── EvaluationConfig: Model evaluation parameters
+├── LoggingConfig: Output directories and logging
+├── WandBConfig: Weights & Biases integration
+└── DemoConfig: Demo mode configuration
+```
+
+### 6.2 Environment Configuration (EnvConfig)
+
+Controls the core game environment and neural network setup:
+
+- **Device Management**: Automatic GPU detection with fallback to CPU
+- **Input Channels**: Configurable observation space (default: 46 channels for 9x9 Shogi board)
+- **Action Space**: Total possible actions in the policy output space
+- **Seeding**: Reproducible training runs with configurable random seeds
+- **Game Parameters**: 
+  - `max_moves_per_game`: Maximum moves before draw (default: 500)
+  - Board representation and SFEN serialization support
+
+### 6.3 Advanced Training Configuration (TrainingConfig)
+
+Provides comprehensive control over modern deep learning training techniques:
+
+**Core Training Parameters:**
+- Learning rate scheduling and optimization
+- Batch size management for different hardware configurations
+- Total timesteps and training duration control
+
+**Advanced Features:**
+- **Mixed Precision Training**: Automatic mixed precision (AMP) support for faster training on modern GPUs
+- **Distributed Data Parallel (DDP)**: Multi-GPU training coordination
+- **Gradient Management**: 
+  - Gradient clipping with configurable thresholds
+  - Gradient accumulation for effective larger batch sizes
+- **GAE Configuration**: Generalized Advantage Estimation parameters (lambda, gamma)
+- **PPO Hyperparameters**: Clip epsilon, entropy coefficients, value function coefficients
+
+**Checkpoint and Resume:**
+- Configurable checkpoint intervals
+- Automatic model saving and loading
+- Training resume capabilities with state preservation
+
+### 6.4 Evaluation Configuration (EvaluationConfig)
+
+Controls model assessment and performance monitoring:
+
+- **Evaluation Frequency**: Configurable intervals for model evaluation
+- **Opponent Selection**: Self-play against previous model versions
+- **Performance Metrics**: Win rate tracking, game length analysis
+- **Statistical Analysis**: Confidence intervals and significance testing
+
+### 6.5 Logging and Monitoring (LoggingConfig)
+
+Comprehensive logging system configuration:
+
+- **Directory Management**: Automatic creation of timestamped run directories
+- **Log Levels**: Configurable verbosity for different components
+- **File Organization**: Structured output for models, logs, and artifacts
+- **Performance Logging**: Training metrics, loss curves, and system statistics
+
+### 6.6 Weights & Biases Integration (WandBConfig)
+
+Full integration with W&B for experiment tracking:
+
+- **Project Organization**: Configurable project names and entity settings
+- **Experiment Tracking**: Automatic logging of hyperparameters, metrics, and artifacts
+- **Model Versioning**: Integration with W&B model registry
+- **Visualization**: Real-time training curves and performance dashboards
+- **Collaboration**: Team sharing and experiment comparison
+
+### 6.7 Demo Mode Configuration (DemoConfig)
+
+Specialized configuration for demonstration and testing:
+
+- **Interactive Play**: Human vs AI game modes
+- **Visualization**: Board state rendering and move highlighting
+- **Performance Testing**: Benchmarking and profiling modes
+
+---
+
+## 7. Refactored Trainer Architecture
+
+The training system has been completely refactored into a modular, manager-based architecture that separates concerns and provides clean interfaces between components.
+
+### 7.1 Manager System Overview
+
+The trainer is organized into 9 specialized managers, each responsible for a specific aspect of the training process:
+
+```
+Trainer Architecture
+├── SessionManager: Run lifecycle and directory management
+├── ModelManager: Neural network and checkpoint handling
+├── EnvManager: Game environment and policy mapping
+├── StepManager: Individual training step execution
+├── MetricsManager: Statistics collection and analysis
+├── TrainingLoopManager: Main training orchestration
+├── SetupManager: Component initialization and validation
+├── DisplayManager: User interface and progress visualization
+└── CallbackManager: Event-driven callback system
+```
+
+### 7.2 SessionManager
+
+**Responsibilities:**
+- Training session lifecycle management
+- Directory structure creation and organization
+- Weights & Biases session initialization and cleanup
+- Configuration validation and environment setup
+
+**Key Features:**
+- Automatic timestamped run directory creation
+- W&B experiment tracking integration
+- Configuration serialization and backup
+- Resource cleanup and graceful shutdown
+
+**Configuration Integration:**
+- Uses `LoggingConfig` for directory management
+- Integrates with `WandBConfig` for experiment tracking
+- Validates all configuration sections before session start
+
+### 7.3 ModelManager
+
+**Responsibilities:**
+- Neural network instantiation and management
+- Model checkpointing and loading
+- Mixed precision training coordination
+- Optimizer state management
+
+**Advanced Features:**
+- **Mixed Precision Support**: Automatic mixed precision (AMP) integration
+- **Checkpoint Management**: Configurable save intervals and retention policies
+- **Model Versioning**: Integration with experiment tracking systems
+- **State Preservation**: Complete training state serialization
+
+**Configuration Integration:**
+- Uses `TrainingConfig` for mixed precision and checkpoint settings
+- Implements device management from `EnvConfig`
+- Supports distributed training coordination
+
+### 7.4 EnvManager
+
+**Responsibilities:**
+- Shogi game environment initialization
+- Policy output mapper configuration
+- Environment reset and state management
+- Action space validation
+
+**Shogi Game Configuration:**
+- Configurable `max_moves_per_game` parameter
+- SFEN notation support for game state serialization
+- Seeding capabilities for reproducible games
+- Observation space configuration (46 channels, 9x9 board)
+
+**Policy Integration:**
+- Action space mapping between Shogi moves and neural network outputs
+- Legal move filtering and validation
+- Move encoding/decoding for network communication
+
+### 7.5 StepManager
+
+**Responsibilities:**
+- Individual training step execution
+- Experience collection and batching
+- Reward calculation and processing
+- Transition state management
+
+**Features:**
+- Efficient batch processing of game experiences
+- Automatic advantage estimation (GAE) calculation
+- Reward normalization and scaling
+- Memory-efficient experience buffering
+
+### 7.6 MetricsManager
+
+**Responsibilities:**
+- Training statistics collection and aggregation
+- Performance metric calculation
+- Loss tracking and analysis
+- System resource monitoring
+
+**Metrics Tracked:**
+- Policy and value loss components
+- Entropy and exploration metrics
+- Game outcome statistics (win/loss/draw rates)
+- Training performance (steps/second, GPU utilization)
+- System metrics (memory usage, CPU load)
+
+### 7.7 TrainingLoopManager
+
+**Responsibilities:**
+- Main training loop orchestration
+- Component coordination and scheduling
+- Training phase management
+- Error handling and recovery
+
+**Advanced Features:**
+- **Distributed Training**: Multi-GPU coordination when using DDP
+- **Dynamic Scheduling**: Adaptive learning rate and batch size management
+- **Fault Tolerance**: Automatic recovery from training interruptions
+- **Resource Management**: Memory optimization and cleanup
+
+### 7.8 SetupManager
+
+**Responsibilities:**
+- Component initialization and dependency injection
+- Configuration validation and consistency checking
+- Hardware detection and optimization
+- Pre-training system validation
+
+**Validation Features:**
+- Configuration schema validation using Pydantic
+- Hardware capability detection (GPU, memory, CUDA)
+- Dependency version checking
+- Pre-flight system tests
+
+### 7.9 DisplayManager
+
+**Responsibilities:**
+- Training progress visualization
+- Real-time metrics display
+- User interface coordination
+- Progress reporting and notifications
+
+**Features:**
+- Rich terminal interface with progress bars
+- Real-time loss and metric visualization
+- Training time estimation and completion forecasting
+- Interactive training control (pause/resume)
+
+### 7.10 CallbackManager
+
+**Responsibilities:**
+- Event-driven callback system
+- Custom hook integration
+- Training event handling
+- Extension point management
+
+**Callback Types:**
+- Training phase callbacks (epoch start/end, batch processing)
+- Model callbacks (checkpoint save/load, evaluation)
+- Metrics callbacks (logging, visualization updates)
+- Custom user-defined callbacks
+
+---
+
+## 8. Configuration and Manager Integration
+
+### 8.1 Configuration Flow
+
+The configuration system integrates seamlessly with the manager architecture:
+
+1. **Schema Validation**: Pydantic models validate all configuration parameters
+2. **Manager Injection**: Configuration sections are injected into relevant managers
+3. **Runtime Adaptation**: Managers adapt behavior based on configuration settings
+4. **State Persistence**: Configuration state is preserved across training resumption
+
+### 8.2 Manager Communication
+
+Managers communicate through well-defined interfaces:
+
+- **Event System**: Managers publish and subscribe to training events
+- **Shared State**: Thread-safe shared state objects for coordination
+- **Configuration Registry**: Centralized configuration access
+- **Dependency Injection**: Automatic dependency resolution between managers
+
+### 8.3 Extensibility and Customization
+
+The architecture supports extensive customization:
+
+- **Custom Managers**: Easy addition of new manager types
+- **Configuration Extensions**: Plugin-based configuration schema extensions
+- **Callback Hooks**: User-defined callbacks for custom training logic
+- **Component Replacement**: Swappable implementations for core components
+
+---
+
+## 9. Modern Training Features
+
+### 9.1 Mixed Precision Training
+
+Automatic mixed precision (AMP) support provides:
+- **Performance**: 1.5-2x training speedup on modern GPUs
+- **Memory Efficiency**: Reduced GPU memory usage
+- **Numerical Stability**: Automatic loss scaling and overflow detection
+- **Backward Compatibility**: Graceful fallback for older hardware
+
+### 9.2 Distributed Training
+
+Multi-GPU training support includes:
+- **Data Parallel**: Distributed data parallel (DDP) training
+- **Gradient Synchronization**: Efficient gradient aggregation across GPUs
+- **Load Balancing**: Automatic batch distribution and workload balancing
+- **Fault Tolerance**: Resilient training with node failure recovery
+
+### 9.3 Advanced Optimization
+
+Sophisticated optimization features:
+- **Gradient Clipping**: Configurable gradient norm clipping
+- **Learning Rate Scheduling**: Adaptive learning rate adjustment
+- **Batch Size Scaling**: Dynamic batch size optimization
+- **Memory Management**: Efficient memory usage and garbage collection
+
+### 9.4 Checkpoint and Resume
+
+Comprehensive training state management:
+- **Full State Preservation**: Complete training state serialization
+- **Incremental Checkpoints**: Efficient incremental state saving
+- **Version Compatibility**: Forward and backward compatible checkpoint formats
+- **Cloud Integration**: Support for cloud-based checkpoint storage
+
+This advanced configuration and training system provides a robust foundation for scalable, reproducible, and efficient deep reinforcement learning training for Shogi AI development.

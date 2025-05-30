@@ -2,58 +2,35 @@
 trainer.py: Contains the Trainer class for managing the Shogi RL training loop (refactored).
 """
 
-import json
-import os
-import sys
 from datetime import datetime
-from typing import (  # pylint: disable=unused-import
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Tuple,
-    Union,
-)
+from typing import Any, Callable, Dict, Optional
 
-import torch  # Add torch import
-from rich.console import Console, Text
-
+import torch
 import wandb
 from keisei.config_schema import AppConfig
-from keisei.core.actor_critic_protocol import (  # Import ActorCriticProtocol
-    ActorCriticProtocol,
-)
+from keisei.core.actor_critic_protocol import ActorCriticProtocol
 from keisei.core.experience_buffer import ExperienceBuffer
-
-# Backwards compatibility imports for tests (these classes are now used in managers)
 from keisei.core.ppo_agent import PPOAgent
 from keisei.evaluation.evaluate import execute_full_evaluation_run
-from keisei.utils import (
-    TrainingLogger,
-)
+from keisei.utils import TrainingLogger
 
-from . import callbacks, display
+from .callback_manager import CallbackManager
+from .compatibility_mixin import CompatibilityMixin
+from .display_manager import DisplayManager
 from .env_manager import EnvManager
+from .metrics_manager import MetricsManager
 from .model_manager import ModelManager
 from .session_manager import SessionManager
+from .setup_manager import SetupManager
 from .step_manager import EpisodeState, StepManager
-from .training_loop_manager import TrainingLoopManager  # Added import
+from .training_loop_manager import TrainingLoopManager
 
 
-class Trainer:
+class Trainer(CompatibilityMixin):
     """
     Manages the training process for the PPO Shogi agent.
     This class orchestrates setup, training loop, evaluation, and logging.
     """
-
-    # Statistics for tracking and logging
-    global_timestep: int = 0
-    total_episodes_completed: int = 0
-    black_wins: int = 0
-    white_wins: int = 0
-    draws: int = 0
 
     def __init__(self, config: AppConfig, args: Any):
         """
@@ -66,22 +43,30 @@ class Trainer:
         self.config = config
         self.args = args
 
-        # Declare instance attributes that will be set up
-        self.model: Optional[ActorCriticProtocol] = None  # Model instance
-        self.agent: Optional[PPOAgent] = None  # Agent instance
+        # Core instance attributes
+        self.model: Optional[ActorCriticProtocol] = None
+        self.agent: Optional[PPOAgent] = None
+        self.experience_buffer: Optional[ExperienceBuffer] = None
+        self.step_manager: Optional[StepManager] = None
+        self.game = None
+        self.policy_output_mapper = None
+        self.action_space_size = 0
+        self.obs_space_shape = ()
         self.log_both: Optional[Callable] = None
         self.execute_full_evaluation_run: Optional[Callable] = None
+        self.resumed_from_checkpoint = False
 
-        # Initialize session manager for session-level concerns
+        # Initialize device
+        self.device = torch.device(config.env.device)
+
+        # Initialize session manager and setup session infrastructure
         self.session_manager = SessionManager(config, args)
-
-        # Setup session infrastructure
         self.session_manager.setup_directories()
         self.session_manager.setup_wandb()
         self.session_manager.save_effective_config()
         self.session_manager.setup_seeding()
 
-        # Access session properties through manager
+        # Access session properties
         self.run_name = self.session_manager.run_name
         self.run_artifact_dir = self.session_manager.run_artifact_dir
         self.model_dir = self.session_manager.model_dir
@@ -89,209 +74,58 @@ class Trainer:
         self.eval_log_file_path = self.session_manager.eval_log_file_path
         self.is_train_wandb_active = self.session_manager.is_wandb_active
 
-        # Initialize statistics
-        self.global_timestep = 0
-        self.total_episodes_completed = 0
-        self.black_wins = 0
-        self.white_wins = 0
-        self.draws = 0
-
-        self.device = torch.device(config.env.device)
-        self.console = Console()
-        self.logger = TrainingLogger(self.log_file_path, self.console)
-
         # Initialize managers
+        self.display_manager = DisplayManager(config, self.log_file_path)
+        self.rich_console = self.display_manager.get_console()
+        self.rich_log_messages = self.display_manager.get_log_messages()
+        self.logger = TrainingLogger(self.log_file_path, self.rich_console)
         self.model_manager = ModelManager(config, args, self.device, self.logger.log)
         self.env_manager = EnvManager(config, self.logger.log)
+        self.metrics_manager = MetricsManager()
+        self.callback_manager = CallbackManager(config, self.model_dir)
+        self.setup_manager = SetupManager(config, self.device)
 
-        # Initialize Rich TUI
-        self.rich_console = Console(file=sys.stderr, record=True)
-        self.rich_log_messages: List[Text] = []
+        # Setup components using SetupManager
+        self._initialize_components()
 
-        # WP-2: Store pending progress bar updates to consolidate them
-        self.pending_progress_updates: Dict[str, Any] = {}
-
-        # Initialize game and components using EnvManager
-        self._setup_game_components()
-
-        # Setup training components
-        self._setup_training_components()
-
-        # Handle checkpoint resuming using ModelManager
-        print("DEBUG: About to call _handle_checkpoint_resume()")
-        self._handle_checkpoint_resume()
-        print("DEBUG: _handle_checkpoint_resume() completed")
-
-        # Display and callbacks
-        self.display = display.TrainingDisplay(self.config, self, self.rich_console)
-        eval_cfg = getattr(self.config, "evaluation", None)
-        checkpoint_interval = (
-            self.config.training.checkpoint_interval_timesteps
-        )  # Use config value
-        eval_interval = (
-            eval_cfg.evaluation_interval_timesteps
-            if eval_cfg
-            else self.config.training.evaluation_interval_timesteps  # Use config value
-        )
-        self.callbacks = [
-            callbacks.CheckpointCallback(checkpoint_interval, self.model_dir),
-            callbacks.EvaluationCallback(eval_cfg, eval_interval),
-        ]
+        # Setup display and callbacks
+        self.display = self.display_manager.setup_display(self)
+        self.callbacks = self.callback_manager.setup_default_callbacks()
 
         # Initialize TrainingLoopManager
         self.training_loop_manager = TrainingLoopManager(trainer=self)
 
-    def _setup_game_components(self):
-        """Initialize game environment and policy mapper using EnvManager."""
-        try:
-            # Call EnvManager's setup_environment to get game and mapper
-            self.game, self.policy_output_mapper = self.env_manager.setup_environment()
-
-            # Retrieve other info if needed, or ensure EnvManager sets them internally
-            # For now, let's assume action_space_size and obs_space_shape are set within EnvManager
-            # by its setup_environment method, and we can access them via properties or get_environment_info
-            # if that method is still useful for other details.
-            # Based on EnvManager changes, these are set as attributes during its setup_environment.
-            self.action_space_size = self.env_manager.action_space_size
-            self.obs_space_shape = self.env_manager.obs_space_shape
-
-            if self.game is None or self.policy_output_mapper is None:
-                raise RuntimeError(
-                    "EnvManager.setup_environment() failed to return valid game or policy_output_mapper."
-                )
-
-        except (RuntimeError, ValueError, OSError) as e:
-            self.rich_console.print(
-                f"[bold red]Error initializing game components: {e}. Aborting.[/bold red]"
-            )
-            raise RuntimeError(f"Failed to initialize game components: {e}") from e
-
-    def _setup_training_components(self):
-        """Initialize PPO agent and experience buffer."""
-        print("DEBUG: _setup_training_components called")
-        # Create model using ModelManager
-        print("DEBUG: About to call self.model_manager.create_model()")
-        self.model = self.model_manager.create_model()  # Get the model instance
-        print(f"DEBUG: Created model: {self.model}")
-
-        # Initialize PPOAgent and assign the model
-        print("DEBUG: About to create PPOAgent")
-        self.agent = PPOAgent(
-            config=self.config,
-            device=self.device,
-        )
-        print(f"DEBUG: Created agent: {self.agent}")
-
-        if self.model is None:
-            # This should ideally not happen if model_manager.create_model() raises an error on failure
-            raise RuntimeError(
-                "Model was not created successfully before agent initialization."
-            )
-        self.agent.model = (
-            self.model
-        )  # self.model is now confirmed to be ActorCriticProtocol
-
-        print("DEBUG: About to create ExperienceBuffer")
-        self.experience_buffer = ExperienceBuffer(
-            buffer_size=self.config.training.steps_per_epoch,
-            gamma=self.config.training.gamma,
-            lambda_gae=self.config.training.lambda_gae,  # Use config value
-            device=self.config.env.device,
-        )
-        print(f"DEBUG: Created experience_buffer: {self.experience_buffer}")
-
-        # Initialize StepManager for step execution and episode management
-        print("DEBUG: About to create StepManager")
-        self.step_manager = StepManager(
-            config=self.config,
-            game=self.game,
-            agent=self.agent,  # Agent is now guaranteed to be initialized
-            policy_mapper=self.policy_output_mapper,
-            experience_buffer=self.experience_buffer,
-        )
-        print(f"DEBUG: Created step_manager: {self.step_manager}")
-        print("DEBUG: _setup_training_components completed successfully")
-
-    def _log_event(self, message: str):
-        """Log important events to the main training log file."""
-        # Always log to the main log file
-        try:
-            with open(self.log_file_path, "a", encoding="utf-8") as f:
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                f.write(f"[{timestamp}] {message}\n")
-        except (OSError, IOError) as e:
-            print(f"[Trainer] Failed to log event: {e}", file=sys.stderr)
-        # No longer print to stderr for test compatibility
-
-    def _handle_checkpoint_resume(self):
-        """Handle resuming from checkpoint using ModelManager."""
-        if not self.agent:
-            self.logger.log(
-                "[ERROR] Agent not initialized before handling checkpoint resume. This should not happen."
-            )
-            # Or raise an error, as this indicates a logic flaw
-            raise RuntimeError("Agent not initialized before _handle_checkpoint_resume")
-
-        # self.agent is confirmed to be not None by the check above.
-        self.model_manager.handle_checkpoint_resume(
-            agent=self.agent,
-            model_dir=self.model_dir,
-            resume_path_override=self.args.resume,
+    def _initialize_components(self):
+        """Initialize all training components using SetupManager."""
+        # Setup game components
+        (self.game, self.policy_output_mapper, 
+         self.action_space_size, self.obs_space_shape) = self.setup_manager.setup_game_components(
+            self.env_manager, self.rich_console
         )
 
-        self.resumed_from_checkpoint = self.model_manager.resumed_from_checkpoint
-
-        # Restore training state from checkpoint data
-        if self.model_manager.checkpoint_data:
-            checkpoint_data = self.model_manager.checkpoint_data
-
-            # Restore global timestep and episode count
-            self.global_timestep = checkpoint_data.get("global_timestep", 0)
-            self.total_episodes_completed = checkpoint_data.get(
-                "total_episodes_completed", 0
-            )
-
-            # Restore game statistics
-            self.black_wins = checkpoint_data.get("black_wins", 0)
-            self.white_wins = checkpoint_data.get("white_wins", 0)
-            self.draws = checkpoint_data.get("draws", 0)
-
-    def _log_run_info(self, log_both):
-        """Log run information at the start of training."""
-        # Delegate session info logging to SessionManager
-        agent_name = "N/A"
-        agent_type_name = "N/A"
-        if self.agent:  # Check if agent is initialized
-            agent_name = getattr(
-                self.agent, "name", "N/A"
-            )  # PPOAgent might not have a 'name' attribute
-            agent_type_name = type(self.agent).__name__
-
-        agent_info = {"type": agent_type_name, "name": agent_name}
-
-        def log_wrapper(msg):
-            log_both(msg)
-
-        self.session_manager.log_session_info(
-            logger_func=log_wrapper,
-            agent_info=agent_info,
-            resumed_from_checkpoint=getattr(self, "resumed_from_checkpoint", None),
-            global_timestep=self.global_timestep,
-            total_episodes_completed=self.total_episodes_completed,
+        # Setup training components
+        self.model, self.agent, self.experience_buffer = self.setup_manager.setup_training_components(
+            self.model_manager
         )
 
-        # Log model structure (trainer-specific) using ModelManager
-        model_info = self.model_manager.get_model_info()
-        log_both(f"Model Structure:\n{model_info}", also_to_wandb=False)
-        self._log_event(f"Model Structure:\n{model_info}")
+        # Setup step manager
+        self.step_manager = self.setup_manager.setup_step_manager(
+            self.game, self.agent, self.policy_output_mapper, self.experience_buffer
+        )
+
+        # Handle checkpoint resume
+        self.resumed_from_checkpoint = self.setup_manager.handle_checkpoint_resume(
+            self.model_manager, self.agent, self.model_dir, self.args.resume,
+            self.metrics_manager, self.logger
+        )
 
     def _initialize_game_state(self, log_both) -> EpisodeState:
         """Initialize the game state for training using EnvManager."""
         try:
-            # Reset game using EnvManager
             self.env_manager.reset_game()
-            episode_state = self.step_manager.reset_episode()
-            return episode_state
+            if not self.step_manager:
+                raise RuntimeError("StepManager not initialized")
+            return self.step_manager.reset_episode()
         except (RuntimeError, ValueError, OSError) as e:
             log_both(
                 f"CRITICAL: Error during initial game.reset(): {e}. Aborting.",
@@ -301,14 +135,11 @@ class Trainer:
                 wandb.finish(exit_code=1)
             raise RuntimeError(f"Game initialization error: {e}") from e
 
-    # _execute_training_step is removed as its logic is now in TrainingLoopManager._run_epoch
-    # def _execute_training_step(...)
-
     def _perform_ppo_update(self, current_obs_np, log_both):
         """Perform a PPO update."""
-        if not self.agent:
+        if not self.agent or not self.experience_buffer:
             log_both(
-                "[ERROR] PPO update called but agent is not initialized.",
+                "[ERROR] PPO update called but agent or experience buffer is not initialized.",
                 also_to_wandb=True,
             )
             return
@@ -320,33 +151,30 @@ class Trainer:
         learn_metrics = self.agent.learn(self.experience_buffer)
         self.experience_buffer.clear()
 
-        # Format PPO metrics for display
-        ppo_metrics_str_parts = []
-        if "ppo/kl_divergence_approx" in learn_metrics:
-            ppo_metrics_str_parts.append(
-                f"KL:{learn_metrics['ppo/kl_divergence_approx']:.4f}"
-            )
-        if "ppo/policy_loss" in learn_metrics:
-            ppo_metrics_str_parts.append(f"PolL:{learn_metrics['ppo/policy_loss']:.4f}")
-        if "ppo/value_loss" in learn_metrics:
-            ppo_metrics_str_parts.append(f"ValL:{learn_metrics['ppo/value_loss']:.4f}")
-        if "ppo/entropy" in learn_metrics:
-            ppo_metrics_str_parts.append(f"Ent:{learn_metrics['ppo/entropy']:.4f}")
+        # Format PPO metrics for display using MetricsManager
+        ppo_metrics_display = self.metrics_manager.format_ppo_metrics(learn_metrics)
+        self.metrics_manager.update_progress_metrics("ppo_metrics", ppo_metrics_display)
 
-        ppo_metrics_display = " ".join(ppo_metrics_str_parts)
-        # Store PPO metrics for next throttled update (WP-2)
-        self.pending_progress_updates["ppo_metrics"] = ppo_metrics_display
+        # Format detailed metrics for logging
+        ppo_metrics_log = self.metrics_manager.format_ppo_metrics_for_logging(learn_metrics)
 
         log_both(
-            f"PPO Update @ ts {self.global_timestep+1}. Metrics: {json.dumps({k: f'{v:.4f}' for k,v in learn_metrics.items()})}",
+            f"PPO Update @ ts {self.metrics_manager.global_timestep+1}. Metrics: {ppo_metrics_log}",
             also_to_wandb=True,
             wandb_data=learn_metrics,
+        )
+
+    def _log_run_info(self, log_both):
+        """Log run information at the start of training using SetupManager."""
+        self.setup_manager.log_run_info(
+            self.session_manager, self.model_manager, self.agent, 
+            self.metrics_manager, log_both
         )
 
     def _finalize_training(self, log_both):
         """Finalize training and save final model and checkpoint via ModelManager."""
         log_both(
-            f"Training loop finished at timestep {self.global_timestep}. Total episodes: {self.total_episodes_completed}.",
+            f"Training loop finished at timestep {self.metrics_manager.global_timestep}. Total episodes: {self.metrics_manager.total_episodes_completed}.",
             also_to_wandb=True,
         )
 
@@ -362,13 +190,9 @@ class Trainer:
                 log_both("Weights & Biases run finished due to error.")
             return
 
-        game_stats = {
-            "black_wins": self.black_wins,
-            "white_wins": self.white_wins,
-            "draws": self.draws,
-        }
+        game_stats = self.metrics_manager.get_final_stats()
 
-        if self.global_timestep >= self.config.training.total_timesteps:
+        if self.metrics_manager.global_timestep >= self.config.training.total_timesteps:
             log_both(
                 "Training successfully completed all timesteps. Saving final model.",
                 also_to_wandb=True,
@@ -376,8 +200,8 @@ class Trainer:
             success, final_model_path = self.model_manager.save_final_model(
                 agent=self.agent,
                 model_dir=self.model_dir,
-                global_timestep=self.global_timestep,
-                total_episodes_completed=self.total_episodes_completed,
+                global_timestep=self.metrics_manager.global_timestep,
+                total_episodes_completed=self.metrics_manager.total_episodes_completed,
                 game_stats=game_stats,
                 run_name=self.run_name,
                 is_wandb_active=self.is_train_wandb_active,
@@ -389,27 +213,27 @@ class Trainer:
                 )
             else:
                 log_both(
-                    f"[ERROR] Failed to save/artifact final model for timestep {self.global_timestep}.",
+                    f"[ERROR] Failed to save/artifact final model for timestep {self.metrics_manager.global_timestep}.",
                     also_to_wandb=True,
                 )
 
             # WandB finishing is handled by SessionManager or after all save attempts
         else:
             log_both(
-                f"[WARNING] Training interrupted at timestep {self.global_timestep} (before {self.config.training.total_timesteps} total).",
+                f"[WARNING] Training interrupted at timestep {self.metrics_manager.global_timestep} (before {self.config.training.total_timesteps} total).",
                 also_to_wandb=True,
             )
 
         # Always attempt to save a final checkpoint
         log_both(
-            f"Attempting to save final checkpoint at timestep {self.global_timestep}.",
+            f"Attempting to save final checkpoint at timestep {self.metrics_manager.global_timestep}.",
             also_to_wandb=False,
         )
         ckpt_success, final_ckpt_path = self.model_manager.save_final_checkpoint(
             agent=self.agent,
             model_dir=self.model_dir,
-            global_timestep=self.global_timestep,
-            total_episodes_completed=self.total_episodes_completed,
+            global_timestep=self.metrics_manager.global_timestep,
+            total_episodes_completed=self.metrics_manager.total_episodes_completed,
             game_stats=game_stats,
             run_name=self.run_name,
             is_wandb_active=self.is_train_wandb_active,
@@ -419,34 +243,18 @@ class Trainer:
                 f"Final checkpoint processing (save & artifact) successful: {final_ckpt_path}",
                 also_to_wandb=True,
             )
-        elif self.global_timestep > 0:  # Only log error if a checkpoint was expected
+        elif self.metrics_manager.global_timestep > 0:  # Only log error if a checkpoint was expected
             log_both(
-                f"[ERROR] Failed to save/artifact final checkpoint for timestep {self.global_timestep}.",
+                f"[ERROR] Failed to save/artifact final checkpoint for timestep {self.metrics_manager.global_timestep}.",
                 also_to_wandb=True,
             )
 
         if self.is_train_wandb_active and wandb.run:
-            self.session_manager.finalize_session()  # Finalize session after all save attempts
+            self.session_manager.finalize_session()
             log_both("Weights & Biases run finished.")
 
-        # Save the full console log from Rich
-        console_log_path = os.path.join(
-            self.run_artifact_dir, "full_console_output_rich.html"
-        )
-        try:
-            self.rich_console.save_html(console_log_path)
-            print(
-                f"Full Rich console output saved to {console_log_path}", file=sys.stderr
-            )
-        except OSError as e:
-            print(f"Error saving Rich console log: {e}", file=sys.stderr)
-
-        # Final messages
-        self.rich_console.rule("[bold green]Run Finished[/bold green]")
-        self.rich_console.print(
-            f"[bold green]Run '{self.run_name}' processing finished.[/bold green]"
-        )
-        self.rich_console.print(f"Output and logs are in: {self.run_artifact_dir}")
+        # Finalize display and save console output
+        self.display_manager.finalize_display(self.run_name, self.run_artifact_dir)
 
     def run_training_loop(self):
         """Executes the main training loop by delegating to TrainingLoopManager."""
@@ -462,14 +270,14 @@ class Trainer:
                 message: str,
                 also_to_wandb: bool = False,
                 wandb_data: Optional[Dict] = None,
-                log_level: str = "info",  # Parameter for log level (unused by current TrainingLogger.log)
+                log_level: str = "info",
             ):
-                logger.log(message)  # Current TrainingLogger.log does not take level
+                logger.log(message)
                 if self.is_train_wandb_active and also_to_wandb and wandb.run:
                     log_payload = {"train_message": message}
                     if wandb_data:
                         log_payload.update(wandb_data)
-                    wandb.log(log_payload, step=self.global_timestep)
+                    wandb.log(log_payload, step=self.metrics_manager.global_timestep)
 
             self.log_both = log_both_impl
             self.execute_full_evaluation_run = execute_full_evaluation_run
@@ -494,126 +302,41 @@ class Trainer:
             # Start the Rich Live display as a context manager
             with self.display.start():
                 try:
-                    self.training_loop_manager.run()  # Delegate the loop execution
+                    self.training_loop_manager.run()
                 except KeyboardInterrupt:
-                    # This is already logged by TrainingLoopManager, but we ensure finalization.
                     self.log_both(
                         "Trainer caught KeyboardInterrupt from TrainingLoopManager. Finalizing.",
                         also_to_wandb=True,
                     )
-                except Exception as e:
-                    # This is already logged by TrainingLoopManager.
+                except (RuntimeError, ValueError, AttributeError, ImportError) as e:
                     self.log_both(
                         f"Trainer caught unhandled exception from TrainingLoopManager: {e}. Finalizing.",
                         also_to_wandb=True,
                     )
-                    # Optionally, re-raise if higher-level handling is needed: raise
                 finally:
-                    # Finalization is critical and should always run.
                     self._finalize_training(self.log_both)
 
-    # The @property for model was removed to allow direct assignment to self.model.
-    # The instance attribute self.model (Optional[ActorCriticProtocol]) should be used directly.
-    # Other properties like feature_spec, obs_shape etc., might need adjustment
-    # if they previously relied on a self.model property that accessed self.agent.model,
-    # or if they should now access self.model directly (after checking it's not None).
-    # For now, only the conflicting 'model' property is fully removed.
-
-    @property
-    def feature_spec(self):
-        """Access the feature spec through ModelManager."""
-        return (
-            self.model_manager.feature_spec
-            if hasattr(self.model_manager, "feature_spec")
-            else None
+    def _handle_checkpoint_resume(self):
+        """
+        Handle checkpoint resume for backward compatibility.
+        
+        This method delegates to SetupManager for consistency with the refactored architecture.
+        """
+        if not self.agent:
+            raise RuntimeError("Agent not initialized before _handle_checkpoint_resume")
+            
+        # Delegate to SetupManager
+        result = self.setup_manager.handle_checkpoint_resume(
+            self.model_manager, self.agent, self.model_dir, self.args.resume,
+            self.metrics_manager, self.logger
         )
-
-    @property
-    def obs_shape(self):
-        """Access the observation shape through ModelManager."""
-        return (
-            self.model_manager.obs_shape
-            if hasattr(self.model_manager, "obs_shape")
-            else None
-        )
-
-    @property
-    def tower_depth(self):
-        """Access the tower depth through ModelManager."""
-        return (
-            self.model_manager.tower_depth
-            if hasattr(self.model_manager, "tower_depth")
-            else None
-        )
-
-    @property
-    def tower_width(self):
-        """Access the tower width through ModelManager."""
-        return (
-            self.model_manager.tower_width
-            if hasattr(self.model_manager, "tower_width")
-            else None
-        )
-
-    @property
-    def se_ratio(self):
-        """Access the SE ratio through ModelManager."""
-        return (
-            self.model_manager.se_ratio
-            if hasattr(self.model_manager, "se_ratio")
-            else None
-        )
-
-    # Backward compatibility delegation methods
-    def _create_model_artifact(
-        self,
-        model_path: str,
-        artifact_name: Optional[str] = None,
-        artifact_type: str = "model",
-        description: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        aliases: Optional[List[str]] = None,
-        log_both: Optional[Callable] = None,
-    ) -> bool:
-        """Backward compatibility method - delegates to ModelManager."""
-        # Use default artifact name if not provided
-        if artifact_name is None:
-            artifact_name = os.path.basename(model_path)
-
-        # Use default description if not provided
-        if description is None:
-            # Use trainer's run_name for backward compatibility (tests set this manually)
-            run_name = getattr(self, "run_name", self.session_manager.run_name)
-            description = f"Model checkpoint from run {run_name}"
-
-        # Use trainer's run_name for artifact naming (for backward compatibility with tests)
-        run_name = getattr(self, "run_name", self.session_manager.run_name)
-
-        # Store original logger function and temporarily replace if log_both provided
-        original_logger = self.model_manager.logger_func
-        if log_both:
-            # Create a wrapper that detects error messages and adds log_level="error"
-            def logger_wrapper(message):
-                if "Error creating W&B artifact" in message:
-                    return log_both(message, log_level="error")
-                else:
-                    return log_both(message)
-
-            self.model_manager.logger_func = logger_wrapper
-
-        try:
-            result = self.model_manager.create_model_artifact(
-                model_path=model_path,
-                artifact_name=artifact_name,
-                run_name=run_name,
-                is_wandb_active=self.session_manager.is_wandb_active,
-                artifact_type=artifact_type,
-                description=description,
-                metadata=metadata,
-                aliases=aliases,
-            )
-        finally:
-            # Restore original logger function
-            self.model_manager.logger_func = original_logger
-
+        
+        # Update trainer's state to match the result
+        self.resumed_from_checkpoint = result
+        
+        return result
+        
+        # Update trainer's state to match the result
+        self.resumed_from_checkpoint = result
+        
         return result

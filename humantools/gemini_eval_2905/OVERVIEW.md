@@ -17,8 +17,8 @@ Overall, the codebase appears well-structured and demonstrates a good understand
 
 ### Errors and Issues
 
-1.  **`evaluation/loop.py` - `run_evaluation_loop`**:
-    * The `legal_mask` passed to `agent_to_eval.select_action` and `opponent.select_action` is `torch.ones(len(legal_moves), dtype=torch.bool)`. This effectively means **no illegal move masking is being applied during evaluation if the agent/opponent relies on this mask.** The agent will select from its entire action space, and then the code checks `if move is None or move not in legal_moves:`. This could lead to the agent selecting an illegal move, which is then caught, but it's not testing the agent's ability to recognize and choose among *actually* legal moves based on the policy output for those moves.
+1.  **✅ FIXED (May 30, 2025): `evaluation/loop.py` - `run_evaluation_loop`**:
+    * **RESOLVED:** The critical evaluation flaw has been fixed. The evaluation loop now properly uses `PolicyOutputMapper.get_legal_mask(legal_moves, device)` to create accurate legal masks based on actual game state, instead of using dummy all-ones masks. This ensures agents are properly evaluated on their ability to select among legal moves.
     * `move = None # type: ignore` is a bit of a code smell. Initialize with a proper type or ensure it's always assigned.
 
 2.  **`training/models/resnet_tower.py` - `SqueezeExcitation.forward`**:
@@ -42,7 +42,7 @@ Overall, the codebase appears well-structured and demonstrates a good understand
 
 ### Risks
 
-1.  **Evaluation Masking**: As mentioned in errors, the `evaluation/loop.py` using an all-ones mask is a significant risk. Evaluation results might not accurately reflect the agent's performance under true game conditions where it must select from only legal moves based on its policy output distribution over those moves.
+1.  **✅ FIXED (May 30, 2025): Evaluation Masking**: The critical `evaluation/loop.py` issue has been resolved. The evaluation loop now properly uses `PolicyOutputMapper.get_legal_mask()` with actual legal moves instead of dummy all-ones masks, ensuring accurate evaluation of agent performance under true game conditions.
 2.  **Silent Failures/Incorrect Behavior**:
     * The `SqueezeExcitation` potential `TypeError` if `self.se` is `None`.
     * In `PolicyOutputMapper.get_legal_mask`, the `try-except ValueError ... pass` for `shogi_move_to_policy_index` could silently ignore valid game moves if the mapper has an issue, leading to an incomplete or incorrect legal mask.

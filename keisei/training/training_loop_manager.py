@@ -190,7 +190,7 @@ class TrainingLoopManager:
                 )
                 d_rate = self.trainer.draws / total_games if total_games > 0 else 0.0
 
-                self.trainer.pending_progress_updates.update(
+                self.trainer.metrics_manager.pending_progress_updates.update(
                     {
                         "ep_metrics": ep_metrics_str,
                         "black_wins_cum": self.trainer.black_wins,
@@ -232,7 +232,7 @@ class TrainingLoopManager:
                     else 0.0
                 )
 
-                self.trainer.pending_progress_updates.setdefault(
+                self.trainer.metrics_manager.pending_progress_updates.setdefault(
                     "current_epoch", self.current_epoch
                 )
 
@@ -242,9 +242,9 @@ class TrainingLoopManager:
                     self.display.update_progress(
                         self.trainer,
                         current_speed,
-                        self.trainer.pending_progress_updates,
+                        self.trainer.metrics_manager.pending_progress_updates,
                     )
-                self.trainer.pending_progress_updates.clear()
+                self.trainer.metrics_manager.pending_progress_updates.clear()
 
                 self.last_time_for_sps = current_time
                 self.steps_since_last_time_for_sps = 0

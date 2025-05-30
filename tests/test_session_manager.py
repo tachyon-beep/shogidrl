@@ -578,7 +578,7 @@ class TestTrainerIntegration:
                 "keisei.training.models.model_factory", autospec=True
             ) as mock_model_factory,
             patch(
-                "keisei.training.trainer.PPOAgent", autospec=True
+                "keisei.training.setup_manager.PPOAgent", autospec=True
             ) as mock_ppo_agent_class,
             patch(
                 "keisei.shogi.features.FEATURE_SPECS", new_callable=dict
