@@ -5,31 +5,15 @@ evaluate.py: Main script for evaluating PPO Shogi agents.
 import argparse
 import os
 import random
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 import numpy as np
 import torch
 from dotenv import load_dotenv  # type: ignore
 
 import wandb  # Ensure wandb is imported for W&B logging
-from keisei.config_schema import (
-    AppConfig,
-    DemoConfig,
-    EnvConfig,
-    EvaluationConfig,
-    LoggingConfig,
-    TrainingConfig,
-    WandBConfig,
-)
 from keisei.core.ppo_agent import PPOAgent
-from keisei.evaluation.loop import ResultsDict
-from keisei.shogi import shogi_game_io  # For observations
-from keisei.shogi.shogi_core_definitions import (  # Added PieceType
-    Color,
-    MoveTuple,
-    PieceType,
-)
-from keisei.shogi.shogi_game import ShogiGame
+from keisei.evaluation.loop import ResultsDict, run_evaluation_loop
 from keisei.utils import BaseOpponent, EvaluationLogger, PolicyOutputMapper
 
 if TYPE_CHECKING:
@@ -103,7 +87,7 @@ class Evaluator:
                 if self.device_str == "cuda":
                     torch.cuda.manual_seed_all(self.seed)
                 print(f"[Evaluator] Set random seed to: {self.seed}")
-            except Exception as e:
+            except (ValueError, TypeError, RuntimeError) as e:
                 raise RuntimeError("Failed to set random seed") from e
 
         # W&B Initialization
@@ -141,11 +125,8 @@ class Evaluator:
                         f"[Evaluator] Error initializing W&B: {e}. W&B logging disabled."
                     )
                     self._wandb_active = False
-            except (OSError, RuntimeError, ValueError) as e:
-                print(f"[Evaluator] Unexpected error during W&B initialization: {e}")
-                self._wandb_active = False
-            except Exception as e:
-                print(f"[Evaluator] Critical error during W&B initialization: {e}")
+            except (OSError, RuntimeError, ValueError, ImportError, AttributeError) as e:
+                print(f"[Evaluator] Error during W&B initialization: {e}")
                 self._wandb_active = False
 
         # Ensure log directory exists
@@ -153,7 +134,7 @@ class Evaluator:
         if log_dir_eval and not os.path.exists(log_dir_eval):
             try:
                 os.makedirs(log_dir_eval)
-            except Exception as e:
+            except (OSError, PermissionError) as e:
                 raise RuntimeError(
                     f"Failed to create log directory '{log_dir_eval}': {e}"
                 ) from e
@@ -163,14 +144,17 @@ class Evaluator:
             self._logger = EvaluationLogger(
                 self.log_file_path_eval, also_stdout=self.logger_also_stdout
             )
-        except Exception as e:
+        except (OSError, ValueError, TypeError) as e:
             raise RuntimeError(f"Failed to initialize EvaluationLogger: {e}") from e
         # Agent and opponent
         # Load input_channels from config
         from keisei.utils.utils import load_config
 
-        config = load_config()
-        input_channels = config.env.input_channels
+        try:
+            config = load_config()
+            input_channels = config.env.input_channels
+        except (OSError, ValueError, TypeError, AttributeError, FileNotFoundError) as e:
+            raise RuntimeError(f"Failed to load configuration: {e}") from e
 
         from keisei.utils.agent_loading import (
             initialize_opponent,
@@ -184,7 +168,7 @@ class Evaluator:
                 self.policy_mapper,
                 input_channels,
             )
-        except Exception as e:
+        except (ValueError, FileNotFoundError, RuntimeError, OSError, TypeError) as e:
             raise RuntimeError(f"Failed to load evaluation agent: {e}") from e
         try:
             self._opponent = initialize_opponent(
@@ -194,15 +178,8 @@ class Evaluator:
                 self.policy_mapper,
                 input_channels,
             )
-        except ValueError as e:
-            print(f"Error initializing opponent {self.opponent_type}: {e}")
-            return None
-        except FileNotFoundError as e:
-            print(f"Error initializing PPO opponent: {e}")
-            return None
-        except Exception as e:  # pylint: disable=broad-except
-            print(f"Unexpected error initializing opponent {self.opponent_type}: {e}")
-            return None
+        except (ValueError, FileNotFoundError, RuntimeError, OSError, TypeError) as e:
+            raise RuntimeError(f"Failed to initialize opponent {self.opponent_type}: {e}") from e
 
         if self._logger is None or self._agent is None or self._opponent is None:
             raise RuntimeError(
@@ -224,7 +201,6 @@ class Evaluator:
                 logger.log(
                     f"Parameters: agent_ckpt='{self.agent_checkpoint_path}', opponent='{self.opponent_type}', num_games={self.num_games}"
                 )
-                from keisei.evaluation.loop import run_evaluation_loop
 
                 results_summary = run_evaluation_loop(
                     self._agent,
@@ -234,11 +210,8 @@ class Evaluator:
                     self.max_moves_per_game,
                 )
                 logger.log(f"[Evaluator] Evaluation Summary: {results_summary}")
-        except (RuntimeError, ValueError, OSError) as e:
+        except (RuntimeError, ValueError, OSError, TypeError, AttributeError) as e:
             print(f"[Evaluator] Error during evaluation run: {e}")
-            results_summary = None
-        except Exception as e:  # pylint: disable=broad-except
-            print(f"Error during evaluation run: {e}")
             results_summary = None
 
         if self._wandb_active and results_summary is not None:
@@ -254,23 +227,17 @@ class Evaluator:
                     }
                 )
 
-            except (OSError, RuntimeError, ValueError) as e:
+            except (OSError, RuntimeError, ValueError, AttributeError, TypeError) as e:
                 print(
                     f"[Evaluator] Error logging final W&B metrics: {e}"
-                )  # Added print
-            except Exception as e:  # pylint: disable=broad-except
-                print(
-                    f"[Evaluator] Unexpected error logging final W&B metrics: {e}"
                 )  # Added print
         if self._wandb_active and self._wandb_run:
             try:
                 self._wandb_run.finish()  # type: ignore
                 if hasattr(wandb, "finish"):
                     wandb.finish()  # Also call global wandb.finish() for test mocks
-            except (OSError, RuntimeError, ValueError) as e:
+            except (OSError, RuntimeError, ValueError, AttributeError) as e:
                 print(f"[Evaluator] Error finishing W&B run: {e}")
-            except Exception as e:  # pylint: disable=broad-except
-                print(f"[Evaluator] Unexpected error finishing W&B run: {e}")
         return results_summary
 
 

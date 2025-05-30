@@ -273,7 +273,7 @@ COMMON_MAIN_MOCKS = [
         "keisei.utils.agent_loading.initialize_opponent"  # Corrected: Patched where Evaluator finds it
     ),
     patch(
-        "keisei.evaluation.loop.run_evaluation_loop"  # Corrected: Patched where Evaluator finds it
+        "keisei.evaluation.evaluate.run_evaluation_loop"  # Corrected: Patched in evaluate.py namespace where it's imported
     ),
     patch(
         "keisei.evaluation.evaluate.EvaluationLogger"  # This is used by Evaluator, imported into evaluate.py
@@ -285,6 +285,9 @@ COMMON_MAIN_MOCKS = [
     patch("random.seed"),
     patch("numpy.random.seed"),
     patch("torch.manual_seed"),
+    patch(
+        "keisei.utils.utils.load_config"  # Mock load_config to prevent setup failures
+    ),
 ]
 
 
@@ -300,10 +303,11 @@ def apply_mocks(mocks):
 @apply_mocks(
     COMMON_MAIN_MOCKS[
         :-3
-    ]  # Indices 0-8: Excludes the three seeding mocks (random.seed, numpy.random.seed, torch.manual_seed)
+    ]  # Indices 0-9: Excludes the last three seeding mocks (random.seed, numpy.random.seed, torch.manual_seed) for clarity in testing specific functionality.
 )
 # pylint: disable=unused-argument,too-many-positional-arguments,too-many-locals
 def test_execute_full_evaluation_run_basic_random(
+    mock_load_config,  # Mock for load_config
     mock_wandb_run_prop,  # For asserting not called
     mock_wandb_finish,  # For asserting not called
     mock_wandb_log,  # For asserting not called
@@ -315,6 +319,11 @@ def test_execute_full_evaluation_run_basic_random(
     mock_policy_output_mapper_class,  # Mock for the class keisei.evaluate.PolicyOutputMapper
     tmp_path,
 ):
+    # Set up mock_load_config to return a config with the required structure
+    mock_config = MagicMock()
+    mock_config.env.input_channels = INPUT_CHANNELS
+    mock_load_config.return_value = mock_config
+    
     # Create a real PolicyOutputMapper instance for the test, as execute_full_evaluation_run expects one.
     policy_mapper_instance = PolicyOutputMapper()
 
@@ -402,6 +411,7 @@ def test_execute_full_evaluation_run_basic_random(
 @apply_mocks(COMMON_MAIN_MOCKS)  # Includes all mocks
 # pylint: disable=unused-argument,too-many-positional-arguments,too-many-locals
 def test_execute_full_evaluation_run_heuristic_opponent_with_wandb(
+    mock_load_config,
     mock_torch_seed,
     mock_np_seed,
     mock_random_seed,
@@ -416,6 +426,11 @@ def test_execute_full_evaluation_run_heuristic_opponent_with_wandb(
     mock_policy_output_mapper_class,
     tmp_path,
 ):
+    # Set up mock_load_config to return a config with the required structure
+    mock_config = MagicMock()
+    mock_config.env.input_channels = INPUT_CHANNELS
+    mock_load_config.return_value = mock_config
+    
     policy_mapper_instance = PolicyOutputMapper()  # MODIFIED: Create an instance
 
     mock_agent_instance = MockPPOAgent(
@@ -548,6 +563,7 @@ def test_execute_full_evaluation_run_heuristic_opponent_with_wandb(
 )  # MODIFIED: Keep all common mocks, initialize_opponent is now called within execute_full_evaluation_run
 # pylint: disable=unused-argument,too-many-positional-arguments,too-many-locals
 def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(
+    mock_load_config,
     mock_torch_seed,
     mock_np_seed,
     mock_random_seed,
@@ -562,6 +578,11 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(
     mock_policy_output_mapper_class,
     tmp_path,
 ):
+    # Set up mock_load_config to return a config with the required structure
+    mock_config = MagicMock()
+    mock_config.env.input_channels = INPUT_CHANNELS
+    mock_load_config.return_value = mock_config
+    
     policy_mapper_instance = PolicyOutputMapper()
 
     mock_agent_to_eval = MockPPOAgent(
@@ -716,6 +737,7 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(
 @apply_mocks(COMMON_MAIN_MOCKS)  # Includes all mocks
 # pylint: disable=unused-argument,too-many-positional-arguments,too-many-locals
 def test_execute_full_evaluation_run_with_seed(  # MODIFIED: Renamed and refactored
+    mock_load_config,
     mock_torch_seed,
     mock_np_seed,
     mock_random_seed,
@@ -731,6 +753,11 @@ def test_execute_full_evaluation_run_with_seed(  # MODIFIED: Renamed and refacto
     tmp_path,
     # monkeypatch, # MODIFIED: Removed monkeypatch as sys.argv is no longer used
 ):
+    # Set up mock_load_config to return a config with the required structure
+    mock_config = MagicMock()
+    mock_config.env.input_channels = INPUT_CHANNELS
+    mock_load_config.return_value = mock_config
+    
     # MODIFIED: Setup similar to test_execute_full_evaluation_run_basic_random
     policy_mapper_instance = PolicyOutputMapper()
 

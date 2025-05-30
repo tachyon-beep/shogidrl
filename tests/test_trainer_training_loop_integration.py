@@ -55,6 +55,18 @@ def mock_config():
             gradient_clip_max_norm=0.5,
             checkpoint_interval_timesteps=100,
             input_features="core46",
+            # Required parameters for testing
+            render_every_steps=1,
+            refresh_per_second=4,
+            enable_spinner=True,
+            tower_depth=9,
+            tower_width=256,
+            se_ratio=0.25,
+            model_type="resnet",
+            mixed_precision=False,
+            ddp=False,
+            evaluation_interval_timesteps=1000,
+            weight_decay=0.0,
         ),
         evaluation=EvaluationConfig(
             num_games=20, opponent_type="random", evaluation_interval_timesteps=1000
@@ -102,7 +114,7 @@ class TestTrainerTrainingLoopIntegration:
         _mock_policy_mapper,
         mock_feature_specs,
         _mock_shogi_game,
-        mock_training_loop_manager_class,
+        _mock_training_loop_manager_class,
         mock_session_manager_class,
         mock_ppo_agent_class,
         mock_model_manager_class,
@@ -135,7 +147,7 @@ class TestTrainerTrainingLoopIntegration:
         # Mock ModelManager with checkpoint data side effect
         mock_model_manager = Mock()
 
-        def setup_checkpoint_data(agent, model_dir, resume_path_override=None):
+        def setup_checkpoint_data(**_kwargs):
             mock_model_manager.checkpoint_data = {
                 "global_timestep": 1500,
                 "total_episodes_completed": 100,
@@ -209,7 +221,7 @@ class TestTrainerTrainingLoopIntegration:
         _mock_policy_mapper,
         mock_feature_specs,
         _mock_shogi_game,
-        mock_training_loop_manager_class,
+        _mock_training_loop_manager_class,
         mock_session_manager_class,
         mock_ppo_agent_class,
         mock_model_manager_class,
@@ -518,7 +530,7 @@ class TestTrainerTrainingLoopIntegration:
         _mock_policy_mapper,
         mock_feature_specs,
         _mock_shogi_game,
-        mock_training_loop_manager_class,
+        _mock_training_loop_manager_class,
         mock_session_manager_class,
         mock_ppo_agent_class,
         mock_model_manager_class,
@@ -551,7 +563,7 @@ class TestTrainerTrainingLoopIntegration:
         # Mock ModelManager with checkpoint data side effect
         mock_model_manager = Mock()
 
-        def setup_checkpoint_data(agent, model_dir, resume_path_override=None):
+        def setup_checkpoint_data(**_kwargs):
             mock_model_manager.checkpoint_data = {
                 "global_timestep": 2000,
                 "total_episodes_completed": 150,
