@@ -1,5 +1,5 @@
 """
-test_trainer_training_loop_integration.py: Integration tests for Trainer.run_training_loop() with proper mocking.
+test_trainer_training_loop_integration_fixed.py: Integration tests for Trainer.run_training_loop() with proper mocking.
 
 Tests verify end-to-end training loop functionality including:
 - Complete training loop execution with mocked components
@@ -9,10 +9,9 @@ Tests verify end-to-end training loop functionality including:
 """
 
 import tempfile
-from unittest.mock import Mock, patch, call
+from unittest.mock import Mock, patch
 
 import pytest
-import torch
 
 from keisei.config_schema import (
     AppConfig,
@@ -49,14 +48,11 @@ def mock_config():
             minibatch_size=64,
             learning_rate=3e-4,
             gamma=0.99,
-            gae_lambda=0.95,
-            value_coef=0.5,
+            lambda_gae=0.95,
+            value_loss_coeff=0.5,
             entropy_coef=0.01,
-            clip_coef=0.2,
-            max_grad_norm=0.5,
-            norm_adv=True,
-            clip_vloss=True,
-            save_interval_timesteps=50,
+            clip_epsilon=0.2,
+            gradient_clip_max_norm=0.5,
             checkpoint_interval_timesteps=100,
             input_features="core46",
         ),
@@ -138,47 +134,44 @@ class TestTrainerTrainingLoopIntegration:
 
         # Mock ModelManager with checkpoint data side effect
         mock_model_manager = Mock()
-        mock_model_manager.checkpoint_data = {
-            "global_timestep": 1500,
-            "total_episodes_completed": 100,
-            "black_wins": 40,
-            "white_wins": 35,
-            "draws": 25,
-        }
-        mock_model_manager.resumed_from_checkpoint = "/path/to/resume_test_checkpoint.pth"
+        def setup_checkpoint_data(agent, model_dir, resume_path_override=None):
+            mock_model_manager.checkpoint_data = {
+                "global_timestep": 1500,
+                "total_episodes_completed": 100,
+                "black_wins": 40,
+                "white_wins": 35,
+                "draws": 25,
+            }
+            mock_model_manager.resumed_from_checkpoint = "/path/to/resume_test_checkpoint.pth"
+
+        mock_model_manager.handle_checkpoint_resume.side_effect = setup_checkpoint_data
+        mock_model_manager.save_final_model.return_value = None
+        mock_model_manager.save_final_checkpoint.return_value = None
         mock_model_manager_class.return_value = mock_model_manager
 
         # Mock EnvManager
         mock_env_manager = Mock()
-        mock_game = Mock()
-        mock_policy_mapper = Mock()
-        mock_env_manager.setup_environment.return_value = (mock_game, mock_policy_mapper)
+        mock_env_manager.setup_environment.return_value = (Mock(), Mock())
         mock_env_manager_class.return_value = mock_env_manager
 
         # Create trainer with resume
         checkpoint_path = "/path/to/resume_test_checkpoint.pth"
         args = MockArgs(resume=checkpoint_path)
         
+        # Create trainer
         trainer = Trainer(mock_config, args)
 
-        # Mock display context manager
-        trainer.display = Mock()
-        trainer.display.start.return_value.__enter__ = Mock()
-        trainer.display.start.return_value.__exit__ = Mock()
+        # Mock TrainingLogger to capture log_both calls
+        mock_logger = Mock()
+        with patch('keisei.training.trainer.TrainingLogger') as mock_training_logger_class:
+            mock_training_logger_class.return_value.__enter__.return_value = mock_logger
+            mock_training_logger_class.return_value.__exit__.return_value = None
 
-        # Mock the TrainingLogger context manager to capture log_both calls
-        logged_messages = []
-        
-        def mock_log(message):
-            logged_messages.append(message)
-        
-        # Mock TrainingLogger context manager
-        with patch('keisei.training.trainer.TrainingLogger') as mock_logger_cls:
-            mock_logger_instance = Mock()
-            mock_logger_instance.log = mock_log
-            mock_logger_cls.return_value.__enter__.return_value = mock_logger_instance
-            mock_logger_cls.return_value.__exit__.return_value = None
-            
+            # Mock display context manager
+            trainer.display = Mock()
+            trainer.display.start.return_value.__enter__ = Mock()
+            trainer.display.start.return_value.__exit__ = Mock()
+
             # Mock episode state initialization
             with patch.object(trainer, '_initialize_game_state') as mock_init_game_state:
                 mock_episode_state = Mock()
@@ -187,10 +180,10 @@ class TestTrainerTrainingLoopIntegration:
                 # Run the training loop
                 trainer.run_training_loop()
 
-                # Verify resume logging was called
-                resume_messages = [msg for msg in logged_messages if "Resumed training from checkpoint" in msg]
-                assert len(resume_messages) > 0, f"Expected resume logging, but got messages: {logged_messages}"
-                assert any(checkpoint_path in msg for msg in resume_messages), f"Expected checkpoint path in messages: {logged_messages}"
+                # Verify resume logging was called via the logger
+                mock_logger.log.assert_any_call(
+                    f"Resumed training from checkpoint: {checkpoint_path}"
+                )
 
     @patch("keisei.training.trainer.EnvManager")
     @patch("keisei.training.trainer.ModelManager")
@@ -243,53 +236,44 @@ class TestTrainerTrainingLoopIntegration:
         mock_model_manager = Mock()
         mock_model_manager.checkpoint_data = None
         mock_model_manager.resumed_from_checkpoint = None
+        mock_model_manager.save_final_model.return_value = None
+        mock_model_manager.save_final_checkpoint.return_value = None
         mock_model_manager_class.return_value = mock_model_manager
 
         # Mock EnvManager
         mock_env_manager = Mock()
-        mock_game = Mock()
-        mock_policy_mapper = Mock()
-        mock_env_manager.setup_environment.return_value = (mock_game, mock_policy_mapper)
+        mock_env_manager.setup_environment.return_value = (Mock(), Mock())
         mock_env_manager_class.return_value = mock_env_manager
 
         # Create trainer without resume
         args = MockArgs()  # No resume
         
+        # Create trainer
         trainer = Trainer(mock_config, args)
 
-        # Mock display context manager
-        trainer.display = Mock()
-        trainer.display.start.return_value.__enter__ = Mock()
-        trainer.display.start.return_value.__exit__ = Mock()
+        # Mock TrainingLogger to capture log_both calls
+        mock_logger = Mock()
+        with patch('keisei.training.trainer.TrainingLogger') as mock_training_logger_class:
+            mock_training_logger_class.return_value.__enter__.return_value = mock_logger
+            mock_training_logger_class.return_value.__exit__.return_value = None
 
-        # Mock the TrainingLogger context manager to capture log_both calls
-        logged_messages = []
-        
-        def mock_log_both(message, also_to_wandb=False, wandb_data=None, log_level="info"):
-            logged_messages.append(message)
-        
-        # Mock TrainingLogger context manager
-        with patch('keisei.training.trainer.TrainingLogger') as mock_logger_cls:
-            mock_logger_instance = Mock()
-            mock_logger_cls.return_value.__enter__.return_value = mock_logger_instance
-            mock_logger_cls.return_value.__exit__.return_value = None
-            
+            # Mock display context manager
+            trainer.display = Mock()
+            trainer.display.start.return_value.__enter__ = Mock()
+            trainer.display.start.return_value.__exit__ = Mock()
+
             # Mock episode state initialization
             with patch.object(trainer, '_initialize_game_state') as mock_init_game_state:
                 mock_episode_state = Mock()
                 mock_init_game_state.return_value = mock_episode_state
 
-                # Mock session logger context
-                with patch.object(trainer, 'logger', mock_logger_instance):
-                    # Set the log_both to our tracking function before running
-                    trainer.log_both = mock_log_both
+                # Run the training loop
+                trainer.run_training_loop()
 
-                    # Run the training loop
-                    trainer.run_training_loop()
-
-                    # Verify no resume logging was called (check all calls don't contain resume message)
-                    resume_calls = [msg for msg in logged_messages if "Resumed training from checkpoint" in msg]
-                    assert len(resume_calls) == 0, f"Unexpected resume logging: {resume_calls}"
+                # Verify no resume logging was called (check all calls don't contain resume message)
+                all_calls = [str(call) for call in mock_logger.log.call_args_list]
+                resume_calls = [call for call in all_calls if "Resumed training from checkpoint" in call]
+                assert len(resume_calls) == 0, f"Unexpected resume logging: {resume_calls}"
 
     @patch("keisei.training.trainer.EnvManager")
     @patch("keisei.training.trainer.ModelManager")
@@ -342,13 +326,13 @@ class TestTrainerTrainingLoopIntegration:
         mock_model_manager = Mock()
         mock_model_manager.checkpoint_data = None
         mock_model_manager.resumed_from_checkpoint = None
+        mock_model_manager.save_final_model.return_value = None
+        mock_model_manager.save_final_checkpoint.return_value = None
         mock_model_manager_class.return_value = mock_model_manager
 
         # Mock EnvManager
         mock_env_manager = Mock()
-        mock_game = Mock()
-        mock_policy_mapper = Mock()
-        mock_env_manager.setup_environment.return_value = (mock_game, mock_policy_mapper)
+        mock_env_manager.setup_environment.return_value = (Mock(), Mock())
         mock_env_manager_class.return_value = mock_env_manager
 
         # Mock TrainingLoopManager to raise KeyboardInterrupt
@@ -358,26 +342,22 @@ class TestTrainerTrainingLoopIntegration:
         # Create trainer
         args = MockArgs()
         
+        # Create trainer
         trainer = Trainer(mock_config, args)
 
-        # Mock display context manager
-        trainer.display = Mock()
-        trainer.display.start.return_value.__enter__ = Mock()
-        trainer.display.start.return_value.__exit__ = Mock()        # Mock the TrainingLogger to capture all log calls
-        logged_messages = []
+        # Mock TrainingLogger to capture log_both calls
+        mock_logger = Mock()
+        with patch('keisei.training.trainer.TrainingLogger') as mock_training_logger_class:
+            mock_training_logger_class.return_value.__enter__.return_value = mock_logger
+            mock_training_logger_class.return_value.__exit__.return_value = None
 
-        def mock_log(message):
-            logged_messages.append(message)
+            # Mock display context manager
+            trainer.display = Mock()
+            trainer.display.start.return_value.__enter__ = Mock()
+            trainer.display.start.return_value.__exit__ = Mock()
 
-        # Mock finalization method
-        with patch.object(trainer, '_finalize_training') as mock_finalize:
-            # Mock TrainingLogger context manager
-            with patch('keisei.training.trainer.TrainingLogger') as mock_logger_cls:
-                mock_logger_instance = Mock()
-                mock_logger_instance.log = mock_log  # Capture actual log calls
-                mock_logger_cls.return_value.__enter__.return_value = mock_logger_instance
-                mock_logger_cls.return_value.__exit__.return_value = None
-
+            # Mock finalization method
+            with patch.object(trainer, '_finalize_training') as mock_finalize:
                 # Mock episode state initialization
                 with patch.object(trainer, '_initialize_game_state') as mock_init_game_state:
                     mock_episode_state = Mock()
@@ -387,8 +367,9 @@ class TestTrainerTrainingLoopIntegration:
                     trainer.run_training_loop()
 
                     # Verify KeyboardInterrupt was logged
-                    interrupt_messages = [msg for msg in logged_messages if "KeyboardInterrupt" in msg]
-                    assert len(interrupt_messages) > 0, f"Expected KeyboardInterrupt logging, but got messages: {logged_messages}"
+                    mock_logger.log.assert_any_call(
+                        "Trainer caught KeyboardInterrupt from TrainingLoopManager. Finalizing."
+                    )
 
                     # Verify finalization was called
                     mock_finalize.assert_called_once()
@@ -444,13 +425,13 @@ class TestTrainerTrainingLoopIntegration:
         mock_model_manager = Mock()
         mock_model_manager.checkpoint_data = None
         mock_model_manager.resumed_from_checkpoint = None
+        mock_model_manager.save_final_model.return_value = None
+        mock_model_manager.save_final_checkpoint.return_value = None
         mock_model_manager_class.return_value = mock_model_manager
 
         # Mock EnvManager
         mock_env_manager = Mock()
-        mock_game = Mock()
-        mock_policy_mapper = Mock()
-        mock_env_manager.setup_environment.return_value = (mock_game, mock_policy_mapper)
+        mock_env_manager.setup_environment.return_value = (Mock(), Mock())
         mock_env_manager_class.return_value = mock_env_manager
 
         # Mock TrainingLoopManager to raise general exception
@@ -461,26 +442,22 @@ class TestTrainerTrainingLoopIntegration:
         # Create trainer
         args = MockArgs()
         
+        # Create trainer
         trainer = Trainer(mock_config, args)
 
-        # Mock display context manager
-        trainer.display = Mock()
-        trainer.display.start.return_value.__enter__ = Mock()
-        trainer.display.start.return_value.__exit__ = Mock()        # Mock the TrainingLogger to capture all log calls
-        logged_messages = []
+        # Mock TrainingLogger to capture log_both calls
+        mock_logger = Mock()
+        with patch('keisei.training.trainer.TrainingLogger') as mock_training_logger_class:
+            mock_training_logger_class.return_value.__enter__.return_value = mock_logger
+            mock_training_logger_class.return_value.__exit__.return_value = None
 
-        def mock_log(message):
-            logged_messages.append(message)
+            # Mock display context manager
+            trainer.display = Mock()
+            trainer.display.start.return_value.__enter__ = Mock()
+            trainer.display.start.return_value.__exit__ = Mock()
 
-        # Mock finalization method
-        with patch.object(trainer, '_finalize_training') as mock_finalize:
-            # Mock TrainingLogger context manager
-            with patch('keisei.training.trainer.TrainingLogger') as mock_logger_cls:
-                mock_logger_instance = Mock()
-                mock_logger_instance.log = mock_log  # Capture actual log calls
-                mock_logger_cls.return_value.__enter__.return_value = mock_logger_instance
-                mock_logger_cls.return_value.__exit__.return_value = None
-
+            # Mock finalization method
+            with patch.object(trainer, '_finalize_training') as mock_finalize:
                 # Mock episode state initialization
                 with patch.object(trainer, '_initialize_game_state') as mock_init_game_state:
                     mock_episode_state = Mock()
@@ -490,8 +467,9 @@ class TestTrainerTrainingLoopIntegration:
                     trainer.run_training_loop()
 
                     # Verify exception was logged
-                    exception_messages = [msg for msg in logged_messages if "unhandled exception" in msg]
-                    assert len(exception_messages) > 0, f"Expected exception logging, but got messages: {logged_messages}"
+                    mock_logger.log.assert_any_call(
+                        f"Trainer caught unhandled exception from TrainingLoopManager: {test_exception}. Finalizing."
+                    )
 
                     # Verify finalization was called
                     mock_finalize.assert_called_once()
@@ -545,57 +523,64 @@ class TestTrainerTrainingLoopIntegration:
 
         # Mock ModelManager with checkpoint data side effect
         mock_model_manager = Mock()
-        mock_model_manager.checkpoint_data = {
-            "global_timestep": 2000,
-            "total_episodes_completed": 150,
-            "black_wins": 60,
-            "white_wins": 55,
-            "draws": 35,
-        }
-        mock_model_manager.resumed_from_checkpoint = "/path/to/state_consistency_checkpoint.pth"
+        def setup_checkpoint_data(agent, model_dir, resume_path_override=None):
+            mock_model_manager.checkpoint_data = {
+                "global_timestep": 2000,
+                "total_episodes_completed": 150,
+                "black_wins": 60,
+                "white_wins": 55,
+                "draws": 35,
+            }
+            mock_model_manager.resumed_from_checkpoint = "/path/to/state_consistency_checkpoint.pth"
+
+        mock_model_manager.handle_checkpoint_resume.side_effect = setup_checkpoint_data
+        mock_model_manager.save_final_model.return_value = None
+        mock_model_manager.save_final_checkpoint.return_value = None
         mock_model_manager_class.return_value = mock_model_manager
 
         # Mock EnvManager
         mock_env_manager = Mock()
-        mock_game = Mock()
-        mock_policy_mapper = Mock()
-        mock_env_manager.setup_environment.return_value = (mock_game, mock_policy_mapper)
+        mock_env_manager.setup_environment.return_value = (Mock(), Mock())
         mock_env_manager_class.return_value = mock_env_manager
 
         # Create trainer with resume to test state preservation
         checkpoint_path = "/path/to/state_consistency_checkpoint.pth"
         args = MockArgs(resume=checkpoint_path)
         
+        # Create trainer
         trainer = Trainer(mock_config, args)
 
-        # Mock display context manager
-        trainer.display = Mock()
-        trainer.display.start.return_value.__enter__ = Mock()
-        trainer.display.start.return_value.__exit__ = Mock()
+        # Mock TrainingLogger to capture log_both calls
+        mock_logger = Mock()
+        with patch('keisei.training.trainer.TrainingLogger') as mock_training_logger_class:
+            mock_training_logger_class.return_value.__enter__.return_value = mock_logger
+            mock_training_logger_class.return_value.__exit__.return_value = None
 
-        # Mock finalization method to capture state at finalization time
-        finalization_state = {}
-        def capture_finalization_state(log_func):
-            finalization_state['global_timestep'] = trainer.global_timestep
-            finalization_state['total_episodes_completed'] = trainer.total_episodes_completed
-            finalization_state['black_wins'] = trainer.black_wins
-            finalization_state['white_wins'] = trainer.white_wins
-            finalization_state['draws'] = trainer.draws
+            # Mock display context manager
+            trainer.display = Mock()
+            trainer.display.start.return_value.__enter__ = Mock()
+            trainer.display.start.return_value.__exit__ = Mock()
 
-        with patch.object(trainer, '_finalize_training', side_effect=capture_finalization_state):
-            # Mock TrainingLogger context manager
-            with patch('keisei.training.trainer.TrainingLogger') as mock_logger_cls:
-                mock_logger_instance = Mock()
-                mock_logger_cls.return_value.__enter__.return_value = mock_logger_instance
-                mock_logger_cls.return_value.__exit__.return_value = None
-                
+            # Mock finalization method to capture state at finalization time
+            finalization_state = {}
+            def capture_finalization_state(_log_func):
+                finalization_state['global_timestep'] = trainer.global_timestep
+                finalization_state['total_episodes_completed'] = trainer.total_episodes_completed
+                finalization_state['black_wins'] = trainer.black_wins
+                finalization_state['white_wins'] = trainer.white_wins
+                finalization_state['draws'] = trainer.draws
+
+            with patch.object(trainer, '_finalize_training', side_effect=capture_finalization_state):
                 # Mock episode state initialization
                 with patch.object(trainer, '_initialize_game_state') as mock_init_game_state:
                     mock_episode_state = Mock()
                     mock_init_game_state.return_value = mock_episode_state
 
                     # Mock session logger context
-                    with patch.object(trainer, 'logger', mock_logger_instance):
+                    with patch.object(trainer, 'logger') as mock_logger:
+                        mock_logger.get_context.return_value.__enter__ = Mock(return_value=trainer)
+                        mock_logger.get_context.return_value.__exit__ = Mock()
+
                         # Verify state after checkpoint resume but before running training loop
                         assert trainer.global_timestep == 2000
                         assert trainer.total_episodes_completed == 150
