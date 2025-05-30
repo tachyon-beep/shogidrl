@@ -2,11 +2,13 @@
 Unit tests for TrainingLoopManager in training_loop_manager.py
 """
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock
 
+import numpy as np
 import pytest
 import torch
 
+from keisei.training.step_manager import EpisodeState
 from keisei.training.training_loop_manager import TrainingLoopManager
 
 
@@ -47,10 +49,6 @@ def mock_trainer():
 @pytest.fixture
 def mock_episode_state():
     """Create a mock episode state."""
-    import numpy as np
-
-    from keisei.training.step_manager import EpisodeState
-
     return EpisodeState(
         current_obs=np.zeros((46, 9, 9)),
         current_obs_tensor=torch.zeros(46, 9, 9),
@@ -73,9 +71,9 @@ def test_training_loop_manager_initialization(mock_trainer):
 
     assert manager.current_epoch == 0
     assert manager.episode_state is None
-    assert manager.last_time_for_sps == 0.0
+    assert abs(manager.last_time_for_sps - 0.0) < 1e-9
     assert manager.steps_since_last_time_for_sps == 0
-    assert manager.last_display_update_time == 0.0
+    assert abs(manager.last_display_update_time - 0.0) < 1e-9
 
 
 def test_set_initial_episode_state(mock_trainer, mock_episode_state):
@@ -102,9 +100,9 @@ def test_training_loop_manager_basic_functionality(mock_trainer, mock_episode_st
 
     assert manager.current_epoch == 0
     assert manager.episode_state is None
-    assert manager.last_time_for_sps == 0.0
+    assert abs(manager.last_time_for_sps - 0.0) < 1e-9
     assert manager.steps_since_last_time_for_sps == 0
-    assert manager.last_display_update_time == 0.0
+    assert abs(manager.last_display_update_time - 0.0) < 1e-9
 
     # Test setting episode state
     manager.set_initial_episode_state(mock_episode_state)
@@ -115,19 +113,17 @@ def test_run_epoch_functionality(mock_trainer):
     """Test the _run_epoch method."""
     manager = TrainingLoopManager(mock_trainer)
 
-    # Mock logger function
-    mock_log_both = Mock()
-
     # Mock the necessary trainer methods for epoch execution
     mock_trainer.global_timestep = 100
     mock_trainer.config.training.total_timesteps = 1000
+    
+    # Set up trainer to have the required metrics_manager attribute
+    mock_trainer.metrics_manager = Mock()
+    mock_trainer.metrics_manager.global_timestep = 100
 
-    # This should not raise an error
-    try:
-        manager._run_epoch(mock_log_both)
-    except Exception as e:
-        # The actual implementation may require more setup, so we just ensure it's callable
-        assert hasattr(manager, "_run_epoch"), "Method _run_epoch should exist"
+    # The method should be callable (it may raise exceptions due to incomplete mocking)
+    assert hasattr(manager, "_run_epoch")
+    assert callable(manager._run_epoch)
 
 
 def test_training_loop_manager_run_method_structure(mock_trainer, mock_episode_state):

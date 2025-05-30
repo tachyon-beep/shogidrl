@@ -355,8 +355,3 @@ class Trainer(CompatibilityMixin):
         self.resumed_from_checkpoint = result
 
         return result
-
-        # Update trainer's state to match the result
-        self.resumed_from_checkpoint = result
-
-        return result
