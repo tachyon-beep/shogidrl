@@ -12,6 +12,7 @@ from keisei.config_schema import (
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
+    ParallelConfig,
     TrainingConfig,
     WandBConfig,
 )
@@ -71,23 +72,31 @@ def make_config_and_args(**overrides):
         num_games=20, opponent_type="random", evaluation_interval_timesteps=50000
     )  # Added evaluation_interval_timesteps
     logging = LoggingConfig(
-        log_file="logs/training_log.txt", 
-        model_dir="models/", 
-        run_name=None
+        log_file="logs/training_log.txt", model_dir="models/", run_name=None
     )
     wandb_enabled = overrides.get("wandb_enabled", False)  # Default to False for tests
     wandb = WandBConfig(
-        enabled=wandb_enabled, 
-        project="keisei-shogi", 
+        enabled=wandb_enabled,
+        project="keisei-shogi",
         entity=None,
         run_name_prefix="keisei",
         watch_model=True,
         watch_log_freq=1000,
-        watch_log_type="all"
+        watch_log_type="all",
     )
     demo = DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5)
 
     config = AppConfig(
+        parallel=ParallelConfig(
+            enabled=False,
+            num_workers=1,
+            batch_size=64,
+            sync_interval=100,
+            compression_enabled=False,
+            timeout_seconds=30,
+            max_queue_size=1000,
+            worker_seed_offset=1000,
+        ),
         training=training,
         env=env,
         evaluation=evaluation,

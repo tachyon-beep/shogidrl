@@ -19,6 +19,16 @@
         "model_dir": "test_models",
         "run_name": "test_run"
     },
+    "parallel": {
+        "batch_size": 32,
+        "compression_enabled": false,
+        "enabled": false,
+        "max_queue_size": 1000,
+        "num_workers": 1,
+        "sync_interval": 100,
+        "timeout_seconds": 30.0,
+        "worker_seed_offset": 1000
+    },
     "training": {
         "checkpoint_interval_timesteps": 500,
         "clip_epsilon": 0.2,

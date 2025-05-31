@@ -7,7 +7,7 @@ import tempfile
 from unittest.mock import Mock, patch
 
 import pytest
-import torch
+import torch  # Added torch import
 
 from keisei.config_schema import (
     AppConfig,
@@ -15,10 +15,11 @@ from keisei.config_schema import (
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
+    ParallelConfig,
     TrainingConfig,
     WandBConfig,
 )
-from keisei.training.model_manager import ModelManager
+from keisei.training.model_manager import ModelManager  # Updated import path
 
 
 class MockArgs:
@@ -91,6 +92,16 @@ def mock_config():
         demo=DemoConfig(
             enable_demo_mode=False,
             demo_mode_delay=0.5,
+        ),
+        parallel=ParallelConfig(
+            enabled=False,
+            num_workers=4,
+            batch_size=32,
+            sync_interval=100,
+            compression_enabled=True,
+            timeout_seconds=10.0,
+            max_queue_size=1000,
+            worker_seed_offset=1000,
         ),
     )
 

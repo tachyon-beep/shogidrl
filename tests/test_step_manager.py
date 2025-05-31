@@ -1,10 +1,14 @@
-''' Unit tests for StepManager class. '''
+"""Unit tests for StepManager class."""
+
 # pylint: disable=unused-import,unused-argument,protected-access
 # flake8: noqa: S1244,S6711,S125
 
-from dataclasses import dataclass  # pylint: disable=unused-import,unused-argument,protected-access
+from dataclasses import (
+    dataclass,
+)  # pylint: disable=unused-import,unused-argument,protected-access
 from typing import Any, Dict, Optional  # pylint: disable=unused-import
 from unittest.mock import MagicMock, Mock, patch  # pylint: disable=unused-import
+
 import numpy as np
 import pytest
 import torch
@@ -500,7 +504,9 @@ class TestHandleEpisodeEnd:
         )
 
         game_stats = {"black_wins": 3, "white_wins": 7, "draws": 0}
-        mock_components["game"].reset.return_value = rng.random((10, 10, 20), dtype=np.float32)
+        mock_components["game"].reset.return_value = rng.random(
+            (10, 10, 20), dtype=np.float32
+        )
 
         # Execute episode end handling
         step_manager.handle_episode_end(
@@ -528,7 +534,9 @@ class TestHandleEpisodeEnd:
         )
 
         game_stats = {"black_wins": 2, "white_wins": 2, "draws": 6}
-        mock_components["game"].reset.return_value = rng.random((10, 10, 20), dtype=np.float32)
+        mock_components["game"].reset.return_value = rng.random(
+            (10, 10, 20), dtype=np.float32
+        )
 
         # Execute episode end handling
         step_manager.handle_episode_end(
@@ -557,7 +565,9 @@ class TestHandleEpisodeEnd:
 
         # 20 black wins, 30 white wins, 50 draws = 100 total
         game_stats = {"black_wins": 20, "white_wins": 30, "draws": 50}
-        mock_components["game"].reset.return_value = rng.random((10, 10, 20), dtype=np.float32)
+        mock_components["game"].reset.return_value = rng.random(
+            (10, 10, 20), dtype=np.float32
+        )
 
         # Execute episode end handling
         step_manager.handle_episode_end(
@@ -587,7 +597,9 @@ class TestHandleEpisodeEnd:
         )
 
         game_stats = {"black_wins": 0, "white_wins": 0, "draws": 0}
-        mock_components["game"].reset.return_value = rng.random((10, 10, 20), dtype=np.float32)
+        mock_components["game"].reset.return_value = rng.random(
+            (10, 10, 20), dtype=np.float32
+        )
 
         # Execute episode end handling
         step_manager.handle_episode_end(
@@ -680,7 +692,9 @@ class TestUpdateEpisodeState:
 
         assert np.array_equal(updated_state.current_obs, next_obs)
         assert torch.equal(updated_state.current_obs_tensor, next_obs_tensor)
-        assert updated_state.episode_reward == pytest.approx(sample_episode_state.episode_reward + 2.5)
+        assert updated_state.episode_reward == pytest.approx(
+            sample_episode_state.episode_reward + 2.5
+        )
         assert updated_state.episode_length == sample_episode_state.episode_length + 1
 
 

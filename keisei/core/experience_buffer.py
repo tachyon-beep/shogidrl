@@ -2,7 +2,23 @@
 Minimal ExperienceBuffer for DRL Shogi Client.
 """
 
+from dataclasses import dataclass
+from typing import Dict, List, Optional
+
 import torch  # Ensure torch is imported
+
+
+@dataclass
+class Experience:
+    """Single experience transition for parallel collection."""
+
+    obs: torch.Tensor
+    action: int
+    reward: float
+    log_prob: float
+    value: float
+    done: bool
+    legal_mask: torch.Tensor
 
 
 class ExperienceBuffer:
@@ -205,3 +221,105 @@ class ExperienceBuffer:
     def __len__(self):
         """Return the number of transitions currently in the buffer."""
         return self.ptr
+
+    def add_batch(self, experiences: List[Experience]) -> None:
+        """
+        Add a batch of experiences to the buffer for parallel collection.
+
+        Args:
+            experiences: List of Experience objects to add
+        """
+        for exp in experiences:
+            if self.ptr >= self.buffer_size:
+                break  # Don't exceed buffer size
+
+            self.add(
+                obs=exp.obs,
+                action=exp.action,
+                reward=exp.reward,
+                log_prob=exp.log_prob,
+                value=exp.value,
+                done=exp.done,
+                legal_mask=exp.legal_mask,
+            )
+
+    def add_from_worker_batch(self, worker_data: Dict[str, torch.Tensor]) -> None:
+        """
+        Add experiences from worker batch data (optimized for parallel collection).
+
+        Args:
+            worker_data: Dictionary containing batched tensors from workers
+        """
+        batch_size = worker_data["obs"].shape[0]
+
+        for i in range(batch_size):
+            if self.ptr >= self.buffer_size:
+                break
+
+            self.add(
+                obs=worker_data["obs"][i],
+                action=int(worker_data["actions"][i].item()),
+                reward=worker_data["rewards"][i].item(),
+                log_prob=worker_data["log_probs"][i].item(),
+                value=worker_data["values"][i].item(),
+                done=bool(worker_data["dones"][i].item()),
+                legal_mask=worker_data["legal_masks"][i],
+            )
+
+    def get_worker_batch_format(self) -> Optional[Dict[str, torch.Tensor]]:
+        """
+        Get current buffer contents in worker batch format for validation.
+
+        Returns:
+            Dictionary with batched tensors or None if buffer is empty
+        """
+        if self.ptr == 0:
+            return None
+
+        return {
+            "obs": torch.stack(self.obs[: self.ptr], dim=0),
+            "actions": torch.tensor(
+                self.actions[: self.ptr], dtype=torch.int64, device=self.device
+            ),
+            "rewards": torch.tensor(
+                self.rewards[: self.ptr], dtype=torch.float32, device=self.device
+            ),
+            "log_probs": torch.tensor(
+                self.log_probs[: self.ptr], dtype=torch.float32, device=self.device
+            ),
+            "values": torch.tensor(
+                self.values[: self.ptr], dtype=torch.float32, device=self.device
+            ),
+            "dones": torch.tensor(
+                self.dones[: self.ptr], dtype=torch.bool, device=self.device
+            ),
+            "legal_masks": torch.stack(self.legal_masks[: self.ptr], dim=0),
+        }
+
+    def merge_from_parallel_buffers(
+        self, parallel_buffers: List["ExperienceBuffer"]
+    ) -> None:
+        """
+        Merge experiences from multiple parallel buffers.
+
+        Args:
+            parallel_buffers: List of ExperienceBuffer instances from workers
+        """
+        for buffer in parallel_buffers:
+            if buffer.ptr == 0:
+                continue
+
+            # Add all experiences from this buffer
+            for i in range(buffer.ptr):
+                if self.ptr >= self.buffer_size:
+                    return  # Main buffer is full
+
+                self.add(
+                    obs=buffer.obs[i],
+                    action=buffer.actions[i],
+                    reward=buffer.rewards[i],
+                    log_prob=buffer.log_probs[i],
+                    value=buffer.values[i],
+                    done=buffer.dones[i],
+                    legal_mask=buffer.legal_masks[i],
+                )

@@ -9,7 +9,7 @@ import sys
 
 import torch
 
-from keisei.config_schema import AppConfig
+from keisei.config_schema import AppConfig, ParallelConfig
 from keisei.core.ppo_agent import PPOAgent
 from keisei.utils import PolicyOutputMapper
 from keisei.utils.utils import generate_run_name as gen_run_name_util
@@ -94,6 +94,12 @@ def test_train_resume_autodetect(tmp_path):
             "watch_log_type": "all",
         },  # Added defaults
         "demo": {"enable_demo_mode": False, "demo_mode_delay": 0.0},
+        "parallel": {
+            "enabled": False,
+            "start_method": "fork",
+            "num_envs": 1,
+            "base_port": 50000,
+        },
     }
     initial_agent_config = AppConfig.parse_obj(base_config_data)
     agent = PPOAgent(config=initial_agent_config, device=torch.device(DEVICE))
@@ -344,6 +350,12 @@ def test_train_explicit_resume(tmp_path):
             "watch_log_type": "all",
         },  # Added defaults
         "demo": {"enable_demo_mode": False, "demo_mode_delay": 0.0},
+        "parallel": {
+            "enabled": False,
+            "start_method": "fork",
+            "num_envs": 1,
+            "base_port": 50000,
+        },
     }
     initial_save_config_obj = AppConfig.parse_obj(initial_save_config_dict)
 

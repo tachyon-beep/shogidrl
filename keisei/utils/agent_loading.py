@@ -5,7 +5,7 @@ agent_loading.py: Utilities for loading PPO agents and initializing opponents.
 import os
 from typing import Any, Optional
 
-from keisei.config_schema import AppConfig, EnvConfig, TrainingConfig
+from keisei.config_schema import AppConfig, EnvConfig, ParallelConfig, TrainingConfig
 from keisei.utils.opponents import (
     BaseOpponent,
     SimpleHeuristicOpponent,
@@ -38,6 +38,9 @@ def load_evaluation_agent(
         raise FileNotFoundError(f"Checkpoint file {checkpoint_path} not found.")
     # Use dummy configs for required fields
     config = AppConfig(
+        parallel=ParallelConfig(
+            enabled=False, start_method="fork", num_envs=1, base_port=50000
+        ),
         env=EnvConfig(
             device=device_str,
             input_channels=input_channels,

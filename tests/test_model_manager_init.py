@@ -1,12 +1,13 @@
 """
 Unit tests for ModelManager initialization and basic utilities.
 """
+
 import os
 import tempfile
 from unittest.mock import Mock, patch
 
 import pytest
-import torch
+import torch  # Added torch import
 
 from keisei.config_schema import (
     AppConfig,
@@ -14,11 +15,12 @@ from keisei.config_schema import (
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
+    ParallelConfig,
     TrainingConfig,
     WandBConfig,
 )
-from keisei.training.model_manager import ModelManager
 from keisei.core.ppo_agent import PPOAgent
+from keisei.training.model_manager import ModelManager  # Updated import path
 
 
 class MockArgs:
@@ -64,9 +66,31 @@ def mock_config():
             evaluation_interval_timesteps=1,
             weight_decay=0.0,
         ),
-        evaluation=EvaluationConfig(num_games=1, opponent_type="random", evaluation_interval_timesteps=1),
-        logging=LoggingConfig(log_file="test.log", model_dir=tempfile.gettempdir(), run_name=None),
-        wandb=WandBConfig(enabled=False, project="test", entity=None, run_name_prefix="test", watch_model=False, watch_log_freq=1, watch_log_type="all"),
+        evaluation=EvaluationConfig(
+            num_games=1, opponent_type="random", evaluation_interval_timesteps=1
+        ),
+        logging=LoggingConfig(
+            log_file="test.log", model_dir=tempfile.gettempdir(), run_name=None
+        ),
+        wandb=WandBConfig(
+            enabled=False,
+            project="test",
+            entity=None,
+            run_name_prefix="test",
+            watch_model=False,
+            watch_log_freq=1,
+            watch_log_type="all",
+        ),
+        parallel=ParallelConfig(
+            enabled=False,
+            num_workers=4,
+            batch_size=32,
+            sync_interval=100,
+            compression_enabled=True,
+            timeout_seconds=10.0,
+            max_queue_size=1000,
+            worker_seed_offset=1000,
+        ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
     )
 

@@ -27,6 +27,7 @@ def create_test_config():
         EnvConfig,
         EvaluationConfig,
         LoggingConfig,
+        ParallelConfig,
         TrainingConfig,
         WandBConfig,
     )
@@ -81,6 +82,16 @@ def create_test_config():
             watch_log_type="all",
         ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
+        parallel=ParallelConfig(
+            enabled=False,
+            num_workers=4,
+            batch_size=32,
+            sync_interval=100,
+            compression_enabled=True,
+            timeout_seconds=10.0,
+            max_queue_size=1000,
+            worker_seed_offset=1000,
+        ),
     )
 
 
@@ -311,11 +322,22 @@ def test_ppo_agent_learn_advantage_normalization():
         EnvConfig,
         EvaluationConfig,
         LoggingConfig,
+        ParallelConfig,
         TrainingConfig,
         WandBConfig,
     )
 
     config = AppConfig(
+        parallel=ParallelConfig(
+            enabled=False,
+            num_workers=4,
+            batch_size=32,
+            sync_interval=100,
+            compression_enabled=True,
+            timeout_seconds=10.0,
+            max_queue_size=1000,
+            worker_seed_offset=1000,
+        ),
         env=EnvConfig(
             device="cpu",
             input_channels=INPUT_CHANNELS,
@@ -424,12 +446,23 @@ def test_ppo_agent_learn_gradient_clipping():
         EnvConfig,
         EvaluationConfig,
         LoggingConfig,
+        ParallelConfig,
         TrainingConfig,
         WandBConfig,
     )
 
     # Use high learning rate to potentially create large gradients
     config = AppConfig(
+        parallel=ParallelConfig(
+            enabled=False,
+            num_workers=4,
+            batch_size=32,
+            sync_interval=100,
+            compression_enabled=True,
+            timeout_seconds=10.0,
+            max_queue_size=1000,
+            worker_seed_offset=1000,
+        ),
         env=EnvConfig(
             device="cpu",
             input_channels=INPUT_CHANNELS,
@@ -531,11 +564,22 @@ def test_ppo_agent_learn_empty_buffer_handling():
         EnvConfig,
         EvaluationConfig,
         LoggingConfig,
+        ParallelConfig,
         TrainingConfig,
         WandBConfig,
     )
 
     config = AppConfig(
+        parallel=ParallelConfig(
+            enabled=False,
+            num_workers=4,
+            batch_size=32,
+            sync_interval=100,
+            compression_enabled=True,
+            timeout_seconds=10.0,
+            max_queue_size=1000,
+            worker_seed_offset=1000,
+        ),
         env=EnvConfig(
             device="cpu",
             input_channels=INPUT_CHANNELS,
@@ -626,11 +670,22 @@ def test_ppo_agent_learn_kl_divergence_tracking():
         EnvConfig,
         EvaluationConfig,
         LoggingConfig,
+        ParallelConfig,
         TrainingConfig,
         WandBConfig,
     )
 
     config = AppConfig(
+        parallel=ParallelConfig(
+            enabled=False,
+            num_workers=4,
+            batch_size=32,
+            sync_interval=100,
+            compression_enabled=True,
+            timeout_seconds=10.0,
+            max_queue_size=1000,
+            worker_seed_offset=1000,
+        ),
         env=EnvConfig(
             device="cpu",
             input_channels=INPUT_CHANNELS,
@@ -735,12 +790,23 @@ def test_ppo_agent_learn_minibatch_processing():
         EnvConfig,
         EvaluationConfig,
         LoggingConfig,
+        ParallelConfig,
         TrainingConfig,
         WandBConfig,
     )
 
     # Test with buffer size that doesn't divide evenly by minibatch size
     config = AppConfig(
+        parallel=ParallelConfig(
+            enabled=False,
+            num_workers=4,
+            batch_size=32,
+            sync_interval=100,
+            compression_enabled=True,
+            timeout_seconds=10.0,
+            max_queue_size=1000,
+            worker_seed_offset=1000,
+        ),
         env=EnvConfig(
             device="cpu",
             input_channels=INPUT_CHANNELS,

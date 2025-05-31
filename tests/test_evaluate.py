@@ -16,6 +16,7 @@ from keisei.config_schema import (
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
+    ParallelConfig,
     TrainingConfig,
     WandBConfig,
 )
@@ -124,6 +125,140 @@ def eval_logger_setup(tmp_path):
 @pytest.fixture
 def shogi_game_initial():
     return ShogiGame()
+
+
+@pytest.fixture
+def mock_app_config():
+    """Returns a mock AppConfig for testing."""
+    return AppConfig(
+        env=EnvConfig(
+            device="cpu",
+            input_channels=INPUT_CHANNELS,
+            num_actions_total=13527,  # Example value
+            seed=42,
+        ),
+        training=TrainingConfig(
+            total_timesteps=1000,
+            steps_per_epoch=200,
+            ppo_epochs=4,
+            minibatch_size=32,
+            learning_rate=0.0003,
+            gamma=0.99,
+            clip_epsilon=0.2,
+            value_loss_coeff=0.5,
+            entropy_coef=0.01,
+            render_every_steps=1,
+            refresh_per_second=4,
+            enable_spinner=True,
+            input_features="core46",
+            tower_depth=9,
+            tower_width=256,
+            se_ratio=0.25,
+            model_type="resnet",
+            mixed_precision=False,
+            ddp=False,
+            gradient_clip_max_norm=0.5,
+            lambda_gae=0.95,
+            checkpoint_interval_timesteps=10000,
+            evaluation_interval_timesteps=50000,
+            weight_decay=0.0,
+        ),
+        evaluation=EvaluationConfig(
+            num_games=2, opponent_type="random", evaluation_interval_timesteps=50000
+        ),
+        logging=LoggingConfig(
+            log_file="logs/test_evaluate_log.txt",
+            model_dir="models/test_evaluate_models/",
+            run_name="test_evaluate_run",
+        ),
+        wandb=WandBConfig(
+            enabled=False,
+            project="keisei-shogi-rl",
+            entity=None,
+            run_name_prefix="keisei",
+            watch_model=True,
+            watch_log_freq=1000,
+            watch_log_type="all",
+        ),
+        parallel=ParallelConfig(
+            enabled=False,
+            num_workers=1,
+            batch_size=32,
+            sync_interval=100,
+            compression_enabled=True,
+            timeout_seconds=10.0,
+            max_queue_size=1000,
+            worker_seed_offset=1000,
+        ),
+        demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5),
+    )
+
+
+@pytest.fixture
+def mock_app_config_parallel(tmp_path):
+    """Returns a mock AppConfig with parallel enabled for testing."""
+    return AppConfig(
+        env=EnvConfig(
+            device="cpu",
+            input_channels=INPUT_CHANNELS,
+            num_actions_total=13527,
+            seed=42,
+        ),
+        training=TrainingConfig(
+            total_timesteps=1000,
+            steps_per_epoch=200,
+            ppo_epochs=4,
+            minibatch_size=32,
+            learning_rate=0.0003,
+            gamma=0.99,
+            clip_epsilon=0.2,
+            value_loss_coeff=0.5,
+            entropy_coef=0.01,
+            render_every_steps=1,
+            refresh_per_second=4,
+            enable_spinner=True,
+            input_features="core46",
+            tower_depth=9,
+            tower_width=256,
+            se_ratio=0.25,
+            model_type="resnet",
+            mixed_precision=False,
+            ddp=False,
+            gradient_clip_max_norm=0.5,
+            lambda_gae=0.95,
+            checkpoint_interval_timesteps=10000,
+            evaluation_interval_timesteps=50000,
+            weight_decay=0.0,
+        ),
+        evaluation=EvaluationConfig(
+            num_games=2, opponent_type="random", evaluation_interval_timesteps=50000
+        ),
+        logging=LoggingConfig(
+            log_file=str(tmp_path / "logs/test_evaluate_log_parallel.txt"),
+            model_dir=str(tmp_path / "models/test_evaluate_models_parallel/"),
+            run_name="test_evaluate_run_parallel",
+        ),
+        wandb=WandBConfig(
+            enabled=False,
+            project="keisei-shogi-rl",
+            entity=None,
+            run_name_prefix="keisei",
+            watch_model=True,
+            watch_log_freq=1000,
+            watch_log_type="all",
+        ),
+        parallel=ParallelConfig(  # Corrected ParallelConfig
+            enabled=True,
+            num_workers=2,
+            batch_size=32,
+            sync_interval=100,
+            compression_enabled=True,
+            timeout_seconds=10.0,
+            max_queue_size=1000,
+            worker_seed_offset=1000,
+        ),
+        demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5),
+    )
 
 
 # --- Tests for Opponent Classes ---
@@ -508,7 +643,6 @@ def test_execute_full_evaluation_run_heuristic_opponent_with_wandb(
     # MODIFIED: The EvaluationLogger in execute_full_evaluation_run does not take run_name_for_log directly.
     # It's used internally if W&B is active to set the W&B run name.
     # The logger itself is called with log_file_path_eval and also_stdout.
-    # The run_name_for_log parameter was removed from EvaluationLogger constructor.
     mock_eval_logger_class.assert_called_once_with(str(log_file), also_stdout=True)
 
     (
@@ -972,6 +1106,16 @@ def make_test_config(device_str, input_channels, policy_mapper):
             watch_log_type="all",
         ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
+        parallel=ParallelConfig(
+            enabled=False,
+            num_workers=4,
+            batch_size=32,
+            sync_interval=100,
+            compression_enabled=True,
+            timeout_seconds=10.0,
+            max_queue_size=1000,
+            worker_seed_offset=1000,
+        ),
     )
 
 

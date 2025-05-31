@@ -31,6 +31,16 @@ wandb:
   entity: null
   log_model_artifact: false
 
+parallel:
+  enabled: false                  # Enable parallel experience collection
+  num_workers: 4                  # Number of parallel workers for experience collection
+  batch_size: 32                  # Batch size for experience transmission from workers
+  sync_interval: 100              # Steps between model weight synchronization
+  compression_enabled: true       # Enable compression for model weight transmission
+  timeout_seconds: 10.0           # Timeout for worker communication operations
+  max_queue_size: 1000            # Maximum size of experience queues
+  worker_seed_offset: 1000        # Offset for worker random seeds to ensure diversity
+
 demo:
   enable_demo_mode: true  # If true, enables demo mode with per-move delay and extra logging
   demo_mode_delay: 0.01     # Delay in seconds between moves in demo mode

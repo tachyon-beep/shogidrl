@@ -144,7 +144,7 @@ class Trainer(CompatibilityMixin):
                 wandb.finish(exit_code=1)
             raise RuntimeError(f"Game initialization error: {e}") from e
 
-    def _perform_ppo_update(self, current_obs_np, log_both):
+    def perform_ppo_update(self, current_obs_np, log_both):
         """Perform a PPO update."""
         if not self.agent or not self.experience_buffer:
             log_both(

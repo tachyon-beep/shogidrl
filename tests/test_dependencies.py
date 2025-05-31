@@ -22,7 +22,7 @@ class TestDependencyStructure:
         assert pyproject_path.is_file()
 
         # Should be readable
-        content = pyproject_path.read_text(encoding='utf-8')
+        content = pyproject_path.read_text(encoding="utf-8")
         assert len(content) > 0
         assert "[project]" in content
 
@@ -51,7 +51,7 @@ class TestDependencyStructure:
 
         # These might not all be installed, but should be listed in pyproject.toml
         pyproject_path = Path("/home/john/keisei/pyproject.toml")
-        content = pyproject_path.read_text(encoding='utf-8')
+        content = pyproject_path.read_text(encoding="utf-8")
 
         for dep in dev_deps:
             assert dep in content, f"Dev dependency '{dep}' not found in pyproject.toml"
@@ -236,7 +236,7 @@ class TestRemovedDependencies:
     def test_matplotlib_references_removed(self):
         """Test that matplotlib references are properly removed."""
         pyproject_path = Path("/home/john/keisei/pyproject.toml")
-        content = pyproject_path.read_text(encoding='utf-8')
+        content = pyproject_path.read_text(encoding="utf-8")
 
         # matplotlib should not be in the main dependencies
         main_deps_section = content.split("[project.optional-dependencies]")[0]
@@ -306,7 +306,7 @@ class TestDependencyAnalysis:
             if not path.exists():
                 continue
 
-            content = path.read_text(encoding='utf-8')
+            content = path.read_text(encoding="utf-8")
 
             # Basic check: no matplotlib imports
             assert "import matplotlib" not in content
@@ -333,7 +333,7 @@ class TestDependencyInstallation:
     def test_pip_environment_consistency(self):
         """Test that pip environment is consistent with pyproject.toml."""
         import json
-        
+
         try:
             # Get installed packages
             result = subprocess.run(
@@ -372,8 +372,8 @@ class TestDependencyInstallation:
         requirements_path = Path("/home/john/keisei/requirements.txt")
 
         if requirements_path.exists():
-            pyproject_content = pyproject_path.read_text(encoding='utf-8')
-            requirements_content = requirements_path.read_text(encoding='utf-8')
+            pyproject_content = pyproject_path.read_text(encoding="utf-8")
+            requirements_content = requirements_path.read_text(encoding="utf-8")
 
             # Basic consistency check - main packages should appear in both
             main_packages = ["torch", "numpy", "pydantic", "rich"]

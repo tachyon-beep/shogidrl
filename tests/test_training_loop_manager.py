@@ -24,6 +24,7 @@ def mock_trainer():
     mock_config.training.ppo_epochs = 4
     mock_config.training.render_every_steps = 100
     mock_config.training.refresh_per_second = 4
+    mock_config.parallel.enabled = False  # Disable parallel training for tests
     mock_trainer.config = mock_config
 
     # Mock agent

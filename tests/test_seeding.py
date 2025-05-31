@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 import pytest
 
-from keisei.config_schema import AppConfig
+from keisei.config_schema import AppConfig, ParallelConfig
 from keisei.shogi.shogi_game import ShogiGame
 from keisei.training.env_manager import EnvManager
 
@@ -112,6 +112,9 @@ class TestEnvManagerSeeding:
         )
 
         self.config = AppConfig(
+            parallel=ParallelConfig(
+                enabled=False, start_method="fork", num_envs=1, base_port=50000
+            ),
             env=EnvConfig(
                 device="cpu", input_channels=46, num_actions_total=13527, seed=42
             ),
@@ -313,6 +316,9 @@ class TestSeedingIntegration:
         )
 
         config = AppConfig(
+            parallel=ParallelConfig(
+                enabled=False, start_method="fork", num_envs=1, base_port=50000
+            ),
             env=EnvConfig(
                 device="cpu", input_channels=46, num_actions_total=13527, seed=42
             ),
@@ -386,6 +392,9 @@ class TestSeedingIntegration:
         )
 
         config = AppConfig(
+            parallel=ParallelConfig(
+                enabled=False, start_method="fork", num_envs=1, base_port=50000
+            ),
             env=EnvConfig(
                 device="cpu", input_channels=46, num_actions_total=13527, seed=42
             ),

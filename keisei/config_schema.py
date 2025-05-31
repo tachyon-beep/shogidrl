@@ -119,6 +119,43 @@ class WandBConfig(BaseModel):
     )
 
 
+class ParallelConfig(BaseModel):
+    enabled: bool = Field(False, description="Enable parallel experience collection.")
+    num_workers: int = Field(
+        4, description="Number of parallel workers for experience collection."
+    )
+    batch_size: int = Field(
+        32, description="Batch size for experience transmission from workers."
+    )
+    sync_interval: int = Field(
+        100, description="Steps between model weight synchronization."
+    )
+    compression_enabled: bool = Field(
+        True, description="Enable compression for model weight transmission."
+    )
+    timeout_seconds: float = Field(
+        10.0, description="Timeout for worker communication operations."
+    )
+    max_queue_size: int = Field(1000, description="Maximum size of experience queues.")
+    worker_seed_offset: int = Field(
+        1000, description="Offset for worker random seeds to ensure diversity."
+    )
+
+    @validator("num_workers")
+    # pylint: disable=no-self-argument
+    def workers_positive(cls, v):
+        if v <= 0:
+            raise ValueError("num_workers must be positive")
+        return v
+
+    @validator("batch_size")
+    # pylint: disable=no-self-argument
+    def batch_size_positive(cls, v):
+        if v <= 0:
+            raise ValueError("batch_size must be positive")
+        return v
+
+
 class DemoConfig(BaseModel):
     enable_demo_mode: bool = Field(
         False,
@@ -135,6 +172,7 @@ class AppConfig(BaseModel):
     evaluation: EvaluationConfig
     logging: LoggingConfig
     wandb: WandBConfig
+    parallel: ParallelConfig
     demo: DemoConfig
 
     class Config:

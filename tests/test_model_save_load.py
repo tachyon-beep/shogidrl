@@ -4,6 +4,7 @@ Unit tests for PPOAgent model saving and loading.
 
 import os
 
+import pytest
 import torch
 
 from keisei.config_schema import (
@@ -12,6 +13,7 @@ from keisei.config_schema import (
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
+    ParallelConfig,
     TrainingConfig,
     WandBConfig,
 )
@@ -24,6 +26,9 @@ def test_model_save_and_load(tmp_path):
     """Test saving and loading of the PPO agent's model."""
     # Setup dimensions and policy mapper
     config = AppConfig(
+        parallel=ParallelConfig(
+            enabled=False, start_method="fork", num_envs=1, base_port=50000
+        ),
         env=EnvConfig(
             device="cpu", input_channels=46, num_actions_total=13527, seed=42
         ),

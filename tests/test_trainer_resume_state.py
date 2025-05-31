@@ -12,7 +12,6 @@ import tempfile
 from unittest.mock import Mock, patch
 
 import pytest
-import torch
 
 from keisei.config_schema import (
     AppConfig,
@@ -20,10 +19,12 @@ from keisei.config_schema import (
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
+    ParallelConfig,
     TrainingConfig,
     WandBConfig,
 )
 from keisei.core.ppo_agent import PPOAgent
+from keisei.training.model_manager import ModelManager
 from keisei.training.trainer import Trainer
 
 
@@ -85,6 +86,16 @@ def mock_config():
             watch_log_type="all",
         ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5),
+        parallel=ParallelConfig(
+            enabled=False,
+            num_workers=4,
+            batch_size=32,
+            sync_interval=100,
+            compression_enabled=True,
+            timeout_seconds=10.0,
+            max_queue_size=1000,
+            worker_seed_offset=1000,
+        ),
     )
 
 
@@ -522,6 +533,7 @@ class TestTrainerResumeState:
 
     @patch("keisei.training.trainer.EnvManager")
     @patch("keisei.training.trainer.ModelManager")
+    @patch("keisei.training.trainer.TrainingLoopManager")
     @patch("keisei.training.trainer.SessionManager")
     @patch("keisei.shogi.ShogiGame")
     @patch("keisei.shogi.features.FEATURE_SPECS")
@@ -531,16 +543,17 @@ class TestTrainerResumeState:
     @patch("keisei.core.ppo_agent.PPOAgent")
     def test_trainer_model_manager_integration_flow(
         self,
-        mock_ppo_agent_class,
-        mock_model_factory,
-        _mock_experience_buffer,
-        _mock_policy_mapper,
-        mock_feature_specs,
-        _mock_shogi_game,
-        mock_session_manager_class,
-        mock_model_manager_class,
-        mock_env_manager_class,
-        mock_config,
+        mock_ppo_agent_class,  # PPOAgent (last patch)
+        mock_model_factory,  # model_factory
+        _mock_experience_buffer,  # ExperienceBuffer
+        _mock_policy_mapper,  # PolicyOutputMapper
+        mock_feature_specs,  # FEATURE_SPECS
+        _mock_shogi_game,  # ShogiGame
+        mock_session_manager_class,  # SessionManager
+        mock_training_loop_manager_class,  # TrainingLoopManager
+        mock_model_manager_class,  # ModelManager
+        mock_env_manager_class,  # EnvManager (first patch)
+        mock_config,  # Added missing fixture
         temp_dir,
     ):
         """Test complete flow of ModelManager checkpoint resume integration with Trainer."""
@@ -593,6 +606,8 @@ class TestTrainerResumeState:
         # Create trainer
         checkpoint_path = "/path/to/test_checkpoint.pth"
         args = MockArgs(resume=checkpoint_path)
+        # Ensure device is a string, not a MagicMock
+        mock_config.env.device = "cpu"
         trainer = Trainer(mock_config, args)
 
         # Mock the ModelManager.handle_checkpoint_resume method

@@ -3,7 +3,12 @@
 Manages the main training loop execution, previously part of the Trainer class.
 """
 import time
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional, cast
+
+import torch.nn as nn
+
+# Constants
+STEP_MANAGER_NOT_AVAILABLE_MSG = "StepManager is not available"
 
 if TYPE_CHECKING:
     from keisei.config_schema import AppConfig
@@ -11,6 +16,7 @@ if TYPE_CHECKING:
     from keisei.core.ppo_agent import PPOAgent
     from keisei.training.callbacks import Callback
     from keisei.training.display import TrainingDisplay
+    from keisei.training.parallel import ParallelManager
     from keisei.training.step_manager import EpisodeState, StepManager
     from keisei.training.trainer import Trainer  # Forward reference
 
@@ -40,6 +46,22 @@ class TrainingLoopManager:
         self.last_time_for_sps: float = 0.0
         self.steps_since_last_time_for_sps: int = 0
         self.last_display_update_time: float = 0.0
+
+        # Initialize parallel manager if enabled
+        self.parallel_manager: Optional["ParallelManager"] = None
+        if self.config.parallel.enabled:
+            from keisei.training.parallel import ParallelManager
+
+            # Build config dictionaries for parallel manager
+            env_config = self._build_env_config()
+            model_config = self._build_model_config()
+
+            self.parallel_manager = ParallelManager(
+                env_config=env_config,
+                model_config=model_config,
+                parallel_config=self.config.parallel.dict(),
+                device=self.config.env.device,
+            )
 
     def set_initial_episode_state(self, initial_episode_state: "EpisodeState"):
         """Sets the initial episode state, typically provided by the Trainer."""
@@ -78,7 +100,7 @@ class TrainingLoopManager:
                     break
 
                 if self.episode_state and self.episode_state.current_obs is not None:
-                    self.trainer._perform_ppo_update(
+                    self.trainer.perform_ppo_update(
                         self.episode_state.current_obs, log_both
                     )
                 else:
@@ -97,18 +119,129 @@ class TrainingLoopManager:
                 also_to_wandb=True,
             )
             raise
-        except Exception as e:
-            log_message = f"Unhandled exception in TrainingLoopManager.run: {e}"
+        except (RuntimeError, ValueError, AttributeError) as e:
+            log_message = f"Training error in TrainingLoopManager.run: {e}"
             if hasattr(self.trainer, "logger") and self.trainer.logger:
-                self.trainer.logger.log(log_message)  # Removed exc_info=True
+                self.trainer.logger.log(log_message)
             else:
                 print(log_message)
-            log_both(f"Unhandled exception in training loop: {e}", also_to_wandb=True)
+            log_both(f"Training error in training loop: {e}", also_to_wandb=True)
             raise
 
     def _run_epoch(self, log_both):
         """
         Runs a single epoch, collecting experiences until the buffer is full or total timesteps are met.
+        Uses parallel collection if enabled, otherwise falls back to sequential collection.
+        """
+        num_steps_collected_this_epoch = 0
+
+        # Check if parallel training is enabled
+        if self.parallel_manager and self.config.parallel.enabled:
+            # Parallel experience collection
+            num_steps_collected_this_epoch = self._run_epoch_parallel(log_both)
+        else:
+            # Sequential experience collection (existing logic)
+            num_steps_collected_this_epoch = self._run_epoch_sequential(log_both)
+
+        # Update metrics regardless of collection mode
+        self.trainer.metrics_manager.pending_progress_updates.setdefault(
+            "steps_collected_this_epoch", num_steps_collected_this_epoch
+        )
+
+    def _run_epoch_parallel(self, log_both):
+        """
+        Parallel experience collection using worker processes.
+        """
+        if not self.parallel_manager:
+            log_both("ParallelManager not available, falling back to sequential mode.")
+            return self._run_epoch_sequential(log_both)
+
+        num_steps_collected = 0
+        collection_attempts = 0
+        max_collection_attempts = 50  # Prevent infinite loops
+
+        log_both(
+            f"Starting parallel experience collection for epoch {self.current_epoch}"
+        )
+
+        while (
+            num_steps_collected < self.config.training.steps_per_epoch
+            and self.trainer.global_timestep < self.config.training.total_timesteps
+            and collection_attempts < max_collection_attempts
+        ):
+
+            collection_attempts += 1
+
+            # Synchronize model with workers if needed
+            if (
+                self.agent
+                and self.agent.model
+                and self.parallel_manager.sync_model_if_needed(
+                    cast(nn.Module, self.agent.model), self.trainer.global_timestep
+                )
+            ):
+                log_both(
+                    f"Model synchronized with workers at step {self.trainer.global_timestep}"
+                )
+
+            # Collect experiences from workers
+            try:
+                if self.buffer:
+                    experiences_collected = self.parallel_manager.collect_experiences(
+                        self.buffer
+                    )
+
+                    if experiences_collected > 0:
+                        num_steps_collected += experiences_collected
+                        self.trainer.metrics_manager.global_timestep += (
+                            experiences_collected
+                        )
+
+                        log_both(
+                            f"Collected {experiences_collected} experiences from workers "
+                            f"(total this epoch: {num_steps_collected})",
+                            also_to_wandb=False,
+                        )
+
+                        # Update display periodically
+                        if num_steps_collected % 100 == 0:  # Every 100 steps
+                            self._update_display_progress(num_steps_collected)
+                    else:
+                        # No experiences collected this round, brief wait
+                        time.sleep(0.01)  # 10ms wait
+                else:
+                    log_both("Experience buffer not available for parallel collection")
+                    break
+
+            except (
+                RuntimeError,
+                ValueError,
+                AttributeError,
+                ConnectionError,
+                TimeoutError,
+            ) as e:
+                log_both(
+                    f"Error collecting parallel experiences: {e}. "
+                    f"Attempt {collection_attempts}/{max_collection_attempts}",
+                    also_to_wandb=True,
+                )
+                if collection_attempts >= max_collection_attempts:
+                    log_both(
+                        "Max collection attempts reached. Falling back to sequential mode.",
+                        also_to_wandb=True,
+                    )
+                    return self._run_epoch_sequential(log_both)
+
+        log_both(
+            f"Parallel epoch {self.current_epoch} completed. "
+            f"Collected {num_steps_collected} experiences in {collection_attempts} attempts."
+        )
+
+        return num_steps_collected
+
+    def _run_epoch_sequential(self, log_both):
+        """
+        Sequential experience collection (original implementation).
         """
         num_steps_collected_this_epoch = 0
         while num_steps_collected_this_epoch < self.config.training.steps_per_epoch:
@@ -121,7 +254,7 @@ class TrainingLoopManager:
                     also_to_wandb=True,
                 )
                 if self.step_manager is None:
-                    raise RuntimeError("StepManager is not available")
+                    raise RuntimeError(STEP_MANAGER_NOT_AVAILABLE_MSG)
                 self.episode_state = self.step_manager.reset_episode()
                 if self.episode_state is None:
                     raise RuntimeError(
@@ -130,7 +263,8 @@ class TrainingLoopManager:
                 continue
 
             if self.step_manager is None:
-                raise RuntimeError("StepManager is not available")
+                raise RuntimeError(STEP_MANAGER_NOT_AVAILABLE_MSG)
+
             step_result = self.step_manager.execute_step(
                 episode_state=self.episode_state,
                 global_timestep=self.trainer.global_timestep,
@@ -143,12 +277,12 @@ class TrainingLoopManager:
                     also_to_wandb=True,
                 )
                 if self.step_manager is None:
-                    raise RuntimeError("StepManager is not available")
+                    raise RuntimeError(STEP_MANAGER_NOT_AVAILABLE_MSG)
                 self.episode_state = self.step_manager.reset_episode()
                 continue
 
             if self.step_manager is None:
-                raise RuntimeError("StepManager is not available")
+                raise RuntimeError(STEP_MANAGER_NOT_AVAILABLE_MSG)
             updated_episode_state = self.step_manager.update_episode_state(
                 self.episode_state, step_result
             )
@@ -172,7 +306,7 @@ class TrainingLoopManager:
                     "draws": self.trainer.metrics_manager.draws,
                 }
                 if self.step_manager is None:
-                    raise RuntimeError("StepManager is not available")
+                    raise RuntimeError(STEP_MANAGER_NOT_AVAILABLE_MSG)
                 new_episode_state_after_end = self.step_manager.handle_episode_end(
                     updated_episode_state,
                     step_result,
@@ -266,3 +400,62 @@ class TrainingLoopManager:
                 self.last_time_for_sps = current_time
                 self.steps_since_last_time_for_sps = 0
                 self.last_display_update_time = current_time
+
+        return num_steps_collected_this_epoch
+
+    def _build_env_config(self) -> Dict[str, Any]:
+        """Build environment configuration dictionary for parallel workers."""
+        return {
+            "device": "cpu",  # Workers typically use CPU for environment simulation
+            "input_channels": self.config.env.input_channels,
+            "num_actions_total": self.config.env.num_actions_total,
+            "seed": self.config.env.seed,
+            "input_features": self.config.training.input_features,
+        }
+
+    def _build_model_config(self) -> Dict[str, Any]:
+        """Build model configuration dictionary for parallel workers."""
+        return {
+            "model_type": self.config.training.model_type,
+            "tower_depth": self.config.training.tower_depth,
+            "tower_width": self.config.training.tower_width,
+            "se_ratio": self.config.training.se_ratio,
+            "obs_shape": (self.config.env.input_channels, 9, 9),  # Standard Shogi board
+            "num_actions": self.config.env.num_actions_total,
+        }
+
+    def _update_display_progress(self, num_steps_collected):
+        """Update display with current progress during parallel collection."""
+        current_time = time.time()
+        display_update_interval = getattr(
+            self.config.training, "rich_display_update_interval_seconds", 0.2
+        )
+
+        if (current_time - self.last_display_update_time) > display_update_interval:
+            time_delta_sps = current_time - self.last_time_for_sps
+            current_speed = (
+                self.steps_since_last_time_for_sps / time_delta_sps
+                if time_delta_sps > 0
+                else 0.0
+            )
+
+            self.trainer.metrics_manager.pending_progress_updates.setdefault(
+                "current_epoch", self.current_epoch
+            )
+            self.trainer.metrics_manager.pending_progress_updates.setdefault(
+                "parallel_steps_collected", num_steps_collected
+            )
+
+            if hasattr(self.display, "update_progress") and callable(
+                self.display.update_progress
+            ):
+                self.display.update_progress(
+                    self.trainer,
+                    current_speed,
+                    self.trainer.metrics_manager.pending_progress_updates,
+                )
+            self.trainer.metrics_manager.pending_progress_updates.clear()
+
+            self.last_time_for_sps = current_time
+            self.steps_since_last_time_for_sps = 0
+            self.last_display_update_time = current_time

@@ -15,6 +15,7 @@ from keisei.config_schema import (
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
+    ParallelConfig,
     TrainingConfig,
     WandBConfig,
 )
@@ -25,6 +26,16 @@ from keisei.training.env_manager import EnvManager
 def mock_config():
     """Create a mock AppConfig for testing."""
     return AppConfig(
+        parallel=ParallelConfig(
+            enabled=False,
+            num_workers=1,
+            batch_size=32,
+            sync_interval=100,
+            compression_enabled=True,
+            timeout_seconds=10.0,
+            max_queue_size=1000,
+            worker_seed_offset=1000,
+        ),
         env=EnvConfig(
             device="cpu",
             num_actions_total=13527,
@@ -50,36 +61,33 @@ def mock_config():
             tower_width=256,
             se_ratio=0.25,
             mixed_precision=False,
-            ddp=False,
-            gradient_clip_max_norm=0.5,
-            lambda_gae=0.95,
-            checkpoint_interval_timesteps=10000,
-            evaluation_interval_timesteps=50000,
-            weight_decay=0.0001,
+            ddp=False,  # Added default
+            gradient_clip_max_norm=0.5,  # Added default
+            lambda_gae=0.95,  # Added default
+            checkpoint_interval_timesteps=10000,  # Added default
+            evaluation_interval_timesteps=50000,  # Added default
+            weight_decay=0.0,  # Added default
         ),
         evaluation=EvaluationConfig(
-            num_games=20,
+            num_games=1,  # Reduced for faster testing
             opponent_type="random",
-            evaluation_interval_timesteps=50000,
+            evaluation_interval_timesteps=50000,  # Added default
         ),
         logging=LoggingConfig(
-            model_dir="/tmp/test_models",
-            log_file="test.log",
+            log_file="logs/test_log.txt",
+            model_dir="models/test_models/",
             run_name="test_run",
         ),
         wandb=WandBConfig(
             enabled=False,
-            project="test-project",
-            entity=None,
-            run_name_prefix="test",
-            watch_model=False,
-            watch_log_freq=1000,
-            watch_log_type="all",
+            project="keisei-shogi-rl",  # Added default
+            entity=None,  # Added default
+            run_name_prefix="keisei",  # Added default
+            watch_model=True,  # Added default
+            watch_log_freq=1000,  # Added default
+            watch_log_type="all",  # Added default
         ),
-        demo=DemoConfig(
-            enable_demo_mode=False,
-            demo_mode_delay=0.5,
-        ),
+        demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5),  # Added default
     )
 
 

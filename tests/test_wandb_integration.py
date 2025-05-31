@@ -6,22 +6,24 @@ and W&B logging integration in the Trainer class.
 """
 
 import os
+import sys
 import tempfile
 from typing import Any, Dict, Optional
 from unittest.mock import Mock, patch
 
 import pytest
 
-import wandb
 from keisei.config_schema import (
     AppConfig,
     DemoConfig,
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
+    ParallelConfig,
     TrainingConfig,
     WandBConfig,
 )
+from keisei.training.session_manager import SessionManager
 from keisei.training.train_wandb_sweep import apply_wandb_sweep_config
 from keisei.training.trainer import Trainer
 from keisei.training.utils import setup_wandb
@@ -105,6 +107,16 @@ def make_test_config(**overrides) -> AppConfig:
     demo = DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0)
 
     return AppConfig(
+        parallel=ParallelConfig(
+            enabled=False,
+            num_workers=1,
+            batch_size=32,
+            sync_interval=100,
+            compression_enabled=False,
+            timeout_seconds=30.0,
+            max_queue_size=1000,
+            worker_seed_offset=1000,
+        ),
         training=training,
         env=env,
         evaluation=evaluation,
@@ -485,7 +497,7 @@ class TestWandBLoggingIntegration:
             # Test the log_both_impl logic directly (simulating what happens in run_training_loop)
             with (
                 patch("wandb.log") as mock_wandb_log,
-                patch("wandb.run", Mock()),
+                patch("wandb.run", Mock()) as mock_wandb_run,
             ):  # wandb.run exists
 
                 # Simulate the log_both_impl function from run_training_loop
@@ -496,11 +508,11 @@ class TestWandBLoggingIntegration:
                 ):
                     mock_logger.log(message)
                     if trainer.is_train_wandb_active and also_to_wandb:
-                        if wandb.run:
+                        if mock_wandb_run:
                             log_payload = {"train_message": message}
                             if wandb_data:
                                 log_payload.update(wandb_data)
-                            wandb.log(log_payload, step=trainer.global_timestep)
+                            mock_wandb_log(log_payload, step=trainer.global_timestep)
 
                 # Test W&B logging when conditions are met
                 log_both_impl(
@@ -543,6 +555,7 @@ class TestWandBLoggingIntegration:
 
             # Test with wandb.run = None
             with patch("wandb.log") as mock_wandb_log, patch("wandb.run", None):
+                import wandb  # Import within the test context where it's patched
 
                 def log_both_impl(
                     message: str,
