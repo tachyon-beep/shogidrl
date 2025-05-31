@@ -52,7 +52,9 @@ class TestParallelSmoke:
                 results.append(item)
                 if len([r for r in results if "done" in r]) == 2:
                     break  # Both workers finished
-            except Exception:  # Catch timeout and other queue exceptions  # pylint: disable=broad-exception-caught
+            except (
+                Exception
+            ):  # Catch timeout and other queue exceptions  # pylint: disable=broad-exception-caught
                 continue
 
         # Clean up processes

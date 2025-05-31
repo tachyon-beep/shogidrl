@@ -323,7 +323,7 @@ def test_execute_full_evaluation_run_basic_random(
     mock_config = MagicMock()
     mock_config.env.input_channels = INPUT_CHANNELS
     mock_load_config.return_value = mock_config
-    
+
     # Create a real PolicyOutputMapper instance for the test, as execute_full_evaluation_run expects one.
     policy_mapper_instance = PolicyOutputMapper()
 
@@ -430,7 +430,7 @@ def test_execute_full_evaluation_run_heuristic_opponent_with_wandb(
     mock_config = MagicMock()
     mock_config.env.input_channels = INPUT_CHANNELS
     mock_load_config.return_value = mock_config
-    
+
     policy_mapper_instance = PolicyOutputMapper()  # MODIFIED: Create an instance
 
     mock_agent_instance = MockPPOAgent(
@@ -582,7 +582,7 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(
     mock_config = MagicMock()
     mock_config.env.input_channels = INPUT_CHANNELS
     mock_load_config.return_value = mock_config
-    
+
     policy_mapper_instance = PolicyOutputMapper()
 
     mock_agent_to_eval = MockPPOAgent(
@@ -757,7 +757,7 @@ def test_execute_full_evaluation_run_with_seed(  # MODIFIED: Renamed and refacto
     mock_config = MagicMock()
     mock_config.env.input_channels = INPUT_CHANNELS
     mock_load_config.return_value = mock_config
-    
+
     # MODIFIED: Setup similar to test_execute_full_evaluation_run_basic_random
     policy_mapper_instance = PolicyOutputMapper()
 

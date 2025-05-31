@@ -1,6 +1,7 @@
 """
 Protocol definition for Actor-Critic models in Keisei.
 """
+
 # pylint: disable=unnecessary-ellipsis
 
 from typing import Any, Dict, Iterator, Optional, Protocol, Tuple

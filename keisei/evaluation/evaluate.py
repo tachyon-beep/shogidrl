@@ -127,7 +127,13 @@ class Evaluator:
                         f"[Evaluator] Error initializing W&B: {e}. W&B logging disabled."
                     )
                     self._wandb_active = False
-            except (OSError, RuntimeError, ValueError, ImportError, AttributeError) as e:
+            except (
+                OSError,
+                RuntimeError,
+                ValueError,
+                ImportError,
+                AttributeError,
+            ) as e:
                 print(f"[Evaluator] Error during W&B initialization: {e}")
                 self._wandb_active = False
 
@@ -174,7 +180,9 @@ class Evaluator:
                 input_channels,
             )
         except (ValueError, FileNotFoundError, RuntimeError, OSError, TypeError) as e:
-            raise RuntimeError(f"Failed to initialize opponent {self.opponent_type}: {e}") from e
+            raise RuntimeError(
+                f"Failed to initialize opponent {self.opponent_type}: {e}"
+            ) from e
 
         if self._logger is None or self._agent is None or self._opponent is None:
             raise RuntimeError(

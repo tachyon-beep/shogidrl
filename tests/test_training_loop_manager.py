@@ -116,7 +116,7 @@ def test_run_epoch_functionality(mock_trainer):
     # Mock the necessary trainer methods for epoch execution
     mock_trainer.global_timestep = 100
     mock_trainer.config.training.total_timesteps = 1000
-    
+
     # Set up trainer to have the required metrics_manager attribute
     mock_trainer.metrics_manager = Mock()
     mock_trainer.metrics_manager.global_timestep = 100

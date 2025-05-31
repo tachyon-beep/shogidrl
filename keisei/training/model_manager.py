@@ -161,7 +161,7 @@ class ModelManager:
     def _handle_latest_checkpoint_resume(self, agent: PPOAgent, model_dir: str) -> bool:
         """Handle resuming from the latest checkpoint."""
         latest_ckpt = self._find_latest_checkpoint(model_dir)
-        
+
         if latest_ckpt:
             self.checkpoint_data = agent.load_model(latest_ckpt)
             self.resumed_from_checkpoint = latest_ckpt
@@ -172,7 +172,9 @@ class ModelManager:
             self.logger_func("No checkpoint found to resume from (searched latest).")
             return False
 
-    def _handle_specific_checkpoint_resume(self, agent: PPOAgent, resume_path: str) -> bool:
+    def _handle_specific_checkpoint_resume(
+        self, agent: PPOAgent, resume_path: str
+    ) -> bool:
         """Handle resuming from a specific checkpoint path."""
         self.logger_func(f"Checking if {resume_path} exists...")
         if os.path.exists(resume_path):
@@ -190,11 +192,11 @@ class ModelManager:
         """Find the latest checkpoint in model_dir or parent directory."""
         # Try to find latest checkpoint in the run's model_dir
         latest_ckpt = utils.find_latest_checkpoint(model_dir)
-        
+
         # If not found, try the parent directory (savedir)
         if not latest_ckpt and model_dir:
             latest_ckpt = self._search_parent_directory(model_dir)
-            
+
         return latest_ckpt
 
     def _search_parent_directory(self, model_dir: str) -> Optional[str]:

@@ -11,8 +11,8 @@ from typing import Any, Dict, Optional
 from unittest.mock import Mock, patch
 
 import pytest
-import wandb
 
+import wandb
 from keisei.config_schema import (
     AppConfig,
     DemoConfig,
