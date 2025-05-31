@@ -7,9 +7,14 @@ required dependencies are properly configured and working.
 
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
+
+
+# Project root path resolution - works from any test file
+PROJECT_ROOT = Path(__file__).resolve().parents[1]  # Go up from tests/ to project root
 
 
 class TestDependencyStructure:
@@ -17,14 +22,16 @@ class TestDependencyStructure:
 
     def test_pyproject_toml_exists(self):
         """Test that pyproject.toml exists and is readable."""
-        pyproject_path = Path("/home/john/keisei/pyproject.toml")
+        pyproject_path = PROJECT_ROOT / "pyproject.toml"
         assert pyproject_path.exists()
         assert pyproject_path.is_file()
 
-        # Should be readable
-        content = pyproject_path.read_text(encoding="utf-8")
-        assert len(content) > 0
-        assert "[project]" in content
+        # Should be parseable as valid TOML
+        with open(pyproject_path, "rb") as f:
+            data = tomllib.load(f)
+        
+        assert len(data) > 0
+        assert "project" in data
 
     def test_main_dependencies_structure(self):
         """Test that main dependencies are properly structured."""
@@ -50,11 +57,28 @@ class TestDependencyStructure:
         dev_deps = ["pytest", "black", "mypy", "pylint", "flake8", "isort"]
 
         # These might not all be installed, but should be listed in pyproject.toml
-        pyproject_path = Path("/home/john/keisei/pyproject.toml")
-        content = pyproject_path.read_text(encoding="utf-8")
+        pyproject_path = PROJECT_ROOT / "pyproject.toml"
+        with open(pyproject_path, "rb") as f:
+            data = tomllib.load(f)
 
+        # Check if dev dependencies are listed in build-system requirements, 
+        # project optional dependencies, or the content as fallback
+        content = pyproject_path.read_text(encoding="utf-8")
+        
         for dep in dev_deps:
-            assert dep in content, f"Dev dependency '{dep}' not found in pyproject.toml"
+            # Check in various possible locations
+            found = False
+            if "project" in data and "optional-dependencies" in data["project"]:
+                for dep_group in data["project"]["optional-dependencies"].values():
+                    if any(dep in dep_entry for dep_entry in dep_group):
+                        found = True
+                        break
+            
+            # Fallback to string search if not found in structured way
+            if not found and dep in content:
+                found = True
+                
+            assert found, f"Dev dependency '{dep}' not found in pyproject.toml"
 
 
 class TestDependencyFunctionality:
@@ -235,24 +259,22 @@ class TestRemovedDependencies:
 
     def test_matplotlib_references_removed(self):
         """Test that matplotlib references are properly removed."""
-        pyproject_path = Path("/home/john/keisei/pyproject.toml")
-        content = pyproject_path.read_text(encoding="utf-8")
+        pyproject_path = PROJECT_ROOT / "pyproject.toml"
+        with open(pyproject_path, "rb") as f:
+            data = tomllib.load(f)
 
-        # matplotlib should not be in the main dependencies
-        main_deps_section = content.split("[project.optional-dependencies]")[0]
-        assert (
-            "matplotlib" not in main_deps_section.lower()
-        ), "matplotlib found in main dependencies"
+        # Check main dependencies
+        if "project" in data and "dependencies" in data["project"]:
+            main_deps = data["project"]["dependencies"]
+            for dep in main_deps:
+                assert "matplotlib" not in dep.lower(), f"matplotlib found in main dependencies: {dep}"
 
-        # Should also not be in dev dependencies
-        dev_deps_section = (
-            content.split("[project.optional-dependencies]")[1]
-            if "[project.optional-dependencies]" in content
-            else ""
-        )
-        assert (
-            "matplotlib" not in dev_deps_section.lower()
-        ), "matplotlib found in dev dependencies"
+        # Check optional dependencies (dev, etc.)
+        if "project" in data and "optional-dependencies" in data["project"]:
+            optional_deps = data["project"]["optional-dependencies"]
+            for group_name, deps in optional_deps.items():
+                for dep in deps:
+                    assert "matplotlib" not in dep.lower(), f"matplotlib found in {group_name} dependencies: {dep}"
 
 
 class TestDependencyAnalysis:
@@ -263,7 +285,7 @@ class TestDependencyAnalysis:
         """Test that deptry analysis shows expected results."""
         try:
             result = subprocess.run(
-                ["deptry", "/home/john/keisei"],
+                ["deptry", str(PROJECT_ROOT)],
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -296,17 +318,16 @@ class TestDependencyAnalysis:
         """Test that core modules don't have unused imports."""
         # This is a basic check - a full analysis would require AST parsing
         core_files = [
-            "/home/john/keisei/keisei/config_schema.py",
-            "/home/john/keisei/keisei/shogi/shogi_game.py",
-            "/home/john/keisei/keisei/utils/profiling.py",
+            PROJECT_ROOT / "keisei" / "config_schema.py",
+            PROJECT_ROOT / "keisei" / "shogi" / "shogi_game.py",
+            PROJECT_ROOT / "keisei" / "utils" / "profiling.py",
         ]
 
         for file_path in core_files:
-            path = Path(file_path)
-            if not path.exists():
+            if not file_path.exists():
                 continue
 
-            content = path.read_text(encoding="utf-8")
+            content = file_path.read_text(encoding="utf-8")
 
             # Basic check: no matplotlib imports
             assert "import matplotlib" not in content
@@ -368,23 +389,30 @@ class TestDependencyInstallation:
 
     def test_requirements_files_consistency(self):
         """Test that requirements files are consistent with pyproject.toml."""
-        pyproject_path = Path("/home/john/keisei/pyproject.toml")
-        requirements_path = Path("/home/john/keisei/requirements.txt")
+        pyproject_path = PROJECT_ROOT / "pyproject.toml"
+        requirements_path = PROJECT_ROOT / "requirements.txt"
 
         if requirements_path.exists():
-            pyproject_content = pyproject_path.read_text(encoding="utf-8")
+            with open(pyproject_path, "rb") as f:
+                pyproject_data = tomllib.load(f)
             requirements_content = requirements_path.read_text(encoding="utf-8")
 
-            # Basic consistency check - main packages should appear in both
+            # Extract main dependencies from pyproject.toml
             main_packages = ["torch", "numpy", "pydantic", "rich"]
-
-            for pkg in main_packages:
-                if pkg in pyproject_content:
-                    # Should also be in requirements.txt if it exists
-                    assert (
-                        pkg in requirements_content
-                        or pkg.replace("-", "_") in requirements_content
-                    ), f"Package '{pkg}' in pyproject.toml but not in requirements.txt"
+            
+            if "project" in pyproject_data and "dependencies" in pyproject_data["project"]:
+                pyproject_deps = pyproject_data["project"]["dependencies"]
+                
+                for pkg in main_packages:
+                    # Check if package is in pyproject dependencies
+                    pkg_in_pyproject = any(pkg in dep for dep in pyproject_deps)
+                    
+                    if pkg_in_pyproject:
+                        # Should also be in requirements.txt if it exists
+                        assert (
+                            pkg in requirements_content
+                            or pkg.replace("-", "_") in requirements_content
+                        ), f"Package '{pkg}' in pyproject.toml but not in requirements.txt"
 
 
 @pytest.mark.integration

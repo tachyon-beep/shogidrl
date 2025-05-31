@@ -23,6 +23,10 @@ from keisei.utils.profiling import (
 )
 
 
+# Project root path resolution
+PROJECT_ROOT = Path(__file__).resolve().parents[1]  # Go up from tests/ to project root
+
+
 @pytest.mark.integration
 class TestRemediationIntegration:
     """Test integration of all remediation components."""
@@ -475,7 +479,7 @@ class TestRemediationCompleteness:
         assert profile_function is not None
 
         # Dependency optimization (matplotlib should be gone)
-        pyproject_path = Path("/home/john/keisei/pyproject.toml")
+        pyproject_path = PROJECT_ROOT / "pyproject.toml"
         content = pyproject_path.read_text(encoding="utf-8")
         assert "matplotlib" not in content, "matplotlib should be removed"
 
@@ -488,7 +492,7 @@ class TestRemediationCompleteness:
 
     def test_remediation_documentation_exists(self):
         """Test that remediation documentation exists."""
-        docs_path = Path("/home/john/keisei/docs")
+        docs_path = PROJECT_ROOT / "docs"
 
         # Should have profiling documentation
         profiling_doc = docs_path / "development" / "PROFILING_WORKFLOW.md"

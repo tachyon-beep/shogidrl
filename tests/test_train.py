@@ -42,7 +42,14 @@ def test_train_cli_help():
 
 
 def test_train_resume_autodetect(tmp_path):
-    """Test that train.py can auto-detect a checkpoint (mocked)."""
+    """
+    Test that train.py can auto-detect a checkpoint from parent directory and resume training.
+    
+    This test verifies the parent directory checkpoint search functionality:
+    1. Save a checkpoint directly in savedir (tmp_path)
+    2. Run train.py with --resume latest and --savedir tmp_path
+    3. Verify ModelManager finds the checkpoint in parent dir, copies it to run dir, and resumes
+    """
     policy_mapper = PolicyOutputMapper()  # Used by PPOAgent and initial AppConfig
 
     # Config for the initial agent save, and for run name generation
@@ -104,9 +111,10 @@ def test_train_resume_autodetect(tmp_path):
     initial_agent_config = AppConfig.parse_obj(base_config_data)
     agent = PPOAgent(config=initial_agent_config, device=torch.device(DEVICE))
 
-    # Place the checkpoint in tmp_path so the subprocess can find it
+    # Save the initial checkpoint in tmp_path (the savedir/parent directory)
+    # This simulates a previous training run that saved a checkpoint in the savedir
     final_ckpt_path = tmp_path / "checkpoint_ts1.pth"
-    agent.save_model(str(final_ckpt_path))  # Save the checkpoint
+    agent.save_model(str(final_ckpt_path), global_timestep=1, total_episodes_completed=0)
 
     # Create the config file that the subprocess will use
     subprocess_config_path = tmp_path / "subprocess_config_autodetect.yaml"
@@ -139,23 +147,35 @@ def test_train_resume_autodetect(tmp_path):
         print(e.stderr)
         raise
     assert result.returncode == 0
+    
     # Find the run directory (should be the only new directory under tmp_path)
     run_dirs = [d for d in tmp_path.iterdir() if d.is_dir()]
     assert run_dirs, f"No run directory created in {tmp_path}"
     run_dir = max(run_dirs, key=lambda d: d.stat().st_mtime)  # Most recently modified
+    
     log_file = run_dir / "training.log"
     assert log_file.exists(), f"Log file {log_file} does not exist"
     with open(log_file, encoding="utf-8") as f:
         log_contents = f.read()
-    # Check that the log file contains a resume message for any checkpoint in the run directory
-    resume_logged = False
-    for ckpt_file in run_dir.glob("checkpoint_ts*.pth"):
-        if f"Resumed training from checkpoint: {str(ckpt_file)}" in log_contents:
-            resume_logged = True
-            break
-    assert (
-        resume_logged
-    ), f"No resume message for any checkpoint in {run_dir} found in log file. Log contents:\n{log_contents}"
+    
+    # Verify that the checkpoint was copied to the run directory and we resumed from it
+    copied_checkpoint = run_dir / "checkpoint_ts1.pth"
+    assert copied_checkpoint.exists(), f"Expected checkpoint {copied_checkpoint} was not copied to run directory"
+    
+    # Check that the log file contains a resume message specifically for the copied checkpoint
+    expected_resume_message = f"Resumed training from checkpoint: {str(copied_checkpoint)}"
+    assert expected_resume_message in log_contents, (
+        f"Expected resume message '{expected_resume_message}' not found in log. "
+        f"Log contents:\n{log_contents}"
+    )
+    
+    # Verify that the original checkpoint timestep was preserved (we saved at ts=1, should resume from ts=1)
+    # And that training progressed beyond that point (we set total_timesteps=2, so should reach ts=2)
+    final_checkpoint = run_dir / "checkpoint_ts2.pth"
+    assert final_checkpoint.exists(), (
+        f"Expected final checkpoint {final_checkpoint} was not created, "
+        f"indicating training did not progress from resumed timestep"
+    )
 
 
 def test_train_runs_minimal(tmp_path):
