@@ -70,9 +70,21 @@ def make_config_and_args(**overrides):
     evaluation = EvaluationConfig(
         num_games=20, opponent_type="random", evaluation_interval_timesteps=50000
     )  # Added evaluation_interval_timesteps
-    logging = LoggingConfig(log_file="logs/training_log.txt", model_dir="models/")
+    logging = LoggingConfig(
+        log_file="logs/training_log.txt", 
+        model_dir="models/", 
+        run_name=None
+    )
     wandb_enabled = overrides.get("wandb_enabled", False)  # Default to False for tests
-    wandb = WandBConfig(enabled=wandb_enabled, project="keisei-shogi", entity=None)
+    wandb = WandBConfig(
+        enabled=wandb_enabled, 
+        project="keisei-shogi", 
+        entity=None,
+        run_name_prefix="keisei",
+        watch_model=True,
+        watch_log_freq=1000,
+        watch_log_type="all"
+    )
     demo = DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5)
 
     config = AppConfig(
@@ -98,6 +110,7 @@ def test_trainer_instantiates_resnet_and_features():
     trainer = Trainer(config, args)
     # Check model and feature spec
     assert trainer.model is not None
+    assert trainer.feature_spec is not None
     assert trainer.feature_spec.name == "core46+all"
     assert trainer.obs_shape == (51, 9, 9)  # For core46+all (46 + 1 + 1 + 1 + 2 = 51)
 
@@ -140,5 +153,6 @@ def test_cli_overrides_config():
         tower_depth=5,
     )
     trainer = Trainer(config, args)
+    assert trainer.feature_spec is not None
     assert trainer.feature_spec.name == "core46+all"
     assert trainer.tower_depth == 5

@@ -8,7 +8,6 @@ required dependencies are properly configured and working.
 import subprocess
 import sys
 from pathlib import Path
-from unittest.mock import Mock, patch
 
 import pytest
 
@@ -23,7 +22,7 @@ class TestDependencyStructure:
         assert pyproject_path.is_file()
 
         # Should be readable
-        content = pyproject_path.read_text()
+        content = pyproject_path.read_text(encoding='utf-8')
         assert len(content) > 0
         assert "[project]" in content
 
@@ -52,7 +51,7 @@ class TestDependencyStructure:
 
         # These might not all be installed, but should be listed in pyproject.toml
         pyproject_path = Path("/home/john/keisei/pyproject.toml")
-        content = pyproject_path.read_text()
+        content = pyproject_path.read_text(encoding='utf-8')
 
         for dep in dev_deps:
             assert dep in content, f"Dev dependency '{dep}' not found in pyproject.toml"
@@ -102,7 +101,7 @@ class TestDependencyFunctionality:
 
         # Validation should work
         with pytest.raises(ValidationError):
-            TestModel(name="test", value="not_an_int")
+            TestModel(name="test", value="not_an_int")  # type: ignore[arg-type]
 
     def test_yaml_functionality(self):
         """Test PyYAML functionality."""
@@ -215,9 +214,11 @@ class TestRemovedDependencies:
         try:
             from keisei.config_schema import TrainingConfig
             from keisei.shogi.shogi_game import ShogiGame
+            from keisei.utils import load_config
 
-            # Core functionality should work
-            config = TrainingConfig()
+            # Core functionality should work - use defaults from load_config
+            app_config = load_config()
+            config = app_config.training
             game = ShogiGame()
             state = game.get_state()
 
@@ -234,7 +235,7 @@ class TestRemovedDependencies:
     def test_matplotlib_references_removed(self):
         """Test that matplotlib references are properly removed."""
         pyproject_path = Path("/home/john/keisei/pyproject.toml")
-        content = pyproject_path.read_text()
+        content = pyproject_path.read_text(encoding='utf-8')
 
         # matplotlib should not be in the main dependencies
         main_deps_section = content.split("[project.optional-dependencies]")[0]
@@ -265,6 +266,7 @@ class TestDependencyAnalysis:
                 capture_output=True,
                 text=True,
                 timeout=30,
+                check=False,
             )
 
             # deptry should run successfully
@@ -303,7 +305,7 @@ class TestDependencyAnalysis:
             if not path.exists():
                 continue
 
-            content = path.read_text()
+            content = path.read_text(encoding='utf-8')
 
             # Basic check: no matplotlib imports
             assert "import matplotlib" not in content
@@ -329,6 +331,8 @@ class TestDependencyInstallation:
 
     def test_pip_environment_consistency(self):
         """Test that pip environment is consistent with pyproject.toml."""
+        import json
+        
         try:
             # Get installed packages
             result = subprocess.run(
@@ -339,8 +343,6 @@ class TestDependencyInstallation:
             )
 
             if result.returncode == 0:
-                import json
-
                 installed_packages = json.loads(result.stdout)
                 package_names = {pkg["name"].lower() for pkg in installed_packages}
 
@@ -391,17 +393,17 @@ class TestDependencyIntegration:
     def test_full_system_imports(self):
         """Test that the full system can be imported without dependency issues."""
         # This should work without any missing dependency errors
-        from keisei.config_schema import TrainingConfig
         from keisei.shogi.shogi_game import ShogiGame
         from keisei.training.env_manager import EnvManager
+        from keisei.utils import load_config
         from keisei.utils.profiling import perf_monitor
 
-        # Basic functionality should work
-        config = TrainingConfig()
+        # Basic functionality should work - use load_config to get proper AppConfig
+        app_config = load_config()
         game = ShogiGame()
-        env_manager = EnvManager(config=config)
+        env_manager = EnvManager(config=app_config)
 
-        assert config is not None
+        assert app_config is not None
         assert game is not None
         assert env_manager is not None
         assert perf_monitor is not None
@@ -432,10 +434,11 @@ class TestDependencyIntegration:
         try:
             import yaml
 
-            from keisei.config_schema import TrainingConfig
+            from keisei.utils import load_config
 
-            # Should be able to create and serialize config
-            config = TrainingConfig()
+            # Should be able to create and serialize config using load_config
+            app_config = load_config()
+            config = app_config.training
             config_dict = config.model_dump()
 
             # Should be able to serialize to YAML
