@@ -6,10 +6,14 @@ Orchestrates game state and delegates complex logic to helper modules.
 # pylint: disable=too-many-lines
 
 import copy  # Added for __deepcopy__
+import logging
 import re  # Added for SFEN parsing
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
+
+# Create logger for this module
+logger = logging.getLogger(__name__)
 
 # Import helper modules
 from . import shogi_game_io, shogi_move_execution, shogi_rules_logic
@@ -187,6 +191,15 @@ class ShogiGame:
             np.ndarray: The observation array.
         """
         return shogi_game_io.generate_neural_network_observation(self)
+
+    def get_state(self) -> np.ndarray:
+        """
+        Alias for get_observation() for backward compatibility.
+
+        Returns:
+            np.ndarray: The observation array.
+        """
+        return self.get_observation()
 
     def is_nifu(self, color: Color, col: int) -> bool:
         return shogi_rules_logic.check_for_nifu(self, color, col)
@@ -1025,7 +1038,24 @@ class ShogiGame:
             return -1.0  # Loss
         return 0.0  # Draw or game not over from this perspective
 
-    def seed(self, _seed_value=None):
-        """Seed the game environment for reproducibility (no-op for standard Shogi)."""
-        # No operation needed for standard Shogi
-        return
+    def seed(self, seed_value=None):
+        """Seed the game environment for reproducibility.
+
+        While standard Shogi is deterministic, this method provides:
+        - A hook for future stochastic variants
+        - Debugging support for reproducibility testing
+        - Environment interface contract completion
+
+        Args:
+            seed_value: Random seed value for reproducibility
+
+        Returns:
+            Self for method chaining
+        """
+        # Store seed value for debugging and future use
+        self._seed_value = seed_value
+
+        # Log seeding operation for debugging
+        logger.debug(f"Game seeded with value: {seed_value}")
+
+        return self

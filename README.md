@@ -1,7 +1,6 @@
-<!-- filepath: /home/john/keisei/README.md -->
-# Keisei: A Deep Reinforcement Learning Shogi AI
+# Keisei: Production-Ready Deep Reinforcement Learning Shogi AI
 
-**Keisei** (形勢, Japanese for "position" or "situation" in a game like Shogi or Go) is a Deep Reinforcement Learning (DRL) project designed to master the game of Shogi from scratch. It learns exclusively through self-play, utilizing the Proximal Policy Optimization (PPO) algorithm. This project aims to explore the capabilities of DRL in complex, perfect-information games without relying on human-defined heuristics, opening books, or traditional evaluation functions beyond win/loss/draw.
+**Keisei** (形勢, Japanese for "position" or "situation" in a game like Shogi or Go) is a production-ready Deep Reinforcement Learning (DRL) system designed to master the game of Shogi from scratch. Built with a modern, manager-based architecture, it learns exclusively through self-play using the Proximal Policy Optimization (PPO) algorithm with advanced features including mixed precision training, distributed computing support, and comprehensive experiment tracking.
 
 ## Table of Contents
 
@@ -9,277 +8,538 @@
 - [Core Philosophy](#core-philosophy)
 - [Key Features](#key-features)
 - [System Architecture](#system-architecture)
-  - [Core Components](#core-components)
-  - [Data Flow & Training Loop](#data-flow--training-loop)
+  - [Manager-Based Architecture](#manager-based-architecture)
+  - [Configuration System](#configuration-system)
+  - [Training Pipeline](#training-pipeline)
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
-  - [Setup](#setup)
+  - [Installation](#installation)
   - [Configuration](#configuration)
   - [Running Training](#running-training)
-  - [Monitoring Training](#monitoring-training)
-  - [Evaluation](#evaluation)
+  - [Monitoring & Evaluation](#monitoring--evaluation)
 - [Project Structure](#project-structure)
 - [Technical Details](#technical-details)
-  - [State Representation](#state-representation)
-  - [Action Representation](#action-representation)
-  - [Neural Network Architecture](#neural-network-architecture)
-- [Operations and Future Development](#operations-and-future-development)
+  - [Neural Network Architectures](#neural-network-architectures)
+  - [State & Action Representation](#state--action-representation)
+  - [Training Features](#training-features)
+- [Development & Testing](#development--testing)
+- [Documentation](#documentation)
 - [Contributing](#contributing)
 - [License](#license)
 
 ## Project Overview
 
-Keisei implements a complete Shogi game environment and a PPO-based agent that learns to play Shogi. The AI starts with no prior knowledge of Shogi strategy and improves by playing games against itself, learning from the outcomes of those games.
+Keisei implements a sophisticated, production-ready Shogi AI training system featuring:
 
-For a comprehensive understanding of the project's design and operational plans, please refer to:
-- [Design Document (`docs/DESIGN.md`)](docs/DESIGN.md)
-- [Operations & Optimization Plan (`OPS_PLAN.md`)](OPS_PLAN.md)
-- [Code Audit Report (`docs/code_audit/`)](docs/code_audit/)
+- **Complete Shogi Implementation**: Full rule support including drops, promotions, and advanced rules (Sennichite, etc.)
+- **Modern Architecture**: Manager-based design with 9 specialized components for modularity and maintainability
+- **Advanced Training**: Mixed precision, distributed training, gradient clipping, and comprehensive checkpointing
+- **Professional Monitoring**: Rich console UI, comprehensive logging, and Weights & Biases integration
+- **Robust Evaluation**: Multi-opponent evaluation system with statistical analysis
+- **Production Features**: CI/CD pipeline, comprehensive test suite, and extensive documentation
+
+For comprehensive technical details, see:
+- [Design Document (`docs/DESIGN.md`)](docs/DESIGN.md) - Complete system architecture and design decisions
+- [Code Map (`docs/CODE_MAP.md`)](docs/CODE_MAP.md) - Detailed codebase organization
+- [Component Documentation (`docs/components/`)](docs/components/) - Individual module documentation
 
 ## Core Philosophy
 
-- **Learn from Scratch:** The AI does not use any hardcoded opening books or human-designed evaluation functions.
-- **Self-Play:** Strategies are discovered solely through self-play and reinforcement learning.
-- **PPO Algorithm:** Utilizes Proximal Policy Optimization for stable and efficient learning.
+- **Learn from Scratch**: No hardcoded opening books, human-designed heuristics, or evaluation functions
+- **Pure Self-Play**: Strategies emerge solely through reinforcement learning and self-play
+- **Production Quality**: Enterprise-grade architecture, monitoring, and operational capabilities
+- **Research-Ready**: Modular design supporting advanced research and experimentation
 
 ## Key Features
 
-- **Full Shogi Implementation:** Supports all standard Shogi rules, including drops, promotions, and repetition detection (Sennichite).
-- **Modular Codebase:** Clearly defined modules for the Shogi engine, neural network, PPO agent, experience buffer, and utilities.
-- **PyTorch-Based:** The neural network and PPO algorithm are implemented using PyTorch.
-- **Configurable Training:** Hyperparameters and training settings are centralized in `config.py`.
-- **Logging & Monitoring:** Comprehensive logging to console, log files, and integration with Weights & Biases (W&B) for experiment tracking.
-- **Model Checkpointing:** Saves model progress periodically, allowing for resumption of training and evaluation of different versions.
-- **Reproducible Training:** Designed to support reproducible training runs.
+### Core Training Capabilities
+- **Advanced PPO Implementation**: Clipped surrogate objectives, entropy regularization, and Generalized Advantage Estimation (GAE)
+- **Mixed Precision Training**: Automatic Mixed Precision (AMP) with GradScaler for memory efficiency and speed
+- **Distributed Training Support**: DistributedDataParallel (DDP) for multi-GPU training
+- **Intelligent Checkpointing**: Automatic model saving with resumption capabilities
+- **Gradient Management**: Configurable gradient clipping and optimization stability controls
+
+### Neural Network Architectures
+- **Flexible Model Factory**: Support for multiple architectures (CNN, ResNet Tower with SE blocks)
+- **Feature Engineering**: Comprehensive 46-channel board representation with configurable feature sets
+- **Actor-Critic Design**: Separate policy and value heads with configurable architectures
+- **Modern Components**: Support for Squeeze-and-Excitation blocks and advanced regularization
+
+### Production Infrastructure
+- **Pydantic Configuration**: Type-safe, validated configuration with YAML loading
+- **Manager-Based Architecture**: 9 specialized managers for clean separation of concerns
+- **Rich Console UI**: Real-time training visualization with progress bars and metrics
+- **Comprehensive Logging**: Structured logging with file output and console formatting
+- **Weights & Biases Integration**: Professional experiment tracking and model artifact management
+
+### Evaluation & Monitoring
+- **Multi-Opponent Evaluation**: Test against random, heuristic, and other trained agents
+- **Statistical Analysis**: Comprehensive performance metrics and significance testing
+- **Real-time Monitoring**: Live training metrics and performance visualization
+- **Automated Evaluation**: Scheduled evaluation runs during training
+
+### Development Features
+- **CI/CD Pipeline**: Automated testing, linting, and quality checks
+- **Comprehensive Test Suite**: Unit tests, integration tests, and performance benchmarks
+- **Code Quality Tools**: Black formatting, mypy type checking, and security scanning
+- **Extensive Documentation**: Complete API documentation and usage guides
 
 ## System Architecture
 
-The system follows a standard DRL loop:
+### Manager-Based Architecture
 
-1.  **Environment (Shogi Game):** The AI plays against itself.
-2.  **Agent (PPO):** Observes the game state, chooses a move.
-3.  **Experience Collection:** Game transitions `(state, action, reward, next_state, done, log_prob_action, value_estimate)` are stored.
-4.  **Learning:** The PPO agent uses collected experiences to update its policy and value networks.
+Keisei employs a sophisticated manager-based architecture that separates concerns across 9 specialized components:
 
-### Core Components
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Trainer (Orchestrator)                   │
+│  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐    │
+│  │ SessionManager  │ │ ModelManager    │ │ EnvManager      │    │
+│  │ - Directories   │ │ - Model Creation│ │ - Game Setup    │    │
+│  │ - WandB Setup   │ │ - Checkpoints   │ │ - Policy Mapper │    │
+│  │ - Config Save   │ │ - Mixed Prec.   │ │ - Environment   │    │
+│  └─────────────────┘ └─────────────────┘ └─────────────────┘    │
+│                                                                 │
+│  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐    │
+│  │ StepManager     │ │TrainingLoopMgr  │ │ MetricsManager  │    │
+│  │ - Step Exec     │ │ - Main Loop     │ │ - Statistics    │    │
+│  │ - Episode Mgmt  │ │ - PPO Updates   │ │ - Progress      │    │
+│  │ - Experience    │ │ - Callbacks     │ │ - Formatting    │    │
+│  └─────────────────┘ └─────────────────┘ └─────────────────┘    │
+│                                                                 │
+│  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐    │
+│  │ DisplayManager  │ │ CallbackManager │ │ SetupManager    │    │
+│  │ - Rich UI       │ │ - Event System  │ │ - Initialization│    │
+│  │ - Progress Bars │ │ - Evaluation    │ │ - Validation    │    │
+│  │ - Logging       │ │ - Checkpoints   │ │ - Dependencies  │    │
+│  └─────────────────┘ └─────────────────┘ └─────────────────┘    │
+└─────────────────────────────────────────────────────────────────┘
+```
 
--   **Shogi Game Environment (`keisei/shogi/shogi_engine.py`):** Manages Shogi game logic, state, legal moves, and rule enforcement.
--   **Neural Network - ActorCritic (`keisei/neural_network.py`):** A PyTorch-based model (ResNet-like) that outputs a policy (move probabilities) and a value (expected future reward).
--   **Policy Output Mapper (`keisei/utils.py` - `PolicyOutputMapper`):** Maps the neural network's output to legal Shogi moves and vice-versa.
--   **PPO Agent (`keisei/ppo_agent.py`):** Implements the PPO algorithm, managing action selection and model learning.
--   **Experience Buffer (`keisei/experience_buffer.py`):** Stores game experiences for training, implementing Generalized Advantage Estimation (GAE).
--   **Training Orchestration (`train.py`):** The main script that drives the training loop, self-play, learning updates, logging, and model saving.
--   **Configuration (`config.py`):** Centralizes all hyperparameters and settings.
+**Architecture Benefits:**
+- **Modularity**: Each manager handles a single responsibility
+- **Testability**: Components can be tested in isolation
+- **Maintainability**: Changes localized to specific managers
+- **Extensibility**: New features added without affecting other components
 
-### Data Flow & Training Loop
+### Configuration System
 
-1.  **Initialization:** `train.py` sets up components, loads configurations, and initializes W&B.
-2.  **Self-Play & Experience Collection:** The agent plays Shogi games, storing experiences in the `ExperienceBuffer`.
-3.  **Learning Phase:** When enough experiences are collected, the `PPOAgent` updates the `ActorCritic` network.
-4.  **Iteration & Checkpointing:** The cycle repeats. Model checkpoints and metrics are logged.
+The system uses a sophisticated Pydantic-based configuration architecture:
 
-For a detailed architectural overview, see the [Operations & Optimization Plan (`OPS_PLAN.md`)](OPS_PLAN.md).
+```python
+class AppConfig(BaseModel):
+    env: EnvConfig           # Environment settings (device, seeds, action space)
+    training: TrainingConfig # PPO parameters, learning rates, optimization
+    evaluation: EvaluationConfig # Evaluation schedules and parameters
+    logging: LoggingConfig   # File paths, log levels, Rich UI settings
+    wandb: WandBConfig      # Experiment tracking configuration
+    demo: DemoConfig        # Demo mode and visualization settings
+```
+
+**Configuration Features:**
+- **Type Safety**: Full Pydantic validation with detailed error reporting
+- **YAML Loading**: Human-readable configuration files with validation
+- **CLI Overrides**: Command-line parameter overrides with nested key support
+- **Default Management**: Sensible defaults with comprehensive documentation
+
+### Training Pipeline
+
+The training process follows a sophisticated pipeline:
+
+1. **Initialization**: `Trainer` sets up all 9 managers and validates configuration
+2. **Session Setup**: `SessionManager` creates directories and initializes experiment tracking
+3. **Component Setup**: `SetupManager` initializes models, agents, and environments
+4. **Training Loop**: `TrainingLoopManager` orchestrates self-play and learning
+5. **Step Execution**: `StepManager` handles individual game steps and experience collection
+6. **PPO Updates**: Policy learning with comprehensive loss tracking
+7. **Evaluation**: `CallbackManager` triggers periodic evaluation runs
+8. **Monitoring**: `DisplayManager` and `MetricsManager` provide real-time feedback
 
 ## Getting Started
 
-Refer to [HOW_TO_USE.md](HOW_TO_USE.md) for detailed instructions.
-
 ### Prerequisites
 
--   Python 3.10+
--   PyTorch (CUDA recommended for GPU acceleration)
--   Dependencies listed in `requirements.txt`
+- **Python 3.12+** (recommended for best performance and compatibility)
+- **PyTorch** with CUDA support (recommended for GPU acceleration)
+- **Git** for version control
+- **8GB+ RAM** (16GB+ recommended for larger models)
+- **CUDA-compatible GPU** (optional but recommended for training)
 
-### Setup
+### Installation
 
-1.  **Clone the repository:**
-    ```bash
-    git clone <your-repo-url> # Replace <your-repo-url> with the actual URL
-    cd keisei
-    ```
-2.  **Create a virtual environment (recommended):**
-    ```bash
-    python3 -m venv env
-    source env/bin/activate  # On Linux/macOS
-    # env\\Scripts\\activate    # On Windows
-    ```
-3.  **Install dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    # For development dependencies (e.g., linters, testing tools)
-    pip install -r requirements-dev.txt
-    ```
-4.  **(Optional) Weights & Biases Setup:**
-    If you plan to use W&B for logging:
-    - Create a `.env` file in the root directory.
-    - Add your W&B API key: `WANDB_API_KEY='your_api_key_here'`
-    - Ensure `wandb` is installed (it's in `requirements.txt`).
+1. **Clone the repository:**
+   ```bash
+   git clone <your-repo-url>
+   cd keisei
+   ```
+
+2. **Create and activate a virtual environment:**
+   ```bash
+   python3 -m venv env
+   source env/bin/activate
+   ```
+
+3. **Install dependencies:**
+   ```bash
+   # Production dependencies
+   pip install -r requirements.txt
+   
+   # Development dependencies (for testing and development)
+   pip install -r requirements-dev.txt
+   ```
+
+4. **Install the package in development mode:**
+   ```bash
+   pip install -e .
+   ```
+
+5. **(Optional) Configure Weights & Biases:**
+   ```bash
+   # Create .env file for W&B API key
+   echo "WANDB_API_KEY=your_api_key_here" > .env
+   ```
 
 ### Configuration
 
--   All primary training parameters are located in `config.py`.
--   Key parameters to review: `TOTAL_TIMESTEPS`, `STEPS_PER_EPOCH`, `LEARNING_RATE`, `DEVICE` ("cuda" or "cpu"), `SAVE_FREQ_EPISODES`.
--   W&B settings (project name, entity) are also in `config.py`.
+Keisei uses YAML configuration files with Pydantic validation. The main configuration file is `default_config.yaml`:
+
+```yaml
+env:
+  device: "cuda"              # Use "cpu" for CPU-only training
+  input_channels: 46          # Observation space channels
+  max_moves_per_game: 256     # Game length limit
+
+training:
+  learning_rate: 0.0003       # PPO learning rate
+  total_timesteps: 100000     # Total training steps
+  steps_per_epoch: 2048       # Steps per training epoch
+  ppo_epochs: 4               # PPO update epochs per batch
+  mixed_precision: false      # Enable AMP for faster training
+  distributed: false          # Enable distributed training
+
+evaluation:
+  enable_periodic_evaluation: true
+  evaluation_interval_timesteps: 50000
+  num_games: 20               # Games per evaluation
+
+logging:
+  model_dir: "models"         # Model checkpoint directory
+  log_file: "training_log.txt"
+
+wandb:
+  enabled: true               # Enable experiment tracking
+  project: "keisei-shogi"     # W&B project name
+```
+
+**Key Configuration Options:**
+- **Device**: Set to `"cuda"` for GPU or `"cpu"` for CPU-only training
+- **Training Parameters**: Adjust learning rate, batch sizes, and training duration
+- **Mixed Precision**: Enable for faster training on modern GPUs
+- **Evaluation**: Configure automated evaluation frequency and opponents
 
 ### Running Training
 
-1.  **Activate the virtual environment.**
-2.  **Start training:**
-    ```bash
-    python train.py
-    ```
+1. **Basic Training:**
+   ```bash
+   python train.py
+   ```
 
-### Monitoring Training
+2. **Training with Custom Configuration:**
+   ```bash
+   python train.py --config my_config.yaml
+   ```
 
--   **Console Output:** Real-time progress, episode rewards, losses.
--   **Log Files:** Detailed logs are saved in the `logs/` directory (e.g., `logs/shogi_run_<timestamp>/training_log.txt`).
--   **Weights & Biases Dashboard:** If enabled, provides comprehensive experiment tracking, visualizations, and model artifact storage.
--   **Model Checkpoints:** Saved periodically to the `models/` directory (e.g., `models/ppo_shogi_<timestamp>/ppo_shogi_agent_step_X.pth`).
+3. **Training with CLI Overrides:**
+   ```bash
+   python train.py --config default_config.yaml \
+     training.learning_rate=0.001 \
+     training.total_timesteps=500000 \
+     env.device=cuda
+   ```
 
-### Evaluation
+4. **Resume from Checkpoint:**
+   ```bash
+   python train.py --resume_checkpoint_path models/my_model/checkpoint.pt
+   ```
 
--   The `train.py` script includes basic evaluation during training.
--   A dedicated `evaluate.py` script can be used for more thorough evaluation against specific model checkpoints or baselines.
--   Tests are located in the `tests/` directory and can be run using `pytest`.
+5. **Weights & Biases Hyperparameter Sweep:**
+   ```bash
+   python -m keisei.training.train_wandb_sweep
+   ```
 
-#### Running Evaluation from the Command Line
+### Monitoring & Evaluation
 
-To evaluate a trained agent against a baseline (random, heuristic, or PPO):
+#### Real-time Training Monitoring
+- **Rich Console UI**: Real-time progress bars, metrics, and log messages
+- **Training Logs**: Comprehensive file-based logging in `logs/` directory
+- **Weights & Biases Dashboard**: Professional experiment tracking and visualization
 
+#### Evaluation System
 ```bash
+# Evaluate against random opponent
 python -m keisei.evaluation.evaluate \
-  --agent_checkpoint path/to/agent.ckpt \
+  --agent_checkpoint path/to/model.pt \
   --opponent_type random \
-  --num_games 20 \
-  --device cpu \
-  --log_file eval_log.txt \
+  --num_games 100
+
+# Evaluate against another trained agent
+python -m keisei.evaluation.evaluate \
+  --agent_checkpoint path/to/model1.pt \
+  --opponent_type ppo \
+  --opponent_checkpoint path/to/model2.pt \
+  --num_games 50 \
   --wandb_log_eval
 ```
 
-- `--opponent_type` can be `random`, `heuristic`, or `ppo` (if `ppo`, provide `--opponent_checkpoint`).
-- Add `--wandb_log_eval` to enable Weights & Biases logging.
-- See `python -m keisei.evaluation.evaluate --help` for all options.
-
-#### Programmatic Evaluation (Python API)
-
-```python
-from keisei.evaluation.evaluate import Evaluator, PolicyOutputMapper
-
-policy_mapper = PolicyOutputMapper()
-evaluator = Evaluator(
-    agent_checkpoint_path="path/to/agent.ckpt",
-    opponent_type="random",
-    num_games=10,
-    device_str="cpu",
-    log_file_path_eval="eval_log.txt",
-    policy_mapper=policy_mapper,
-)
-results = evaluator.evaluate()
-print(results)
-```
-
-#### Troubleshooting & Error Handling
-
-- If the agent checkpoint file is missing, a clear `FileNotFoundError` will be raised.
-- Invalid opponent types will raise a `ValueError`.
-- W&B logging failures are caught and will not crash evaluation.
-- For more details, see the docstrings in `keisei/evaluation/evaluate.py` and the tests in `tests/test_evaluate.py`.
-
----
+#### Monitoring Features
+- **Real-time Metrics**: Win rates, episode lengths, training losses
+- **Performance Tracking**: Steps per second, GPU utilization, memory usage
+- **Model Artifacts**: Automatic model versioning and artifact management
+- **Statistical Analysis**: Confidence intervals, significance testing
 
 ## Project Structure
 
 ```
 keisei/
-├── config.py             # Hyperparameters and configuration
-├── train.py              # Main training script
-├── HOW_TO_USE.md         # Detailed usage instructions
-├── OPS_PLAN.md           # Operations and optimization plan
-├── README.md             # This file
-├── requirements.txt      # Main dependencies
-├── requirements-dev.txt  # Development dependencies
-├── pyproject.toml        # Project metadata and build configuration
-├── pytest.ini            # Pytest configuration
-├── .env.example          # Example for .env file (for WANDB_API_KEY)
+├── README.md                    # This file
+├── pyproject.toml              # Project metadata and dependencies
+├── default_config.yaml         # Default training configuration
+├── train.py                    # Main training entry point
+├── requirements.txt            # Production dependencies
+├── requirements-dev.txt        # Development dependencies
 │
-├── keisei/                 # Core library code
-│   ├── __init__.py
-│   ├── shogi/              # Shogi game engine and rules
-│   │   ├── __init__.py
-│   │   └── shogi_engine.py # Core game logic, board, pieces, moves
-│   │   └── (other shogi related files like constants, move_logic)
-│   ├── neural_network.py   # ActorCritic NN model (PyTorch)
-│   ├── ppo_agent.py        # PPO algorithm, action selection, learning
-│   ├── experience_buffer.py# Replay buffer with GAE
-│   ├── utils.py            # PolicyOutputMapper, logging setup, other helpers
-│   └── evaluate.py         # (Potentially) Script for evaluating trained models
+├── keisei/                     # Core library package
+│   ├── config_schema.py        # Pydantic configuration models
+│   │
+│   ├── core/                   # Core RL components
+│   │   ├── actor_critic_protocol.py # Model interface definition
+│   │   ├── neural_network.py   # Basic ActorCritic implementation
+│   │   ├── ppo_agent.py        # PPO algorithm implementation
+│   │   ├── experience_buffer.py # Experience storage and GAE
+│   │   └── __init__.py
+│   │
+│   ├── shogi/                  # Shogi game engine
+│   │   ├── shogi_core_definitions.py # Piece types, board constants
+│   │   ├── shogi_game.py       # Main game logic and state
+│   │   ├── shogi_rules_logic.py # Rule validation and enforcement
+│   │   ├── shogi_move_execution.py # Move execution and board updates
+│   │   ├── shogi_game_io.py    # I/O, SFEN, observation generation
+│   │   ├── features.py         # Feature extraction and encoding
+│   │   └── __init__.py
+│   │
+│   ├── training/               # Training infrastructure
+│   │   ├── trainer.py          # Main Trainer orchestrator
+│   │   ├── train.py            # Training script with CLI
+│   │   ├── train_wandb_sweep.py # W&B hyperparameter sweeps
+│   │   │
+│   │   ├── models/             # Neural network architectures
+│   │   │   ├── __init__.py     # Model factory
+│   │   │   └── resnet_tower.py # ResNet architecture with SE blocks
+│   │   │
+│   │   ├── session_manager.py  # Session and directory management
+│   │   ├── model_manager.py    # Model operations and checkpointing
+│   │   ├── env_manager.py      # Environment lifecycle management
+│   │   ├── step_manager.py     # Training step execution
+│   │   ├── metrics_manager.py  # Metrics collection and formatting
+│   │   ├── training_loop_manager.py # Main training loop
+│   │   ├── display_manager.py  # Rich UI and visualization
+│   │   ├── callback_manager.py # Training callbacks and events
+│   │   ├── setup_manager.py    # Component initialization
+│   │   └── utils.py            # Training utilities
+│   │
+│   ├── evaluation/             # Evaluation system
+│   │   ├── evaluate.py         # Main evaluation orchestrator
+│   │   ├── loop.py             # Evaluation game loop
+│   │   └── __init__.py
+│   │
+│   └── utils/                  # Utilities and support
+│       ├── agent_loading.py    # Agent loading and initialization
+│       ├── checkpoint.py       # Checkpoint management utilities
+│       ├── move_formatting.py  # Move display and formatting
+│       ├── opponents.py        # Opponent implementations
+│       ├── utils.py            # Core utilities and policy mapping
+│       └── __init__.py
 │
-├── docs/                   # Documentation
-│   ├── DESIGN.md           # Detailed design document
-│   ├── code_audit/         # Code audit reports and related files
-│   └── (other markdown files)
+├── docs/                       # Comprehensive documentation
+│   ├── DESIGN.md              # Complete system design document
+│   ├── CODE_MAP.md            # Detailed code organization
+│   ├── CI_CD.md               # CI/CD pipeline documentation
+│   └── components/            # Individual component documentation
+│       ├── core_*.md          # Core component docs
+│       ├── training_*.md      # Training component docs
+│       ├── evaluation_*.md    # Evaluation component docs
+│       └── shogi_*.md         # Game engine docs
 │
-├── models/                 # Saved trained models
-│   └── ppo_shogi_<timestamp>/ # Models from a specific run
-│       └── ppo_shogi_agent_step_X.pth
+├── tests/                     # Comprehensive test suite
+│   ├── conftest.py           # Test configuration and fixtures
+│   ├── test_*.py             # Unit and integration tests
+│   └── integration/          # Integration test suites
 │
-├── logs/                   # Training logs
-│   └── shogi_run_<timestamp>/   # Logs from a specific run
-│       └── training_log.txt
+├── scripts/                  # Development and utility scripts
+│   ├── profile_training.py   # Performance profiling
+│   └── run_training.py       # Training utilities
 │
-├── tests/                  # Unit and integration tests
-│   ├── __init__.py
-│   ├── conftest.py
-│   └── test_*.py            # Individual test files
-│
-├── wandb/                  # Weights & Biases local files (if used)
-└── env/                    # Python virtual environment (if created here)
+├── models/                   # Saved model checkpoints
+├── logs/                     # Training logs and outputs
+└── wandb/                    # Weights & Biases local artifacts
 ```
+
+**Key Directories:**
+- **`keisei/core/`**: Core reinforcement learning components (PPO, neural networks, experience buffer)
+- **`keisei/shogi/`**: Complete Shogi game implementation with full rule support
+- **`keisei/training/`**: Manager-based training infrastructure with modular components
+- **`keisei/evaluation/`**: Comprehensive evaluation system with multi-opponent support
+- **`docs/`**: Extensive documentation including design documents and component details
 
 ## Technical Details
 
-### State Representation
+### Neural Network Architectures
 
-The game state is represented as a multi-channel 3D NumPy array `(Channels, 9, 9)` fed into the neural network. This includes:
-- Planes for current player's pieces (promoted and unpromoted).
-- Planes for opponent's pieces (promoted and unpromoted).
-- Planes for piece counts in hand for both players.
-- Planes indicating player to move, repetition counts, etc.
-(Refer to `docs/DESIGN.md` for the exact channel definition).
+Keisei supports multiple neural network architectures through a flexible model factory system:
 
-### Action Representation
+#### ActorCritic (Basic CNN)
+- **Convolutional layers**: Feature extraction from board representation
+- **Residual connections**: Improved gradient flow and training stability
+- **Separate heads**: Independent policy and value network heads
+- **Configurable depth**: Adjustable number of layers and filters
 
-The policy network outputs logits for a flat vector of all possible actions. This includes:
-- Board moves (from each square to each relative direction, with and without promotion).
-- Drop moves (each piece type to each square).
-The `PolicyOutputMapper` handles the mapping between these canonical actions and legal Shogi moves.
-(Refer to `docs/DESIGN.md` for details).
+#### ResNet Tower (Advanced)
+- **ResNet blocks**: Deep residual network architecture for complex pattern recognition
+- **Squeeze-and-Excitation**: Channel attention mechanism for improved feature selection
+- **Configurable architecture**: Adjustable tower depth, width, and SE ratio
+- **Mixed precision support**: Automatic Mixed Precision (AMP) for faster training
 
-### Neural Network Architecture
+```python
+# Model configuration examples
+model_configs = {
+    "basic_cnn": {
+        "model_type": "cnn",
+        "input_channels": 46,
+        "num_actions_total": 6480
+    },
+    "resnet_tower": {
+        "model_type": "resnet",
+        "tower_depth": 10,
+        "tower_width": 256,
+        "se_ratio": 0.25,
+        "input_features": "core46"
+    }
+}
+```
 
-An AlphaZero-like architecture is used for the `ActorCritic` model:
-- An initial convolutional layer.
-- A stack of ResNet blocks.
-- Separate policy and value heads:
-    - **Policy Head:** Outputs logits for actions.
-    - **Value Head:** Outputs a scalar value estimating expected reward (tanh activated to [-1, 1]).
+### State & Action Representation
 
-## Operations and Future Development
+#### State Representation (46-Channel Observation)
+The game state is encoded as a multi-channel 3D tensor `(46, 9, 9)`:
 
-The `OPS_PLAN.md` outlines ongoing operational tasks, monitoring, optimization strategies, and potential future enhancements, such as:
-- Hyperparameter tuning.
-- Advanced evaluation against other engines.
-- Implementation of a USI (Universal Shogi Interface) for playing against other Shogi GUIs/engines.
-- Further rule refinements (e.g., Nyugyoku - King entering opponent's camp).
+- **Player piece planes** (14 channels): Current player's pieces by type and promotion status
+- **Opponent piece planes** (14 channels): Opponent's pieces by type and promotion status
+- **Hand piece planes** (14 channels): Pieces in hand for both players
+- **Game state planes** (4 channels): Turn indicator, repetition count, castling rights, etc.
+
+#### Action Space (6,480 Actions)
+Complete coverage of all possible Shogi moves:
+
+- **Board moves**: All possible piece movements with and without promotion
+- **Drop moves**: Placing captured pieces back on the board
+- **Special moves**: Castling, en passant equivalents in Shogi
+
+```python
+class PolicyOutputMapper:
+    """Maps between neural network outputs and Shogi game actions."""
+    
+    def get_total_actions(self) -> int:
+        return 6480  # Complete action space coverage
+    
+    def policy_index_to_shogi_move(self, index: int) -> MoveTuple:
+        """Convert policy network output index to Shogi move."""
+    
+    def shogi_move_to_policy_index(self, move: MoveTuple) -> int:
+        """Convert Shogi move to policy network input index."""
+```
+
+### Training Features
+
+#### Advanced PPO Implementation
+- **Clipped Surrogate Objective**: Prevents large policy updates for training stability
+- **Generalized Advantage Estimation (GAE)**: Improved value function learning
+- **Entropy Regularization**: Maintains exploration throughout training
+- **Value Function Clipping**: Stabilizes critic learning
+
+#### Performance Optimizations
+- **Mixed Precision Training**: Faster training with reduced memory usage
+- **Gradient Clipping**: Prevents exploding gradients
+- **Distributed Training**: Multi-GPU support with DistributedDataParallel
+- **Efficient Experience Collection**: Optimized batch processing and memory management
+
+#### Training Stability
+- **Comprehensive Checkpointing**: Model state, optimizer state, and training metadata
+- **Resume Capabilities**: Seamless training resumption from any checkpoint
+- **Error Recovery**: Graceful handling of training interruptions
+- **Validation Checks**: Configuration and model validation before training
+
+## Development & Testing
+
+### Quality Assurance
+- **Comprehensive Test Suite**: Unit tests, integration tests, and performance benchmarks
+- **CI/CD Pipeline**: Automated testing, linting, and security scanning
+- **Code Quality**: Black formatting, mypy type checking, and pylint analysis
+- **Pre-commit Hooks**: Automated code quality checks before commits
+
+### Development Workflow
+```bash
+# Run the full CI pipeline locally
+./scripts/run_local_ci.sh
+
+# Run specific test categories
+pytest tests/unit/          # Unit tests
+pytest tests/integration/   # Integration tests
+pytest tests/performance/   # Performance benchmarks
+
+# Code quality checks
+black keisei/              # Code formatting
+mypy keisei/               # Type checking
+pylint keisei/             # Code analysis
+```
+
+### Performance Monitoring
+- **Training Profiling**: Built-in performance profiling tools
+- **Memory Usage**: GPU and CPU memory monitoring
+- **Throughput Metrics**: Steps per second and training efficiency
+- **Resource Utilization**: Hardware utilization tracking
+
+## Documentation
+
+### Comprehensive Documentation
+- **[Design Document](docs/DESIGN.md)**: Complete system architecture and design decisions
+- **[Code Map](docs/CODE_MAP.md)**: Detailed codebase organization and component relationships
+- **[Component Docs](docs/components/)**: Individual module documentation with examples
+- **[CI/CD Guide](docs/CI_CD.md)**: Development workflow and quality assurance
+
+### API Documentation
+Each component includes comprehensive documentation:
+- **Purpose and Responsibilities**: Clear component roles and boundaries
+- **Configuration Options**: All available settings and their effects
+- **Usage Examples**: Practical code examples and patterns
+- **Testing Strategies**: Component-specific testing approaches
 
 ## Contributing
 
-Contributions are welcome! Please refer to `CONTRIBUTING.md` (to be created) for guidelines on how to contribute to the project. This would typically include:
-- Reporting bugs or suggesting features via GitHub Issues.
-- Forking the repository and submitting Pull Requests for code changes.
-- Adhering to coding standards (e.g., using `black` for formatting, `flake8` for linting).
-- Writing unit tests for new features or bug fixes.
+We welcome contributions! Please see our development guidelines:
+
+1. **Fork the repository** and create a feature branch
+2. **Install development dependencies**: `pip install -r requirements-dev.txt`
+3. **Install pre-commit hooks**: `pre-commit install`
+4. **Write tests** for new functionality
+5. **Run the CI pipeline**: `./scripts/run_local_ci.sh`
+6. **Submit a pull request** with a clear description
+
+### Development Standards
+- **Code Quality**: All code must pass black, mypy, and pylint checks
+- **Test Coverage**: New features require comprehensive test coverage
+- **Documentation**: Update documentation for any API changes
+- **Type Safety**: Use type hints throughout the codebase
 
 ## License
 
-This project is licensed under the MIT License. See the `LICENSE` file (to be created, assuming MIT from original README) for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
