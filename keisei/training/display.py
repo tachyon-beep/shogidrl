@@ -104,7 +104,7 @@ class TrainingDisplay:
         layout = Layout(name="root")
         layout.split_column(
             Layout(name="main_log", ratio=1),
-            Layout(name="progress_display", size=4),
+            Layout(name="progress_display", size=2),
         )
         layout["main_log"].update(log_panel)
         layout["progress_display"].update(progress_bar)
