@@ -66,7 +66,8 @@ class TestDependencyFunctionality:
 
         # Basic tensor operations
         tensor = torch.tensor([1.0, 2.0, 3.0])
-        assert tensor.sum().item() == 6.0
+        # Use approximate comparison for floats
+        assert abs(tensor.sum().item() - 6.0) < 1e-6
 
         # Check CUDA availability (optional)
         cuda_available = torch.cuda.is_available()
@@ -78,8 +79,9 @@ class TestDependencyFunctionality:
         import numpy as np
 
         array = np.array([1, 2, 3, 4, 5])
-        assert array.sum() == 15
-        assert array.mean() == 3.0
+        # Use approximate comparison for floats
+        assert abs(array.sum() - 15) < 1e-6
+        assert abs(array.mean() - 3.0) < 1e-6
 
         # Test array operations
         result = array * 2
@@ -212,7 +214,6 @@ class TestRemovedDependencies:
         """Test that matplotlib is not required for core functionality."""
         # The system should work without matplotlib
         try:
-            from keisei.config_schema import TrainingConfig
             from keisei.shogi.shogi_game import ShogiGame
             from keisei.utils import load_config
 
@@ -371,8 +372,8 @@ class TestDependencyInstallation:
         requirements_path = Path("/home/john/keisei/requirements.txt")
 
         if requirements_path.exists():
-            pyproject_content = pyproject_path.read_text()
-            requirements_content = requirements_path.read_text()
+            pyproject_content = pyproject_path.read_text(encoding='utf-8')
+            requirements_content = requirements_path.read_text(encoding='utf-8')
 
             # Basic consistency check - main packages should appear in both
             main_packages = ["torch", "numpy", "pydantic", "rich"]
@@ -410,24 +411,19 @@ class TestDependencyIntegration:
 
     def test_training_pipeline_dependencies(self):
         """Test that training pipeline has all required dependencies."""
-        try:
-            from keisei.config_schema import AppConfig
-            from keisei.training.env_manager import EnvManager
-            from keisei.utils import load_config
+        from keisei.training.env_manager import EnvManager
+        from keisei.utils import load_config
 
-            # Use the default config to get a working configuration
-            config = load_config()
-            env_manager = EnvManager(config=config)
+        # Use the default config to get a working configuration
+        app_config = load_config()
+        env_manager = EnvManager(config=app_config)
 
-            # Setup the environment to initialize the game
-            game, _ = env_manager.setup_environment()
+        # Setup the environment to initialize the game
+        game, _ = env_manager.setup_environment()
 
-            # Should be able to get basic game state
-            state = game.get_observation()
-            assert state is not None
-
-        except ImportError as e:
-            pytest.fail(f"Training pipeline missing dependencies: {e}")
+        # Should be able to get basic game state
+        state = game.get_observation()
+        assert state is not None
 
     def test_configuration_system_dependencies(self):
         """Test that configuration system has all required dependencies."""

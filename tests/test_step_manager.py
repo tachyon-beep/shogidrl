@@ -1,17 +1,17 @@
-"""
-Unit tests for StepManager class.
+''' Unit tests for StepManager class. '''
+# pylint: disable=unused-import,unused-argument,protected-access
+# flake8: noqa: S1244,S6711,S125
 
-Tests the step execution, episode management, and error handling
-functionality of the StepManager.
-"""
-
-from dataclasses import dataclass
-from typing import Any, Dict, Optional
-from unittest.mock import MagicMock, Mock, patch
-
+from dataclasses import dataclass  # pylint: disable=unused-import,unused-argument,protected-access
+from typing import Any, Dict, Optional  # pylint: disable=unused-import
+from unittest.mock import MagicMock, Mock, patch  # pylint: disable=unused-import
 import numpy as np
 import pytest
 import torch
+
+rng = np.random.default_rng(42)  # seeded RNG
+
+# Use numpy.random.Generator for random numbers
 
 from keisei.config_schema import AppConfig
 from keisei.training.step_manager import EpisodeState, StepManager, StepResult
@@ -60,7 +60,7 @@ def step_manager(mock_config, mock_components):
 @pytest.fixture
 def sample_episode_state():
     """Create a sample episode state for testing."""
-    obs = np.random.rand(10, 10, 20).astype(np.float32)
+    obs = rng.random((10, 10, 20), dtype=np.float32)
     obs_tensor = torch.tensor(obs, dtype=torch.float32).unsqueeze(0)
     return EpisodeState(
         current_obs=obs,
@@ -81,7 +81,7 @@ class TestEpisodeState:
 
     def test_episode_state_creation(self):
         """Test creating an EpisodeState."""
-        obs = np.random.rand(5, 5, 10).astype(np.float32)
+        obs = rng.random((5, 5, 10), dtype=np.float32)
         obs_tensor = torch.tensor(obs, dtype=torch.float32)
 
         state = EpisodeState(
@@ -93,7 +93,7 @@ class TestEpisodeState:
 
         assert np.array_equal(state.current_obs, obs)
         assert torch.equal(state.current_obs_tensor, obs_tensor)
-        assert state.episode_reward == 10.0
+        assert state.episode_reward == pytest.approx(10.0)
         assert state.episode_length == 5
 
 
@@ -102,7 +102,7 @@ class TestStepResult:
 
     def test_step_result_creation(self):
         """Test creating a StepResult."""
-        obs = np.random.rand(5, 5, 10).astype(np.float32)
+        obs = rng.random((5, 5, 10), dtype=np.float32)
         obs_tensor = torch.tensor(obs, dtype=torch.float32)
 
         result = StepResult(
@@ -121,19 +121,19 @@ class TestStepResult:
 
         assert np.array_equal(result.next_obs, obs)
         assert torch.equal(result.next_obs_tensor, obs_tensor)
-        assert result.reward == 2.5
+        assert result.reward == pytest.approx(2.5)
         assert result.done is False
         assert result.info == {"test": "value"}
         assert result.selected_move == (1, 2, 3, 4, 5)
         assert result.policy_index == 42
-        assert result.log_prob == -1.5
-        assert result.value_pred == 0.8
+        assert result.log_prob == pytest.approx(-1.5)
+        assert result.value_pred == pytest.approx(0.8)
         assert result.success is True
         assert result.error_message is None
 
     def test_step_result_defaults(self):
         """Test StepResult with default values."""
-        obs = np.random.rand(5, 5, 10).astype(np.float32)
+        obs = rng.random((5, 5, 10), dtype=np.float32)
         obs_tensor = torch.tensor(obs, dtype=torch.float32)
 
         result = StepResult(
@@ -199,7 +199,7 @@ class TestExecuteStep:
             value_pred,
         )
 
-        next_obs = np.random.rand(10, 10, 20).astype(np.float32)
+        next_obs = rng.random((10, 10, 20), dtype=np.float32)
         reward = 2.5
         done = False
         info = {"test": "info"}
@@ -214,13 +214,13 @@ class TestExecuteStep:
         assert result.success is True
         assert result.error_message is None
         assert np.array_equal(result.next_obs, next_obs)
-        assert result.reward == reward
+        assert result.reward == pytest.approx(reward)
         assert result.done == done
         assert result.info == info
         assert result.selected_move == selected_move
         assert result.policy_index == policy_index
-        assert result.log_prob == log_prob
-        assert result.value_pred == value_pred
+        assert result.log_prob == pytest.approx(log_prob)
+        assert result.value_pred == pytest.approx(value_pred)
 
         # Verify method calls
         mock_components["game"].get_legal_moves.assert_called_once()
@@ -247,7 +247,7 @@ class TestExecuteStep:
         # Agent returns None for selected move
         mock_components["agent"].select_action.return_value = (None, 0, 0.0, 0.0)
 
-        reset_obs = np.random.rand(10, 10, 20).astype(np.float32)
+        reset_obs = rng.random((10, 10, 20), dtype=np.float32)
         mock_components["game"].reset.return_value = reset_obs
 
         # Execute step
@@ -259,7 +259,7 @@ class TestExecuteStep:
         assert result.success is False
         assert "Agent failed to select a move" in result.error_message
         assert np.array_equal(result.next_obs, reset_obs)
-        assert result.reward == 0.0
+        assert result.reward == pytest.approx(0.0)
         assert result.done is False
         assert result.selected_move is None
 
@@ -292,7 +292,7 @@ class TestExecuteStep:
         # make_move raises ValueError
         mock_components["game"].make_move.side_effect = ValueError("Invalid move")
 
-        reset_obs = np.random.rand(10, 10, 20).astype(np.float32)
+        reset_obs = rng.random((10, 10, 20), dtype=np.float32)
         mock_components["game"].reset.return_value = reset_obs
 
         # Execute step
@@ -331,7 +331,7 @@ class TestExecuteStep:
         # make_move returns invalid format (not 4-tuple)
         mock_components["game"].make_move.return_value = (1, 2, 3)  # Only 3 elements
 
-        reset_obs = np.random.rand(10, 10, 20).astype(np.float32)
+        reset_obs = rng.random((10, 10, 20), dtype=np.float32)
         mock_components["game"].reset.return_value = reset_obs
 
         # Execute step
@@ -403,7 +403,7 @@ class TestExecuteStep:
             0.8,
         )
 
-        next_obs = np.random.rand(10, 10, 20).astype(np.float32)
+        next_obs = rng.random((10, 10, 20), dtype=np.float32)
         mock_components["game"].make_move.return_value = (next_obs, 1.0, False, {})
 
         # Mock the format function
@@ -444,7 +444,7 @@ class TestHandleEpisodeEnd:
         """Test successful episode end handling."""
         # Create step result with game outcome
         step_result = StepResult(
-            next_obs=np.random.rand(10, 10, 20).astype(np.float32),
+            next_obs=rng.random((10, 10, 20), dtype=np.float32),
             next_obs_tensor=torch.randn(1, 10, 10, 20),
             reward=5.0,
             done=True,
@@ -457,7 +457,7 @@ class TestHandleEpisodeEnd:
 
         game_stats = {"black_wins": 10, "white_wins": 5, "draws": 2}
 
-        reset_obs = np.random.rand(10, 10, 20).astype(np.float32)
+        reset_obs = rng.random((10, 10, 20), dtype=np.float32)
         mock_components["game"].reset.return_value = reset_obs
 
         # Execute episode end handling
@@ -467,7 +467,7 @@ class TestHandleEpisodeEnd:
 
         # Verify new episode state
         assert np.array_equal(new_state.current_obs, reset_obs)
-        assert new_state.episode_reward == 0.0
+        assert new_state.episode_reward == pytest.approx(0.0)
         assert new_state.episode_length == 0
 
         # Verify logging was called
@@ -488,7 +488,7 @@ class TestHandleEpisodeEnd:
     ):
         """Test episode end with white victory."""
         step_result = StepResult(
-            next_obs=np.random.rand(10, 10, 20).astype(np.float32),
+            next_obs=rng.random((10, 10, 20), dtype=np.float32),
             next_obs_tensor=torch.randn(1, 10, 10, 20),
             reward=0.0,
             done=True,
@@ -500,9 +500,7 @@ class TestHandleEpisodeEnd:
         )
 
         game_stats = {"black_wins": 3, "white_wins": 7, "draws": 0}
-        mock_components["game"].reset.return_value = np.random.rand(10, 10, 20).astype(
-            np.float32
-        )
+        mock_components["game"].reset.return_value = rng.random((10, 10, 20), dtype=np.float32)
 
         # Execute episode end handling
         step_manager.handle_episode_end(
@@ -518,7 +516,7 @@ class TestHandleEpisodeEnd:
     ):
         """Test episode end with draw."""
         step_result = StepResult(
-            next_obs=np.random.rand(10, 10, 20).astype(np.float32),
+            next_obs=rng.random((10, 10, 20), dtype=np.float32),
             next_obs_tensor=torch.randn(1, 10, 10, 20),
             reward=0.0,
             done=True,
@@ -530,9 +528,7 @@ class TestHandleEpisodeEnd:
         )
 
         game_stats = {"black_wins": 2, "white_wins": 2, "draws": 6}
-        mock_components["game"].reset.return_value = np.random.rand(10, 10, 20).astype(
-            np.float32
-        )
+        mock_components["game"].reset.return_value = rng.random((10, 10, 20), dtype=np.float32)
 
         # Execute episode end handling
         step_manager.handle_episode_end(
@@ -548,7 +544,7 @@ class TestHandleEpisodeEnd:
     ):
         """Test win rate calculations in episode end."""
         step_result = StepResult(
-            next_obs=np.random.rand(10, 10, 20).astype(np.float32),
+            next_obs=rng.random((10, 10, 20), dtype=np.float32),
             next_obs_tensor=torch.randn(1, 10, 10, 20),
             reward=0.0,
             done=True,
@@ -561,9 +557,7 @@ class TestHandleEpisodeEnd:
 
         # 20 black wins, 30 white wins, 50 draws = 100 total
         game_stats = {"black_wins": 20, "white_wins": 30, "draws": 50}
-        mock_components["game"].reset.return_value = np.random.rand(10, 10, 20).astype(
-            np.float32
-        )
+        mock_components["game"].reset.return_value = rng.random((10, 10, 20), dtype=np.float32)
 
         # Execute episode end handling
         step_manager.handle_episode_end(
@@ -572,16 +566,16 @@ class TestHandleEpisodeEnd:
 
         # Verify win rates in wandb data
         wandb_data = mock_logger.call_args[1]["wandb_data"]
-        assert wandb_data["black_win_rate"] == 0.2  # 20/100
-        assert wandb_data["white_win_rate"] == 0.3  # 30/100
-        assert wandb_data["draw_rate"] == 0.5  # 50/100
+        assert wandb_data["black_win_rate"] == pytest.approx(0.2)  # 20/100
+        assert wandb_data["white_win_rate"] == pytest.approx(0.3)  # 30/100
+        assert wandb_data["draw_rate"] == pytest.approx(0.5)  # 50/100
 
     def test_episode_end_zero_games(
         self, step_manager, sample_episode_state, mock_logger, mock_components
     ):
         """Test episode end with zero total games."""
         step_result = StepResult(
-            next_obs=np.random.rand(10, 10, 20).astype(np.float32),
+            next_obs=rng.random((10, 10, 20), dtype=np.float32),
             next_obs_tensor=torch.randn(1, 10, 10, 20),
             reward=0.0,
             done=True,
@@ -593,9 +587,7 @@ class TestHandleEpisodeEnd:
         )
 
         game_stats = {"black_wins": 0, "white_wins": 0, "draws": 0}
-        mock_components["game"].reset.return_value = np.random.rand(10, 10, 20).astype(
-            np.float32
-        )
+        mock_components["game"].reset.return_value = rng.random((10, 10, 20), dtype=np.float32)
 
         # Execute episode end handling
         step_manager.handle_episode_end(
@@ -604,16 +596,16 @@ class TestHandleEpisodeEnd:
 
         # Verify win rates are 0.0 when no games played
         wandb_data = mock_logger.call_args[1]["wandb_data"]
-        assert wandb_data["black_win_rate"] == 0.0
-        assert wandb_data["white_win_rate"] == 0.0
-        assert wandb_data["draw_rate"] == 0.0
+        assert wandb_data["black_win_rate"] == pytest.approx(0.0)
+        assert wandb_data["white_win_rate"] == pytest.approx(0.0)
+        assert wandb_data["draw_rate"] == pytest.approx(0.0)
 
     def test_episode_end_reset_fails(
         self, step_manager, sample_episode_state, mock_logger, mock_components
     ):
         """Test episode end when game reset fails."""
         step_result = StepResult(
-            next_obs=np.random.rand(10, 10, 20).astype(np.float32),
+            next_obs=rng.random((10, 10, 20), dtype=np.float32),
             next_obs_tensor=torch.randn(1, 10, 10, 20),
             reward=0.0,
             done=True,
@@ -651,13 +643,13 @@ class TestResetEpisode:
 
     def test_successful_reset(self, step_manager, mock_components):
         """Test successful episode reset."""
-        reset_obs = np.random.rand(10, 10, 20).astype(np.float32)
+        reset_obs = rng.random((10, 10, 20), dtype=np.float32)
         mock_components["game"].reset.return_value = reset_obs
 
         new_state = step_manager.reset_episode()
 
         assert np.array_equal(new_state.current_obs, reset_obs)
-        assert new_state.episode_reward == 0.0
+        assert new_state.episode_reward == pytest.approx(0.0)
         assert new_state.episode_length == 0
         assert new_state.current_obs_tensor.shape == (1, 10, 10, 20)
 
@@ -667,7 +659,7 @@ class TestUpdateEpisodeState:
 
     def test_update_episode_state(self, step_manager, sample_episode_state):
         """Test updating episode state with step result."""
-        next_obs = np.random.rand(10, 10, 20).astype(np.float32)
+        next_obs = rng.random((10, 10, 20), dtype=np.float32)
         next_obs_tensor = torch.tensor(next_obs, dtype=torch.float32).unsqueeze(0)
 
         step_result = StepResult(
@@ -688,12 +680,8 @@ class TestUpdateEpisodeState:
 
         assert np.array_equal(updated_state.current_obs, next_obs)
         assert torch.equal(updated_state.current_obs_tensor, next_obs_tensor)
-        assert (
-            updated_state.episode_reward == sample_episode_state.episode_reward + 2.5
-        )  # 15.5 + 2.5 = 18.0
-        assert (
-            updated_state.episode_length == sample_episode_state.episode_length + 1
-        )  # 25 + 1 = 26
+        assert updated_state.episode_reward == pytest.approx(sample_episode_state.episode_reward + 2.5)
+        assert updated_state.episode_length == sample_episode_state.episode_length + 1
 
 
 class TestPrepareAndHandleDemoMode:
