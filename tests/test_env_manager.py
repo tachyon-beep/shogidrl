@@ -255,112 +255,56 @@ class TestEnvManagerActionSpaceValidation:
 class TestEnvManagerEnvironmentOperations:
     """Test environment operation methods."""
 
+    @pytest.mark.parametrize(
+        "operation_name,setup_method,expected_result,expected_log_content",
+        [
+            ("reset_game", "setup_reset_success", True, None),
+            ("reset_game", "setup_reset_failure", False, "Error resetting game: Reset failed"),
+            ("get_legal_moves_count", "setup_legal_moves_success", 3, None),
+            ("get_legal_moves_count", "setup_legal_moves_failure", 0, "Error getting legal moves count: Legal moves error"),
+        ],
+        ids=["reset_success", "reset_failure", "legal_moves_success", "legal_moves_failure"],
+    )
     @patch("keisei.training.env_manager.ShogiGame")
     @patch("keisei.training.env_manager.PolicyOutputMapper")
-    def test_reset_game_success(
-        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func
+    def test_environment_operations(
+        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func,
+        operation_name, setup_method, expected_result, expected_log_content
     ):
-        """Test successful game reset."""
-        # Setup mocks
+        """Test environment operations with success and failure scenarios."""
+        # Setup mocks based on test scenario
         mock_game = Mock()
-        mock_game.reset = Mock()
         mock_shogi_game_class.return_value = mock_game
 
         mock_mapper = Mock()
         mock_mapper.get_total_actions.return_value = 13527
         mock_policy_mapper_class.return_value = mock_mapper
 
-        # Create EnvManager
-        env_manager = EnvManager(mock_config, logger_func)
-        env_manager.setup_environment()  # Call setup_environment
-
-        # Test game reset
-        result = env_manager.reset_game()
-
-        # Verify reset was called
-        assert result is True
-        mock_game.reset.assert_called_once()
-
-    @patch("keisei.training.env_manager.ShogiGame")
-    @patch("keisei.training.env_manager.PolicyOutputMapper")
-    def test_reset_game_failure(
-        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func
-    ):
-        """Test game reset failure."""
-        # Setup mocks
-        mock_game = Mock()
-        mock_game.reset.side_effect = Exception("Reset failed")
-        mock_shogi_game_class.return_value = mock_game
-
-        mock_mapper = Mock()
-        mock_mapper.get_total_actions.return_value = 13527
-        mock_policy_mapper_class.return_value = mock_mapper
+        # Configure mock behavior based on setup method
+        if setup_method == "setup_reset_success":
+            mock_game.reset = Mock()
+        elif setup_method == "setup_reset_failure":
+            mock_game.reset = Mock(side_effect=Exception("Reset failed"))
+        elif setup_method == "setup_legal_moves_success":
+            mock_legal_moves = [Mock(), Mock(), Mock()]  # 3 legal moves
+            mock_game.get_legal_moves = Mock(return_value=mock_legal_moves)
+        elif setup_method == "setup_legal_moves_failure":
+            mock_game.get_legal_moves = Mock(side_effect=Exception("Legal moves error"))
 
         # Create EnvManager
         env_manager = EnvManager(mock_config, logger_func)
         env_manager.setup_environment()  # Call setup_environment
 
-        # Test game reset
-        result = env_manager.reset_game()
+        # Test the operation
+        operation_method = getattr(env_manager, operation_name)
+        result = operation_method()
 
-        # Verify reset failed
-        assert result is False
-        logger_func.assert_any_call("Error resetting game: Reset failed")
+        # Verify result
+        assert result == expected_result
 
-    @patch("keisei.training.env_manager.ShogiGame")
-    @patch("keisei.training.env_manager.PolicyOutputMapper")
-    def test_get_legal_moves_count_success(
-        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func
-    ):
-        """Test getting legal moves count successfully."""
-        # Setup mocks
-        mock_game = Mock()
-        mock_legal_moves = [Mock(), Mock(), Mock()]  # 3 legal moves
-        mock_game.get_legal_moves.return_value = mock_legal_moves
-        mock_shogi_game_class.return_value = mock_game
-
-        mock_mapper = Mock()
-        mock_mapper.get_total_actions.return_value = 13527
-        mock_policy_mapper_class.return_value = mock_mapper
-
-        # Create EnvManager
-        env_manager = EnvManager(mock_config, logger_func)
-        env_manager.setup_environment()  # Call setup_environment
-
-        # Test getting legal moves count
-        count = env_manager.get_legal_moves_count()
-
-        # Verify count
-        assert count == 3
-        mock_game.get_legal_moves.assert_called_once()
-
-    @patch("keisei.training.env_manager.ShogiGame")
-    @patch("keisei.training.env_manager.PolicyOutputMapper")
-    def test_get_legal_moves_count_error(
-        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func
-    ):
-        """Test getting legal moves count with error."""
-        # Setup mocks
-        mock_game = Mock()
-        mock_game.get_legal_moves.side_effect = Exception("Legal moves error")
-        mock_shogi_game_class.return_value = mock_game
-
-        mock_mapper = Mock()
-        mock_mapper.get_total_actions.return_value = 13527
-        mock_policy_mapper_class.return_value = mock_mapper
-
-        # Create EnvManager
-        env_manager = EnvManager(mock_config, logger_func)
-        env_manager.setup_environment()  # Call setup_environment
-
-        # Test getting legal moves count
-        count = env_manager.get_legal_moves_count()
-
-        # Verify error handling
-        assert count == 0
-        logger_func.assert_any_call(
-            "Error getting legal moves count: Legal moves error"
-        )
+        # Verify logging if expected
+        if expected_log_content:
+            logger_func.assert_any_call(expected_log_content)
 
 
 class TestEnvManagerSeeding:

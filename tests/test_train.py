@@ -7,12 +7,12 @@ import os
 import subprocess
 import sys
 
+import pytest
 import torch
 
 from keisei.config_schema import AppConfig, ParallelConfig
 from keisei.core.ppo_agent import PPOAgent
 from keisei.utils import PolicyOutputMapper
-from keisei.utils.utils import generate_run_name as gen_run_name_util
 
 # Local config constants for test compatibility with new config system
 INPUT_CHANNELS = 46
@@ -28,7 +28,8 @@ DEVICE = "cpu"
 TRAIN_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "train.py"))
 
 
-def test_train_cli_help():
+@pytest.mark.slow
+def test_train_cli_help(mock_wandb_disabled):
     """Test that train.py --help runs and prints usage."""
     result = subprocess.run(
         [sys.executable, TRAIN_PATH, "--help"],
@@ -41,7 +42,8 @@ def test_train_cli_help():
     assert "--device" in result.stdout
 
 
-def test_train_resume_autodetect(tmp_path):
+@pytest.mark.slow
+def test_train_resume_autodetect(tmp_path, mock_wandb_disabled):
     """
     Test that train.py can auto-detect a checkpoint from parent directory and resume training.
     
@@ -140,7 +142,7 @@ def test_train_resume_autodetect(tmp_path):
             capture_output=True,
             text=True,
             check=True,
-            env={"WANDB_MODE": "disabled", **os.environ},  # Disable W&B
+            # W&B is mocked by the fixture, no need for environment variable
         )
     except subprocess.CalledProcessError as e:
         print("STDERR from train.py (test_train_resume_autodetect with 'latest'):")
@@ -178,7 +180,8 @@ def test_train_resume_autodetect(tmp_path):
     )
 
 
-def test_train_runs_minimal(tmp_path):
+@pytest.mark.slow
+def test_train_runs_minimal(tmp_path, mock_wandb_disabled):
     """Test that train.py runs for 1 step and creates log/model files."""
     savedir = tmp_path
     config_override = {
@@ -219,7 +222,8 @@ def test_train_runs_minimal(tmp_path):
     assert ckpt_files, "No checkpoint file found in run directory"
 
 
-def test_train_config_override(tmp_path):
+@pytest.mark.slow
+def test_train_config_override(tmp_path, mock_wandb_disabled):
     """Test that --config JSON override works and is saved in effective_config.json."""
     config_override = {
         "training.total_timesteps": 2,
@@ -259,7 +263,8 @@ def test_train_config_override(tmp_path):
     assert abs(eff["training"]["learning_rate"] - 0.12345) < 1e-6
 
 
-def test_train_run_name_and_savedir(tmp_path):
+@pytest.mark.slow
+def test_train_run_name_and_savedir(tmp_path, mock_wandb_disabled):
     """Test that --savedir influences the base path of the generated run directory."""
     dummy_config_content = {
         "wandb": {
@@ -292,7 +297,7 @@ def test_train_run_name_and_savedir(tmp_path):
             capture_output=True,
             text=True,
             check=True,
-            env={"WANDB_MODE": "disabled", **os.environ},  # Disable W&B
+            # W&B is mocked by the fixture, no need for environment variable
         )
     except subprocess.CalledProcessError as e:
         print("STDERR from train.py (test_train_run_name_and_savedir):")
@@ -314,7 +319,8 @@ def test_train_run_name_and_savedir(tmp_path):
     assert (found_run_dir / "effective_config.json").exists()
 
 
-def test_train_explicit_resume(tmp_path):
+@pytest.mark.slow
+def test_train_explicit_resume(tmp_path, mock_wandb_disabled):
     """Test that --resume overrides auto-detection and resumes from the specified checkpoint."""
     run_name_prefix = "explicitresume"
     model_type = "resumemodel"
@@ -428,7 +434,7 @@ def test_train_explicit_resume(tmp_path):
             capture_output=True,
             text=True,
             check=True,
-            env={"WANDB_MODE": "disabled", **os.environ},  # Disable W&B
+            # W&B is mocked by the fixture, no need for environment variable
         )
     except subprocess.CalledProcessError as e:
         print("STDERR from train.py (test_train_explicit_resume):")

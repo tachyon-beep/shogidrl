@@ -424,22 +424,26 @@ class TestProfilingEdgeCases:
         stats = self.monitor.get_stats()
         assert f"{long_name}_count" in stats
 
-    def test_special_characters_in_names(self):
-        """Test operation names with special characters."""
-        special_names = [
+    @pytest.mark.parametrize(
+        "operation_name",
+        [
             "op-with-dashes",
-            "op_with_underscores",
+            "op_with_underscores", 
             "op.with.dots",
-            "op with spaces",  # This might need normalization
-        ]
-
-        for name in special_names:
-            with self.monitor.time_operation(name):
-                time.sleep(0.001)
+            "op with spaces",
+        ],
+        ids=["dashes", "underscores", "dots", "spaces"],
+    )
+    def test_special_characters_in_names(self, operation_name):
+        """Test operation names with special characters."""
+        with self.monitor.time_operation(operation_name):
+            time.sleep(0.001)
 
         stats = self.monitor.get_stats()
-        # All operations should be recorded (possibly with normalized names)
-        assert len(stats) >= len(special_names)
+        # Operation should be recorded with the exact name provided (no normalization)
+        expected_count_key = f"{operation_name}_count"
+        assert expected_count_key in stats, f"No stats found for operation '{operation_name}'. Available keys: {list(stats.keys())}"
+        assert stats[expected_count_key] == 1
 
 
 @pytest.mark.performance

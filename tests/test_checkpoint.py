@@ -24,29 +24,24 @@ def make_state_dict(in_channels):
     return model.state_dict()
 
 
-def test_load_checkpoint_with_padding_pad():
-    # Old checkpoint has fewer input channels
-    old_sd = make_state_dict(46)
-    model = DummyModel(51)
+@pytest.mark.parametrize(
+    "old_channels,new_channels,scenario",
+    [
+        (46, 51, "pad"),
+        (51, 46, "truncate"), 
+        (46, 46, "noop"),
+    ],
+    ids=["pad", "truncate", "noop"],
+)
+def test_load_checkpoint_with_padding_scenarios(old_channels, new_channels, scenario):
+    """Test checkpoint loading with different channel padding scenarios."""
+    # Create old checkpoint with specified channels
+    old_sd = make_state_dict(old_channels)
+    model = DummyModel(new_channels)
     checkpoint = {"model_state_dict": old_sd}
-    load_checkpoint_with_padding(model, checkpoint, 51)
-    # Check that the stem weight shape matches the new model
-    assert model.stem.weight.shape[1] == 51
-
-
-def test_load_checkpoint_with_padding_truncate():
-    # Old checkpoint has more input channels
-    old_sd = make_state_dict(51)
-    model = DummyModel(46)
-    checkpoint = {"model_state_dict": old_sd}
-    load_checkpoint_with_padding(model, checkpoint, 46)
-    assert model.stem.weight.shape[1] == 46
-
-
-def test_load_checkpoint_with_padding_noop():
-    # Old checkpoint has same input channels
-    old_sd = make_state_dict(46)
-    model = DummyModel(46)
-    checkpoint = {"model_state_dict": old_sd}
-    load_checkpoint_with_padding(model, checkpoint, 46)
-    assert model.stem.weight.shape[1] == 46
+    
+    # Load checkpoint with padding
+    load_checkpoint_with_padding(model, checkpoint, new_channels)
+    
+    # Verify the stem weight shape matches the new model
+    assert model.stem.weight.shape[1] == new_channels

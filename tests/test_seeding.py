@@ -243,7 +243,7 @@ class TestSeedingReproducibility:
             try:
                 game.seed(seed)
                 assert game._seed_value == seed
-            except Exception as e:
+            except (ValueError, TypeError) as e:
                 # If there are type restrictions, they should be documented
                 assert False, f"Seeding failed unexpectedly for {type(seed)}: {e}"
 

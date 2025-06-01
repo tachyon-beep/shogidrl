@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional
 from unittest.mock import Mock, patch
 
 import pytest
+import wandb
 
 from keisei.config_schema import (
     AppConfig,
@@ -158,20 +159,17 @@ class TestWandBArtifacts:
             assert result is False
             log_mock.assert_not_called()
 
-    @patch("wandb.run")
-    @patch("wandb.Artifact")
-    @patch("wandb.log_artifact")
     def test_create_model_artifact_success(
-        self, mock_log_artifact, mock_artifact_class, mock_wandb_run, tmp_path
+        self, mock_wandb_active, tmp_path
     ):
         """Test successful artifact creation when W&B is enabled."""
         config = make_test_config(wandb_enabled=True)
         args = DummyArgs()
 
-        # Mock W&B objects
+        # Configure the mock W&B active fixture
         mock_artifact = Mock()
-        mock_artifact_class.return_value = mock_artifact
-        mock_wandb_run.return_value = True
+        mock_wandb_active["artifact_class"].return_value = mock_artifact
+        mock_wandb_active["run"].return_value = True
 
         with patch("keisei.training.utils.setup_wandb", return_value=True):
             trainer = Trainer(config=config, args=args)
@@ -200,7 +198,7 @@ class TestWandBArtifacts:
             assert result is True
 
             # Verify artifact was created with correct parameters
-            mock_artifact_class.assert_called_once_with(
+            mock_wandb_active["artifact_class"].assert_called_once_with(
                 name="test_run_123-test-model",
                 type="model",
                 description="Test model for unit testing",
@@ -211,7 +209,7 @@ class TestWandBArtifacts:
             mock_artifact.add_file.assert_called_once_with(str(model_path))
 
             # Verify artifact was logged with aliases
-            mock_log_artifact.assert_called_once_with(
+            mock_wandb_active["log_artifact"].assert_called_once_with(
                 mock_artifact, aliases=["latest", "test"]
             )
 
@@ -223,15 +221,12 @@ class TestWandBArtifacts:
             assert "latest" in log_call_args
             assert "test" in log_call_args
 
-    def test_create_model_artifact_missing_file(self, tmp_path):
+    def test_create_model_artifact_missing_file(self, mock_wandb_disabled, tmp_path):
         """Test artifact creation with missing model file."""
         config = make_test_config(wandb_enabled=True)
         args = DummyArgs()
 
-        with (
-            patch("keisei.training.utils.setup_wandb", return_value=True),
-            patch("wandb.run", return_value=True),
-        ):
+        with patch("keisei.training.utils.setup_wandb", return_value=True):
             trainer = Trainer(config=config, args=args)
             trainer.is_train_wandb_active = True
 
@@ -253,20 +248,17 @@ class TestWandBArtifacts:
             log_call_args = log_mock.call_args[0][0]
             assert "does not exist" in log_call_args
 
-    @patch("wandb.run")
-    @patch("wandb.Artifact")
-    @patch("wandb.log_artifact")
     def test_create_model_artifact_wandb_error(
-        self, mock_log_artifact, mock_artifact_class, mock_wandb_run, tmp_path
+        self, mock_wandb_active, tmp_path
     ):
         """Test artifact creation when W&B throws an error."""
         config = make_test_config(wandb_enabled=True)
         args = DummyArgs()
 
         # Mock W&B to throw an error
-        mock_log_artifact.side_effect = RuntimeError("W&B API error")
-        mock_artifact_class.return_value = Mock()
-        mock_wandb_run.return_value = True
+        mock_wandb_active["log_artifact"].side_effect = RuntimeError("W&B API error")
+        mock_wandb_active["artifact_class"].return_value = Mock()
+        mock_wandb_active["run"].return_value = True
 
         with patch("keisei.training.utils.setup_wandb", return_value=True):
             trainer = Trainer(config=config, args=args)
@@ -428,32 +420,34 @@ class TestWandBUtilities:
 
         assert result is False
 
-    @patch("wandb.init")
-    def test_setup_wandb_success(self, mock_wandb_init):
-        """Test successful W&B setup."""
+    @pytest.mark.parametrize(
+        "init_side_effect,expected_result,should_verify_call_args",
+        [
+            (None, True, True),  # Success case
+            (OSError("Network error"), False, False),  # Error case
+        ],
+        ids=["success", "init_error"],
+    )
+    def test_setup_wandb_scenarios(self, mock_wandb_disabled, init_side_effect, expected_result, should_verify_call_args):
+        """Test W&B setup with success and error scenarios."""
         config = make_test_config(wandb_enabled=True)
+        
+        # Mock wandb.init based on test scenario
+        with patch("wandb.init", side_effect=init_side_effect) as mock_wandb_init:
+            result = setup_wandb(config, "test_run", "/tmp/test")
 
-        result = setup_wandb(config, "test_run", "/tmp/test")
-
-        assert result is True
-        mock_wandb_init.assert_called_once()
-
-        # Verify init was called with correct parameters
-        call_kwargs = mock_wandb_init.call_args[1]
-        assert call_kwargs["project"] == "keisei-test"
-        assert call_kwargs["name"] == "test_run"
-        assert call_kwargs["mode"] == "online"
-        assert call_kwargs["id"] == "test_run"
-
-    @patch("wandb.init")
-    def test_setup_wandb_init_error(self, mock_wandb_init):
-        """Test W&B setup when init throws an error."""
-        config = make_test_config(wandb_enabled=True)
-        mock_wandb_init.side_effect = OSError("Network error")
-
-        result = setup_wandb(config, "test_run", "/tmp/test")
-
-        assert result is False
+            assert result is expected_result
+            
+            if expected_result:
+                mock_wandb_init.assert_called_once()
+                
+                if should_verify_call_args:
+                    # Verify init was called with correct parameters
+                    call_kwargs = mock_wandb_init.call_args[1]
+                    assert call_kwargs["project"] == "keisei-test"
+                    assert call_kwargs["name"] == "test_run"
+                    assert call_kwargs["mode"] == "online"
+                    assert call_kwargs["id"] == "test_run"
 
 
 class TestWandBLoggingIntegration:

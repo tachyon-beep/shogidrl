@@ -11,20 +11,20 @@ import torch
 from keisei.training.models.resnet_tower import ActorCriticResTower
 
 
-def test_resnet_tower_forward_shapes():
-    # Test with C=46, 51, and a large config
-    for c in [46, 51]:
-        model = ActorCriticResTower(
-            input_channels=c,
-            num_actions_total=13527,
-            tower_depth=9,
-            tower_width=256,
-            se_ratio=0.25,
-        )
-        x = torch.randn(2, c, 9, 9)
-        policy, value = model(x)
-        assert policy.shape == (2, 13527)
-        assert value.shape == (2,)
+@pytest.mark.parametrize("input_channels", [46, 51], ids=["channels_46", "channels_51"])
+def test_resnet_tower_forward_shapes(input_channels):
+    # Test with different input channel configurations
+    model = ActorCriticResTower(
+        input_channels=input_channels,
+        num_actions_total=13527,
+        tower_depth=9,
+        tower_width=256,
+        se_ratio=0.25,
+    )
+    x = torch.randn(2, input_channels, 9, 9)
+    policy, value = model(x)
+    assert policy.shape == (2, 13527)
+    assert value.shape == (2,)
 
 
 def test_resnet_tower_fp16_memory():
@@ -382,24 +382,24 @@ class TestIntegrationAndEdgeCases:
         _, log_prob, value = model.get_action_and_value(obs_large)
         assert not torch.isnan(log_prob).any() and not torch.isnan(value).any()
 
-    def test_batch_size_edge_cases(self, model):
+    @pytest.mark.parametrize("batch_size", [1, 2, 7, 16, 32], ids=["batch_1", "batch_2", "batch_7", "batch_16", "batch_32"])
+    def test_batch_size_edge_cases(self, model, batch_size):
         """Test with different batch sizes including edge cases."""
-        for batch_size in [1, 2, 7, 16, 32]:
-            obs = torch.randn(batch_size, 46, 9, 9)
-            actions = torch.randint(0, 100, (batch_size,))
-            legal_mask = torch.ones(batch_size, 100, dtype=torch.bool)
+        obs = torch.randn(batch_size, 46, 9, 9)
+        actions = torch.randint(0, 100, (batch_size,))
+        legal_mask = torch.ones(batch_size, 100, dtype=torch.bool)
 
-            # Test get_action_and_value
-            action, log_prob, value = model.get_action_and_value(obs, legal_mask)
-            assert action.shape == (batch_size,)
-            assert log_prob.shape == (batch_size,)
-            assert value.shape == (batch_size,)
+        # Test get_action_and_value
+        action, log_prob, value = model.get_action_and_value(obs, legal_mask)
+        assert action.shape == (batch_size,)
+        assert log_prob.shape == (batch_size,)
+        assert value.shape == (batch_size,)
 
-            # Test evaluate_actions
-            log_probs, entropy, value = model.evaluate_actions(obs, actions, legal_mask)
-            assert log_probs.shape == (batch_size,)
-            assert entropy.shape == (batch_size,)
-            assert value.shape == (batch_size,)
+        # Test evaluate_actions
+        log_probs, entropy, value = model.evaluate_actions(obs, actions, legal_mask)
+        assert log_probs.shape == (batch_size,)
+        assert entropy.shape == (batch_size,)
+        assert value.shape == (batch_size,)
 
     def test_mixed_legal_masks_in_batch(self, model):
         """Test batch with mixed legal mask conditions."""

@@ -6,6 +6,8 @@ Tests that the full training pipeline can initialize and run for a short period.
 import tempfile
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from keisei.config_schema import AppConfig
 from keisei.evaluation.evaluate import Evaluator
 from keisei.training.trainer import Trainer
@@ -13,10 +15,12 @@ from keisei.utils import load_config
 from keisei.utils.opponents import SimpleRandomOpponent
 
 
+@pytest.mark.integration
 class TestIntegrationSmoke:
     """Integration tests to verify the full system works end-to-end."""
 
-    def test_training_smoke_test(self):
+    @pytest.mark.slow
+    def test_training_smoke_test(self, mock_wandb_disabled):
         """
         Run a very short training session to ensure the system can initialize,
         run without errors, and terminate cleanly.
@@ -47,21 +51,19 @@ class TestIntegrationSmoke:
             mock_args.tower_width = None
             mock_args.se_ratio = None
 
-            # Mock W&B to prevent initialization
-            with patch("wandb.init"), patch("wandb.log"), patch("wandb.finish"):
-                # Create trainer with correct interface
-                trainer = Trainer(config=config, args=mock_args)
+            # Create trainer with correct interface (W&B disabled via fixture)
+            trainer = Trainer(config=config, args=mock_args)
 
-                # Verify basic initialization
-                assert trainer.config == config
-                assert trainer.run_name == "smoke_test"
-                assert hasattr(trainer, "global_timestep")
-                assert hasattr(trainer, "total_episodes_completed")
+            # Verify basic initialization
+            assert trainer.config == config
+            assert trainer.run_name == "smoke_test"
+            assert hasattr(trainer, "global_timestep")
+            assert hasattr(trainer, "total_episodes_completed")
 
-                # Note: For actual training test, we would call trainer.run_training_loop()
-                # but that's quite heavy for a smoke test, so we just verify initialization
-                # Note: checkpoint may not be created if interval wasn't reached
-                # Just verify no crash occurred
+            # Note: For actual training test, we would call trainer.run_training_loop()
+            # but that's quite heavy for a smoke test, so we just verify initialization
+            # Note: checkpoint may not be created if interval wasn't reached
+            # Just verify no crash occurred
 
     def test_evaluation_smoke_test(self):
         """

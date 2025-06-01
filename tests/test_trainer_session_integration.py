@@ -110,6 +110,7 @@ def temp_dir():
         yield tmpdir
 
 
+@pytest.mark.integration
 class TestTrainerSessionIntegration:
     """Test SessionManager integration in Trainer."""
 
@@ -171,10 +172,8 @@ class TestTrainerSessionIntegration:
         assert trainer.log_file_path == f"{temp_dir}/train.log"
         assert trainer.is_train_wandb_active is True
 
-    @patch("wandb.run", new_callable=Mock)
-    @patch("wandb.finish")
     @patch("keisei.training.utils.setup_seeding")
-    @patch("keisei.training.utils.setup_directories")
+    @patch("keisei.training.utils.setup_directories") 
     @patch("keisei.training.utils.setup_wandb")
     @patch("keisei.shogi.ShogiGame")
     @patch("keisei.shogi.features.FEATURE_SPECS")
@@ -193,8 +192,7 @@ class TestTrainerSessionIntegration:
         mock_setup_wandb,
         mock_setup_dirs,
         _mock_setup_seeding,
-        mock_wandb_finish,
-        _mock_wandb_run,
+        mock_wandb_active,  # Use the W&B fixture
         mock_config,
         mock_args,
         temp_dir,
@@ -220,7 +218,7 @@ class TestTrainerSessionIntegration:
             trainer = Trainer(mock_config, mock_args)
 
         trainer.session_manager.finalize_session()
-        mock_wandb_finish.assert_called_once()
+        mock_wandb_active["finish"].assert_called_once()
 
     @patch("keisei.training.utils.setup_directories")
     @patch("keisei.training.models.model_factory")

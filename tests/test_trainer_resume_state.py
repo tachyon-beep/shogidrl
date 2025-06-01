@@ -106,6 +106,7 @@ def temp_dir():
         yield tmpdir
 
 
+@pytest.mark.integration
 class TestTrainerResumeState:
     """Test Trainer training state restoration during checkpoint resumption."""
 

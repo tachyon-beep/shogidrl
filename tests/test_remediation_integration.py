@@ -35,6 +35,7 @@ class TestRemediationIntegration:
         """Setup for each test."""
         perf_monitor.reset()
 
+    @pytest.mark.slow
     def test_complete_system_startup(self):
         """Test that the complete system can start up without errors."""
         # This simulates a full system initialization
@@ -70,6 +71,7 @@ class TestRemediationIntegration:
         assert "game_seeding_count" in stats
         assert stats["game_seeding_count"] == 1
 
+    @pytest.mark.slow
     def test_training_simulation_with_full_stack(self):
         """Test a simulated training scenario with all components."""
         # Setup

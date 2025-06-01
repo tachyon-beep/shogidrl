@@ -4,6 +4,7 @@ Unit tests for ExperienceBuffer in experience_buffer.py
 
 import numpy as np
 import torch
+import pytest
 
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.utils import PolicyOutputMapper
@@ -216,7 +217,7 @@ def test_experience_buffer_clear():
     assert buf.ptr == 0
 
 
-def test_experience_buffer_full_buffer_warning():
+def test_experience_buffer_full_buffer_warning(capsys):
     """Test that adding to a full buffer prints warning and doesn't add."""
     buf = ExperienceBuffer(buffer_size=2, gamma=0.99, lambda_gae=0.95)
     mapper = PolicyOutputMapper()
@@ -228,8 +229,12 @@ def test_experience_buffer_full_buffer_warning():
 
     assert len(buf) == 2
 
-    # Try to add one more (should not add due to full buffer)
+    # Try to add one more - should print warning and not add
     buf.add(torch.randn(46, 9, 9), 3, 3.0, 0.3, 1.5, True, dummy_legal_mask)
+
+    # Verify warning was printed
+    captured = capsys.readouterr()
+    assert "Warning: ExperienceBuffer is full" in captured.out
 
     # Buffer should still be size 2, not 3
     assert len(buf) == 2

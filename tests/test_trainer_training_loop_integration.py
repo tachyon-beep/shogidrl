@@ -106,6 +106,7 @@ def temp_dir():
         yield tmpdir
 
 
+@pytest.mark.integration
 class TestTrainerTrainingLoopIntegration:
     """Test end-to-end training loop integration with mocked components."""
 
@@ -119,6 +120,7 @@ class TestTrainerTrainingLoopIntegration:
     @patch("keisei.utils.PolicyOutputMapper")
     @patch("keisei.core.experience_buffer.ExperienceBuffer")
     @patch("keisei.training.models.model_factory")
+    @pytest.mark.slow
     def test_run_training_loop_with_checkpoint_resume_logging(
         self,
         mock_model_factory,
@@ -535,6 +537,7 @@ class TestTrainerTrainingLoopIntegration:
     @patch("keisei.utils.PolicyOutputMapper")
     @patch("keisei.core.experience_buffer.ExperienceBuffer")
     @patch("keisei.training.models.model_factory")
+    @pytest.mark.slow
     def test_training_loop_state_consistency_throughout_execution(
         self,
         mock_model_factory,

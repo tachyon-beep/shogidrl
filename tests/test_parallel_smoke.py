@@ -11,6 +11,8 @@ import queue
 import time
 from unittest.mock import MagicMock
 
+import pytest
+
 from keisei.utils import load_config
 
 
@@ -22,9 +24,11 @@ def simple_worker_function(queue, worker_id):
     queue.put(f"worker_{worker_id}_done")
 
 
+@pytest.mark.integration
 class TestParallelSmoke:
     """Tests for parallel system functionality."""
 
+    @pytest.mark.slow
     def test_multiprocessing_basic_functionality(self):
         """
         Test that basic multiprocessing works in the environment.
@@ -70,6 +74,7 @@ class TestParallelSmoke:
         assert len(worker_0_items) >= 1, "Should have results from worker 0"
         assert len(worker_1_items) >= 1, "Should have results from worker 1"
 
+    @pytest.mark.slow
     def test_future_parallel_environment_interface(self):
         """
         Test the interface that will be used for parallel environments.
@@ -136,6 +141,7 @@ class TestParallelSmoke:
         assert len(truncated) == 2, "Should get truncated flags from both environments"
         assert len(infos) == 2, "Should get info dicts from both environments"
 
+    @pytest.mark.slow
     def test_future_self_play_worker_interface(self):
         """
         Test the interface that will be used for self-play workers.

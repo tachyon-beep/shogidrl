@@ -46,31 +46,22 @@ class TestBasicMoveFormatting:
         assert "piece promoting moving from 3g to 3f" in result
         assert result.endswith(".")
 
-    def test_drop_move_pawn(self, policy_mapper):
-        """Test formatting pawn drop moves."""
-        move = (None, None, 4, 4, PieceType.PAWN)
+    @pytest.mark.parametrize(
+        "piece_type,col,row,expected_notation,expected_description",
+        [
+            (PieceType.PAWN, 4, 4, "P*5e", "Fuhyō (Pawn) drop to 5e"),
+            (PieceType.ROOK, 2, 6, "R*3c", "Hisha (Rook) drop to 3c"),
+            (PieceType.KNIGHT, 5, 3, "N*6f", "Keima (Knight) drop to 6f"),
+        ],
+        ids=["pawn", "rook", "knight"],
+    )
+    def test_drop_moves(self, policy_mapper, piece_type, col, row, expected_notation, expected_description):
+        """Test formatting drop moves for different pieces."""
+        move = (None, None, col, row, piece_type)
         result = format_move_with_description(move, policy_mapper, game=None)
 
-        assert "P*5e" in result
-        assert "Fuhyō (Pawn) drop to 5e" in result
-        assert result.endswith(".")
-
-    def test_drop_move_rook(self, policy_mapper):
-        """Test formatting rook drop moves."""
-        move = (None, None, 2, 6, PieceType.ROOK)
-        result = format_move_with_description(move, policy_mapper, game=None)
-
-        assert "R*3c" in result
-        assert "Hisha (Rook) drop to 3c" in result
-        assert result.endswith(".")
-
-    def test_drop_move_knight(self, policy_mapper):
-        """Test formatting knight drop moves."""
-        move = (None, None, 5, 3, PieceType.KNIGHT)
-        result = format_move_with_description(move, policy_mapper, game=None)
-
-        assert "N*6f" in result
-        assert "Keima (Knight) drop to 6f" in result
+        assert expected_notation in result
+        assert expected_description in result
         assert result.endswith(".")
 
     def test_none_move(self, policy_mapper):
@@ -166,9 +157,9 @@ class TestEnhancedMoveFormatting:
 class TestPieceNaming:
     """Test Japanese piece naming functionality."""
 
-    def test_regular_piece_names(self):
-        """Test regular piece name generation."""
-        test_cases = [
+    @pytest.mark.parametrize(
+        "piece_type,expected_name",
+        [
             (PieceType.PAWN, "Fuhyō (Pawn)"),
             (PieceType.ROOK, "Hisha (Rook)"),
             (PieceType.BISHOP, "Kakugyō (Bishop)"),
@@ -177,41 +168,47 @@ class TestPieceNaming:
             (PieceType.LANCE, "Kyōsha (Lance)"),
             (PieceType.SILVER, "Ginsho (Silver General)"),
             (PieceType.GOLD, "Kinshō (Gold General)"),
-        ]
+        ],
+        ids=["pawn", "rook", "bishop", "king", "knight", "lance", "silver", "gold"],
+    )
+    def test_regular_piece_names(self, piece_type, expected_name):
+        """Test regular piece name generation."""
+        result = _get_piece_name(piece_type, is_promoting=False)
+        assert result == expected_name
 
-        for piece_type, expected_name in test_cases:
-            result = _get_piece_name(piece_type, is_promoting=False)
-            assert result == expected_name
-
-    def test_promoted_piece_names(self):
-        """Test promoted piece name generation."""
-        test_cases = [
+    @pytest.mark.parametrize(
+        "piece_type,expected_name",
+        [
             (PieceType.PROMOTED_PAWN, "Tokin (Promoted Pawn)"),
             (PieceType.PROMOTED_ROOK, "Ryūō (Dragon King)"),
             (PieceType.PROMOTED_BISHOP, "Ryūma (Dragon Horse)"),
             (PieceType.PROMOTED_LANCE, "Narikyo (Promoted Lance)"),
             (PieceType.PROMOTED_KNIGHT, "Narikei (Promoted Knight)"),
             (PieceType.PROMOTED_SILVER, "Narigin (Promoted Silver)"),
-        ]
+        ],
+        ids=["promoted_pawn", "promoted_rook", "promoted_bishop", "promoted_lance", "promoted_knight", "promoted_silver"],
+    )
+    def test_promoted_piece_names(self, piece_type, expected_name):
+        """Test promoted piece name generation."""
+        result = _get_piece_name(piece_type, is_promoting=False)
+        assert result == expected_name
 
-        for piece_type, expected_name in test_cases:
-            result = _get_piece_name(piece_type, is_promoting=False)
-            assert result == expected_name
-
-    def test_promotion_transformations(self):
-        """Test piece promotion transformations."""
-        test_cases = [
+    @pytest.mark.parametrize(
+        "piece_type,expected_name",
+        [
             (PieceType.PAWN, "Fuhyō (Pawn) → Tokin (Promoted Pawn)"),
             (PieceType.ROOK, "Hisha (Rook) → Ryūō (Dragon King)"),
             (PieceType.BISHOP, "Kakugyō (Bishop) → Ryūma (Dragon Horse)"),
             (PieceType.LANCE, "Kyōsha (Lance) → Narikyo (Promoted Lance)"),
             (PieceType.KNIGHT, "Keima (Knight) → Narikei (Promoted Knight)"),
             (PieceType.SILVER, "Ginsho (Silver General) → Narigin (Promoted Silver)"),
-        ]
-
-        for piece_type, expected_name in test_cases:
-            result = _get_piece_name(piece_type, is_promoting=True)
-            assert result == expected_name
+        ],
+        ids=["pawn_promotion", "rook_promotion", "bishop_promotion", "lance_promotion", "knight_promotion", "silver_promotion"],
+    )
+    def test_promotion_transformations(self, piece_type, expected_name):
+        """Test piece promotion transformations."""
+        result = _get_piece_name(piece_type, is_promoting=True)
+        assert result == expected_name
 
     def test_unknown_piece_type(self):
         """Test handling of unknown piece types."""
@@ -229,40 +226,39 @@ class TestPieceNaming:
 class TestCoordinateConversion:
     """Test coordinate to square name conversion."""
 
-    def test_coordinate_conversion(self):
+    @pytest.mark.parametrize(
+        "row,col,expected_square",
+        [
+            (0, 0, "9a"),  # Top-left corner
+            (0, 8, "1a"),  # Top-right corner
+            (8, 0, "9i"),  # Bottom-left corner
+            (8, 8, "1i"),  # Bottom-right corner
+            (4, 4, "5e"),  # Center
+        ],
+        ids=["top_left", "top_right", "bottom_left", "bottom_right", "center"],
+    )
+    def test_coordinate_conversion(self, row, col, expected_square):
         """Test coordinate to square name conversion."""
-        test_cases = [
-            ((0, 0), "9a"),  # Top-left corner
-            ((0, 8), "1a"),  # Top-right corner
-            ((8, 0), "9i"),  # Bottom-left corner
-            ((8, 8), "1i"),  # Bottom-right corner
-            ((4, 4), "5e"),  # Center
-        ]
+        result = _coords_to_square_name(row, col)
+        assert result == expected_square
 
-        for (row, col), expected_square in test_cases:
-            result = _coords_to_square_name(row, col)
-            assert result == expected_square
-
-    def test_coordinate_bounds(self):
+    @pytest.mark.parametrize(
+        "row,col",
+        [
+            (0, 0), (0, 4), (0, 8),  # Top row
+            (4, 0), (4, 8),          # Middle row edges
+            (8, 0), (8, 4), (8, 8),  # Bottom row
+        ],
+        ids=["corner_0_0", "edge_0_4", "corner_0_8", "edge_4_0", "edge_4_8", "corner_8_0", "edge_8_4", "corner_8_8"],
+    )
+    def test_coordinate_bounds(self, row, col):
         """Test coordinate conversion at boundaries."""
-        # Test all corners and edges
-        corners_and_edges = [
-            (0, 0),
-            (0, 4),
-            (0, 8),  # Top row
-            (4, 0),
-            (4, 8),  # Middle row edges
-            (8, 0),
-            (8, 4),
-            (8, 8),  # Bottom row
-        ]
-
-        for row, col in corners_and_edges:
-            result = _coords_to_square_name(row, col)
-            # Should produce valid square names
-            assert len(result) == 2
-            assert result[0] in "123456789"
-            assert result[1] in "abcdefghi"
+        result = _coords_to_square_name(row, col)
+        # Should not raise an exception and should return a valid string
+        assert isinstance(result, str)
+        assert len(result) == 2  # Format: digit + letter
+        assert result[0] in "123456789"
+        assert result[1] in "abcdefghi"
 
 
 class TestIntegrationMoveFormatting:

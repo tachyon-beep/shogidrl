@@ -711,23 +711,32 @@ class TestPrepareAndHandleDemoMode:
         assert piece_info == "test_piece"
         mock_components["game"].get_piece.assert_called_once_with(1, 2)
 
-    def test_prepare_demo_info_empty_moves(self, step_manager, mock_components):
-        """Test demo info preparation with empty moves."""
-        piece_info = step_manager._prepare_demo_info([])
-        assert piece_info is None
-
-    def test_prepare_demo_info_none_move(self, step_manager, mock_components):
-        """Test demo info preparation with None move."""
-        piece_info = step_manager._prepare_demo_info([None])
-        assert piece_info is None
-
-    def test_prepare_demo_info_invalid_move_format(self, step_manager, mock_components):
-        """Test demo info preparation with invalid move format."""
-        legal_moves = [(1, 2, 3)]  # Too short
+    @pytest.mark.parametrize(
+        "legal_moves,expected_result,test_description",
+        [
+            ([], None, "empty moves"),
+            ([None], None, "none move"),
+            ([(1, 2, 3)], None, "invalid move format (too short)"),
+            ([(1, 2, 3, 4, 5), (2, 3, 4, 5, 6)], "test_piece", "valid moves"),
+        ],
+        ids=["empty", "none", "invalid_format", "valid"],
+    )
+    def test_prepare_demo_info_scenarios(self, step_manager, mock_components, legal_moves, expected_result, test_description):
+        """Test demo info preparation with various move scenarios."""
+        if expected_result == "test_piece":
+            mock_components["game"].get_piece.return_value = "test_piece"
+        
         piece_info = step_manager._prepare_demo_info(legal_moves)
-        assert piece_info is None
+        
+        assert piece_info == expected_result
+        
+        # Only check get_piece call for valid moves
+        if legal_moves and legal_moves[0] is not None and len(legal_moves[0]) >= 5:
+            mock_components["game"].get_piece.assert_called_once_with(1, 2)
+        else:
+            mock_components["game"].get_piece.assert_not_called()
 
-    def test_prepare_demo_info_get_piece_fails(self, step_manager, mock_components):
+    def test_prepare_demo_info_exception_handling(self, step_manager, mock_components):
         """Test demo info preparation when get_piece fails."""
         legal_moves = [(1, 2, 3, 4, 5)]
         mock_components["game"].get_piece.side_effect = AttributeError("No such method")

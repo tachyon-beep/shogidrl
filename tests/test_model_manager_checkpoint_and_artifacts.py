@@ -363,14 +363,13 @@ class TestModelManagerArtifacts:
         # Verify artifact not created
         assert result is False
 
-    @patch("keisei.training.model_manager.wandb")
     @patch("keisei.training.model_manager.features.FEATURE_SPECS")
     @patch("keisei.training.model_manager.model_factory")
     def test_create_model_artifact_file_missing(
         self,
         mock_model_factory,
         mock_features,
-        mock_wandb,
+        mock_wandb_disabled,  # Use standardized W&B fixture
         mock_config,
         mock_args,
         device,
@@ -386,8 +385,7 @@ class TestModelManagerArtifacts:
         mock_model.to.return_value = mock_model
         mock_model_factory.return_value = mock_model
 
-        # Setup wandb mock
-        mock_wandb.run = Mock()
+        # W&B is mocked by the fixture
 
         # Create ModelManager
         manager = ModelManager(mock_config, mock_args, device, logger_func)
