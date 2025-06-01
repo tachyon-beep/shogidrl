@@ -17,8 +17,9 @@ if TYPE_CHECKING:
     from keisei.training.callbacks import Callback
     from keisei.training.display import TrainingDisplay
     from keisei.training.parallel import ParallelManager
-    from keisei.training.step_manager import EpisodeState, StepManager
+    from keisei.training.step_manager import EpisodeState, StepManager, StepResult  # Added StepResult
     from keisei.training.trainer import Trainer  # Forward reference
+    from typing import Callable  # Added Callable
 
 
 class TrainingLoopManager:
@@ -239,169 +240,186 @@ class TrainingLoopManager:
 
         return num_steps_collected
 
-    def _run_epoch_sequential(self, log_both):
+    def _run_epoch_sequential(self, log_both: "Callable"):
         """
-        Sequential experience collection (original implementation).
+        Sequential experience collection.
+        Refactored for clarity and reduced complexity.
         """
         num_steps_collected_this_epoch = 0
         while num_steps_collected_this_epoch < self.config.training.steps_per_epoch:
-            if self.trainer.global_timestep >= self.config.training.total_timesteps:
+            should_continue = self._process_step_and_handle_episode(log_both)
+            if not should_continue:
                 break
 
-            if self.episode_state is None:
-                log_both(
-                    "[ERROR] Episode state is None at the start of a step collection. Resetting.",
-                    also_to_wandb=True,
-                )
-                if self.step_manager is None:
-                    raise RuntimeError(STEP_MANAGER_NOT_AVAILABLE_MSG)
-                self.episode_state = self.step_manager.reset_episode()
-                if self.episode_state is None:
-                    raise RuntimeError(
-                        "Failed to recover from None episode_state by resetting."
-                    )
-                continue
-
-            if self.step_manager is None:
-                raise RuntimeError(STEP_MANAGER_NOT_AVAILABLE_MSG)
-
-            step_result = self.step_manager.execute_step(
-                episode_state=self.episode_state,
-                global_timestep=self.trainer.global_timestep,
-                logger_func=log_both,
-            )
-
-            if not step_result.success:
-                log_both(
-                    f"[WARNING] Step execution failed at timestep {self.trainer.global_timestep}. Resetting episode.",
-                    also_to_wandb=True,
-                )
-                if self.step_manager is None:
-                    raise RuntimeError(STEP_MANAGER_NOT_AVAILABLE_MSG)
-                self.episode_state = self.step_manager.reset_episode()
-                continue
-
-            if self.step_manager is None:
-                raise RuntimeError(STEP_MANAGER_NOT_AVAILABLE_MSG)
-            updated_episode_state = self.step_manager.update_episode_state(
-                self.episode_state, step_result
-            )
-
-            if step_result.done:
-                # Use metrics manager to safely update stats
-                if step_result.info and "winner" in step_result.info:
-                    winner = step_result.info["winner"]
-                    if winner == "black":
-                        self.trainer.metrics_manager.black_wins += 1
-                    elif winner == "white":
-                        self.trainer.metrics_manager.white_wins += 1
-                    else:
-                        self.trainer.metrics_manager.draws += 1
-                else:
-                    self.trainer.metrics_manager.draws += 1
-
-                game_stats_for_sm = {
-                    "black_wins": self.trainer.metrics_manager.black_wins,
-                    "white_wins": self.trainer.metrics_manager.white_wins,
-                    "draws": self.trainer.metrics_manager.draws,
-                }
-                if self.step_manager is None:
-                    raise RuntimeError(STEP_MANAGER_NOT_AVAILABLE_MSG)
-                new_episode_state_after_end = self.step_manager.handle_episode_end(
-                    updated_episode_state,
-                    step_result,
-                    game_stats_for_sm,
-                    self.trainer.metrics_manager.total_episodes_completed,
-                    log_both,
-                )
-                self.trainer.metrics_manager.total_episodes_completed += 1
-
-                ep_len = updated_episode_state.episode_length
-                ep_rew = updated_episode_state.episode_reward
-                ep_metrics_str = f"L:{ep_len} R:{ep_rew:.2f}"
-
-                total_games = (
-                    self.trainer.metrics_manager.black_wins
-                    + self.trainer.metrics_manager.white_wins
-                    + self.trainer.metrics_manager.draws
-                )
-                bw_rate = (
-                    self.trainer.metrics_manager.black_wins / total_games
-                    if total_games > 0
-                    else 0.0
-                )
-                ww_rate = (
-                    self.trainer.metrics_manager.white_wins / total_games
-                    if total_games > 0
-                    else 0.0
-                )
-                d_rate = (
-                    self.trainer.metrics_manager.draws / total_games
-                    if total_games > 0
-                    else 0.0
-                )
-
-                self.trainer.metrics_manager.pending_progress_updates.update(
-                    {
-                        "ep_metrics": ep_metrics_str,
-                        "black_wins_cum": self.trainer.metrics_manager.black_wins,
-                        "white_wins_cum": self.trainer.metrics_manager.white_wins,
-                        "draws_cum": self.trainer.metrics_manager.draws,
-                        "black_win_rate": bw_rate,
-                        "white_win_rate": ww_rate,
-                        "draw_rate": d_rate,
-                        "total_episodes": self.trainer.metrics_manager.total_episodes_completed,
-                    }
-                )
-                self.episode_state = new_episode_state_after_end
-            else:
-                self.episode_state = updated_episode_state
-
-            self.trainer.metrics_manager.global_timestep += 1
             num_steps_collected_this_epoch += 1
-            self.steps_since_last_time_for_sps += 1
-
-            if (
-                self.trainer.global_timestep % self.config.training.render_every_steps
-                == 0
-            ):
-                if hasattr(self.display, "update_log_panel") and callable(
-                    self.display.update_log_panel
-                ):
-                    self.display.update_log_panel(self.trainer)
-
-            current_time = time.time()
-            display_update_interval = getattr(
-                self.config.training, "rich_display_update_interval_seconds", 0.2
-            )
-
-            if (current_time - self.last_display_update_time) > display_update_interval:
-                time_delta_sps = current_time - self.last_time_for_sps
-                current_speed = (
-                    self.steps_since_last_time_for_sps / time_delta_sps
-                    if time_delta_sps > 0
-                    else 0.0
-                )
-
-                self.trainer.metrics_manager.pending_progress_updates.setdefault(
-                    "current_epoch", self.current_epoch
-                )
-
-                if hasattr(self.display, "update_progress") and callable(
-                    self.display.update_progress
-                ):
-                    self.display.update_progress(
-                        self.trainer,
-                        current_speed,
-                        self.trainer.metrics_manager.pending_progress_updates,
-                    )
-                self.trainer.metrics_manager.pending_progress_updates.clear()
-
-                self.last_time_for_sps = current_time
-                self.steps_since_last_time_for_sps = 0
-                self.last_display_update_time = current_time
+            self._handle_display_updates()
 
         return num_steps_collected_this_epoch
+
+    def _handle_successful_step(
+        self,
+        episode_state: "EpisodeState",
+        step_result: "StepResult",  # Corrected type hint
+        log_both: "Callable",  # Corrected type hint
+    ) -> "EpisodeState":
+        """Handles the logic after a successful step, including episode end."""
+        if self.step_manager is None:
+            raise RuntimeError(STEP_MANAGER_NOT_AVAILABLE_MSG)
+
+        updated_episode_state = self.step_manager.update_episode_state(
+            episode_state, step_result
+        )
+
+        if step_result.done:
+            current_cumulative_stats = {
+                "black_wins": self.trainer.metrics_manager.black_wins,
+                "white_wins": self.trainer.metrics_manager.white_wins,
+                "draws": self.trainer.metrics_manager.draws,
+            }
+
+            new_episode_state_after_end, episode_winner_color = self.step_manager.handle_episode_end(
+                updated_episode_state,
+                step_result,
+                current_cumulative_stats,
+                self.trainer.metrics_manager.total_episodes_completed,
+                log_both,
+            )
+
+            if episode_winner_color == "black":
+                self.trainer.metrics_manager.black_wins += 1
+            elif episode_winner_color == "white":
+                self.trainer.metrics_manager.white_wins += 1
+            elif episode_winner_color is None:
+                self.trainer.metrics_manager.draws += 1
+
+            self.trainer.metrics_manager.total_episodes_completed += 1
+
+            self._log_episode_metrics(updated_episode_state)
+            return new_episode_state_after_end
+        else:
+            return updated_episode_state
+
+    def _process_step_and_handle_episode(self, log_both: "Callable") -> bool:
+        """Processes a single step and handles episode completion if necessary.
+        Returns True if the loop should continue, False if a critical error occurred or max timesteps reached.
+        """
+        if self.trainer.global_timestep >= self.config.training.total_timesteps:
+            return False  # Stop epoch
+
+        if self.episode_state is None:
+            log_both(
+                "[ERROR] Episode state is None. Resetting.", also_to_wandb=True
+            )
+            if self.step_manager is None:
+                raise RuntimeError(STEP_MANAGER_NOT_AVAILABLE_MSG)
+            self.episode_state = self.step_manager.reset_episode()
+            if self.episode_state is None:
+                raise RuntimeError("Failed to reset episode_state.")
+            return True  # Continue epoch
+
+        if self.step_manager is None:
+            raise RuntimeError(STEP_MANAGER_NOT_AVAILABLE_MSG)
+
+        step_result = self.step_manager.execute_step(
+            episode_state=self.episode_state,
+            global_timestep=self.trainer.global_timestep,
+            logger_func=log_both,
+        )
+
+        if not step_result.success:
+            log_both(
+                f"[WARNING] Step failed at {self.trainer.global_timestep}. Resetting.",
+                also_to_wandb=True,
+            )
+            if self.step_manager is None:
+                raise RuntimeError(STEP_MANAGER_NOT_AVAILABLE_MSG)
+            self.episode_state = self.step_manager.reset_episode()
+            return True  # Continue epoch
+
+        self.episode_state = self._handle_successful_step(self.episode_state, step_result, log_both)
+
+        self.trainer.metrics_manager.global_timestep += 1
+        self.steps_since_last_time_for_sps += 1
+        return True  # Continue epoch
+
+    def _log_episode_metrics(self, episode_state: "EpisodeState"):
+        """Logs metrics at the end of an episode."""
+        ep_len = episode_state.episode_length
+        ep_rew = episode_state.episode_reward
+        ep_metrics_str = f"L:{ep_len} R:{ep_rew:.2f}"
+
+        total_games = (
+            self.trainer.metrics_manager.black_wins
+            + self.trainer.metrics_manager.white_wins
+            + self.trainer.metrics_manager.draws
+        )
+        bw_rate = (
+            self.trainer.metrics_manager.black_wins / total_games
+            if total_games > 0
+            else 0.0
+        )
+        ww_rate = (
+            self.trainer.metrics_manager.white_wins / total_games
+            if total_games > 0
+            else 0.0
+        )
+        d_rate = (
+            self.trainer.metrics_manager.draws / total_games
+            if total_games > 0
+            else 0.0
+        )
+
+        self.trainer.metrics_manager.pending_progress_updates.update(
+            {
+                "ep_metrics": ep_metrics_str,
+                "black_wins_cum": self.trainer.metrics_manager.black_wins,
+                "white_wins_cum": self.trainer.metrics_manager.white_wins,
+                "draws_cum": self.trainer.metrics_manager.draws,
+                "black_win_rate": bw_rate,
+                "white_win_rate": ww_rate,
+                "draw_rate": d_rate,
+                "total_episodes": self.trainer.metrics_manager.total_episodes_completed,
+            }
+        )
+
+    def _handle_display_updates(self):
+        """Handles periodic display updates based on time and step intervals."""
+        if self.trainer.global_timestep % self.config.training.render_every_steps == 0:
+            if hasattr(self.display, "update_log_panel") and callable(
+                self.display.update_log_panel
+            ):
+                self.display.update_log_panel(self.trainer)
+
+        current_time = time.time()
+        display_update_interval = getattr(
+            self.config.training, "rich_display_update_interval_seconds", 0.2
+        )
+
+        if (current_time - self.last_display_update_time) > display_update_interval:
+            time_delta_sps = current_time - self.last_time_for_sps
+            current_speed = (
+                self.steps_since_last_time_for_sps / time_delta_sps
+                if time_delta_sps > 0
+                else 0.0
+            )
+
+            self.trainer.metrics_manager.pending_progress_updates.setdefault(
+                "current_epoch", self.current_epoch
+            )
+
+            if hasattr(self.display, "update_progress") and callable(
+                self.display.update_progress
+            ):
+                self.display.update_progress(
+                    self.trainer,
+                    current_speed,
+                    self.trainer.metrics_manager.pending_progress_updates,
+                )
+            self.trainer.metrics_manager.pending_progress_updates.clear()
+
+            self.last_time_for_sps = current_time
+            self.steps_since_last_time_for_sps = 0
+            self.last_display_update_time = current_time
 
     def _build_env_config(self) -> Dict[str, Any]:
         """Build environment configuration dictionary for parallel workers."""

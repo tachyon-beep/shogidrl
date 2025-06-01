@@ -42,5 +42,5 @@ parallel:
   worker_seed_offset: 1000        # Offset for worker random seeds to ensure diversity
 
 demo:
-  enable_demo_mode: true  # If true, enables demo mode with per-move delay and extra logging
+  enable_demo_mode: false  # If true, enables demo mode with per-move delay and extra logging
   demo_mode_delay: 0.01     # Delay in seconds between moves in demo mode

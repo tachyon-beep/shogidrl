@@ -161,10 +161,10 @@ class ExperienceBuffer:
             obs_tensor = torch.stack(self.obs[:num_samples], dim=0)
         except RuntimeError as e:
             # This might happen if tensors in self.obs are not on the same device or have inconsistent shapes.
-            # Should not happen if train.py's add() is consistent.
-            print(f"Error stacking observation tensors in ExperienceBuffer: {e}")
-            # Fallback or re-raise, for now, let's indicate a problem by returning empty.
-            return {}
+            # Should not happen if train.py\'s add() is consistent.
+            raise ValueError(
+                f"Failed to stack observation tensors: {e}. Check tensor shapes and devices."
+            ) from e
 
         # --- Convert other lists to tensors ---
         actions_tensor = torch.tensor(
@@ -191,8 +191,9 @@ class ExperienceBuffer:
         try:
             legal_masks_tensor = torch.stack(self.legal_masks[:num_samples], dim=0)
         except RuntimeError as e:
-            print(f"Error stacking legal_mask tensors in ExperienceBuffer: {e}")
-            return {}
+            raise ValueError(
+                f"Failed to stack legal_mask tensors: {e}. Check tensor shapes and devices."
+            ) from e
 
         return {
             "obs": obs_tensor,

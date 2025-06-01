@@ -174,6 +174,37 @@ def test_experience_buffer_get_batch_empty():
     assert batch == {}
 
 
+def test_experience_buffer_get_batch_stack_error():
+    """Test that get_batch raises ValueError on tensor stack error."""
+    buf = ExperienceBuffer(buffer_size=2, gamma=0.99, lambda_gae=0.95)
+    mapper = PolicyOutputMapper()
+
+    # Create obs tensors with different shapes to cause a stack error
+    obs1 = torch.randn(46, 9, 9)
+    obs2 = torch.randn(46, 8, 8)  # Different shape
+    legal_mask = torch.zeros(mapper.get_total_actions(), dtype=torch.bool)
+
+    buf.add(obs1, 1, 1.0, 0.1, 0.5, False, legal_mask)
+    buf.add(obs2, 2, 2.0, 0.2, 1.0, True, legal_mask)
+    buf.compute_advantages_and_returns(0.0)
+
+    with pytest.raises(ValueError, match="Failed to stack observation tensors"):
+        buf.get_batch()
+
+    # Test for legal_mask stacking error
+    buf.clear()
+    obs = torch.randn(46, 9, 9)
+    legal_mask1 = torch.zeros(mapper.get_total_actions(), dtype=torch.bool)
+    legal_mask2 = torch.zeros(mapper.get_total_actions() + 1, dtype=torch.bool) # Different shape
+
+    buf.add(obs, 1, 1.0, 0.1, 0.5, False, legal_mask1)
+    buf.add(obs, 2, 2.0, 0.2, 1.0, True, legal_mask2)
+    buf.compute_advantages_and_returns(0.0)
+
+    with pytest.raises(ValueError, match="Failed to stack legal_mask tensors"):
+        buf.get_batch()
+
+
 def test_experience_buffer_clear():
     """Test ExperienceBuffer clear method."""
     buf = ExperienceBuffer(buffer_size=3, gamma=0.99, lambda_gae=0.95)

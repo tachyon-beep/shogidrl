@@ -465,7 +465,7 @@ class TestHandleEpisodeEnd:
         mock_components["game"].reset.return_value = reset_obs
 
         # Execute episode end handling
-        new_state = step_manager.handle_episode_end(
+        new_state, _ = step_manager.handle_episode_end(
             sample_episode_state, step_result, game_stats, 17, mock_logger
         )
 
@@ -563,7 +563,7 @@ class TestHandleEpisodeEnd:
             value_pred=0.8,
         )
 
-        # 20 black wins, 30 white wins, 50 draws = 100 total
+        # Initial stats: 20 black wins, 30 white wins, 50 draws = 100 total
         game_stats = {"black_wins": 20, "white_wins": 30, "draws": 50}
         mock_components["game"].reset.return_value = rng.random(
             (10, 10, 20), dtype=np.float32
@@ -574,11 +574,15 @@ class TestHandleEpisodeEnd:
             sample_episode_state, step_result, game_stats, 99, mock_logger
         )
 
-        # Verify win rates in wandb data
+        # Verify win rates in wandb data (calculated AFTER current game is added)
+        # Black wins, so black_wins becomes 21, total games becomes 101
         wandb_data = mock_logger.call_args[1]["wandb_data"]
-        assert wandb_data["black_win_rate"] == pytest.approx(0.2)  # 20/100
-        assert wandb_data["white_win_rate"] == pytest.approx(0.3)  # 30/100
-        assert wandb_data["draw_rate"] == pytest.approx(0.5)  # 50/100
+        assert wandb_data["black_win_rate"] == pytest.approx(21 / 101)
+        assert wandb_data["white_win_rate"] == pytest.approx(30 / 101)
+        assert wandb_data["draw_rate"] == pytest.approx(50 / 101)
+        assert wandb_data["black_wins_total"] == 21
+        assert wandb_data["white_wins_total"] == 30
+        assert wandb_data["draws_total"] == 50
 
     def test_episode_end_zero_games(
         self, step_manager, sample_episode_state, mock_logger, mock_components
@@ -606,11 +610,15 @@ class TestHandleEpisodeEnd:
             sample_episode_state, step_result, game_stats, 0, mock_logger
         )
 
-        # Verify win rates are 0.0 when no games played
+        # Verify win rates are calculated after this game (black wins)
+        # black_wins becomes 1, total games becomes 1
         wandb_data = mock_logger.call_args[1]["wandb_data"]
-        assert wandb_data["black_win_rate"] == pytest.approx(0.0)
-        assert wandb_data["white_win_rate"] == pytest.approx(0.0)
-        assert wandb_data["draw_rate"] == pytest.approx(0.0)
+        assert wandb_data["black_win_rate"] == pytest.approx(1.0) # 1/1
+        assert wandb_data["white_win_rate"] == pytest.approx(0.0) # 0/1
+        assert wandb_data["draw_rate"] == pytest.approx(0.0)    # 0/1
+        assert wandb_data["black_wins_total"] == 1
+        assert wandb_data["white_wins_total"] == 0
+        assert wandb_data["draws_total"] == 0
 
     def test_episode_end_reset_fails(
         self, step_manager, sample_episode_state, mock_logger, mock_components
@@ -634,7 +642,7 @@ class TestHandleEpisodeEnd:
         mock_components["game"].reset.side_effect = RuntimeError("Reset failed")
 
         # Execute episode end handling
-        returned_state = step_manager.handle_episode_end(
+        returned_state, _ = step_manager.handle_episode_end(
             sample_episode_state, step_result, game_stats, 0, mock_logger
         )
 

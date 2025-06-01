@@ -5,18 +5,17 @@ This module encapsulates the logic for executing single training steps,
 handling episode boundaries, and managing the interaction between the agent
 and the environment during training.
 """
-
-import time
+import time  # Added import
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-import numpy as np
-import torch
+import numpy as np  # Added import
+import torch  # Added import
 
 from keisei.config_schema import AppConfig
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.ppo_agent import PPOAgent
-from keisei.shogi import ShogiGame
+from keisei.shogi import Color, ShogiGame  # Added Color import
 from keisei.utils import PolicyOutputMapper, format_move_with_description_enhanced
 
 
@@ -251,55 +250,57 @@ class StepManager:
         self,
         episode_state: EpisodeState,
         step_result: StepResult,
-        game_stats: Dict[str, int],  # black_wins, white_wins, draws
+        game_stats: Dict[str, int],  # Will be modified in place
         total_episodes_completed: int,
         logger_func: Callable[..., None],
-    ) -> EpisodeState:
+    ) -> Tuple[EpisodeState, Optional[str]]: # Return tuple
         """
-        Handle the end of an episode and prepare for the next one.
+        Handle the end of an episode, prepare for the next one, and log results.
 
         Args:
             episode_state: Current episode state
             step_result: Result from the final step of the episode
-            game_stats: Running game statistics (wins/draws)
-            total_episodes_completed: Total episodes completed so far
+            game_stats: Running game statistics (e.g., black_wins, white_wins, draws) - WILL BE MODIFIED IN PLACE.
+            total_episodes_completed: Total episodes completed so far (before this one)
             logger_func: Function for logging messages
 
         Returns:
-            New EpisodeState for the next episode
+            Tuple[New EpisodeState for the next episode, final_winner_color (str or None)]
         """
-        # Extract game outcome information
-        game_outcome_color = None
-        game_outcome_reason = "Unknown"
+        final_winner_color, reason_from_info = self._determine_winner_and_reason(
+            step_result.info
+        )
+        game_outcome_message = self._format_game_outcome_message(
+            final_winner_color, reason_from_info
+        )
 
-        if step_result.info:
-            game_outcome_color = step_result.info.get("winner")
-            game_outcome_reason = step_result.info.get("reason", "Unknown")
+        # Update game_stats in place with the outcome of the current episode
+        if final_winner_color == "black":
+            game_stats["black_wins"] += 1
+        elif final_winner_color == "white":
+            game_stats["white_wins"] += 1
+        elif final_winner_color is None:  # Draw
+            game_stats["draws"] += 1
 
-        # Format game outcome message
-        if game_outcome_color == "black":
-            game_outcome_message = f"Black wins by {game_outcome_reason}."
-        elif game_outcome_color == "white":
-            game_outcome_message = f"White wins by {game_outcome_reason}."
-        elif game_outcome_color is None:
-            game_outcome_message = f"Draw by {game_outcome_reason}."
-        else:
-            game_outcome_message = (
-                f"Game ended: {game_outcome_color} by {game_outcome_reason}."
-            )
-
-        # Calculate win rates
-        total_games = (
+        # Calculate win rates for logging using the *updated* game_stats
+        updated_total_games = (
             game_stats["black_wins"] + game_stats["white_wins"] + game_stats["draws"]
         )
-        current_black_win_rate = (
-            game_stats["black_wins"] / total_games if total_games > 0 else 0.0
+
+        updated_black_win_rate = (
+            game_stats["black_wins"] / updated_total_games
+            if updated_total_games > 0
+            else 0.0
         )
-        current_white_win_rate = (
-            game_stats["white_wins"] / total_games if total_games > 0 else 0.0
+        updated_white_win_rate = (
+            game_stats["white_wins"] / updated_total_games
+            if updated_total_games > 0
+            else 0.0
         )
-        current_draw_rate = (
-            game_stats["draws"] / total_games if total_games > 0 else 0.0
+        updated_draw_rate = (
+            game_stats["draws"] / updated_total_games
+            if updated_total_games > 0
+            else 0.0
         )
 
         # Log episode completion
@@ -310,11 +311,14 @@ class StepManager:
             wandb_data={
                 "episode_reward": episode_state.episode_reward,
                 "episode_length": episode_state.episode_length,
-                "game_outcome": game_outcome_color,
-                "game_reason": game_outcome_reason,
-                "black_win_rate": current_black_win_rate,
-                "white_win_rate": current_white_win_rate,
-                "draw_rate": current_draw_rate,
+                "game_outcome": final_winner_color,
+                "game_reason": reason_from_info,
+                "black_wins_total": game_stats["black_wins"],
+                "white_wins_total": game_stats["white_wins"],
+                "draws_total": game_stats["draws"],
+                "black_win_rate": updated_black_win_rate, # Corrected key
+                "white_win_rate": updated_white_win_rate, # Corrected key
+                "draw_rate": updated_draw_rate,          # Corrected key
             },
             log_level="info",
         )
@@ -331,23 +335,23 @@ class StepManager:
                 device=self.device,
             ).unsqueeze(0)
 
-            return EpisodeState(
+            new_episode_state = EpisodeState(
                 current_obs=reset_result,
                 current_obs_tensor=reset_obs_tensor,
                 episode_reward=0.0,
                 episode_length=0,
             )
+            return new_episode_state, final_winner_color
 
         except (RuntimeError, ValueError, OSError) as e:
-            # If reset fails, log error and return current state
             logger_func(
                 f"CRITICAL: Game reset failed after episode end: {e}",
-                True,  # also_to_wandb
-                None,  # wandb_data
-                "error",  # log_level
+                True,
+                None,
+                "error",
             )
             # Return current state to allow caller to handle the error
-            return episode_state
+            return episode_state, final_winner_color # Return winner color even on reset failure
 
     def reset_episode(self) -> EpisodeState:
         """
@@ -463,3 +467,38 @@ class StepManager:
         demo_delay = self.config.demo.demo_mode_delay
         if demo_delay > 0:
             time.sleep(demo_delay)
+
+    def _determine_winner_and_reason(
+        self, step_info: Optional[Dict[str, Any]]
+    ) -> Tuple[Optional[str], str]:
+        """Helper to determine winner and reason from step_info and game state."""
+        winner_from_info = None
+        reason_from_info = "Unknown"
+
+        if step_info:
+            winner_from_info = step_info.get("winner")
+            reason_from_info = step_info.get("reason", "Unknown")
+
+        final_winner_color = winner_from_info
+
+        if reason_from_info == "Tsumi" and winner_from_info is None:
+            if hasattr(self.game, "winner") and self.game.winner is not None:
+                game_winner_enum = self.game.winner
+                if game_winner_enum == Color.BLACK:
+                    final_winner_color = "black"
+                elif game_winner_enum == Color.WHITE:
+                    final_winner_color = "white"
+
+        return final_winner_color, reason_from_info
+
+    def _format_game_outcome_message(
+        self, winner: Optional[str], reason: str
+    ) -> str:
+        """Helper to format the game outcome message."""
+        if winner == "black":
+            return f"Black wins by {reason}."
+        if winner == "white":
+            return f"White wins by {reason}."
+        if winner is None:
+            return f"Draw by {reason}."
+        return f"Game ended: {winner} by {reason}."  # Should ideally not be reached with current logic
