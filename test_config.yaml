@@ -1,0 +1,65 @@
+env:
+  device: cpu
+  input_channels: 46
+  num_actions_total: 13527
+  seed: 42
+  max_moves_per_game: 50  # Low value to force more natural game endings
+
+training:
+  total_timesteps: 2000
+  steps_per_epoch: 200
+  ppo_epochs: 4
+  minibatch_size: 32
+  learning_rate: 3e-4
+  gamma: 0.99
+  clip_epsilon: 0.2
+  value_loss_coeff: 0.5
+  entropy_coef: 0.01
+  render_every_steps: 1
+  refresh_per_second: 4
+  enable_spinner: true
+  input_features: core46
+  tower_depth: 6  # Smaller for faster testing
+  tower_width: 128  # Smaller for faster testing
+  se_ratio: 0.25
+  model_type: resnet
+  mixed_precision: false
+  ddp: false
+  gradient_clip_max_norm: 0.5
+  lambda_gae: 0.95
+  checkpoint_interval_timesteps: 10000
+  evaluation_interval_timesteps: 50000
+  weight_decay: 0.0
+
+evaluation:
+  num_games: 5
+  opponent_type: random
+  evaluation_interval_timesteps: 50000
+
+logging:
+  log_file: logs/test_training_log.txt
+  model_dir: test_models/
+  run_name: debug_draws_test
+
+wandb:
+  enabled: false
+  project: keisei-shogi-rl
+  entity: null
+  run_name_prefix: keisei
+  watch_model: false
+  watch_log_freq: 1000
+  watch_log_type: all
+
+parallel:
+  enabled: false
+  num_workers: 4
+  batch_size: 32
+  sync_interval: 100
+  compression_enabled: true
+  timeout_seconds: 10.0
+  max_queue_size: 1000
+  worker_seed_offset: 1000
+
+demo:
+  enable_demo_mode: false
+  demo_mode_delay: 0.5

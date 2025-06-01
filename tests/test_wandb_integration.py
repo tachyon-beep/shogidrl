@@ -12,8 +12,8 @@ from typing import Any, Dict, Optional
 from unittest.mock import Mock, patch
 
 import pytest
-import wandb
 
+import wandb
 from keisei.config_schema import (
     AppConfig,
     DemoConfig,
@@ -159,9 +159,7 @@ class TestWandBArtifacts:
             assert result is False
             log_mock.assert_not_called()
 
-    def test_create_model_artifact_success(
-        self, mock_wandb_active, tmp_path
-    ):
+    def test_create_model_artifact_success(self, mock_wandb_active, tmp_path):
         """Test successful artifact creation when W&B is enabled."""
         config = make_test_config(wandb_enabled=True)
         args = DummyArgs()
@@ -248,9 +246,7 @@ class TestWandBArtifacts:
             log_call_args = log_mock.call_args[0][0]
             assert "does not exist" in log_call_args
 
-    def test_create_model_artifact_wandb_error(
-        self, mock_wandb_active, tmp_path
-    ):
+    def test_create_model_artifact_wandb_error(self, mock_wandb_active, tmp_path):
         """Test artifact creation when W&B throws an error."""
         config = make_test_config(wandb_enabled=True)
         args = DummyArgs()
@@ -428,19 +424,25 @@ class TestWandBUtilities:
         ],
         ids=["success", "init_error"],
     )
-    def test_setup_wandb_scenarios(self, mock_wandb_disabled, init_side_effect, expected_result, should_verify_call_args):
+    def test_setup_wandb_scenarios(
+        self,
+        mock_wandb_disabled,
+        init_side_effect,
+        expected_result,
+        should_verify_call_args,
+    ):
         """Test W&B setup with success and error scenarios."""
         config = make_test_config(wandb_enabled=True)
-        
+
         # Mock wandb.init based on test scenario
         with patch("wandb.init", side_effect=init_side_effect) as mock_wandb_init:
             result = setup_wandb(config, "test_run", "/tmp/test")
 
             assert result is expected_result
-            
+
             if expected_result:
                 mock_wandb_init.assert_called_once()
-                
+
                 if should_verify_call_args:
                     # Verify init was called with correct parameters
                     call_kwargs = mock_wandb_init.call_args[1]

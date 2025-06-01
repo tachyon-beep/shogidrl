@@ -12,7 +12,6 @@ from pathlib import Path
 
 import pytest
 
-
 # Project root path resolution - works from any test file
 PROJECT_ROOT = Path(__file__).resolve().parents[1]  # Go up from tests/ to project root
 
@@ -29,7 +28,7 @@ class TestDependencyStructure:
         # Should be parseable as valid TOML
         with open(pyproject_path, "rb") as f:
             data = tomllib.load(f)
-        
+
         assert len(data) > 0
         assert "project" in data
 
@@ -61,10 +60,10 @@ class TestDependencyStructure:
         with open(pyproject_path, "rb") as f:
             data = tomllib.load(f)
 
-        # Check if dev dependencies are listed in build-system requirements, 
+        # Check if dev dependencies are listed in build-system requirements,
         # project optional dependencies, or the content as fallback
         content = pyproject_path.read_text(encoding="utf-8")
-        
+
         for dep in dev_deps:
             # Check in various possible locations
             found = False
@@ -73,11 +72,11 @@ class TestDependencyStructure:
                     if any(dep in dep_entry for dep_entry in dep_group):
                         found = True
                         break
-            
+
             # Fallback to string search if not found in structured way
             if not found and dep in content:
                 found = True
-                
+
             assert found, f"Dev dependency '{dep}' not found in pyproject.toml"
 
 
@@ -198,7 +197,7 @@ class TestDependencyFunctionality:
 
 class TestDependencyVersioning:
     """Test dependency version constraints."""
-    
+
     @pytest.mark.parametrize(
         "library_name,import_name,version_attr,expected_major,expected_minor",
         [
@@ -208,7 +207,9 @@ class TestDependencyVersioning:
         ],
         ids=["pydantic", "torch", "numpy"],
     )
-    def test_version_compatibility(self, library_name, import_name, version_attr, expected_major, expected_minor):
+    def test_version_compatibility(
+        self, library_name, import_name, version_attr, expected_major, expected_minor
+    ):
         """Test that library versions are compatible."""
         import importlib
 
@@ -223,14 +224,16 @@ class TestDependencyVersioning:
 
         # Handle version strings with suffixes (e.g., "2.5.0+cu126" -> "2.5.0")
         version_str = version_str.split("+")[0]
-        
+
         version_parts = [int(x) for x in version_str.split(".")]
         major_version = version_parts[0]
         minor_version = version_parts[1] if len(version_parts) > 1 else 0
-        
+
         if expected_minor is None:
             # Only check major version
-            assert major_version >= expected_major, f"{library_name} version too old: {version_str}"
+            assert (
+                major_version >= expected_major
+            ), f"{library_name} version too old: {version_str}"
         else:
             # Check major.minor
             assert major_version > expected_major or (
@@ -274,14 +277,18 @@ class TestRemovedDependencies:
         if "project" in data and "dependencies" in data["project"]:
             main_deps = data["project"]["dependencies"]
             for dep in main_deps:
-                assert "matplotlib" not in dep.lower(), f"matplotlib found in main dependencies: {dep}"
+                assert (
+                    "matplotlib" not in dep.lower()
+                ), f"matplotlib found in main dependencies: {dep}"
 
         # Check optional dependencies (dev, etc.)
         if "project" in data and "optional-dependencies" in data["project"]:
             optional_deps = data["project"]["optional-dependencies"]
             for group_name, deps in optional_deps.items():
                 for dep in deps:
-                    assert "matplotlib" not in dep.lower(), f"matplotlib found in {group_name} dependencies: {dep}"
+                    assert (
+                        "matplotlib" not in dep.lower()
+                    ), f"matplotlib found in {group_name} dependencies: {dep}"
 
 
 class TestDependencyAnalysis:
@@ -316,7 +323,9 @@ class TestDependencyAnalysis:
             # Dependency issues should be manageable - this count represents
             # known acceptable issues like dev dependencies not used in main code
             # If this fails, investigate the specific DEP002 issues reported
-            max_acceptable_issues = 20  # Conservative threshold allowing for project growth
+            max_acceptable_issues = (
+                20  # Conservative threshold allowing for project growth
+            )
             assert dep_issues <= max_acceptable_issues, (
                 f"Too many dependency issues: {dep_issues} > {max_acceptable_issues}. "
                 f"Check deptry output for specific issues and either fix them or "
@@ -413,14 +422,17 @@ class TestDependencyInstallation:
 
             # Extract main dependencies from pyproject.toml
             main_packages = ["torch", "numpy", "pydantic", "rich"]
-            
-            if "project" in pyproject_data and "dependencies" in pyproject_data["project"]:
+
+            if (
+                "project" in pyproject_data
+                and "dependencies" in pyproject_data["project"]
+            ):
                 pyproject_deps = pyproject_data["project"]["dependencies"]
-                
+
                 for pkg in main_packages:
                     # Check if package is in pyproject dependencies
                     pkg_in_pyproject = any(pkg in dep for dep in pyproject_deps)
-                    
+
                     if pkg_in_pyproject:
                         # Should also be in requirements.txt if it exists
                         assert (

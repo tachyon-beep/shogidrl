@@ -131,10 +131,10 @@ class TestModelManagerInitialization:
         # Setup mocks
         mock_feature_specs.__getitem__.return_value = Mock(num_planes=46)
         mock_model_factory.return_value = Mock()
-        
+
         # Create ModelManager
         manager = ModelManager(mock_config, mock_args, device, logger_func)
-        
+
         # Verify initialization
         assert manager.config == mock_config
         assert manager.args == mock_args
@@ -143,11 +143,11 @@ class TestModelManagerInitialization:
         assert manager.model is None  # Model not created yet
         assert manager.resumed_from_checkpoint is None
         assert manager.checkpoint_data is None
-        
+
         # Verify feature setup
         assert manager.input_features == mock_config.training.input_features
         assert manager.obs_shape == (46, 9, 9)
-        
+
         # Verify mixed precision setup for CPU
         assert not manager.use_mixed_precision
         assert manager.scaler is None
@@ -166,19 +166,19 @@ class TestModelManagerInitialization:
         # Setup mocks
         mock_feature_specs.__getitem__.return_value = Mock(num_planes=20)
         mock_model_factory.return_value = Mock()
-        
+
         # Create args with overrides
         args_with_overrides = MockArgs(
             input_features="custom",
             model="cnn",
             tower_depth=8,
             tower_width=128,
-            se_ratio=0.1
+            se_ratio=0.1,
         )
-        
+
         # Create ModelManager
         manager = ModelManager(mock_config, args_with_overrides, device, logger_func)
-        
+
         # Verify args override config values
         assert manager.input_features == "custom"
         assert manager.model_type == "cnn"
@@ -205,16 +205,16 @@ class TestModelManagerInitialization:
         mock_model_factory.return_value = Mock()
         mock_scaler_instance = Mock()
         mock_grad_scaler.return_value = mock_scaler_instance
-        
+
         # Enable mixed precision in config
         mock_config.training.mixed_precision = True
-        
+
         # Use CUDA device
         cuda_device = torch.device("cuda")
-        
+
         # Create ModelManager
         manager = ModelManager(mock_config, mock_args, cuda_device, logger_func)
-        
+
         # Verify mixed precision is enabled
         assert manager.use_mixed_precision is True
         assert manager.scaler == mock_scaler_instance
@@ -236,21 +236,24 @@ class TestModelManagerInitialization:
         mock_feature_specs.__getitem__.return_value = Mock(num_planes=46)
         mock_model_factory.return_value = Mock()
         mock_logger = Mock()
-        
+
         # Enable mixed precision in config (but device is CPU)
         mock_config.training.mixed_precision = True
-        
+
         # Create ModelManager
         manager = ModelManager(mock_config, mock_args, device, mock_logger)
-        
+
         # Verify mixed precision is disabled with warning
         assert manager.use_mixed_precision is False
         assert manager.scaler is None
-        
+
         # Verify warning was logged
         mock_logger.assert_called()
         warning_call = mock_logger.call_args[0][0]
-        assert "Mixed precision training requested but CUDA is not available" in warning_call
+        assert (
+            "Mixed precision training requested but CUDA is not available"
+            in warning_call
+        )
 
 
 class TestModelManagerUtilities:
@@ -272,13 +275,13 @@ class TestModelManagerUtilities:
         mock_feature_spec = Mock(num_planes=46)
         mock_features.__getitem__.return_value = mock_feature_spec
         mock_model_factory.return_value = Mock()
-        
+
         # Create ModelManager
         manager = ModelManager(mock_config, mock_args, device, logger_func)
-        
+
         # Get model info
         info = manager.get_model_info()
-        
+
         # Verify returned information
         expected_info = {
             "model_type": mock_config.training.model_type,
@@ -291,7 +294,7 @@ class TestModelManagerUtilities:
             "use_mixed_precision": False,  # CPU device
             "device": "cpu",
         }
-        
+
         assert info == expected_info
 
     @patch("keisei.training.model_manager.features.FEATURE_SPECS")
@@ -309,18 +312,18 @@ class TestModelManagerUtilities:
         # Setup mocks
         mock_feature_spec = Mock(num_planes=46)
         mock_features.__getitem__.return_value = mock_feature_spec
-        
+
         # Create a mock model that responds to .to()
         mock_model = Mock()
         mock_model.to.return_value = mock_model  # .to() returns itself
         mock_model_factory.return_value = mock_model
-        
+
         # Create ModelManager
         manager = ModelManager(mock_config, mock_args, device, logger_func)
-        
+
         # Create model
         created_model = manager.create_model()
-        
+
         # Verify model factory was called with correct parameters
         mock_model_factory.assert_called_once_with(
             model_type=mock_config.training.model_type,
@@ -330,10 +333,10 @@ class TestModelManagerUtilities:
             tower_width=mock_config.training.tower_width,
             se_ratio=0.1,  # se_ratio is 0.1 in mock config
         )
-        
+
         # Verify model was moved to device
         mock_model.to.assert_called_once_with(device)
-        
+
         # Verify model is stored and returned
         assert manager.model == mock_model
         assert created_model == mock_model

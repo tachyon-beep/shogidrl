@@ -94,6 +94,8 @@ def _merge_overrides(config_data: dict, overrides: dict) -> None:
 
 def _map_flat_overrides(overrides: dict) -> dict:
     mapped = {}
+    if overrides is None:
+        return mapped
     for k, v in overrides.items():
         if k.isupper() and k in FLAT_KEY_TO_NESTED:
             mapped[FLAT_KEY_TO_NESTED[k]] = v

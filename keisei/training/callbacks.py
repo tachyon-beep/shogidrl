@@ -119,7 +119,9 @@ class EvaluationCallback(Callback):
                     ),
                     num_games=getattr(self.eval_cfg, "num_games", 20),
                     max_moves_per_game=getattr(
-                        self.eval_cfg, "max_moves_per_game", 256
+                        self.eval_cfg,
+                        "max_moves_per_game",
+                        trainer.config.env.max_moves_per_game,
                     ),
                     device_str=trainer.config.env.device,
                     log_file_path_eval=getattr(self.eval_cfg, "log_file_path_eval", ""),

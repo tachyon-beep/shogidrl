@@ -17,6 +17,9 @@ class EnvConfig(BaseModel):
         13527, description="Total number of possible actions."
     )
     seed: int = Field(42, description="Random seed for reproducibility.")
+    max_moves_per_game: int = Field(
+        500, description="Maximum number of moves per game before declaring a draw."
+    )
 
 
 class TrainingConfig(BaseModel):

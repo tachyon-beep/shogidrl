@@ -55,7 +55,15 @@ class TestBasicMoveFormatting:
         ],
         ids=["pawn", "rook", "knight"],
     )
-    def test_drop_moves(self, policy_mapper, piece_type, col, row, expected_notation, expected_description):
+    def test_drop_moves(
+        self,
+        policy_mapper,
+        piece_type,
+        col,
+        row,
+        expected_notation,
+        expected_description,
+    ):
         """Test formatting drop moves for different pieces."""
         move = (None, None, col, row, piece_type)
         result = format_move_with_description(move, policy_mapper, game=None)
@@ -186,7 +194,14 @@ class TestPieceNaming:
             (PieceType.PROMOTED_KNIGHT, "Narikei (Promoted Knight)"),
             (PieceType.PROMOTED_SILVER, "Narigin (Promoted Silver)"),
         ],
-        ids=["promoted_pawn", "promoted_rook", "promoted_bishop", "promoted_lance", "promoted_knight", "promoted_silver"],
+        ids=[
+            "promoted_pawn",
+            "promoted_rook",
+            "promoted_bishop",
+            "promoted_lance",
+            "promoted_knight",
+            "promoted_silver",
+        ],
     )
     def test_promoted_piece_names(self, piece_type, expected_name):
         """Test promoted piece name generation."""
@@ -203,7 +218,14 @@ class TestPieceNaming:
             (PieceType.KNIGHT, "Keima (Knight) → Narikei (Promoted Knight)"),
             (PieceType.SILVER, "Ginsho (Silver General) → Narigin (Promoted Silver)"),
         ],
-        ids=["pawn_promotion", "rook_promotion", "bishop_promotion", "lance_promotion", "knight_promotion", "silver_promotion"],
+        ids=[
+            "pawn_promotion",
+            "rook_promotion",
+            "bishop_promotion",
+            "lance_promotion",
+            "knight_promotion",
+            "silver_promotion",
+        ],
     )
     def test_promotion_transformations(self, piece_type, expected_name):
         """Test piece promotion transformations."""
@@ -245,11 +267,25 @@ class TestCoordinateConversion:
     @pytest.mark.parametrize(
         "row,col",
         [
-            (0, 0), (0, 4), (0, 8),  # Top row
-            (4, 0), (4, 8),          # Middle row edges
-            (8, 0), (8, 4), (8, 8),  # Bottom row
+            (0, 0),
+            (0, 4),
+            (0, 8),  # Top row
+            (4, 0),
+            (4, 8),  # Middle row edges
+            (8, 0),
+            (8, 4),
+            (8, 8),  # Bottom row
         ],
-        ids=["corner_0_0", "edge_0_4", "corner_0_8", "edge_4_0", "edge_4_8", "corner_8_0", "edge_8_4", "corner_8_8"],
+        ids=[
+            "corner_0_0",
+            "edge_0_4",
+            "corner_0_8",
+            "edge_4_0",
+            "edge_4_8",
+            "corner_8_0",
+            "edge_8_4",
+            "corner_8_8",
+        ],
     )
     def test_coordinate_bounds(self, row, col):
         """Test coordinate conversion at boundaries."""

@@ -3,8 +3,8 @@ Unit tests for ExperienceBuffer in experience_buffer.py
 """
 
 import numpy as np
-import torch
 import pytest
+import torch
 
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.utils import PolicyOutputMapper

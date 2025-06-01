@@ -28,7 +28,7 @@ def make_state_dict(in_channels):
     "old_channels,new_channels,scenario",
     [
         (46, 51, "pad"),
-        (51, 46, "truncate"), 
+        (51, 46, "truncate"),
         (46, 46, "noop"),
     ],
     ids=["pad", "truncate", "noop"],
@@ -39,9 +39,9 @@ def test_load_checkpoint_with_padding_scenarios(old_channels, new_channels, scen
     old_sd = make_state_dict(old_channels)
     model = DummyModel(new_channels)
     checkpoint = {"model_state_dict": old_sd}
-    
+
     # Load checkpoint with padding
     load_checkpoint_with_padding(model, checkpoint, new_channels)
-    
+
     # Verify the stem weight shape matches the new model
     assert model.stem.weight.shape[1] == new_channels

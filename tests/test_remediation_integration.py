@@ -22,7 +22,6 @@ from keisei.utils.profiling import (
     profile_training_step,
 )
 
-
 # Project root path resolution
 PROJECT_ROOT = Path(__file__).resolve().parents[1]  # Go up from tests/ to project root
 

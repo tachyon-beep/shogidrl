@@ -428,7 +428,7 @@ class TestProfilingEdgeCases:
         "operation_name",
         [
             "op-with-dashes",
-            "op_with_underscores", 
+            "op_with_underscores",
             "op.with.dots",
             "op with spaces",
         ],
@@ -442,7 +442,9 @@ class TestProfilingEdgeCases:
         stats = self.monitor.get_stats()
         # Operation should be recorded with the exact name provided (no normalization)
         expected_count_key = f"{operation_name}_count"
-        assert expected_count_key in stats, f"No stats found for operation '{operation_name}'. Available keys: {list(stats.keys())}"
+        assert (
+            expected_count_key in stats
+        ), f"No stats found for operation '{operation_name}'. Available keys: {list(stats.keys())}"
         assert stats[expected_count_key] == 1
 
 

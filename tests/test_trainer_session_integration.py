@@ -11,16 +11,6 @@ from unittest.mock import Mock, mock_open, patch
 
 import pytest
 
-from keisei.config_schema import (
-    AppConfig,
-    DemoConfig,
-    EnvConfig,
-    EvaluationConfig,
-    LoggingConfig,
-    ParallelConfig,
-    TrainingConfig,
-    WandBConfig,
-)
 from keisei.training.session_manager import SessionManager
 from keisei.training.trainer import Trainer
 
@@ -36,65 +26,9 @@ class MockArgs:
 
 
 @pytest.fixture
-def mock_config():
-    """Create a mock configuration for testing."""
-    return AppConfig(
-        env=EnvConfig(
-            device="cpu", num_actions_total=13527, input_channels=46, seed=42
-        ),
-        training=TrainingConfig(
-            total_timesteps=1000,
-            steps_per_epoch=64,
-            ppo_epochs=10,
-            minibatch_size=64,
-            learning_rate=3e-4,
-            gamma=0.99,
-            clip_epsilon=0.2,
-            value_loss_coeff=0.5,
-            entropy_coef=0.01,
-            render_every_steps=1,
-            refresh_per_second=4,
-            enable_spinner=True,
-            input_features="core46",
-            tower_depth=5,
-            tower_width=128,
-            se_ratio=0.25,
-            model_type="resnet",
-            mixed_precision=False,
-            ddp=False,
-            gradient_clip_max_norm=0.5,
-            lambda_gae=0.95,
-            checkpoint_interval_timesteps=1000,
-            evaluation_interval_timesteps=1000,
-            weight_decay=0.0,
-        ),
-        evaluation=EvaluationConfig(
-            num_games=20, opponent_type="random", evaluation_interval_timesteps=1000
-        ),
-        logging=LoggingConfig(
-            log_file="test.log", model_dir="/tmp/test_models", run_name=None
-        ),
-        wandb=WandBConfig(
-            enabled=False,
-            project="test-project",
-            entity=None,
-            run_name_prefix="test",
-            watch_model=False,
-            watch_log_freq=1000,
-            watch_log_type="all",
-        ),
-        demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5),
-        parallel=ParallelConfig(
-            enabled=False,
-            num_workers=4,
-            batch_size=32,
-            sync_interval=100,
-            compression_enabled=True,
-            timeout_seconds=10.0,
-            max_queue_size=1000,
-            worker_seed_offset=1000,
-        ),
-    )
+def mock_config(fast_app_config):
+    """Create a mock configuration for testing using the centralized fixture."""
+    return fast_app_config
 
 
 @pytest.fixture
@@ -173,7 +107,7 @@ class TestTrainerSessionIntegration:
         assert trainer.is_train_wandb_active is True
 
     @patch("keisei.training.utils.setup_seeding")
-    @patch("keisei.training.utils.setup_directories") 
+    @patch("keisei.training.utils.setup_directories")
     @patch("keisei.training.utils.setup_wandb")
     @patch("keisei.shogi.ShogiGame")
     @patch("keisei.shogi.features.FEATURE_SPECS")
@@ -192,7 +126,7 @@ class TestTrainerSessionIntegration:
         mock_setup_wandb,
         mock_setup_dirs,
         _mock_setup_seeding,
-        mock_wandb_active,  # Use the W&B fixture
+        mock_wandb_disabled,  # Use the correct fixture name
         mock_config,
         mock_args,
         temp_dir,
@@ -218,7 +152,7 @@ class TestTrainerSessionIntegration:
             trainer = Trainer(mock_config, mock_args)
 
         trainer.session_manager.finalize_session()
-        mock_wandb_active["finish"].assert_called_once()
+        mock_wandb_disabled["finish"].assert_called_once()
 
     @patch("keisei.training.utils.setup_directories")
     @patch("keisei.training.models.model_factory")

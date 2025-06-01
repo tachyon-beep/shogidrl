@@ -713,7 +713,7 @@ class ShogiGame:
             reward = 0.0  # No reward for trying to move in a completed game
             done = True
             info = {
-                "termination_reason": (
+                "reason": (
                     self.termination_reason
                     if self.termination_reason
                     else "Game already over"
@@ -935,11 +935,7 @@ class ShogiGame:
             player_who_made_the_move
         )  # Get reward from perspective of the player who moved
         done = self.game_over
-        info = (
-            {"termination_reason": self.termination_reason}
-            if self.termination_reason
-            else {}
-        )
+        info = {"reason": self.termination_reason} if self.termination_reason else {}
 
         return next_obs, reward, done, info
 

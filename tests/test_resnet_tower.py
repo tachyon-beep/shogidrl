@@ -382,7 +382,11 @@ class TestIntegrationAndEdgeCases:
         _, log_prob, value = model.get_action_and_value(obs_large)
         assert not torch.isnan(log_prob).any() and not torch.isnan(value).any()
 
-    @pytest.mark.parametrize("batch_size", [1, 2, 7, 16, 32], ids=["batch_1", "batch_2", "batch_7", "batch_16", "batch_32"])
+    @pytest.mark.parametrize(
+        "batch_size",
+        [1, 2, 7, 16, 32],
+        ids=["batch_1", "batch_2", "batch_7", "batch_16", "batch_32"],
+    )
     def test_batch_size_edge_cases(self, model, batch_size):
         """Test with different batch sizes including edge cases."""
         obs = torch.randn(batch_size, 46, 9, 9)

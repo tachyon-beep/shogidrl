@@ -3,9 +3,9 @@
 # pylint: disable=unused-import,unused-argument,protected-access
 # flake8: noqa: S1244,S6711,S125
 
-from dataclasses import (
+from dataclasses import (  # pylint: disable=unused-import,unused-argument,protected-access
     dataclass,
-)  # pylint: disable=unused-import,unused-argument,protected-access
+)
 from typing import Any, Dict, Optional  # pylint: disable=unused-import
 from unittest.mock import MagicMock, Mock, patch  # pylint: disable=unused-import
 
@@ -721,15 +721,22 @@ class TestPrepareAndHandleDemoMode:
         ],
         ids=["empty", "none", "invalid_format", "valid"],
     )
-    def test_prepare_demo_info_scenarios(self, step_manager, mock_components, legal_moves, expected_result, test_description):
+    def test_prepare_demo_info_scenarios(
+        self,
+        step_manager,
+        mock_components,
+        legal_moves,
+        expected_result,
+        test_description,
+    ):
         """Test demo info preparation with various move scenarios."""
         if expected_result == "test_piece":
             mock_components["game"].get_piece.return_value = "test_piece"
-        
+
         piece_info = step_manager._prepare_demo_info(legal_moves)
-        
+
         assert piece_info == expected_result
-        
+
         # Only check get_piece call for valid moves
         if legal_moves and legal_moves[0] is not None and len(legal_moves[0]) >= 5:
             mock_components["game"].get_piece.assert_called_once_with(1, 2)

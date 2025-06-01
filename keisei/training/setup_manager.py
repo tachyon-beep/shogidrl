@@ -76,20 +76,14 @@ class SetupManager:
         Returns:
             Tuple of (model, agent, experience_buffer)
         """
-        print("DEBUG: setup_training_components called")
-
         # Create model using ModelManager
-        print("DEBUG: About to call model_manager.create_model()")
         model = model_manager.create_model()
-        print(f"DEBUG: Created model: {model}")
 
         # Initialize PPOAgent and assign the model
-        print("DEBUG: About to create PPOAgent")
         agent = PPOAgent(
             config=self.config,
             device=self.device,
         )
-        print(f"DEBUG: Created agent: {agent}")
 
         if model is None:
             raise RuntimeError(
@@ -97,7 +91,6 @@ class SetupManager:
             )
 
         agent.model = model
-        print("DEBUG: About to create ExperienceBuffer")
 
         experience_buffer = ExperienceBuffer(
             buffer_size=self.config.training.steps_per_epoch,
@@ -105,8 +98,6 @@ class SetupManager:
             lambda_gae=self.config.training.lambda_gae,
             device=self.config.env.device,
         )
-        print(f"DEBUG: Created experience_buffer: {experience_buffer}")
-        print("DEBUG: setup_training_components completed successfully")
 
         return model, agent, experience_buffer
 
@@ -123,7 +114,6 @@ class SetupManager:
         Returns:
             Configured StepManager instance
         """
-        print("DEBUG: About to create StepManager")
         step_manager = StepManager(
             config=self.config,
             game=game,
@@ -131,7 +121,6 @@ class SetupManager:
             policy_mapper=policy_output_mapper,
             experience_buffer=experience_buffer,
         )
-        print(f"DEBUG: Created step_manager: {step_manager}")
         return step_manager
 
     def handle_checkpoint_resume(

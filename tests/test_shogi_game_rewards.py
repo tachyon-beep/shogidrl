@@ -171,7 +171,7 @@ def test_make_move_returns_correct_reward_at_terminal_state():
             game.get_observation(),
             game.get_reward(),  # This will use the mocked get_reward
             game.game_over,
-            {"termination_reason": game.termination_reason},
+            {"reason": game.termination_reason},
         )
 
     # Mock the get_reward method to return a specific value for this test's scope
@@ -192,7 +192,7 @@ def test_make_move_returns_correct_reward_at_terminal_state():
         # Should be a win based on our mock
         assert reward == 1.0  # get_reward is mocked to 1.0
         assert done is True
-        assert info.get("termination_reason") == "Tsumi"
+        assert info.get("reason") == "Tsumi"
 
 
 def test_make_move_returns_perspective_specific_reward():

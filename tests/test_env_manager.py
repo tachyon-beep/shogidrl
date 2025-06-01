@@ -259,17 +259,39 @@ class TestEnvManagerEnvironmentOperations:
         "operation_name,setup_method,expected_result,expected_log_content",
         [
             ("reset_game", "setup_reset_success", True, None),
-            ("reset_game", "setup_reset_failure", False, "Error resetting game: Reset failed"),
+            (
+                "reset_game",
+                "setup_reset_failure",
+                False,
+                "Error resetting game: Reset failed",
+            ),
             ("get_legal_moves_count", "setup_legal_moves_success", 3, None),
-            ("get_legal_moves_count", "setup_legal_moves_failure", 0, "Error getting legal moves count: Legal moves error"),
+            (
+                "get_legal_moves_count",
+                "setup_legal_moves_failure",
+                0,
+                "Error getting legal moves count: Legal moves error",
+            ),
         ],
-        ids=["reset_success", "reset_failure", "legal_moves_success", "legal_moves_failure"],
+        ids=[
+            "reset_success",
+            "reset_failure",
+            "legal_moves_success",
+            "legal_moves_failure",
+        ],
     )
     @patch("keisei.training.env_manager.ShogiGame")
     @patch("keisei.training.env_manager.PolicyOutputMapper")
     def test_environment_operations(
-        self, mock_policy_mapper_class, mock_shogi_game_class, mock_config, logger_func,
-        operation_name, setup_method, expected_result, expected_log_content
+        self,
+        mock_policy_mapper_class,
+        mock_shogi_game_class,
+        mock_config,
+        logger_func,
+        operation_name,
+        setup_method,
+        expected_result,
+        expected_log_content,
     ):
         """Test environment operations with success and failure scenarios."""
         # Setup mocks based on test scenario

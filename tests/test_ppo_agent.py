@@ -19,86 +19,10 @@ from keisei.shogi.shogi_core_definitions import (  # Ensure MoveTuple is importe
 from keisei.utils import PolicyOutputMapper
 
 
-def create_test_config():
-    """Create a properly configured AppConfig for testing."""
-    from keisei.config_schema import (
-        AppConfig,
-        DemoConfig,
-        EnvConfig,
-        EvaluationConfig,
-        LoggingConfig,
-        ParallelConfig,
-        TrainingConfig,
-        WandBConfig,
-    )
-
-    mapper = PolicyOutputMapper()
-    return AppConfig(
-        env=EnvConfig(
-            device="cpu",
-            input_channels=INPUT_CHANNELS,
-            num_actions_total=mapper.get_total_actions(),
-            seed=42,
-        ),
-        training=TrainingConfig(
-            total_timesteps=1000,
-            steps_per_epoch=32,
-            ppo_epochs=1,
-            minibatch_size=2,
-            learning_rate=1e-3,
-            gamma=0.99,
-            clip_epsilon=0.2,
-            value_loss_coeff=0.5,
-            entropy_coef=0.01,
-            render_every_steps=1,
-            refresh_per_second=4,
-            enable_spinner=True,
-            input_features="core46",
-            tower_depth=9,
-            tower_width=256,
-            se_ratio=0.25,
-            model_type="resnet",
-            mixed_precision=False,
-            ddp=False,
-            gradient_clip_max_norm=0.5,
-            lambda_gae=0.95,
-            checkpoint_interval_timesteps=10000,
-            evaluation_interval_timesteps=50000,
-            weight_decay=0.0,
-        ),
-        evaluation=EvaluationConfig(
-            num_games=1, opponent_type="random", evaluation_interval_timesteps=50000
-        ),
-        logging=LoggingConfig(
-            log_file="/tmp/test.log", model_dir="/tmp/", run_name="test_run"
-        ),
-        wandb=WandBConfig(
-            enabled=False,
-            project="test",
-            entity=None,
-            run_name_prefix="test",
-            watch_model=False,
-            watch_log_freq=1000,
-            watch_log_type="all",
-        ),
-        demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
-        parallel=ParallelConfig(
-            enabled=False,
-            num_workers=4,
-            batch_size=32,
-            sync_interval=100,
-            compression_enabled=True,
-            timeout_seconds=10.0,
-            max_queue_size=1000,
-            worker_seed_offset=1000,
-        ),
-    )
-
-
-def test_ppo_agent_init_and_select_action():
+def test_ppo_agent_init_and_select_action(policy_mapper, integration_test_config):
     """Test PPOAgent initializes and select_action returns a valid index."""
-    mapper = PolicyOutputMapper()
-    config = create_test_config()
+    mapper = policy_mapper
+    config = integration_test_config
     agent = PPOAgent(config=config, device=torch.device("cpu"))
     rng = np.random.default_rng(42)
     obs = rng.random((INPUT_CHANNELS, 9, 9)).astype(np.float32)
@@ -155,9 +79,9 @@ def test_ppo_agent_init_and_select_action():
     assert legal_mask.dtype == torch.bool
 
 
-def test_ppo_agent_learn():
+def test_ppo_agent_learn(integration_test_config):
     """Test PPOAgent's learn method with dummy data from an ExperienceBuffer."""
-    config = create_test_config()
+    config = integration_test_config
     agent = PPOAgent(config=config, device=torch.device("cpu"))
 
     buffer_size = 4  # Small buffer for testing
@@ -232,9 +156,9 @@ def test_ppo_agent_learn():
 #   (though this can be complex and brittle)
 
 
-def test_ppo_agent_learn_loss_components():
+def test_ppo_agent_learn_loss_components(integration_test_config):
     """Test that PPOAgent.learn correctly computes and returns individual loss components."""
-    config = create_test_config()
+    config = integration_test_config
     # Override specific settings for this test
     config.training.ppo_epochs = 2  # Multiple epochs to test learning behavior
     agent = PPOAgent(config=config, device=torch.device("cpu"))

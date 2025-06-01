@@ -272,7 +272,9 @@ def mock_app_config_parallel(tmp_path):
     ],
     ids=["random", "heuristic"],
 )
-def test_opponent_select_move(shogi_game_initial: ShogiGame, opponent_class, opponent_name):
+def test_opponent_select_move(
+    shogi_game_initial: ShogiGame, opponent_class, opponent_name
+):
     """Test that opponents select legal moves from the game state."""
     opponent = opponent_class()
     legal_moves = shogi_game_initial.get_legal_moves()
@@ -670,7 +672,9 @@ def test_execute_full_evaluation_run_heuristic_opponent_with_wandb(
     # wandb.log is called by run_evaluation_loop, which is mocked here.
     # So, this mock_wandb_log (global) won\'t be hit by the mocked run_evaluation_loop.
     # mock_wandb_log.assert_not_called() # MODIFIED: execute_full_evaluation_run now calls wandb.log for final summary
-    mock_wandb_active["log"].assert_called_once_with(  # MODIFIED: Check for the specific final summary log call
+    mock_wandb_active[
+        "log"
+    ].assert_called_once_with(  # MODIFIED: Check for the specific final summary log call
         {
             "eval/final_win_rate": expected_run_loop_results["win_rate"],
             "eval/final_loss_rate": expected_run_loop_results["loss_rate"],

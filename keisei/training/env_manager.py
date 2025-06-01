@@ -51,7 +51,7 @@ class EnvManager:
         """
         try:
             # Initialize the Shogi game
-            self.game = ShogiGame()
+            self.game = ShogiGame(max_moves_per_game=self.config.env.max_moves_per_game)
 
             # Setup seeding if specified
             if hasattr(self.game, "seed") and self.config.env.seed is not None:
