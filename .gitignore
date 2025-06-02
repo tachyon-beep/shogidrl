@@ -66,9 +66,9 @@ coverage.xml
 .vscode/
 
 # Model and log directories
-models/
-logs/
-tmp/
+/models/
+/logs/
+/tmp/
 
 # OS files
 .DS_Store
