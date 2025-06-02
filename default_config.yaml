@@ -13,11 +13,11 @@ training:
   value_loss_coeff: 0.5
   entropy_coef: 0.01
   steps_per_epoch: 2048
-  total_timesteps: 100000
-  checkpoint_interval_timesteps: 10000
+  total_timesteps: 500000
+  checkpoint_interval_timesteps: 2000
 evaluation:
   enable_periodic_evaluation: true
-  evaluation_interval_timesteps: 50000
+  evaluation_interval_timesteps: 10000
   num_games: 20
   opponent_type: "random"
   max_moves_per_game: 500

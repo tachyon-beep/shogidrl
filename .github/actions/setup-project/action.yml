@@ -7,7 +7,6 @@ runs:
       uses: actions/setup-python@v4 # Updated to v4
       with:
         python-version: 3.12
-      shell: bash # Explicitly set shell for consistency if needed later
 
     - name: Cache pip dependencies
       uses: actions/cache@v4 # Updated to v4
@@ -16,7 +15,6 @@ runs:
         key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
         restore-keys: |
           ${{ runner.os }}-pip-
-      shell: bash
 
     - name: Install dependencies
       run: |

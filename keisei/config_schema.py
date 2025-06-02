@@ -86,13 +86,46 @@ class TrainingConfig(BaseModel):
 
 
 class EvaluationConfig(BaseModel):
-    num_games: int = Field(20, description="Number of games to play during evaluation.")
-    opponent_type: str = Field(
-        "random", description="Type of opponent: 'random', 'heuristic', etc."
+    enable_periodic_evaluation: bool = Field(
+        True, description="Enable periodic evaluation during training."
     )
     evaluation_interval_timesteps: int = Field(
         50000, description="Run evaluation every N timesteps."
     )
+    num_games: int = Field(20, description="Number of games to play during evaluation.")
+    opponent_type: str = Field(
+        "random", description="Type of opponent: 'random', 'heuristic', etc."
+    )
+    max_moves_per_game: int = Field(
+        500, description="Maximum number of moves per evaluation game."
+    )
+    log_file_path_eval: str = Field(
+        "eval_log.txt", description="Path for the evaluation log file."
+    )
+    wandb_log_eval: bool = Field(
+        False, description="Enable Weights & Biases logging for evaluation."
+    )
+
+    @validator("evaluation_interval_timesteps")
+    # pylint: disable=no-self-argument
+    def evaluation_interval_positive(cls, v):
+        if v <= 0:
+            raise ValueError("evaluation_interval_timesteps must be positive")
+        return v
+
+    @validator("num_games")
+    # pylint: disable=no-self-argument
+    def num_games_positive(cls, v):
+        if v <= 0:
+            raise ValueError("num_games must be positive")
+        return v
+
+    @validator("max_moves_per_game")
+    # pylint: disable=no-self-argument
+    def max_moves_positive(cls, v):
+        if v <= 0:
+            raise ValueError("max_moves_per_game must be positive")
+        return v
 
 
 class LoggingConfig(BaseModel):
@@ -123,6 +156,9 @@ class WandBConfig(BaseModel):
     )
     watch_log_type: Literal["gradients", "parameters", "all"] = Field(
         "all", description="Type of data to log with wandb.watch()."
+    )
+    log_model_artifact: bool = Field(
+        False, description="Enable logging model artifacts to W&B."
     )
 
 

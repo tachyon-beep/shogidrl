@@ -11,9 +11,13 @@
         "seed": 42
     },
     "evaluation": {
+        "enable_periodic_evaluation": true,
         "evaluation_interval_timesteps": 1000,
+        "log_file_path_eval": "eval_log.txt",
+        "max_moves_per_game": 500,
         "num_games": 1,
-        "opponent_type": "random"
+        "opponent_type": "random",
+        "wandb_log_eval": false
     },
     "logging": {
         "log_file": "test_training.log",
@@ -60,6 +64,7 @@
     "wandb": {
         "enabled": true,
         "entity": null,
+        "log_model_artifact": false,
         "project": "keisei-test",
         "run_name_prefix": "test",
         "watch_log_freq": 1000,

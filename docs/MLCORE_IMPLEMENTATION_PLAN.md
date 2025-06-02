@@ -3,7 +3,7 @@
 
 **Critical Items**: 1/1 ✅ **COMPLETED**
 **High Priority Items**: 1/2 ✅ **COMPLETED**
-**Medium Priority Items**: 0/7 completed  
+**Medium Priority Items**: 1/7 completed  
 **Low Priority Items**: 0/4 completed
 
 ### Recent Completions:
@@ -94,17 +94,20 @@ This document outlines an implementation plan to address the findings and recomm
 
 ## III. Medium Priority Items
 
-### 1. Refactor Model Code Duplication
--   **Recommendation**: If `core/neural_network.py` contains another `ActorCritic` model with duplicated logic for `get_action_and_value` and `evaluate_actions` (as in `ActorCriticResTower`), refactor these into a shared base class.
--   **Affected System(s)/File(s)**: System 4 / `core/neural_network.py`, `training/models/resnet_tower.py`, potentially a new base model file.
--   **Actionable Steps**:
-    1.  Identify the common `ActorCritic` implementation in `core/neural_network.py`.
-    2.  Create a new base class (e.g., `BaseActorCriticModel`) that inherits `nn.Module` and conceptually implements `ActorCriticProtocol`.
-    3.  Move the shared methods (`get_action_and_value`, `evaluate_actions`, potentially `forward` if the structure is very similar before the heads) into this base class.
-    4.  Refactor `ActorCriticResTower` and the model in `core/neural_network.py` to inherit from this new base class.
-    5.  Ensure all existing tests for both models still pass.
--   **Estimated Effort**: Medium
--   **Impact**: Improves code maintainability, reduces redundancy, ensures consistency between model implementations.
+### ✅ 1. Refactor Model Code Duplication - **RESOLVED (June 2, 2025)**
+-   **Original Recommendation**: If `core/neural_network.py` contains another `ActorCritic` model with duplicated logic for `get_action_and_value` and `evaluate_actions` (as in `ActorCriticResTower`), refactor these into a shared base class.
+-   **Resolution Status**: **COMPLETED** ✅
+-   **Implementation Details**:
+    -   Created new `BaseActorCriticModel` class in `core/base_actor_critic.py` that inherits from both `nn.Module` and implements `ActorCriticProtocol`
+    -   Moved common `get_action_and_value` and `evaluate_actions` methods to the base class
+    -   Refactored `ActorCritic` (in `core/neural_network.py`) to inherit from `BaseActorCriticModel`
+    -   Refactored `ActorCriticResTower` (in `training/models/resnet_tower.py`) to inherit from `BaseActorCriticModel`
+    -   Both models now only implement their specific `forward` methods, inheriting shared behavior
+    -   Added comprehensive test coverage in `tests/test_actor_critic_refactoring.py`
+    -   All existing tests continue to pass for both models
+    -   Enhanced warning messages to include class name for better debugging
+-   **Affected System(s)/File(s)**: System 4 / `core/neural_network.py`, `training/models/resnet_tower.py`, `core/base_actor_critic.py` (new), `core/__init__.py`, `tests/test_actor_critic_refactoring.py` (new)
+-   **Impact**: Eliminated ~120 lines of duplicated code, improved maintainability, ensured consistency between model implementations, enhanced error reporting
 
 ### 2. Model Injection for PPOAgent
 -   **Recommendation**: `PPOAgent` should receive the instantiated model (conforming to `ActorCriticProtocol`) as a constructor argument (dependency injection), rather than initializing a default model.
@@ -227,6 +230,49 @@ This document outlines an implementation plan to address the findings and recomm
     2.  Periodically review comments for accuracy and relevance.
 -   **Estimated Effort**: Ongoing
 -   **Impact**: Improves code readability and maintainability.
+
+---
+
+## V. Configuration System Enhancements
+
+### ✅ 1.5. Configuration System Analysis & Validation Enhancement - **COMPLETED (June 2, 2025)**
+-   **Recommendation**: Address configuration system inconsistencies discovered during recent work
+-   **Resolution Status**: **COMPLETED** ✅
+-   **Implementation Details**:
+    -   **Schema Completeness**: Fixed missing fields in Pydantic schema that existed in YAML
+        -   Added `evaluation.log_file_path_eval` field to `EvaluationConfig`
+        -   Added `wandb.log_model_artifact` field to `WandBConfig`
+    -   **Validation Enhancement**: Added proper field validation to `EvaluationConfig`
+        -   `evaluation_interval_timesteps` must be positive (> 0)
+        -   `num_games` must be positive (> 0)
+        -   `max_moves_per_game` must be positive (> 0)
+    -   **Test Coverage**: Fixed failing configuration integration tests
+        -   Updated `test_config_validation_with_missing_fields` to test actual validation scenarios
+        -   Added comprehensive test cases for invalid configuration values
+        -   Verified all configuration fields are accessible and properly validated
+    -   **Documentation**: Created comprehensive configuration system documentation
+        -   Configuration system analysis with usage flow tracing
+        -   Quick reference guide for immediate use
+        -   Detailed mapping task plan for future comprehensive analysis
+-   **Affected System(s)/File(s)**: Configuration System / `config_schema.py`, `tests/test_configuration_integration.py`, `docs/development/configuration_system_*.md`
+-   **Impact**: Eliminated silent configuration failures, improved validation, enhanced developer experience, established foundation for configuration system maintenance
+
+### 1.6. Configuration System Comprehensive Mapping - **PLANNED**
+-   **Recommendation**: Execute comprehensive configuration system audit and documentation
+-   **Status**: **READY TO EXECUTE** 📋
+-   **Implementation Plan**: Detailed task plan created in `docs/development/configuration_system_mapping_task.md`
+-   **Scope**: 
+    -   Complete configuration inventory and usage flow mapping
+    -   Validation gap analysis and enhancement recommendations
+    -   Automated schema-YAML consistency verification
+    -   Comprehensive configuration reference documentation
+-   **Estimated Effort**: 3-5 days
+-   **Priority**: Medium-High (important for system maintainability)
+-   **Deliverables**: 
+    -   Complete configuration reference documentation
+    -   Enhanced validation rules for all config classes
+    -   Automated verification tools
+    -   Best practices guide for configuration management
 
 ---
 
