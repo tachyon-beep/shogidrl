@@ -8,6 +8,18 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
+from keisei.config_schema import (
+    AppConfig,
+    DemoConfig,
+    EnvConfig,
+    EvaluationConfig,
+    LoggingConfig,
+    ParallelConfig,
+    TrainingConfig,
+    WandBConfig,
+)
+from keisei.utils import PolicyOutputMapper
+
 # Try to set the start method as early as possible for pytest runs
 try:
     if mp.get_start_method(allow_none=True) != "spawn":
@@ -125,18 +137,6 @@ def mock_setup_wandb():
 # Configuration Fixtures - Eliminates Config Duplication Anti-Pattern
 # =============================================================================
 
-from keisei.config_schema import (
-    AppConfig,
-    DemoConfig,
-    EnvConfig,
-    EvaluationConfig,
-    LoggingConfig,
-    ParallelConfig,
-    TrainingConfig,
-    WandBConfig,
-)
-from keisei.utils import PolicyOutputMapper
-
 
 @pytest.fixture
 def policy_mapper():
@@ -152,6 +152,7 @@ def minimal_env_config():
         input_channels=46,
         num_actions_total=13527,
         seed=42,
+        max_moves_per_game=200,  # Reasonable limit for test scenarios
     )
 
 
@@ -312,6 +313,7 @@ def integration_test_config(policy_mapper, tmp_path):
             input_channels=46,
             num_actions_total=policy_mapper.get_total_actions(),
             seed=42,
+            max_moves_per_game=200,  # Reasonable limit for test scenarios
         ),
         training=TrainingConfig(
             total_timesteps=200,  # Small for integration tests

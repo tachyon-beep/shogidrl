@@ -39,13 +39,21 @@ def load_evaluation_agent(
     # Use dummy configs for required fields
     config = AppConfig(
         parallel=ParallelConfig(
-            enabled=False, start_method="fork", num_envs=1, base_port=50000
+            enabled=False,
+            num_workers=1,
+            batch_size=32,
+            sync_interval=100,
+            compression_enabled=True,
+            timeout_seconds=10.0,
+            max_queue_size=1000,
+            worker_seed_offset=1000,
         ),
         env=EnvConfig(
             device=device_str,
             input_channels=input_channels,
             num_actions_total=policy_mapper.get_total_actions(),
             seed=42,
+            max_moves_per_game=500,
         ),
         training=TrainingConfig(
             total_timesteps=1,

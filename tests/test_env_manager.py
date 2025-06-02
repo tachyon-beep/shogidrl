@@ -41,6 +41,7 @@ def mock_config():
             num_actions_total=13527,
             input_channels=46,
             seed=42,
+            max_moves_per_game=500,
         ),
         training=TrainingConfig(
             input_features="core46",

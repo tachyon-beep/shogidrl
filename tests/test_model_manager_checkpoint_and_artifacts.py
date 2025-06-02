@@ -43,6 +43,7 @@ def mock_config():
             num_actions_total=13527,
             input_channels=46,
             seed=42,
+            max_moves_per_game=500,
         ),
         training=TrainingConfig(
             total_timesteps=500_000,
@@ -365,11 +366,12 @@ class TestModelManagerArtifacts:
 
     @patch("keisei.training.model_manager.features.FEATURE_SPECS")
     @patch("keisei.training.model_manager.model_factory")
+    @patch("keisei.training.model_manager.wandb")
     def test_create_model_artifact_file_missing(
         self,
+        mock_wandb,
         mock_model_factory,
         mock_features,
-        mock_wandb_disabled,  # Use standardized W&B fixture
         mock_config,
         mock_args,
         device,
@@ -385,7 +387,8 @@ class TestModelManagerArtifacts:
         mock_model.to.return_value = mock_model
         mock_model_factory.return_value = mock_model
 
-        # W&B is mocked by the fixture
+        # Mock W&B to simulate active state
+        mock_wandb.run = Mock()  # Mock run object to simulate active W&B
 
         # Create ModelManager
         manager = ModelManager(mock_config, mock_args, device, logger_func)
@@ -570,7 +573,6 @@ class TestModelManagerEnhancedCheckpointHandling:
         mock_model_factory,
         mock_features,
         mock_config,
-        mock_args,
         device,
         logger_func,
     ):
@@ -849,7 +851,7 @@ class TestModelManagerWandBArtifactEnhancements:
     def test_create_model_artifact_wandb_failure_handling(
         self,
         mock_wandb_run,
-        mock_log_artifact,
+        mock_log_artifact,  # Keep but mark as used for side_effect
         mock_artifact_class,
         mock_model_factory,
         mock_features,
@@ -880,6 +882,9 @@ class TestModelManagerWandBArtifactEnhancements:
 
         manager = ModelManager(mock_config, mock_args, device, logger_func)
 
+        # Verify the mock_log_artifact is configured to raise an error
+        assert mock_log_artifact.side_effect is not None
+
         # Test artifact creation with W&B failure
         result = manager.create_model_artifact(
             model_path=model_path,
@@ -891,7 +896,7 @@ class TestModelManagerWandBArtifactEnhancements:
         # Should handle failure gracefully
         assert result is False
         logger_func.assert_any_call(
-            "Error creating W&B artifact for %s: W&B API Error" % model_path
+            f"Error creating W&B artifact for {model_path}: W&B API Error"
         )
 
     def test_create_model_artifact_wandb_inactive(

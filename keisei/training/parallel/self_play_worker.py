@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import torch
 
+from keisei.core.actor_critic_protocol import ActorCriticProtocol
 from keisei.core.experience_buffer import Experience
 from keisei.shogi.shogi_game import ShogiGame
 from keisei.utils.utils import PolicyOutputMapper
@@ -72,7 +73,7 @@ class SelfPlayWorker(mp.Process):
 
         # Will be initialized in run()
         self.game: Optional[ShogiGame] = None
-        self.model: Optional[torch.nn.Module] = None
+        self.model: Optional[ActorCriticProtocol] = None
         self.policy_mapper: Optional[PolicyOutputMapper] = None
         self.device = torch.device("cpu")  # Workers use CPU
 
@@ -186,7 +187,7 @@ class SelfPlayWorker(mp.Process):
 
             # Get model predictions
             with torch.no_grad():
-                action_logits, value = self.model(obs_tensor.unsqueeze(0))
+                action_logits, value = self.model.forward(obs_tensor.unsqueeze(0))
                 action_probs = torch.softmax(action_logits, dim=-1)
 
                 # Get legal moves and create action mask using PolicyOutputMapper
@@ -424,7 +425,7 @@ class SelfPlayWorker(mp.Process):
             pass
 
         logger.info(
-            "Worker %d cleanup complete " "(steps=%d, games=%d)",
+            "Worker %d cleanup complete (steps=%d, games=%d)",
             self.worker_id,
             self.steps_collected,
             self.games_played,

@@ -602,7 +602,6 @@ def test_undo_move_multiple_moves(
     # 2. White P-3d (2,3) -> (3,3)
     move2: tuple = (2, 3, 3, 3, False)
     game.make_move(move2)
-    # state_after_move2 = GameState.from_game(game) # Not strictly needed for assertion path
 
     # 3. Black P-2f (6,1) -> P-2e (5,1) (capture, promote)
     # Instead of manually placing a piece, let's use a proper game move to place it
@@ -907,6 +906,13 @@ def test_sfen_invalid_strings(invalid_sfen: str, error_message_part: str):
 # --- Tests for Game Termination Conditions ---
 
 
+def _set_game_termination(game: ShogiGame, winner: Optional[Color], reason: str):
+    """Helper function to set game termination state consistently."""
+    game.game_over = True
+    game.winner = winner
+    game.termination_reason = reason
+
+
 @pytest.mark.parametrize(
     "sfen_setup, last_move, expected_winner, expected_reason",
     [
@@ -916,7 +922,6 @@ def test_sfen_invalid_strings(invalid_sfen: str, error_message_part: str):
             (4, 4, 3, 4, False),
             Color.BLACK,
             "Tsumi",
-            # marks=pytest.mark.skip(reason="SFEN/outcome needs review, implies non-checkmate") # Unskipped
         ),
         # pytest.param( # Unskipping this test
         (
@@ -924,7 +929,6 @@ def test_sfen_invalid_strings(invalid_sfen: str, error_message_part: str):
             (1, 4, 3, 4, False),  # Corrected move: BR(1,4) to (3,4)
             Color.BLACK,
             "Tsumi",
-            # marks=pytest.mark.skip(reason="SFEN/last_move implies non-checkmate or setup error") # Unskipped
         ),
         (
             "4k4/4R4/9/9/9/9/9/9/4K4 b - 1",
@@ -938,7 +942,6 @@ def test_sfen_invalid_strings(invalid_sfen: str, error_message_part: str):
             None,
             None,
             "Stalemate",
-            # marks=pytest.mark.skip(reason="Stalemate logic might be affected by legal_moves issues") # Unskipped
         ),
         # pytest.param( # Unskipping this test
         (
@@ -946,7 +949,6 @@ def test_sfen_invalid_strings(invalid_sfen: str, error_message_part: str):
             None,
             None,
             "Stalemate",
-            # marks=pytest.mark.skip(reason="Stalemate logic might be affected by legal_moves issues") # Unskipped
         ),
     ],
 )
@@ -972,9 +974,7 @@ def test_game_termination_checkmate_stalemate(
         4,
         False,
     ):
-        game.game_over = True
-        game.winner = Color.BLACK
-        game.termination_reason = "Tsumi"
+        _set_game_termination(game, Color.BLACK, "Tsumi")
     elif sfen_setup == "4k4/4R4/9/9/9/9/9/9/4K4 b - 1" and last_move == (
         1,
         4,
@@ -985,21 +985,13 @@ def test_game_termination_checkmate_stalemate(
         # Type-safe way to make the move
         move_tuple: MoveTuple = (1, 4, 3, 4, False)
         game.make_move(move_tuple)
-        game.game_over = True
-        game.winner = Color.BLACK
-        game.termination_reason = "Tsumi"
+        _set_game_termination(game, Color.BLACK, "Tsumi")
     elif sfen_setup == "4k4/4R4/9/9/9/9/9/9/4K4 b - 1" and last_move is None:
-        game.game_over = True
-        game.winner = Color.BLACK
-        game.termination_reason = "Tsumi"
+        _set_game_termination(game, Color.BLACK, "Tsumi")
     elif sfen_setup == "k8/P8/1P7/9/9/9/9/9/K8 b - 1" and last_move is None:
-        game.game_over = True
-        game.winner = None
-        game.termination_reason = "Stalemate"
+        _set_game_termination(game, None, "Stalemate")
     elif sfen_setup == "8k/p8/1p7/9/9/9/9/9/K8 w - 1" and last_move is None:
-        game.game_over = True
-        game.winner = None
-        game.termination_reason = "Stalemate"
+        _set_game_termination(game, None, "Stalemate")
     elif last_move:
         # If a last_move is provided, it means the SFEN sets up the position *before* the terminating move.
         # The player whose turn it is in the SFEN makes this move.
@@ -1049,16 +1041,14 @@ def test_game_termination_checkmate_stalemate(
         # apply_move_to_board in shogi_move_execution.py handles this.
         # For a stalemate position loaded from SFEN, we need to check if current player has legal moves.
         if not game.is_in_check(game.current_player) and not game.get_legal_moves():
-            game.game_over = True
-            game.winner = None  # Stalemate means no winner
-            game.termination_reason = "Stalemate"
+            _set_game_termination(game, None, "Stalemate")
             # No change to game.current_player or game.move_count as no move was made.
         elif game.is_in_check(game.current_player) and not game.get_legal_moves():
-            game.game_over = True
-            game.winner = (
-                Color.WHITE if game.current_player == Color.BLACK else Color.BLACK
-            )  # Opponent wins
-            game.termination_reason = "Tsumi"
+            _set_game_termination(
+                game,
+                Color.WHITE if game.current_player == Color.BLACK else Color.BLACK,
+                "Tsumi"
+            )
 
     assert (
         game.game_over

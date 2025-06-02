@@ -17,6 +17,28 @@ from typing import Any, Callable, Dict
 logger = logging.getLogger(__name__)
 
 
+class _FastTimerContext:
+    """Fast timer context with minimal overhead."""
+    
+    def __init__(self, monitor, operation_name):
+        self.monitor = monitor
+        self.operation_name = operation_name
+        self.start_time = 0.0
+    
+    def __enter__(self):
+        self.start_time = time.perf_counter()
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        duration = time.perf_counter() - self.start_time
+        
+        # Fast path: pre-initialize if needed and append
+        timings = self.monitor.timings
+        if self.operation_name not in timings:
+            timings[self.operation_name] = []
+        timings[self.operation_name].append(duration)
+
+
 class PerformanceMonitor:
     """Simple performance monitoring for development."""
 
@@ -26,7 +48,11 @@ class PerformanceMonitor:
 
     def time_operation(self, operation_name: str):
         """Context manager for timing operations."""
-        return self._timer_context(operation_name)
+        return self._timer_context_fast(operation_name)
+
+    def _timer_context_fast(self, operation_name: str):
+        """Fast timer context manager with minimal overhead."""
+        return _FastTimerContext(self, operation_name)
 
     @contextmanager
     def _timer_context(self, operation_name: str):
@@ -38,11 +64,14 @@ class PerformanceMonitor:
             end_time = time.perf_counter()
             duration = end_time - start_time
 
+            # Optimize: pre-initialize list to avoid repeated dict lookups
             if operation_name not in self.timings:
                 self.timings[operation_name] = []
             self.timings[operation_name].append(duration)
 
-            logger.debug("Operation '%s' took %.4f seconds", operation_name, duration)
+            # Only log debug if debug logging is enabled (avoid string formatting overhead)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("Operation '%s' took %.4f seconds", operation_name, duration)
 
     def increment_counter(self, counter_name: str, value: int = 1):
         """Increment a named counter."""
