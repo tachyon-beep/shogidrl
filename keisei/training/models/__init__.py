@@ -3,7 +3,9 @@ from keisei.core.actor_critic_protocol import ActorCriticProtocol
 from .resnet_tower import ActorCriticResTower
 
 
-def model_factory(model_type, obs_shape, num_actions, tower_depth, tower_width, se_ratio, **kwargs) -> ActorCriticProtocol:
+def model_factory(
+    model_type, obs_shape, num_actions, tower_depth, tower_width, se_ratio, **kwargs
+) -> ActorCriticProtocol:
     if model_type == "resnet":
         return ActorCriticResTower(
             input_channels=obs_shape[0],
@@ -11,7 +13,7 @@ def model_factory(model_type, obs_shape, num_actions, tower_depth, tower_width, 
             tower_depth=tower_depth,
             tower_width=tower_width,
             se_ratio=se_ratio,
-            **kwargs
+            **kwargs,
         )
     # Add dummy/test models for testing
     elif model_type in ["dummy", "testmodel", "resumemodel"]:
@@ -24,6 +26,6 @@ def model_factory(model_type, obs_shape, num_actions, tower_depth, tower_width, 
             tower_depth=1,  # Minimal depth
             tower_width=16,  # Minimal width
             se_ratio=None,  # No SE block for simplicity
-            **kwargs
+            **kwargs,
         )
     raise ValueError(f"Unknown model_type: {model_type}")

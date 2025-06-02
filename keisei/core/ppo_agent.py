@@ -13,8 +13,8 @@ import torch.nn.functional as F
 from keisei.config_schema import AppConfig
 from keisei.core.actor_critic_protocol import ActorCriticProtocol
 from keisei.core.experience_buffer import ExperienceBuffer
-from keisei.utils import PolicyOutputMapper
 from keisei.core.scheduler_factory import SchedulerFactory
+from keisei.utils import PolicyOutputMapper
 
 if TYPE_CHECKING:
     from keisei.shogi.shogi_core_definitions import MoveTuple
@@ -32,7 +32,7 @@ class PPOAgent:
     ):
         """
         Initialize the PPOAgent with model, optimizer, and PPO hyperparameters.
-        
+
         Args:
             model: ActorCritic model instance conforming to ActorCriticProtocol
             config: Application configuration
@@ -45,7 +45,7 @@ class PPOAgent:
 
         # Direct model assignment (dependency injection)
         self.model: ActorCriticProtocol = model.to(self.device)
-        
+
         # Initialize policy mapper
         policy_output_mapper = PolicyOutputMapper()
         self.policy_output_mapper = policy_output_mapper
@@ -77,7 +77,9 @@ class PPOAgent:
         self.ppo_epochs = config.training.ppo_epochs
         self.minibatch_size = config.training.minibatch_size
         # Normalization options
-        self.normalize_advantages = getattr(config.training, "normalize_advantages", True)
+        self.normalize_advantages = getattr(
+            config.training, "normalize_advantages", True
+        )
 
         self.last_kl_div = 0.0  # Initialize KL divergence tracker
         self.gradient_clip_max_norm = (
@@ -102,12 +104,18 @@ class PPOAgent:
         """Calculate total number of scheduler steps based on configuration."""
         if config.training.lr_schedule_step_on == "epoch":
             # epochs = total_timesteps // steps_per_epoch
-            return (config.training.total_timesteps // config.training.steps_per_epoch) * config.training.ppo_epochs
+            return (
+                config.training.total_timesteps // config.training.steps_per_epoch
+            ) * config.training.ppo_epochs
         else:
             # updates per epoch = steps_per_epoch // minibatch_size * ppo_epochs
-            updates_per_epoch = (config.training.steps_per_epoch // config.training.minibatch_size) * config.training.ppo_epochs
+            updates_per_epoch = (
+                config.training.steps_per_epoch // config.training.minibatch_size
+            ) * config.training.ppo_epochs
             # number of epochs = total_timesteps // steps_per_epoch
-            num_epochs = config.training.total_timesteps // config.training.steps_per_epoch
+            num_epochs = (
+                config.training.total_timesteps // config.training.steps_per_epoch
+            )
             return num_epochs * updates_per_epoch
 
     def select_action(
@@ -230,7 +238,9 @@ class PPOAgent:
             advantage_std = advantages_batch.std()
             # Only normalize if we have multiple samples and non-zero std
             if advantage_std > 1e-8 and advantages_batch.shape[0] > 1:
-                advantages_batch = (advantages_batch - advantages_batch.mean()) / advantage_std
+                advantages_batch = (
+                    advantages_batch - advantages_batch.mean()
+                ) / advantage_std
             # For single sample or zero std, skip normalization to avoid numerical issues
 
         num_samples = obs_batch.shape[0]
@@ -315,8 +325,12 @@ class PPOAgent:
         # Recalculate current learning rate after scheduler step
         current_lr = self.optimizer.param_groups[0]["lr"]
         # Compute average losses over updates
-        avg_policy_loss = total_policy_loss_epoch / num_updates if num_updates > 0 else 0.0
-        avg_value_loss = total_value_loss_epoch / num_updates if num_updates > 0 else 0.0
+        avg_policy_loss = (
+            total_policy_loss_epoch / num_updates if num_updates > 0 else 0.0
+        )
+        avg_value_loss = (
+            total_value_loss_epoch / num_updates if num_updates > 0 else 0.0
+        )
         avg_entropy = total_entropy_epoch / num_updates if num_updates > 0 else 0.0
         # Compile metrics
         return {
@@ -374,7 +388,9 @@ class PPOAgent:
 
             result = {
                 "global_timestep": checkpoint.get("global_timestep", 0),
-                "total_episodes_completed": checkpoint.get("total_episodes_completed", 0),
+                "total_episodes_completed": checkpoint.get(
+                    "total_episodes_completed", 0
+                ),
                 "black_wins": checkpoint.get("black_wins", 0),
                 "white_wins": checkpoint.get("white_wins", 0),
                 "draws": checkpoint.get("draws", 0),

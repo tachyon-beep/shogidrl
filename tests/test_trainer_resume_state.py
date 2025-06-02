@@ -33,11 +33,11 @@ def _create_mock_model_with_parameters():
     """Helper to create a properly mocked model with parameters for optimizer."""
     mock_model = Mock()
     mock_model.to.return_value = mock_model
-    
+
     # Create a proper mock parameter that behaves like a PyTorch tensor
     mock_param = torch.nn.Parameter(torch.randn(10, 10))
     mock_model.parameters.return_value = [mock_param]
-    
+
     return mock_model
 
 

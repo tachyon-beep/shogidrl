@@ -55,14 +55,18 @@ class MockPPOAgent(PPOAgent, BaseOpponent):
     ):
         # Create mock model first for dependency injection
         from keisei.core.neural_network import ActorCritic
-        
+
         policy_mapper = PolicyOutputMapper()
-        mock_model = ActorCritic(config.env.input_channels, policy_mapper.get_total_actions())
-        
+        mock_model = ActorCritic(
+            config.env.input_channels, policy_mapper.get_total_actions()
+        )
+
         # Call parent constructors with model parameter
-        PPOAgent.__init__(self, model=mock_model, config=config, device=device, name=name)
+        PPOAgent.__init__(
+            self, model=mock_model, config=config, device=device, name=name
+        )
         BaseOpponent.__init__(self, name=name)
-        
+
         # Override with MagicMock for testing
         self.model = MagicMock()
         self._is_ppo_agent_mock = True  # Flag to identify this mock
@@ -178,8 +182,8 @@ def mock_app_config():
             lr_schedule_step_on="epoch",
         ),
         evaluation=EvaluationConfig(
-            num_games=2, 
-            opponent_type="random", 
+            num_games=2,
+            opponent_type="random",
             evaluation_interval_timesteps=50000,
             enable_periodic_evaluation=False,  # Added missing parameter
             max_moves_per_game=500,  # Added missing parameter
@@ -257,8 +261,8 @@ def mock_app_config_parallel(tmp_path):
             lr_schedule_step_on="epoch",
         ),
         evaluation=EvaluationConfig(
-            num_games=2, 
-            opponent_type="random", 
+            num_games=2,
+            opponent_type="random",
             evaluation_interval_timesteps=50000,
             enable_periodic_evaluation=False,  # Added missing parameter
             max_moves_per_game=500,  # Added missing parameter
@@ -1010,12 +1014,17 @@ def test_evaluator_class_basic(monkeypatch, tmp_path, policy_mapper):
     class DummyAgent(PPOAgent):
         def __init__(self):
             from keisei.core.neural_network import ActorCritic
-            
+
             config = make_test_config("cpu", INPUT_CHANNELS, PolicyOutputMapper())
             policy_mapper = PolicyOutputMapper()
-            mock_model = ActorCritic(config.env.input_channels, policy_mapper.get_total_actions())
+            mock_model = ActorCritic(
+                config.env.input_channels, policy_mapper.get_total_actions()
+            )
             super().__init__(
-                model=mock_model, config=config, device=torch.device("cpu"), name="DummyAgent"
+                model=mock_model,
+                config=config,
+                device=torch.device("cpu"),
+                name="DummyAgent",
             )
             self.model = MagicMock()
 

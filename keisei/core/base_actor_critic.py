@@ -19,7 +19,7 @@ from .actor_critic_protocol import ActorCriticProtocol
 class BaseActorCriticModel(nn.Module, ActorCriticProtocol, ABC):
     """
     Abstract base class for Actor-Critic models that implements shared methods.
-    
+
     This class provides common implementations of get_action_and_value and
     evaluate_actions methods while requiring subclasses to implement the
     forward method.
@@ -47,7 +47,7 @@ class BaseActorCriticModel(nn.Module, ActorCriticProtocol, ABC):
         """
         Given an observation (and optional legal action mask), return a sampled or deterministically chosen action,
         its log probability, and value estimate.
-        
+
         Args:
             obs: Input observation tensor.
             legal_mask: Optional boolean tensor indicating legal actions.
@@ -107,11 +107,11 @@ class BaseActorCriticModel(nn.Module, ActorCriticProtocol, ABC):
             action = dist.sample()
 
         log_prob = dist.log_prob(action)
-        
+
         # Handle value squeezing - some models squeeze in forward, others don't
         if value.dim() > 1 and value.shape[-1] == 1:
             value = value.squeeze(-1)
-            
+
         return action, log_prob, value
 
     def evaluate_actions(
@@ -122,7 +122,7 @@ class BaseActorCriticModel(nn.Module, ActorCriticProtocol, ABC):
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Evaluate the log probabilities, entropy, and value for given observations and actions.
-        
+
         Args:
             obs: Input observation tensor.
             actions: Actions taken tensor.
@@ -176,9 +176,9 @@ class BaseActorCriticModel(nn.Module, ActorCriticProtocol, ABC):
         dist = torch.distributions.Categorical(probs=probs)
         log_probs = dist.log_prob(actions)
         entropy = dist.entropy()
-        
+
         # Handle value squeezing - some models squeeze in forward, others don't
         if value.dim() > 1 and value.shape[-1] == 1:
             value = value.squeeze(-1)
-            
+
         return log_probs, entropy, value

@@ -19,11 +19,11 @@ if TYPE_CHECKING:
     from keisei.training.callbacks import Callback
     from keisei.training.display import TrainingDisplay
     from keisei.training.parallel import ParallelManager
-    from keisei.training.step_manager import (
+    from keisei.training.step_manager import (  # Added StepResult
         EpisodeState,
         StepManager,
         StepResult,
-    )  # Added StepResult
+    )
     from keisei.training.trainer import Trainer  # Forward reference
 
 

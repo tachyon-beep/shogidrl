@@ -360,7 +360,9 @@ def integration_test_config(policy_mapper, tmp_path):
             evaluation_interval_timesteps=200,
             enable_periodic_evaluation=False,  # Added missing parameter
             max_moves_per_game=200,  # Added missing parameter
-            log_file_path_eval=str(tmp_path / "integration_eval.log"),  # Added missing parameter
+            log_file_path_eval=str(
+                tmp_path / "integration_eval.log"
+            ),  # Added missing parameter
             wandb_log_eval=False,  # Added missing parameter
         ),
         logging=LoggingConfig(
@@ -399,6 +401,7 @@ def integration_test_config(policy_mapper, tmp_path):
 # PPOAgent Testing Fixtures - Eliminates Setup Duplication
 # =============================================================================
 
+
 @pytest.fixture
 def ppo_test_model():
     """Create a test ActorCritic model for PPOAgent testing."""
@@ -412,8 +415,9 @@ def ppo_test_model():
 @pytest.fixture
 def ppo_agent_basic(minimal_app_config, ppo_test_model):
     """Basic PPOAgent with minimal configuration for unit tests."""
-    from keisei.core.ppo_agent import PPOAgent
     import torch
+
+    from keisei.core.ppo_agent import PPOAgent
 
     return PPOAgent(
         model=ppo_test_model,
@@ -426,8 +430,9 @@ def ppo_agent_basic(minimal_app_config, ppo_test_model):
 @pytest.fixture
 def ppo_agent_fast(fast_app_config, ppo_test_model):
     """PPOAgent optimized for fast test execution."""
-    from keisei.core.ppo_agent import PPOAgent
     import torch
+
+    from keisei.core.ppo_agent import PPOAgent
 
     return PPOAgent(
         model=ppo_test_model,
@@ -440,8 +445,9 @@ def ppo_agent_fast(fast_app_config, ppo_test_model):
 @pytest.fixture
 def populated_experience_buffer():
     """Pre-populated experience buffer for PPO learning tests."""
-    import torch
     import numpy as np
+    import torch
+
     from keisei.core.experience_buffer import ExperienceBuffer
 
     buffer = ExperienceBuffer(
@@ -477,8 +483,8 @@ def populated_experience_buffer():
 @pytest.fixture
 def dummy_observation():
     """Standard dummy observation tensor for PPO tests."""
-    import torch
     import numpy as np
+    import torch
 
     rng = np.random.default_rng(42)
     obs_np = rng.random((46, 9, 9)).astype(np.float32)
@@ -534,6 +540,8 @@ def assert_valid_ppo_metrics(metrics: dict):
 
     for metric in required_metrics:
         assert metric in metrics, f"Missing required metric: {metric}"
-        assert isinstance(metrics[metric], (int, float)), f"Metric {metric} should be numeric"
+        assert isinstance(
+            metrics[metric], (int, float)
+        ), f"Metric {metric} should be numeric"
         assert not np.isnan(metrics[metric]), f"Metric {metric} is NaN"
         assert not np.isinf(metrics[metric]), f"Metric {metric} is infinite"

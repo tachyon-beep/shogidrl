@@ -21,6 +21,7 @@ def _create_test_model(config):
     mapper = PolicyOutputMapper()
     return ActorCritic(config.env.input_channels, mapper.get_total_actions())
 
+
 # Local config constants for test compatibility with new config system
 INPUT_CHANNELS = 46
 LEARNING_RATE = 3e-4
@@ -118,10 +119,12 @@ def test_train_resume_autodetect(tmp_path, mock_wandb_disabled):
         },
     }
     initial_agent_config = AppConfig.parse_obj(base_config_data)
-    
+
     # Create model for dependency injection
     model = _create_test_model(initial_agent_config)
-    agent = PPOAgent(model=model, config=initial_agent_config, device=torch.device(DEVICE))
+    agent = PPOAgent(
+        model=model, config=initial_agent_config, device=torch.device(DEVICE)
+    )
 
     # Save the initial checkpoint in tmp_path (the savedir/parent directory)
     # This simulates a previous training run that saved a checkpoint in the savedir
@@ -408,7 +411,9 @@ def test_train_explicit_resume(tmp_path, mock_wandb_disabled):
 
     # Create model for dependency injection
     model = _create_test_model(initial_save_config_obj)
-    agent = PPOAgent(model=model, config=initial_save_config_obj, device=torch.device(DEVICE))
+    agent = PPOAgent(
+        model=model, config=initial_save_config_obj, device=torch.device(DEVICE)
+    )
     agent.save_model(str(ckpt_path), global_timestep=100, total_episodes_completed=10)
 
     # Config for the actual training run that will resume

@@ -12,6 +12,7 @@ from keisei.utils.opponents import (
     SimpleRandomOpponent,
 )
 
+
 def load_evaluation_agent(
     checkpoint_path: str,
     device_str: str,
@@ -30,8 +31,8 @@ def load_evaluation_agent(
         TrainingConfig,
         WandBConfig,
     )
-    from keisei.core.ppo_agent import PPOAgent
     from keisei.core.neural_network import ActorCritic
+    from keisei.core.ppo_agent import PPOAgent
 
     if not os.path.isfile(checkpoint_path):
         print(f"Error: Checkpoint file {checkpoint_path} not found.")
@@ -86,8 +87,8 @@ def load_evaluation_agent(
             lr_schedule_step_on="epoch",
         ),
         evaluation=EvaluationConfig(
-            num_games=1, 
-            opponent_type="random", 
+            num_games=1,
+            opponent_type="random",
             evaluation_interval_timesteps=50000,
             enable_periodic_evaluation=False,
             max_moves_per_game=500,
@@ -109,19 +110,18 @@ def load_evaluation_agent(
         ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
     )
-    
+
     # Create temporary model for loading
     device = torch.device(device_str)
-    temp_model = ActorCritic(input_channels, policy_mapper.get_total_actions()).to(device)
-    
+    temp_model = ActorCritic(input_channels, policy_mapper.get_total_actions()).to(
+        device
+    )
+
     # Create agent with model (dependency injection)
     agent = PPOAgent(
-        model=temp_model,
-        config=config, 
-        device=device,
-        name="EvaluationAgent"
+        model=temp_model, config=config, device=device, name="EvaluationAgent"
     )
-    
+
     agent.load_model(checkpoint_path)
     agent.model.eval()
     print(f"Loaded agent from {checkpoint_path} on device {device_str} for evaluation.")

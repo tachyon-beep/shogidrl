@@ -1,6 +1,7 @@
 """
 resnet_tower.py: ActorCriticResTower model for Keisei Shogi with SE block support.
 """
+
 from typing import Optional
 
 import torch
@@ -16,11 +17,13 @@ class SqueezeExcitation(nn.Module):
         hidden = max(1, int(channels * se_ratio))
         self.fc1 = nn.Conv2d(channels, hidden, 1)
         self.fc2 = nn.Conv2d(hidden, channels, 1)
+
     def forward(self, x):
         s = F.adaptive_avg_pool2d(x, 1)
         s = F.relu(self.fc1(s))
         s = torch.sigmoid(self.fc2(s))
         return x * s
+
 
 class ResidualBlock(nn.Module):
     def __init__(self, channels: int, se_ratio: Optional[float] = None):
@@ -39,21 +42,29 @@ class ResidualBlock(nn.Module):
         out += x
         return F.relu(out)
 
+
 class ActorCriticResTower(BaseActorCriticModel):
-    def __init__(self, input_channels: int, num_actions_total: int, tower_depth: int = 9, tower_width: int = 256, se_ratio: Optional[float] = None):
+    def __init__(
+        self,
+        input_channels: int,
+        num_actions_total: int,
+        tower_depth: int = 9,
+        tower_width: int = 256,
+        se_ratio: Optional[float] = None,
+    ):
         super().__init__()
         self.stem = nn.Conv2d(input_channels, tower_width, 3, padding=1)
         self.bn_stem = nn.BatchNorm2d(tower_width)
-        self.res_blocks = nn.Sequential(*[
-            ResidualBlock(tower_width, se_ratio) for _ in range(tower_depth)
-        ])
+        self.res_blocks = nn.Sequential(
+            *[ResidualBlock(tower_width, se_ratio) for _ in range(tower_depth)]
+        )
         # Slim policy head: 2 planes, then flatten, then linear
         self.policy_head = nn.Sequential(
             nn.Conv2d(tower_width, 2, 1),
             nn.BatchNorm2d(2),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(2 * 9 * 9, num_actions_total)
+            nn.Linear(2 * 9 * 9, num_actions_total),
         )
         # Slim value head: 2 planes, then flatten, then linear
         self.value_head = nn.Sequential(
@@ -61,8 +72,9 @@ class ActorCriticResTower(BaseActorCriticModel):
             nn.BatchNorm2d(2),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(2 * 9 * 9, 1)
+            nn.Linear(2 * 9 * 9, 1),
         )
+
     def forward(self, x):
         x = F.relu(self.bn_stem(self.stem(x)))
         x = self.res_blocks(x)

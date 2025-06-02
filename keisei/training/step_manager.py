@@ -103,7 +103,7 @@ class StepManager:
         try:
             # Get legal moves for current position
             legal_shogi_moves = self.game.get_legal_moves()
-            
+
             # Check for no legal moves condition (terminal state)
             if not legal_shogi_moves:
                 error_msg = (
@@ -138,7 +138,7 @@ class StepManager:
                     success=False,
                     error_message=error_msg,
                 )
-            
+
             legal_mask_tensor = self.policy_mapper.get_legal_mask(
                 legal_shogi_moves, device=self.device
             )

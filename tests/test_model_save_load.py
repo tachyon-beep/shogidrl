@@ -43,11 +43,11 @@ def test_model_save_and_load(tmp_path):
             worker_seed_offset=1000,
         ),
         env=EnvConfig(
-            device="cpu", 
-            input_channels=46, 
-            num_actions_total=policy_output_mapper.get_total_actions(), 
+            device="cpu",
+            input_channels=46,
+            num_actions_total=policy_output_mapper.get_total_actions(),
             seed=42,
-            max_moves_per_game=512
+            max_moves_per_game=512,
         ),
         training=TrainingConfig(
             total_timesteps=500_000,
@@ -80,7 +80,7 @@ def test_model_save_and_load(tmp_path):
             lr_schedule_step_on="epoch",
         ),
         evaluation=EvaluationConfig(
-            num_games=20, 
+            num_games=20,
             opponent_type="random",
             evaluation_interval_timesteps=50000,
             enable_periodic_evaluation=False,
@@ -89,13 +89,11 @@ def test_model_save_and_load(tmp_path):
             wandb_log_eval=False,
         ),
         logging=LoggingConfig(
-            log_file="logs/training_log.txt", 
-            model_dir="models/",
-            run_name="test_run"
+            log_file="logs/training_log.txt", model_dir="models/", run_name="test_run"
         ),
         wandb=WandBConfig(
-            enabled=True, 
-            project="keisei-shogi", 
+            enabled=True,
+            project="keisei-shogi",
             entity=None,
             run_name_prefix="test",
             watch_model=False,
@@ -107,7 +105,7 @@ def test_model_save_and_load(tmp_path):
     )
 
     device = config.env.device
-    
+
     # Create model for dependency injection
     model = _create_test_model(config)
     agent = PPOAgent(model=model, config=config, device=torch.device(device))
@@ -139,7 +137,9 @@ def test_model_save_and_load(tmp_path):
 
     # Test loading into an agent with a different network instance but same architecture
     third_model = _create_test_model(config)
-    third_agent = PPOAgent(model=third_model, config=config, device=torch.device(device))
+    third_agent = PPOAgent(
+        model=third_model, config=config, device=torch.device(device)
+    )
     # Modify some parameters to test that loading restores original values
     # Use a general approach that works with any model structure
     for param in third_agent.model.parameters():

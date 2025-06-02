@@ -28,9 +28,7 @@ class TestSchedulerFactory:
     def test_create_scheduler_none_type(self, dummy_optimizer):
         """Test that None schedule_type returns None."""
         scheduler = SchedulerFactory.create_scheduler(
-            optimizer=dummy_optimizer,
-            schedule_type=None,
-            total_steps=1000
+            optimizer=dummy_optimizer, schedule_type=None, total_steps=1000
         )
         assert scheduler is None
 
@@ -40,25 +38,25 @@ class TestSchedulerFactory:
             optimizer=dummy_optimizer,
             schedule_type="linear",
             total_steps=100,
-            schedule_kwargs={"final_lr_fraction": 0.1}
+            schedule_kwargs={"final_lr_fraction": 0.1},
         )
-        
+
         assert scheduler is not None
-        assert hasattr(scheduler, 'step')
-        
+        assert hasattr(scheduler, "step")
+
         # Test learning rate progression
         initial_lr = dummy_optimizer.param_groups[0]["lr"]
-        
+
         # After 0 steps, LR should be unchanged
         assert dummy_optimizer.param_groups[0]["lr"] == initial_lr
-        
+
         # After 50 steps (halfway), LR should be 50% of initial (linear decay from 100% to 10%)
         for _ in range(50):
             scheduler.step()
         mid_lr = dummy_optimizer.param_groups[0]["lr"]
         expected_mid_lr = initial_lr * 0.5  # max(0.1, 1.0 - 50/100) = 0.5
         assert abs(mid_lr - expected_mid_lr) < 1e-6
-        
+
         # After 100 steps, LR should be 10% of initial
         for _ in range(50):
             scheduler.step()
@@ -72,14 +70,14 @@ class TestSchedulerFactory:
             optimizer=dummy_optimizer,
             schedule_type="cosine",
             total_steps=100,
-            schedule_kwargs={"eta_min_fraction": 0.0}
+            schedule_kwargs={"eta_min_fraction": 0.0},
         )
-        
+
         assert scheduler is not None
-        assert hasattr(scheduler, 'step')
-        
+        assert hasattr(scheduler, "step")
+
         initial_lr = dummy_optimizer.param_groups[0]["lr"]
-        
+
         # After 100 steps, LR should approach eta_min (0.0)
         for _ in range(100):
             scheduler.step()
@@ -92,14 +90,14 @@ class TestSchedulerFactory:
             optimizer=dummy_optimizer,
             schedule_type="exponential",
             total_steps=100,  # Not used for exponential
-            schedule_kwargs={"gamma": 0.9}
+            schedule_kwargs={"gamma": 0.9},
         )
-        
+
         assert scheduler is not None
-        assert hasattr(scheduler, 'step')
-        
+        assert hasattr(scheduler, "step")
+
         initial_lr = dummy_optimizer.param_groups[0]["lr"]
-        
+
         # After 1 step, LR should be gamma * initial_lr
         scheduler.step()
         new_lr = dummy_optimizer.param_groups[0]["lr"]
@@ -112,19 +110,19 @@ class TestSchedulerFactory:
             optimizer=dummy_optimizer,
             schedule_type="step",
             total_steps=100,  # Not used for step
-            schedule_kwargs={"step_size": 10, "gamma": 0.5}
+            schedule_kwargs={"step_size": 10, "gamma": 0.5},
         )
-        
+
         assert scheduler is not None
-        assert hasattr(scheduler, 'step')
-        
+        assert hasattr(scheduler, "step")
+
         initial_lr = dummy_optimizer.param_groups[0]["lr"]
-        
+
         # After 9 steps, LR should be unchanged
         for _ in range(9):
             scheduler.step()
         assert dummy_optimizer.param_groups[0]["lr"] == initial_lr
-        
+
         # After 10 steps, LR should be halved
         scheduler.step()
         new_lr = dummy_optimizer.param_groups[0]["lr"]
@@ -135,9 +133,7 @@ class TestSchedulerFactory:
         """Test that invalid scheduler type raises ValueError."""
         with pytest.raises(ValueError, match="Unsupported scheduler type"):
             SchedulerFactory.create_scheduler(
-                optimizer=dummy_optimizer,
-                schedule_type="invalid_type",
-                total_steps=100
+                optimizer=dummy_optimizer, schedule_type="invalid_type", total_steps=100
             )
 
     def test_scheduler_with_default_kwargs(self, dummy_optimizer):
@@ -147,16 +143,16 @@ class TestSchedulerFactory:
             optimizer=dummy_optimizer,
             schedule_type="linear",
             total_steps=100,
-            schedule_kwargs=None
+            schedule_kwargs=None,
         )
         assert scheduler is not None
-        
+
         # Exponential scheduler with default kwargs
         scheduler = SchedulerFactory.create_scheduler(
             optimizer=dummy_optimizer,
-            schedule_type="exponential", 
+            schedule_type="exponential",
             total_steps=100,
-            schedule_kwargs=None
+            schedule_kwargs=None,
         )
         assert scheduler is not None
 
@@ -167,11 +163,11 @@ class TestSchedulerFactory:
             optimizer=dummy_optimizer,
             schedule_type="linear",
             total_steps=10,
-            schedule_kwargs={"final_lr_fraction": 0.0}
+            schedule_kwargs={"final_lr_fraction": 0.0},
         )
-        
+
         initial_lr = dummy_optimizer.param_groups[0]["lr"]
-        
+
         # After all steps, LR should approach 0
         for _ in range(10):
             scheduler.step()
@@ -184,11 +180,11 @@ class TestSchedulerFactory:
             optimizer=dummy_optimizer,
             schedule_type="cosine",
             total_steps=100,
-            schedule_kwargs={"eta_min_fraction": 0.1}
+            schedule_kwargs={"eta_min_fraction": 0.1},
         )
-        
+
         initial_lr = dummy_optimizer.param_groups[0]["lr"]
-        
+
         # After all steps, LR should be at least 10% of initial
         for _ in range(100):
             scheduler.step()
@@ -204,14 +200,12 @@ class TestSchedulerFactoryIntegration:
         """Test that all documented scheduler types are supported."""
         dummy_param = torch.nn.Parameter(torch.randn(1))
         optimizer = Adam([dummy_param], lr=1e-3)
-        
+
         supported_types = ["linear", "cosine", "exponential", "step"]
-        
+
         for schedule_type in supported_types:
             scheduler = SchedulerFactory.create_scheduler(
-                optimizer=optimizer,
-                schedule_type=schedule_type,
-                total_steps=100
+                optimizer=optimizer, schedule_type=schedule_type, total_steps=100
             )
             assert scheduler is not None, f"Failed to create {schedule_type} scheduler"
 
@@ -219,22 +213,18 @@ class TestSchedulerFactoryIntegration:
         """Test that multiple schedulers can be created for the same optimizer type."""
         dummy_param1 = torch.nn.Parameter(torch.randn(1))
         dummy_param2 = torch.nn.Parameter(torch.randn(1))
-        
+
         optimizer1 = Adam([dummy_param1], lr=1e-3)
         optimizer2 = Adam([dummy_param2], lr=1e-3)
-        
+
         scheduler1 = SchedulerFactory.create_scheduler(
-            optimizer=optimizer1,
-            schedule_type="linear",
-            total_steps=100
+            optimizer=optimizer1, schedule_type="linear", total_steps=100
         )
-        
+
         scheduler2 = SchedulerFactory.create_scheduler(
-            optimizer=optimizer2,
-            schedule_type="cosine",
-            total_steps=100
+            optimizer=optimizer2, schedule_type="cosine", total_steps=100
         )
-        
+
         assert scheduler1 is not None
         assert scheduler2 is not None
         assert scheduler1 != scheduler2

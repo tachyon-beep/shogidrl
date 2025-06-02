@@ -3,7 +3,7 @@ Unit tests for advanced PPOAgent learning functionality.
 
 This module tests sophisticated PPO learning features including:
 - Loss component computation and validation
-- Advantage normalization (enabled/disabled/behavioral differences) 
+- Advantage normalization (enabled/disabled/behavioral differences)
 - Gradient clipping mechanisms
 - KL divergence tracking
 - Minibatch processing
@@ -22,15 +22,17 @@ from tests.conftest import assert_valid_ppo_metrics
 
 class TestPPOAgentLossComponents:
     """Tests for PPO loss computation and validation."""
-    
+
     def test_learn_loss_components(self, integration_test_config, ppo_test_model):
         """Test that PPOAgent.learn correctly computes and returns individual loss components."""
         # Override specific settings for this test
         config = integration_test_config.model_copy()
         config.training.ppo_epochs = 2  # Multiple epochs to test learning behavior
-        
-        agent = PPOAgent(model=ppo_test_model, config=config, device=torch.device("cpu"))
-        
+
+        agent = PPOAgent(
+            model=ppo_test_model, config=config, device=torch.device("cpu")
+        )
+
         buffer_size = 8  # Larger buffer for more realistic training
         experience_buffer = ExperienceBuffer(
             buffer_size=buffer_size,
@@ -38,20 +40,20 @@ class TestPPOAgentLossComponents:
             lambda_gae=0.95,
             device="cpu",
         )
-        
+
         # Create deterministic data for more predictable testing
         torch.manual_seed(42)
         np.random.seed(42)
-        
+
         dummy_obs_tensor = torch.randn(46, 9, 9, device="cpu")
         dummy_legal_mask = torch.ones(
             agent.num_actions_total, dtype=torch.bool, device="cpu"
         )
-        
+
         # Create varied rewards and values to test advantage calculation
         rewards = [1.0, -0.5, 2.0, 0.0, 1.5, -1.0, 0.5, 2.5]
         values = [0.8, 0.2, 1.5, 0.1, 1.0, -0.3, 0.3, 2.0]
-        
+
         for i in range(buffer_size):
             experience_buffer.add(
                 obs=dummy_obs_tensor,
@@ -62,20 +64,20 @@ class TestPPOAgentLossComponents:
                 done=(i == buffer_size - 1),
                 legal_mask=dummy_legal_mask,
             )
-        
+
         # Compute advantages with realistic last value
         last_value = 1.2
         experience_buffer.compute_advantages_and_returns(last_value)
-        
+
         # Capture initial model parameters for change verification
         initial_params = [p.clone() for p in agent.model.parameters()]
-        
+
         # Call learn method
         metrics = agent.learn(experience_buffer)
-        
+
         # Verify all expected metrics are present and valid
         assert_valid_ppo_metrics(metrics)
-        
+
         # Verify reasonable metric ranges
         assert metrics["ppo/learning_rate"] == config.training.learning_rate
         assert (
@@ -83,7 +85,7 @@ class TestPPOAgentLossComponents:
         ), "Entropy loss should be negative (entropy bonus)"
         assert metrics["ppo/policy_loss"] >= 0.0, "Policy loss should be non-negative"
         assert metrics["ppo/value_loss"] >= 0.0, "Value loss should be non-negative"
-        
+
         # Verify model parameters changed (learning occurred)
         final_params = [p.clone() for p in agent.model.parameters()]
         params_changed = any(
@@ -95,26 +97,32 @@ class TestPPOAgentLossComponents:
 
 class TestPPOAgentAdvantageNormalization:
     """Tests for advantage normalization functionality."""
-    
-    def test_advantage_normalization_config_option(self, minimal_app_config, ppo_test_model):
+
+    def test_advantage_normalization_config_option(
+        self, minimal_app_config, ppo_test_model
+    ):
         """Test that advantage normalization can be controlled via configuration."""
         # Test with normalization enabled (default)
         config_enabled = minimal_app_config.model_copy()
         config_enabled.training.normalize_advantages = True
-        agent_enabled = PPOAgent(model=ppo_test_model, config=config_enabled, device=torch.device("cpu"))
+        agent_enabled = PPOAgent(
+            model=ppo_test_model, config=config_enabled, device=torch.device("cpu")
+        )
         assert agent_enabled.normalize_advantages is True
-        
+
         # Test with normalization disabled
         config_disabled = minimal_app_config.model_copy()
         config_disabled.training.normalize_advantages = False
         model_disabled = ActorCritic(46, PolicyOutputMapper().get_total_actions())
-        agent_disabled = PPOAgent(model=model_disabled, config=config_disabled, device=torch.device("cpu"))
+        agent_disabled = PPOAgent(
+            model=model_disabled, config=config_disabled, device=torch.device("cpu")
+        )
         assert agent_disabled.normalize_advantages is False
-        
+
     def test_advantage_normalization_behavior_difference(self, minimal_app_config):
         """Test that enabling/disabling advantage normalization actually affects computation."""
         buffer_size = 8
-        
+
         # Create data with high variance advantages to test normalization
         experience_buffer = ExperienceBuffer(
             buffer_size=buffer_size,
@@ -122,14 +130,14 @@ class TestPPOAgentAdvantageNormalization:
             lambda_gae=0.95,
             device="cpu",
         )
-        
+
         dummy_obs_tensor = torch.randn(46, 9, 9, device="cpu")
         dummy_legal_mask = torch.ones(13527, dtype=torch.bool, device="cpu")
-        
+
         # High variance rewards and values to create large advantage differences
         rewards = [100.0, -50.0, 75.0, -25.0, 50.0, -75.0, 25.0, -100.0]
         values = [10.0, 5.0, 8.0, 3.0, 6.0, 2.0, 4.0, 1.0]
-        
+
         for i in range(buffer_size):
             experience_buffer.add(
                 obs=dummy_obs_tensor,
@@ -140,32 +148,40 @@ class TestPPOAgentAdvantageNormalization:
                 done=(i == buffer_size - 1),
                 legal_mask=dummy_legal_mask,
             )
-        
+
         experience_buffer.compute_advantages_and_returns(0.0)
-        
+
         # Get raw advantages before normalization
         batch_data = experience_buffer.get_batch()
         raw_advantages = batch_data["advantages"].clone()
-        
+
         # Verify raw advantages have significant variance
-        assert torch.std(raw_advantages, dim=0).max() > 10.0, "Raw advantages should have high variance"
-        assert not torch.allclose(raw_advantages, torch.zeros_like(raw_advantages)), "Raw advantages should not be zero"
-        
+        assert (
+            torch.std(raw_advantages, dim=0).max() > 10.0
+        ), "Raw advantages should have high variance"
+        assert not torch.allclose(
+            raw_advantages, torch.zeros_like(raw_advantages)
+        ), "Raw advantages should not be zero"
+
         # Test with normalization enabled
         config_enabled = minimal_app_config.model_copy()
         config_enabled.training.normalize_advantages = True
         model_enabled = ActorCritic(46, PolicyOutputMapper().get_total_actions())
-        agent_enabled = PPOAgent(model=model_enabled, config=config_enabled, device=torch.device("cpu"))
-        
-        # Test with normalization disabled  
+        agent_enabled = PPOAgent(
+            model=model_enabled, config=config_enabled, device=torch.device("cpu")
+        )
+
+        # Test with normalization disabled
         config_disabled = minimal_app_config.model_copy()
         config_disabled.training.normalize_advantages = False
         model_disabled = ActorCritic(46, PolicyOutputMapper().get_total_actions())
-        agent_disabled = PPOAgent(model=model_disabled, config=config_disabled, device=torch.device("cpu"))
-        
+        agent_disabled = PPOAgent(
+            model=model_disabled, config=config_disabled, device=torch.device("cpu")
+        )
+
         # Both agents should learn successfully regardless of normalization
         metrics_enabled = agent_enabled.learn(experience_buffer)
-        
+
         # Recreate buffer for second agent (since buffer is consumed)
         experience_buffer2 = ExperienceBuffer(
             buffer_size=buffer_size,
@@ -173,7 +189,7 @@ class TestPPOAgentAdvantageNormalization:
             lambda_gae=0.95,
             device="cpu",
         )
-        
+
         for i in range(buffer_size):
             experience_buffer2.add(
                 obs=dummy_obs_tensor,
@@ -184,10 +200,10 @@ class TestPPOAgentAdvantageNormalization:
                 done=(i == buffer_size - 1),
                 legal_mask=dummy_legal_mask,
             )
-        
+
         experience_buffer2.compute_advantages_and_returns(0.0)
         metrics_disabled = agent_disabled.learn(experience_buffer2)
-        
+
         # Both should return valid metrics
         assert_valid_ppo_metrics(metrics_enabled)
         assert_valid_ppo_metrics(metrics_disabled)
@@ -199,7 +215,7 @@ class TestPPOAgentAdvantageNormalization:
 
 class TestPPOAgentGradientClipping:
     """Tests for gradient clipping functionality."""
-    
+
     def test_gradient_clipping(self, minimal_app_config, ppo_test_model):
         """Test that gradient clipping is applied during learning."""
         # Use high learning rate to potentially create large gradients
@@ -208,9 +224,11 @@ class TestPPOAgentGradientClipping:
         config.training.gradient_clip_max_norm = 0.5  # Explicit gradient clipping
         config.training.ppo_epochs = 1
         config.training.minibatch_size = 2
-        
-        agent = PPOAgent(model=ppo_test_model, config=config, device=torch.device("cpu"))
-        
+
+        agent = PPOAgent(
+            model=ppo_test_model, config=config, device=torch.device("cpu")
+        )
+
         buffer_size = 4
         experience_buffer = ExperienceBuffer(
             buffer_size=buffer_size,
@@ -218,16 +236,16 @@ class TestPPOAgentGradientClipping:
             lambda_gae=0.95,
             device="cpu",
         )
-        
+
         # Create data that might produce large gradients
         dummy_obs_tensor = torch.randn(46, 9, 9, device="cpu")
         dummy_legal_mask = torch.ones(
             agent.num_actions_total, dtype=torch.bool, device="cpu"
         )
-        
+
         # Extreme reward values to potentially create large policy updates
         rewards = [100.0, -100.0, 50.0, -50.0]
-        
+
         for i in range(buffer_size):
             experience_buffer.add(
                 obs=dummy_obs_tensor,
@@ -238,27 +256,29 @@ class TestPPOAgentGradientClipping:
                 done=(i == buffer_size - 1),
                 legal_mask=dummy_legal_mask,
             )
-        
+
         experience_buffer.compute_advantages_and_returns(0.0)
-        
+
         # Learn should complete without exploding gradients due to clipping
         metrics = agent.learn(experience_buffer)
-        
+
         # Verify learning completed successfully
         assert_valid_ppo_metrics(metrics)
 
 
 class TestPPOAgentKLDivergence:
     """Tests for KL divergence tracking functionality."""
-    
+
     def test_kl_divergence_tracking(self, minimal_app_config, ppo_test_model):
         """Test that KL divergence is properly computed and tracked."""
         config = minimal_app_config.model_copy()
         config.training.ppo_epochs = 2  # Multiple epochs to see KL divergence change
         config.training.minibatch_size = 2
-        
-        agent = PPOAgent(model=ppo_test_model, config=config, device=torch.device("cpu"))
-        
+
+        agent = PPOAgent(
+            model=ppo_test_model, config=config, device=torch.device("cpu")
+        )
+
         buffer_size = 4
         experience_buffer = ExperienceBuffer(
             buffer_size=buffer_size,
@@ -266,12 +286,12 @@ class TestPPOAgentKLDivergence:
             lambda_gae=0.95,
             device="cpu",
         )
-        
+
         dummy_obs_tensor = torch.randn(46, 9, 9, device="cpu")
         dummy_legal_mask = torch.ones(
             agent.num_actions_total, dtype=torch.bool, device="cpu"
         )
-        
+
         for i in range(buffer_size):
             experience_buffer.add(
                 obs=dummy_obs_tensor,
@@ -282,22 +302,22 @@ class TestPPOAgentKLDivergence:
                 done=(i == buffer_size - 1),
                 legal_mask=dummy_legal_mask,
             )
-        
+
         experience_buffer.compute_advantages_and_returns(0.0)
-        
+
         # First learn call
         metrics = agent.learn(experience_buffer)
         kl_div = metrics["ppo/kl_divergence_approx"]
-        
+
         # Verify KL divergence is tracked in agent
         assert hasattr(agent, "last_kl_div")
         assert agent.last_kl_div == kl_div
-        
+
         # KL divergence should be a reasonable value
         assert isinstance(kl_div, float)
         assert not np.isnan(kl_div)
         assert not np.isinf(kl_div)
-        
+
         # For multiple epochs with the same data, KL should generally be small
         # (policy shouldn't diverge dramatically from itself)
         assert abs(kl_div) < 10.0, f"KL divergence {kl_div} seems too large"
@@ -305,16 +325,18 @@ class TestPPOAgentKLDivergence:
 
 class TestPPOAgentMinibatchProcessing:
     """Tests for minibatch processing functionality."""
-    
+
     def test_minibatch_processing(self, minimal_app_config, ppo_test_model):
         """Test that minibatch processing works correctly with different batch sizes."""
         # Test with buffer size that doesn't divide evenly by minibatch size
         config = minimal_app_config.model_copy()
         config.training.ppo_epochs = 1
         config.training.minibatch_size = 3  # Doesn't divide evenly into 5
-        
-        agent = PPOAgent(model=ppo_test_model, config=config, device=torch.device("cpu"))
-        
+
+        agent = PPOAgent(
+            model=ppo_test_model, config=config, device=torch.device("cpu")
+        )
+
         buffer_size = 5  # Odd size to test uneven minibatch splitting
         experience_buffer = ExperienceBuffer(
             buffer_size=buffer_size,
@@ -322,12 +344,12 @@ class TestPPOAgentMinibatchProcessing:
             lambda_gae=0.95,
             device="cpu",
         )
-        
+
         dummy_obs_tensor = torch.randn(46, 9, 9, device="cpu")
         dummy_legal_mask = torch.ones(
             agent.num_actions_total, dtype=torch.bool, device="cpu"
         )
-        
+
         for i in range(buffer_size):
             experience_buffer.add(
                 obs=dummy_obs_tensor,
@@ -338,23 +360,25 @@ class TestPPOAgentMinibatchProcessing:
                 done=(i == buffer_size - 1),
                 legal_mask=dummy_legal_mask,
             )
-        
+
         experience_buffer.compute_advantages_and_returns(0.0)
-        
+
         # Learn should handle uneven minibatch split correctly
         metrics = agent.learn(experience_buffer)
-        
+
         # Should complete successfully
         assert_valid_ppo_metrics(metrics)
 
 
 class TestPPOAgentRobustness:
     """Tests for PPO learning robustness and edge cases."""
-    
+
     def test_empty_buffer_handling(self, minimal_app_config, ppo_test_model):
         """Test PPOAgent.learn behavior with empty experience buffer."""
-        agent = PPOAgent(model=ppo_test_model, config=minimal_app_config, device=torch.device("cpu"))
-        
+        agent = PPOAgent(
+            model=ppo_test_model, config=minimal_app_config, device=torch.device("cpu")
+        )
+
         # Create empty buffer
         experience_buffer = ExperienceBuffer(
             buffer_size=4,
@@ -362,16 +386,16 @@ class TestPPOAgentRobustness:
             lambda_gae=0.95,
             device="cpu",
         )
-        
+
         # Don't add any experiences - buffer remains empty
-        
+
         # Learn should handle empty buffer gracefully
         metrics = agent.learn(experience_buffer)
-        
+
         # Should return default/zero metrics without crashing
         assert metrics is not None
         assert isinstance(metrics, dict)
-        
+
         expected_metrics = [
             "ppo/policy_loss",
             "ppo/value_loss",
@@ -379,28 +403,30 @@ class TestPPOAgentRobustness:
             "ppo/kl_divergence_approx",
             "ppo/learning_rate",
         ]
-        
+
         for metric in expected_metrics:
             assert metric in metrics
             # Should be zero or default values for empty buffer
             assert isinstance(metrics[metric], (int, float))
-            
+
     def test_single_experience_learning(self, minimal_app_config, ppo_test_model):
         """Test learning with minimal experience buffer (single experience)."""
-        agent = PPOAgent(model=ppo_test_model, config=minimal_app_config, device=torch.device("cpu"))
-        
+        agent = PPOAgent(
+            model=ppo_test_model, config=minimal_app_config, device=torch.device("cpu")
+        )
+
         experience_buffer = ExperienceBuffer(
             buffer_size=1,
             gamma=0.99,
             lambda_gae=0.95,
             device="cpu",
         )
-        
+
         dummy_obs_tensor = torch.randn(46, 9, 9, device="cpu")
         dummy_legal_mask = torch.ones(
             agent.num_actions_total, dtype=torch.bool, device="cpu"
         )
-        
+
         experience_buffer.add(
             obs=dummy_obs_tensor,
             action=0,
@@ -410,9 +436,9 @@ class TestPPOAgentRobustness:
             done=True,
             legal_mask=dummy_legal_mask,
         )
-        
+
         experience_buffer.compute_advantages_and_returns(0.0)
-        
+
         # Should handle single experience without errors
         metrics = agent.learn(experience_buffer)
         assert_valid_ppo_metrics(metrics)
@@ -431,9 +457,11 @@ class TestPPOAgentSchedulerLearning:
         config.training.total_timesteps = 1000
         config.training.steps_per_epoch = 100
         config.training.ppo_epochs = 1
-        
-        agent = PPOAgent(model=ppo_test_model, config=config, device=torch.device("cpu"))
-        
+
+        agent = PPOAgent(
+            model=ppo_test_model, config=config, device=torch.device("cpu")
+        )
+
         # Create simple experience buffer
         experience_buffer = ExperienceBuffer(
             buffer_size=4,
@@ -441,12 +469,12 @@ class TestPPOAgentSchedulerLearning:
             lambda_gae=0.95,
             device="cpu",
         )
-        
+
         dummy_obs_tensor = torch.randn(46, 9, 9, device="cpu")
         dummy_legal_mask = torch.ones(
             agent.num_actions_total, dtype=torch.bool, device="cpu"
         )
-        
+
         # Add experiences
         for i in range(4):
             experience_buffer.add(
@@ -458,24 +486,28 @@ class TestPPOAgentSchedulerLearning:
                 done=(i == 3),
                 legal_mask=dummy_legal_mask,
             )
-        
+
         experience_buffer.compute_advantages_and_returns(0.0)
-        
+
         # Track learning rate changes
         initial_lr = config.training.learning_rate
-        
+
         # First learning call
         metrics1 = agent.learn(experience_buffer)
         lr_after_first = metrics1["ppo/learning_rate"]
-        
+
         # Second learning call (scheduler steps automatically)
         metrics2 = agent.learn(experience_buffer)
         lr_after_second = metrics2["ppo/learning_rate"]
-        
+
         # Learning rate should be decreasing with linear scheduler
-        assert lr_after_first < initial_lr, "Learning rate should decrease after first epoch"
-        assert lr_after_second < lr_after_first, "Learning rate should continue decreasing"
-        
+        assert (
+            lr_after_first < initial_lr
+        ), "Learning rate should decrease after first epoch"
+        assert (
+            lr_after_second < lr_after_first
+        ), "Learning rate should continue decreasing"
+
         # Verify learning rate is above minimum threshold
         min_lr = initial_lr * config.training.lr_schedule_kwargs["final_lr_fraction"]
         assert lr_after_second >= min_lr, "Learning rate should not go below minimum"
@@ -490,9 +522,11 @@ class TestPPOAgentSchedulerLearning:
         config.training.total_timesteps = 1000
         config.training.steps_per_epoch = 100
         config.training.ppo_epochs = 1
-        
-        agent = PPOAgent(model=ppo_test_model, config=config, device=torch.device("cpu"))
-        
+
+        agent = PPOAgent(
+            model=ppo_test_model, config=config, device=torch.device("cpu")
+        )
+
         # Create experience buffer
         experience_buffer = ExperienceBuffer(
             buffer_size=4,
@@ -500,12 +534,12 @@ class TestPPOAgentSchedulerLearning:
             lambda_gae=0.95,
             device="cpu",
         )
-        
+
         dummy_obs_tensor = torch.randn(46, 9, 9, device="cpu")
         dummy_legal_mask = torch.ones(
             agent.num_actions_total, dtype=torch.bool, device="cpu"
         )
-        
+
         # Add experiences
         for i in range(4):
             experience_buffer.add(
@@ -517,29 +551,33 @@ class TestPPOAgentSchedulerLearning:
                 done=(i == 3),
                 legal_mask=dummy_legal_mask,
             )
-        
+
         experience_buffer.compute_advantages_and_returns(0.0)
-        
+
         # Track learning rates over multiple learning calls
         learning_rates = []
         initial_lr = config.training.learning_rate
-        
+
         for _ in range(5):
             metrics = agent.learn(experience_buffer)
             learning_rates.append(metrics["ppo/learning_rate"])
-        
+
         # Verify cosine decay pattern
         assert learning_rates[0] < initial_lr, "First epoch should show scheduler step"
-        
+
         # For cosine schedule, learning rate should generally decrease
         final_lr = learning_rates[-1]
         assert final_lr < initial_lr, "Final learning rate should be less than initial"
-        
+
         # Verify minimum learning rate constraint
         min_lr = initial_lr * config.training.lr_schedule_kwargs["eta_min_fraction"]
-        assert all(lr >= min_lr for lr in learning_rates), "All learning rates should be >= min_lr"
+        assert all(
+            lr >= min_lr for lr in learning_rates
+        ), "All learning rates should be >= min_lr"
 
-    def test_learning_with_exponential_scheduler(self, minimal_app_config, ppo_test_model):
+    def test_learning_with_exponential_scheduler(
+        self, minimal_app_config, ppo_test_model
+    ):
         """Test exponential scheduler during learning with gamma decay."""
         config = minimal_app_config.model_copy()
         config.training.learning_rate = 0.001
@@ -549,9 +587,11 @@ class TestPPOAgentSchedulerLearning:
         config.training.total_timesteps = 1000
         config.training.steps_per_epoch = 100
         config.training.ppo_epochs = 1
-        
-        agent = PPOAgent(model=ppo_test_model, config=config, device=torch.device("cpu"))
-        
+
+        agent = PPOAgent(
+            model=ppo_test_model, config=config, device=torch.device("cpu")
+        )
+
         # Create experience buffer
         experience_buffer = ExperienceBuffer(
             buffer_size=4,
@@ -559,12 +599,12 @@ class TestPPOAgentSchedulerLearning:
             lambda_gae=0.95,
             device="cpu",
         )
-        
+
         dummy_obs_tensor = torch.randn(46, 9, 9, device="cpu")
         dummy_legal_mask = torch.ones(
             agent.num_actions_total, dtype=torch.bool, device="cpu"
         )
-        
+
         # Add experiences
         for i in range(4):
             experience_buffer.add(
@@ -576,21 +616,23 @@ class TestPPOAgentSchedulerLearning:
                 done=(i == 3),
                 legal_mask=dummy_legal_mask,
             )
-        
+
         experience_buffer.compute_advantages_and_returns(0.0)
-        
+
         # First learning call
         metrics1 = agent.learn(experience_buffer)
         lr1 = metrics1["ppo/learning_rate"]
-        
+
         # Second learning call (scheduler steps automatically)
         metrics2 = agent.learn(experience_buffer)
         lr2 = metrics2["ppo/learning_rate"]
-        
+
         # Verify exponential decay
         expected_ratio = config.training.lr_schedule_kwargs["gamma"]
         actual_ratio = lr2 / lr1
-        assert abs(actual_ratio - expected_ratio) < 0.01, f"Expected ratio ~{expected_ratio}, got {actual_ratio}"
+        assert (
+            abs(actual_ratio - expected_ratio) < 0.01
+        ), f"Expected ratio ~{expected_ratio}, got {actual_ratio}"
 
     def test_learning_with_step_scheduler(self, minimal_app_config, ppo_test_model):
         """Test step scheduler with step intervals during learning."""
@@ -598,13 +640,18 @@ class TestPPOAgentSchedulerLearning:
         config.training.learning_rate = 0.001
         config.training.lr_schedule_type = "step"
         config.training.lr_schedule_step_on = "epoch"
-        config.training.lr_schedule_kwargs = {"step_size": 2, "gamma": 0.5}  # 50% reduction every 2 epochs
+        config.training.lr_schedule_kwargs = {
+            "step_size": 2,
+            "gamma": 0.5,
+        }  # 50% reduction every 2 epochs
         config.training.total_timesteps = 1000
         config.training.steps_per_epoch = 100
         config.training.ppo_epochs = 1
-        
-        agent = PPOAgent(model=ppo_test_model, config=config, device=torch.device("cpu"))
-        
+
+        agent = PPOAgent(
+            model=ppo_test_model, config=config, device=torch.device("cpu")
+        )
+
         # Create experience buffer
         experience_buffer = ExperienceBuffer(
             buffer_size=4,
@@ -612,12 +659,12 @@ class TestPPOAgentSchedulerLearning:
             lambda_gae=0.95,
             device="cpu",
         )
-        
+
         dummy_obs_tensor = torch.randn(46, 9, 9, device="cpu")
         dummy_legal_mask = torch.ones(
             agent.num_actions_total, dtype=torch.bool, device="cpu"
         )
-        
+
         # Add experiences
         for i in range(4):
             experience_buffer.add(
@@ -629,36 +676,50 @@ class TestPPOAgentSchedulerLearning:
                 done=(i == 3),
                 legal_mask=dummy_legal_mask,
             )
-        
+
         experience_buffer.compute_advantages_and_returns(0.0)
-        
+
         initial_lr = config.training.learning_rate
         learning_rates = []
-        
+
         # Test over several epochs to see step behavior
         for _ in range(4):
             metrics = agent.learn(experience_buffer)
             learning_rates.append(metrics["ppo/learning_rate"])
-        
+
         # Verify step scheduler behavior
         # PyTorch StepLR behavior: steps at step_size calls, not after step_size calls
         # learning_rates[i] shows LR after the i-th scheduler.step() call
-        
-        # After 1st step: no change yet (step_size=2)
-        assert learning_rates[0] == initial_lr, "LR should remain initial after 1st step"
-        
-        # After 2nd step: first reduction (step count reaches step_size=2)
-        expected_lr_after_first_step = initial_lr * config.training.lr_schedule_kwargs["gamma"]
-        assert abs(learning_rates[1] - expected_lr_after_first_step) < 1e-6, "LR should step down after 2nd step"
-        
-        # After 3rd step: no change yet (need step_size=2 more steps for next reduction)
-        assert abs(learning_rates[2] - expected_lr_after_first_step) < 1e-6, "LR should remain stepped after 3rd step"
-        
-        # After 4th step: second reduction (step count reaches next multiple of step_size)
-        expected_lr_after_second_step = expected_lr_after_first_step * config.training.lr_schedule_kwargs["gamma"]
-        assert abs(learning_rates[3] - expected_lr_after_second_step) < 1e-6, "LR should step down again after 4th step"
 
-    def test_scheduler_interaction_with_multiple_epochs(self, minimal_app_config, ppo_test_model):
+        # After 1st step: no change yet (step_size=2)
+        assert (
+            learning_rates[0] == initial_lr
+        ), "LR should remain initial after 1st step"
+
+        # After 2nd step: first reduction (step count reaches step_size=2)
+        expected_lr_after_first_step = (
+            initial_lr * config.training.lr_schedule_kwargs["gamma"]
+        )
+        assert (
+            abs(learning_rates[1] - expected_lr_after_first_step) < 1e-6
+        ), "LR should step down after 2nd step"
+
+        # After 3rd step: no change yet (need step_size=2 more steps for next reduction)
+        assert (
+            abs(learning_rates[2] - expected_lr_after_first_step) < 1e-6
+        ), "LR should remain stepped after 3rd step"
+
+        # After 4th step: second reduction (step count reaches next multiple of step_size)
+        expected_lr_after_second_step = (
+            expected_lr_after_first_step * config.training.lr_schedule_kwargs["gamma"]
+        )
+        assert (
+            abs(learning_rates[3] - expected_lr_after_second_step) < 1e-6
+        ), "LR should step down again after 4th step"
+
+    def test_scheduler_interaction_with_multiple_epochs(
+        self, minimal_app_config, ppo_test_model
+    ):
         """Test scheduler behavior with multiple PPO epochs per learning call."""
         config = minimal_app_config.model_copy()
         config.training.learning_rate = 0.001
@@ -668,9 +729,11 @@ class TestPPOAgentSchedulerLearning:
         config.training.lr_schedule_kwargs = {"final_lr_fraction": 0.1}
         config.training.total_timesteps = 1000
         config.training.steps_per_epoch = 100
-        
-        agent = PPOAgent(model=ppo_test_model, config=config, device=torch.device("cpu"))
-        
+
+        agent = PPOAgent(
+            model=ppo_test_model, config=config, device=torch.device("cpu")
+        )
+
         # Create experience buffer
         experience_buffer = ExperienceBuffer(
             buffer_size=4,
@@ -678,12 +741,12 @@ class TestPPOAgentSchedulerLearning:
             lambda_gae=0.95,
             device="cpu",
         )
-        
+
         dummy_obs_tensor = torch.randn(46, 9, 9, device="cpu")
         dummy_legal_mask = torch.ones(
             agent.num_actions_total, dtype=torch.bool, device="cpu"
         )
-        
+
         # Add experiences
         for i in range(4):
             experience_buffer.add(
@@ -695,37 +758,45 @@ class TestPPOAgentSchedulerLearning:
                 done=(i == 3),
                 legal_mask=dummy_legal_mask,
             )
-        
+
         experience_buffer.compute_advantages_and_returns(0.0)
-        
+
         initial_lr = config.training.learning_rate
-        
+
         # First learning call (will run 3 epochs internally)
         metrics1 = agent.learn(experience_buffer)
         lr_after_first_learn = metrics1["ppo/learning_rate"]
-        
+
         # Second learning call
         metrics2 = agent.learn(experience_buffer)
         lr_after_second_learn = metrics2["ppo/learning_rate"]
-        
+
         # Since we're stepping per epoch and each learn() runs 3 epochs,
         # the learning rate should decrease more significantly
-        assert lr_after_first_learn < initial_lr, "LR should decrease after first learn call"
-        assert lr_after_second_learn < lr_after_first_learn, "LR should continue decreasing"
-        
+        assert (
+            lr_after_first_learn < initial_lr
+        ), "LR should decrease after first learn call"
+        assert (
+            lr_after_second_learn < lr_after_first_learn
+        ), "LR should continue decreasing"
+
         # Verify the learning rate is still above minimum
         min_lr = initial_lr * config.training.lr_schedule_kwargs["final_lr_fraction"]
         assert lr_after_second_learn >= min_lr, "LR should not go below minimum"
 
-    def test_scheduler_disabled_maintains_constant_lr(self, minimal_app_config, ppo_test_model):
+    def test_scheduler_disabled_maintains_constant_lr(
+        self, minimal_app_config, ppo_test_model
+    ):
         """Test that when scheduler is disabled, learning rate remains constant during learning."""
         config = minimal_app_config.model_copy()
         config.training.learning_rate = 0.001
         config.training.lr_schedule_type = None  # Disable scheduler
         config.training.total_timesteps = 100
-        
-        agent = PPOAgent(model=ppo_test_model, config=config, device=torch.device("cpu"))
-        
+
+        agent = PPOAgent(
+            model=ppo_test_model, config=config, device=torch.device("cpu")
+        )
+
         # Create experience buffer
         experience_buffer = ExperienceBuffer(
             buffer_size=4,
@@ -733,12 +804,12 @@ class TestPPOAgentSchedulerLearning:
             lambda_gae=0.95,
             device="cpu",
         )
-        
+
         dummy_obs_tensor = torch.randn(46, 9, 9, device="cpu")
         dummy_legal_mask = torch.ones(
             agent.num_actions_total, dtype=torch.bool, device="cpu"
         )
-        
+
         # Add experiences
         for i in range(4):
             experience_buffer.add(
@@ -750,21 +821,25 @@ class TestPPOAgentSchedulerLearning:
                 done=(i == 3),
                 legal_mask=dummy_legal_mask,
             )
-        
+
         experience_buffer.compute_advantages_and_returns(0.0)
-        
+
         initial_lr = config.training.learning_rate
         learning_rates = []
-        
+
         # Multiple learning calls
         for _ in range(5):
             metrics = agent.learn(experience_buffer)
             learning_rates.append(metrics["ppo/learning_rate"])
-        
-        # All learning rates should be identical when scheduler is disabled
-        assert all(lr == initial_lr for lr in learning_rates), "Learning rate should remain constant when scheduler disabled"
 
-    def test_scheduler_respects_optimizer_lr_changes(self, minimal_app_config, ppo_test_model):
+        # All learning rates should be identical when scheduler is disabled
+        assert all(
+            lr == initial_lr for lr in learning_rates
+        ), "Learning rate should remain constant when scheduler disabled"
+
+    def test_scheduler_respects_optimizer_lr_changes(
+        self, minimal_app_config, ppo_test_model
+    ):
         """Test that scheduler correctly updates the actual optimizer learning rate."""
         config = minimal_app_config.model_copy()
         config.training.learning_rate = 0.001
@@ -774,9 +849,11 @@ class TestPPOAgentSchedulerLearning:
         config.training.total_timesteps = 1000
         config.training.steps_per_epoch = 100
         config.training.ppo_epochs = 1
-        
-        agent = PPOAgent(model=ppo_test_model, config=config, device=torch.device("cpu"))
-        
+
+        agent = PPOAgent(
+            model=ppo_test_model, config=config, device=torch.device("cpu")
+        )
+
         # Create experience buffer
         experience_buffer = ExperienceBuffer(
             buffer_size=4,
@@ -784,12 +861,12 @@ class TestPPOAgentSchedulerLearning:
             lambda_gae=0.95,
             device="cpu",
         )
-        
+
         dummy_obs_tensor = torch.randn(46, 9, 9, device="cpu")
         dummy_legal_mask = torch.ones(
             agent.num_actions_total, dtype=torch.bool, device="cpu"
         )
-        
+
         # Add experiences
         for i in range(4):
             experience_buffer.add(
@@ -801,25 +878,31 @@ class TestPPOAgentSchedulerLearning:
                 done=(i == 3),
                 legal_mask=dummy_legal_mask,
             )
-        
+
         experience_buffer.compute_advantages_and_returns(0.0)
-        
+
         # Check initial optimizer learning rate
-        initial_optimizer_lr = agent.optimizer.param_groups[0]['lr']
-        assert initial_optimizer_lr == config.training.learning_rate, "Initial optimizer LR should match config"
-        
+        initial_optimizer_lr = agent.optimizer.param_groups[0]["lr"]
+        assert (
+            initial_optimizer_lr == config.training.learning_rate
+        ), "Initial optimizer LR should match config"
+
         # Perform learning
         metrics = agent.learn(experience_buffer)
         reported_lr = metrics["ppo/learning_rate"]
-        
+
         # Perform another learning call
         metrics2 = agent.learn(experience_buffer)
         reported_lr2 = metrics2["ppo/learning_rate"]
-        
+
         # Check that optimizer learning rate matches reported learning rate
-        final_optimizer_lr = agent.optimizer.param_groups[0]['lr']
-        assert abs(final_optimizer_lr - reported_lr2) < 1e-8, "Optimizer LR should match reported LR"
-        
+        final_optimizer_lr = agent.optimizer.param_groups[0]["lr"]
+        assert (
+            abs(final_optimizer_lr - reported_lr2) < 1e-8
+        ), "Optimizer LR should match reported LR"
+
         # Verify that learning rate actually changed
         assert reported_lr2 != initial_optimizer_lr, "Learning rate should have changed"
-        assert reported_lr2 < reported_lr, "Learning rate should have decreased with exponential scheduler"
+        assert (
+            reported_lr2 < reported_lr
+        ), "Learning rate should have decreased with exponential scheduler"
