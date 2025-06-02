@@ -125,6 +125,12 @@ class CompatibilityMixin:
         log_both: Optional[Callable] = None,
     ) -> bool:
         """Backward compatibility method - delegates to ModelManager."""
+        # Early missing file check
+        if not os.path.exists(model_path):
+            if log_both:
+                log_both(f"Model file {model_path} does not exist.")
+            return False
+
         # Use default artifact name if not provided
         if artifact_name is None:
             artifact_name = os.path.basename(model_path)

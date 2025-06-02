@@ -74,6 +74,10 @@ def test_model_save_and_load(tmp_path):
             checkpoint_interval_timesteps=10000,
             evaluation_interval_timesteps=50000,
             weight_decay=0.0,
+            normalize_advantages=True,
+            lr_schedule_type=None,
+            lr_schedule_kwargs=None,
+            lr_schedule_step_on="epoch",
         ),
         evaluation=EvaluationConfig(
             num_games=20, 
@@ -82,7 +86,7 @@ def test_model_save_and_load(tmp_path):
             enable_periodic_evaluation=False,
             max_moves_per_game=512,
             log_file_path_eval="/tmp/eval.log",
-            wandb_log_eval=False
+            wandb_log_eval=False,
         ),
         logging=LoggingConfig(
             log_file="logs/training_log.txt", 
@@ -96,7 +100,8 @@ def test_model_save_and_load(tmp_path):
             run_name_prefix="test",
             watch_model=False,
             watch_log_freq=1000,
-            watch_log_type="all"
+            watch_log_type="all",
+            log_model_artifact=False,
         ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5),
     )

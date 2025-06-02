@@ -172,6 +172,10 @@ def mock_app_config():
             checkpoint_interval_timesteps=10000,
             evaluation_interval_timesteps=50000,
             weight_decay=0.0,
+            normalize_advantages=True,
+            lr_schedule_type=None,
+            lr_schedule_kwargs=None,
+            lr_schedule_step_on="epoch",
         ),
         evaluation=EvaluationConfig(
             num_games=2, 
@@ -195,6 +199,7 @@ def mock_app_config():
             watch_model=True,
             watch_log_freq=1000,
             watch_log_type="all",
+            log_model_artifact=False,
         ),
         parallel=ParallelConfig(
             enabled=False,
@@ -246,6 +251,10 @@ def mock_app_config_parallel(tmp_path):
             checkpoint_interval_timesteps=10000,
             evaluation_interval_timesteps=50000,
             weight_decay=0.0,
+            normalize_advantages=True,
+            lr_schedule_type=None,
+            lr_schedule_kwargs=None,
+            lr_schedule_step_on="epoch",
         ),
         evaluation=EvaluationConfig(
             num_games=2, 

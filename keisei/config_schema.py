@@ -76,12 +76,38 @@ class TrainingConfig(BaseModel):
     normalize_advantages: bool = Field(
         True, description="Enable advantage normalization in PPO training for improved stability."
     )
+    
+    # Learning Rate Scheduling Configuration
+    lr_schedule_type: Optional[str] = Field(
+        None, 
+        description="Type of learning rate scheduler: 'linear', 'cosine', 'exponential', 'step', or None to disable"
+    )
+    lr_schedule_kwargs: Optional[dict] = Field(
+        None,
+        description="Additional keyword arguments for the learning rate scheduler"
+    )
+    lr_schedule_step_on: str = Field(
+        "epoch",
+        description="When to step the scheduler: 'epoch' (per PPO epoch) or 'update' (per minibatch update)"
+    )
 
     @validator("learning_rate")
     # pylint: disable=no-self-argument
     def lr_positive(cls, v):
         if v <= 0:
             raise ValueError("learning_rate must be positive")
+        return v
+
+    @validator("lr_schedule_type")
+    def validate_lr_schedule_type(cls, v):  # pylint: disable=no-self-argument
+        if v is not None and v not in ["linear", "cosine", "exponential", "step"]:
+            raise ValueError("lr_schedule_type must be one of: 'linear', 'cosine', 'exponential', 'step', or None")
+        return v
+
+    @validator("lr_schedule_step_on")
+    def validate_lr_schedule_step_on(cls, v):  # pylint: disable=no-self-argument
+        if v not in ["epoch", "update"]:
+            raise ValueError("lr_schedule_step_on must be 'epoch' or 'update'")
         return v
 
 

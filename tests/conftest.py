@@ -184,6 +184,10 @@ def minimal_training_config():
         checkpoint_interval_timesteps=1000,
         evaluation_interval_timesteps=1000,
         weight_decay=0.0,
+        normalize_advantages=True,
+        lr_schedule_type=None,
+        lr_schedule_kwargs=None,
+        lr_schedule_step_on="epoch",
     )
 
 
@@ -194,6 +198,10 @@ def test_evaluation_config():
         num_games=1,  # Minimal for fast tests
         opponent_type="random",
         evaluation_interval_timesteps=1000,
+        enable_periodic_evaluation=False,
+        max_moves_per_game=200,
+        log_file_path_eval="eval_log.txt",
+        wandb_log_eval=False,
     )
 
 
@@ -218,6 +226,7 @@ def disabled_wandb_config():
         watch_model=False,
         watch_log_freq=1000,
         watch_log_type="all",
+        log_model_artifact=False,
     )
 
 
@@ -340,6 +349,10 @@ def integration_test_config(policy_mapper, tmp_path):
             checkpoint_interval_timesteps=200,
             evaluation_interval_timesteps=200,
             weight_decay=0.0,
+            normalize_advantages=True,
+            lr_schedule_type=None,
+            lr_schedule_kwargs=None,
+            lr_schedule_step_on="epoch",
         ),
         evaluation=EvaluationConfig(
             num_games=2,
@@ -363,6 +376,7 @@ def integration_test_config(policy_mapper, tmp_path):
             watch_model=False,
             watch_log_freq=1000,
             watch_log_type="all",
+            log_model_artifact=False,
         ),
         demo=DemoConfig(
             enable_demo_mode=False,
@@ -379,3 +393,147 @@ def integration_test_config(policy_mapper, tmp_path):
             worker_seed_offset=1000,
         ),
     )
+
+
+# =============================================================================
+# PPOAgent Testing Fixtures - Eliminates Setup Duplication
+# =============================================================================
+
+@pytest.fixture
+def ppo_test_model():
+    """Create a test ActorCritic model for PPOAgent testing."""
+    from keisei.core.neural_network import ActorCritic
+    from keisei.utils import PolicyOutputMapper
+
+    mapper = PolicyOutputMapper()
+    return ActorCritic(input_channels=46, num_actions_total=mapper.get_total_actions())
+
+
+@pytest.fixture
+def ppo_agent_basic(minimal_app_config, ppo_test_model):
+    """Basic PPOAgent with minimal configuration for unit tests."""
+    from keisei.core.ppo_agent import PPOAgent
+    import torch
+
+    return PPOAgent(
+        model=ppo_test_model,
+        config=minimal_app_config,
+        device=torch.device("cpu"),
+        name="TestPPOAgent",
+    )
+
+
+@pytest.fixture
+def ppo_agent_fast(fast_app_config, ppo_test_model):
+    """PPOAgent optimized for fast test execution."""
+    from keisei.core.ppo_agent import PPOAgent
+    import torch
+
+    return PPOAgent(
+        model=ppo_test_model,
+        config=fast_app_config,
+        device=torch.device("cpu"),
+        name="FastTestPPOAgent",
+    )
+
+
+@pytest.fixture
+def populated_experience_buffer():
+    """Pre-populated experience buffer for PPO learning tests."""
+    import torch
+    import numpy as np
+    from keisei.core.experience_buffer import ExperienceBuffer
+
+    buffer = ExperienceBuffer(
+        buffer_size=4,
+        gamma=0.99,
+        lambda_gae=0.95,
+        device="cpu",
+    )
+
+    # Create consistent dummy data
+    dummy_obs_tensor = torch.randn(46, 9, 9, device="cpu")
+    dummy_legal_mask = torch.ones(13527, dtype=torch.bool, device="cpu")
+
+    # Add varied experiences
+    rewards = [1.0, -0.5, 2.0, 0.0]
+    values = [0.8, 0.2, 1.5, 0.1]
+
+    for i in range(4):
+        buffer.add(
+            obs=dummy_obs_tensor,
+            action=i % 1000,  # Valid action index
+            reward=rewards[i],
+            log_prob=0.1 * (i + 1),
+            value=values[i],
+            done=(i == 3),
+            legal_mask=dummy_legal_mask,
+        )
+
+    buffer.compute_advantages_and_returns(0.0)
+    return buffer
+
+
+@pytest.fixture
+def dummy_observation():
+    """Standard dummy observation tensor for PPO tests."""
+    import torch
+    import numpy as np
+
+    rng = np.random.default_rng(42)
+    obs_np = rng.random((46, 9, 9)).astype(np.float32)
+    return torch.from_numpy(obs_np).to(torch.device("cpu"))
+
+
+@pytest.fixture
+def dummy_legal_mask():
+    """Standard dummy legal mask for PPO tests."""
+    import torch
+
+    mask = torch.ones(13527, dtype=torch.bool, device="cpu")
+    mask[0] = False  # Make first action illegal for testing
+    return mask
+
+
+def create_test_experience_data(buffer_size: int, device: str = "cpu"):
+    """Helper function to generate consistent dummy experience data."""
+    import torch
+
+    dummy_obs = torch.randn(46, 9, 9, device=device)
+    dummy_mask = torch.ones(13527, dtype=torch.bool, device=device)
+
+    # Generate varied but consistent data
+    experiences = []
+    for i in range(buffer_size):
+        experiences.append(
+            {
+                "obs": dummy_obs,
+                "action": i % 1000,
+                "reward": float(i - buffer_size // 2),  # Mix of positive/negative
+                "log_prob": 0.1 * (i + 1),
+                "value": 0.5 * i,
+                "done": (i == buffer_size - 1),
+                "legal_mask": dummy_mask,
+            }
+        )
+
+    return experiences
+
+
+def assert_valid_ppo_metrics(metrics: dict):
+    """Validate PPO training metrics structure and content."""
+    import numpy as np
+
+    required_metrics = [
+        "ppo/policy_loss",
+        "ppo/value_loss",
+        "ppo/entropy",
+        "ppo/kl_divergence_approx",
+        "ppo/learning_rate",
+    ]
+
+    for metric in required_metrics:
+        assert metric in metrics, f"Missing required metric: {metric}"
+        assert isinstance(metrics[metric], (int, float)), f"Metric {metric} should be numeric"
+        assert not np.isnan(metrics[metric]), f"Metric {metric} is NaN"
+        assert not np.isinf(metrics[metric]), f"Metric {metric} is infinite"

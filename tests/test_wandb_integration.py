@@ -6,7 +6,6 @@ and W&B logging integration in the Trainer class.
 """
 
 import os
-import sys
 import tempfile
 from typing import Any, Dict, Optional
 from unittest.mock import Mock, patch
@@ -74,7 +73,13 @@ def make_test_config(**overrides) -> AppConfig:
         "evaluation_interval_timesteps": 1000,
     }
     training_data.update({k: v for k, v in overrides.items() if k in training_data})
-    training = TrainingConfig(**training_data)
+    training = TrainingConfig(
+        **training_data,
+        normalize_advantages=True,
+        lr_schedule_type=None,
+        lr_schedule_kwargs=None,
+        lr_schedule_step_on="epoch",
+    )
 
     env_data: Dict[str, Any] = {
         "device": "cpu",
@@ -86,7 +91,13 @@ def make_test_config(**overrides) -> AppConfig:
     env = EnvConfig(**env_data)
 
     evaluation = EvaluationConfig(
-        num_games=1, opponent_type="random", evaluation_interval_timesteps=1000
+        num_games=1,
+        opponent_type="random",
+        evaluation_interval_timesteps=1000,
+        enable_periodic_evaluation=False,
+        max_moves_per_game=500,
+        log_file_path_eval="eval_log.txt",
+        wandb_log_eval=False,
     )
 
     logging = LoggingConfig(
@@ -103,6 +114,7 @@ def make_test_config(**overrides) -> AppConfig:
         watch_model=False,
         watch_log_freq=1000,
         watch_log_type="all",
+        log_model_artifact=False,
     )
 
     demo = DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0)
@@ -219,7 +231,7 @@ class TestWandBArtifacts:
             assert "latest" in log_call_args
             assert "test" in log_call_args
 
-    def test_create_model_artifact_missing_file(self, mock_wandb_disabled, tmp_path):
+    def test_create_model_artifact_missing_file(self, tmp_path):
         """Test artifact creation with missing model file."""
         config = make_test_config(wandb_enabled=True)
         args = DummyArgs()

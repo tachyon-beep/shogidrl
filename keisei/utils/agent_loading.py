@@ -12,7 +12,6 @@ from keisei.utils.opponents import (
     SimpleRandomOpponent,
 )
 
-
 def load_evaluation_agent(
     checkpoint_path: str,
     device_str: str,
@@ -81,6 +80,10 @@ def load_evaluation_agent(
             checkpoint_interval_timesteps=10000,
             evaluation_interval_timesteps=50000,
             weight_decay=0.0,
+            normalize_advantages=True,
+            lr_schedule_type=None,
+            lr_schedule_kwargs=None,
+            lr_schedule_step_on="epoch",
         ),
         evaluation=EvaluationConfig(
             num_games=1, 
@@ -102,6 +105,7 @@ def load_evaluation_agent(
             watch_model=False,
             watch_log_freq=1000,
             watch_log_type="all",
+            log_model_artifact=False,
         ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
     )

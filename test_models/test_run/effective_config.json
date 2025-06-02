@@ -11,7 +11,7 @@
         "seed": 42
     },
     "evaluation": {
-        "enable_periodic_evaluation": true,
+        "enable_periodic_evaluation": false,
         "evaluation_interval_timesteps": 1000,
         "log_file_path_eval": "eval_log.txt",
         "max_moves_per_game": 500,
@@ -46,6 +46,9 @@
         "input_features": "core46",
         "lambda_gae": 0.95,
         "learning_rate": 0.0003,
+        "lr_schedule_kwargs": null,
+        "lr_schedule_step_on": "epoch",
+        "lr_schedule_type": null,
         "minibatch_size": 32,
         "mixed_precision": false,
         "model_type": "resnet",

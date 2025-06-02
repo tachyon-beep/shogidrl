@@ -55,7 +55,13 @@ def make_config_and_args(**overrides):
         "evaluation_interval_timesteps": 50000,
     }
     training_data.update({k: v for k, v in overrides.items() if k in training_data})
-    training = TrainingConfig(**training_data)
+    training = TrainingConfig(
+        **training_data,
+        normalize_advantages=True,
+        lr_schedule_type=None,
+        lr_schedule_kwargs=None,
+        lr_schedule_step_on="epoch",
+    )
 
     # EnvConfig: Start with all defaults, then apply overrides
     env_data: Dict[str, Any] = {  # Explicitly type env_data
@@ -69,8 +75,14 @@ def make_config_and_args(**overrides):
 
     # Other configs: Instantiate with their explicit defaults from schema
     evaluation = EvaluationConfig(
-        num_games=20, opponent_type="random", evaluation_interval_timesteps=50000
-    )  # Added evaluation_interval_timesteps
+        num_games=20,
+        opponent_type="random",
+        evaluation_interval_timesteps=50000,
+        enable_periodic_evaluation=True,
+        max_moves_per_game=500,
+        log_file_path_eval="eval_log.txt",
+        wandb_log_eval=False,
+    )
     logging = LoggingConfig(
         log_file="logs/training_log.txt", model_dir="models/", run_name=None
     )
@@ -83,6 +95,7 @@ def make_config_and_args(**overrides):
         watch_model=True,
         watch_log_freq=1000,
         watch_log_type="all",
+        log_model_artifact=False,
     )
     demo = DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5)
 

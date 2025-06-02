@@ -82,9 +82,19 @@ def mock_config():
             checkpoint_interval_timesteps=1000,
             evaluation_interval_timesteps=1000,
             weight_decay=0.0,
+            normalize_advantages=True,
+            lr_schedule_type=None,
+            lr_schedule_kwargs=None,
+            lr_schedule_step_on="epoch",
         ),
         evaluation=EvaluationConfig(
-            num_games=20, opponent_type="random", evaluation_interval_timesteps=1000
+            num_games=20,
+            opponent_type="random",
+            evaluation_interval_timesteps=1000,
+            enable_periodic_evaluation=True,
+            max_moves_per_game=500,
+            log_file_path_eval="eval_log.txt",
+            wandb_log_eval=False,
         ),
         logging=LoggingConfig(
             log_file="test.log", model_dir="/tmp/test_models", run_name=None
@@ -97,6 +107,7 @@ def mock_config():
             watch_model=False,
             watch_log_freq=1000,
             watch_log_type="all",
+            log_model_artifact=False,
         ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5),
         parallel=ParallelConfig(

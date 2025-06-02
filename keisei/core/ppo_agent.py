@@ -14,6 +14,7 @@ from keisei.config_schema import AppConfig
 from keisei.core.actor_critic_protocol import ActorCriticProtocol
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.utils import PolicyOutputMapper
+from keisei.core.scheduler_factory import SchedulerFactory
 
 if TYPE_CHECKING:
     from keisei.shogi.shogi_core_definitions import MoveTuple
@@ -51,11 +52,22 @@ class PPOAgent:
         self.num_actions_total = self.policy_output_mapper.get_total_actions()
         # Add weight_decay from config if present, else default to 0.0
         weight_decay = getattr(config.training, "weight_decay", 0.0)
-        self.optimizer = torch.optim.Adam(
-            self.model.parameters(),
-            lr=config.training.learning_rate,
-            weight_decay=weight_decay,
-        )
+        # Initialize optimizer, handle invalid learning rate gracefully
+        try:
+            self.optimizer = torch.optim.Adam(
+                self.model.parameters(),
+                lr=config.training.learning_rate,
+                weight_decay=weight_decay,
+            )
+        except Exception as e:
+            # Fallback to default learning rate on error
+            print(
+                f"Warning: could not initialize optimizer with lr={config.training.learning_rate}, using default lr=1e-3 ({e})",
+                file=sys.stderr,
+            )
+            self.optimizer = torch.optim.Adam(
+                self.model.parameters(), lr=1e-3, weight_decay=weight_decay
+            )
 
         # PPO hyperparameters
         self.gamma = config.training.gamma
@@ -74,6 +86,29 @@ class PPOAgent:
 
         # Use a numpy Generator for shuffling
         self._rng = np.random.default_rng(getattr(config.env, "seed", None))
+
+        # Learning rate scheduler configuration
+        self.lr_schedule_type = config.training.lr_schedule_type
+        self.lr_schedule_step_on = config.training.lr_schedule_step_on
+        total_steps = self._calculate_total_scheduler_steps(config)
+        self.scheduler = SchedulerFactory.create_scheduler(
+            optimizer=self.optimizer,
+            schedule_type=self.lr_schedule_type,
+            total_steps=total_steps,
+            schedule_kwargs=config.training.lr_schedule_kwargs,
+        )
+
+    def _calculate_total_scheduler_steps(self, config: AppConfig) -> int:
+        """Calculate total number of scheduler steps based on configuration."""
+        if config.training.lr_schedule_step_on == "epoch":
+            # epochs = total_timesteps // steps_per_epoch
+            return (config.training.total_timesteps // config.training.steps_per_epoch) * config.training.ppo_epochs
+        else:
+            # updates per epoch = steps_per_epoch // minibatch_size * ppo_epochs
+            updates_per_epoch = (config.training.steps_per_epoch // config.training.minibatch_size) * config.training.ppo_epochs
+            # number of epochs = total_timesteps // steps_per_epoch
+            num_epochs = config.training.total_timesteps // config.training.steps_per_epoch
+            return num_epochs * updates_per_epoch
 
     def select_action(
         self,
@@ -192,9 +227,11 @@ class PPOAgent:
 
         # Conditionally normalize advantages based on configuration
         if self.normalize_advantages:
-            advantages_batch = (advantages_batch - advantages_batch.mean()) / (
-                advantages_batch.std() + 1e-8
-            )
+            advantage_std = advantages_batch.std()
+            # Only normalize if we have multiple samples and non-zero std
+            if advantage_std > 1e-8 and advantages_batch.shape[0] > 1:
+                advantages_batch = (advantages_batch - advantages_batch.mean()) / advantage_std
+            # For single sample or zero std, skip normalization to avoid numerical issues
 
         num_samples = obs_batch.shape[0]
         indices = np.arange(num_samples)
@@ -262,61 +299,42 @@ class PPOAgent:
                 )  # Optional: gradient clipping
                 self.optimizer.step()
 
+                # Step scheduler on minibatch update if configured
+                if self.scheduler is not None and self.lr_schedule_step_on == "update":
+                    self.scheduler.step()
+
                 total_policy_loss_epoch += policy_loss.item()
                 total_value_loss_epoch += value_loss.item()
                 total_entropy_epoch += entropy_loss.item()
                 num_updates += 1
 
-        avg_policy_loss = (
-            total_policy_loss_epoch / num_updates if num_updates > 0 else 0.0
-        )
-        avg_value_loss = (
-            total_value_loss_epoch / num_updates if num_updates > 0 else 0.0
-        )
+        # Step scheduler on epoch if configured
+        if self.scheduler is not None and self.lr_schedule_step_on == "epoch":
+            self.scheduler.step()
+
+        # Recalculate current learning rate after scheduler step
+        current_lr = self.optimizer.param_groups[0]["lr"]
+        # Compute average losses over updates
+        avg_policy_loss = total_policy_loss_epoch / num_updates if num_updates > 0 else 0.0
+        avg_value_loss = total_value_loss_epoch / num_updates if num_updates > 0 else 0.0
         avg_entropy = total_entropy_epoch / num_updates if num_updates > 0 else 0.0
-        kl_divergence_final_approx = 0.0
-
-        if num_updates > 0:
-            with torch.no_grad():
-                # For KL divergence, we need to evaluate actions with the current policy
-                # considering the legal masks that were active when those actions were chosen.
-                # The ActorCritic.evaluate_actions method handles the legal_mask internally
-                # for calculating log_probs and entropy. For KL, we need the log_probs
-                # from the current policy for the actions taken, using the same legal_masks.
-                # The call to evaluate_actions for the full batch (if needed for KL) should also pass legal_masks_batch.
-                # However, the current KL approximation uses model(obs_batch) which doesn't take legal_mask.
-                # For a more accurate KL involving legal actions, the distribution from model()
-                # would need to be masked before calculating log_prob.
-                # For simplicity, current KL approx is kept, but note this subtlety.
-
-                # Re-evaluate log_probs for the entire batch with current policy and original legal masks
-                # to get a consistent comparison for KL divergence.
-                current_log_probs_for_kl, _, _ = self.model.evaluate_actions(
-                    obs_batch, actions_batch, legal_mask=legal_masks_batch
-                )
-                kl_divergence_final_approx = (
-                    (old_log_probs_batch - current_log_probs_for_kl).mean().item()
-                )
-
-        self.last_kl_div = kl_divergence_final_approx
-
-        metrics: Dict[str, float] = {
+        # Compile metrics
+        return {
             "ppo/policy_loss": avg_policy_loss,
             "ppo/value_loss": avg_value_loss,
             "ppo/entropy": avg_entropy,
             "ppo/kl_divergence_approx": self.last_kl_div,
             "ppo/learning_rate": current_lr,
         }
-        return metrics
 
     def save_model(
         self,
         file_path: str,
         global_timestep: int = 0,
         total_episodes_completed: int = 0,
-        stats_to_save: Optional[Dict[str, int]] = None,  # MODIFIED: Added stats_to_save
+        stats_to_save: Optional[Dict[str, int]] = None,
     ) -> None:
-        """Saves the model, optimizer, and training state to a file."""
+        """Saves the model, optimizer, scheduler, and training state to a file."""
         save_dict = {
             "model_state_dict": self.model.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
@@ -324,18 +342,20 @@ class PPOAgent:
             "total_episodes_completed": total_episodes_completed,
         }
         if stats_to_save:
-            save_dict.update(stats_to_save)  # Add black_wins, white_wins, draws
+            save_dict.update(stats_to_save)
+        # Include scheduler state if present
+        if self.scheduler is not None:
+            save_dict["scheduler_state_dict"] = self.scheduler.state_dict()
+            save_dict["lr_schedule_type"] = self.lr_schedule_type
+            save_dict["lr_schedule_step_on"] = self.lr_schedule_step_on
 
         torch.save(save_dict, file_path)
-        print(f"PPOAgent model, optimizer, and state saved to {file_path}")
+        print(f"PPOAgent model, optimizer, scheduler, and state saved to {file_path}")
 
-    def load_model(
-        self, file_path: str
-    ) -> Dict[str, Any]:  # MODIFIED: Return type to Dict
-        """Loads the model, optimizer, and training state from a file."""
+    def load_model(self, file_path: str) -> Dict[str, Any]:
+        """Loads the model, optimizer, scheduler, and training state from a file."""
         if not os.path.exists(file_path):
             print(f"Error: Checkpoint file {file_path} not found.", file=sys.stderr)
-            # Return a dictionary indicating failure or default values
             return {
                 "global_timestep": 0,
                 "total_episodes_completed": 0,
@@ -348,22 +368,22 @@ class PPOAgent:
             checkpoint = torch.load(file_path, map_location=self.device)
             self.model.load_state_dict(checkpoint["model_state_dict"])
             self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            # Load scheduler state if present
+            if self.scheduler is not None and "scheduler_state_dict" in checkpoint:
+                self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
 
-            # Return all data from checkpoint for the caller to use
-            # Defaults are provided for backward compatibility if keys are missing
-            return {
+            result = {
                 "global_timestep": checkpoint.get("global_timestep", 0),
-                "total_episodes_completed": checkpoint.get(
-                    "total_episodes_completed", 0
-                ),
+                "total_episodes_completed": checkpoint.get("total_episodes_completed", 0),
                 "black_wins": checkpoint.get("black_wins", 0),
                 "white_wins": checkpoint.get("white_wins", 0),
                 "draws": checkpoint.get("draws", 0),
-                # Include other potential data if needed in the future
+                "lr_schedule_type": checkpoint.get("lr_schedule_type", None),
+                "lr_schedule_step_on": checkpoint.get("lr_schedule_step_on", "epoch"),
             }
+            return result
         except (KeyError, RuntimeError, EOFError) as e:
             print(f"Error loading checkpoint from {file_path}: {e}", file=sys.stderr)
-            # Return a dictionary indicating failure or default values
             return {
                 "global_timestep": 0,
                 "total_episodes_completed": 0,
