@@ -32,6 +32,7 @@ def load_evaluation_agent(
         WandBConfig,
     )
     from keisei.core.ppo_agent import PPOAgent
+    from keisei.core.neural_network import ActorCritic
 
     if not os.path.isfile(checkpoint_path):
         print(f"Error: Checkpoint file {checkpoint_path} not found.")
@@ -82,7 +83,13 @@ def load_evaluation_agent(
             weight_decay=0.0,
         ),
         evaluation=EvaluationConfig(
-            num_games=1, opponent_type="random", evaluation_interval_timesteps=50000
+            num_games=1, 
+            opponent_type="random", 
+            evaluation_interval_timesteps=50000,
+            enable_periodic_evaluation=False,
+            max_moves_per_game=500,
+            log_file_path_eval="/tmp/eval.log",
+            wandb_log_eval=False,
         ),
         logging=LoggingConfig(
             log_file="/tmp/eval.log", model_dir="/tmp/", run_name="eval-run"
@@ -98,7 +105,19 @@ def load_evaluation_agent(
         ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
     )
-    agent = PPOAgent(config=config, device=torch.device(device_str))
+    
+    # Create temporary model for loading
+    device = torch.device(device_str)
+    temp_model = ActorCritic(input_channels, policy_mapper.get_total_actions()).to(device)
+    
+    # Create agent with model (dependency injection)
+    agent = PPOAgent(
+        model=temp_model,
+        config=config, 
+        device=device,
+        name="EvaluationAgent"
+    )
+    
     agent.load_model(checkpoint_path)
     agent.model.eval()
     print(f"Loaded agent from {checkpoint_path} on device {device_str} for evaluation.")

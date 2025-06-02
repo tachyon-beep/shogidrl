@@ -79,18 +79,17 @@ class SetupManager:
         # Create model using ModelManager
         model = model_manager.create_model()
 
-        # Initialize PPOAgent and assign the model
-        agent = PPOAgent(
-            config=self.config,
-            device=self.device,
-        )
-
         if model is None:
             raise RuntimeError(
                 "Model was not created successfully before agent initialization."
             )
 
-        agent.model = model
+        # Initialize PPOAgent with the model (dependency injection)
+        agent = PPOAgent(
+            model=model,
+            config=self.config,
+            device=self.device,
+        )
 
         experience_buffer = ExperienceBuffer(
             buffer_size=self.config.training.steps_per_epoch,

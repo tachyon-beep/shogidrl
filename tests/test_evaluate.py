@@ -4,7 +4,7 @@ Unit and integration tests for the evaluate.py script.
 
 import os
 import tempfile
-from unittest.mock import MagicMock, PropertyMock, patch  # Added PropertyMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -53,8 +53,17 @@ class MockPPOAgent(PPOAgent, BaseOpponent):
         device,
         name="MockPPOAgentForTest",
     ):
-        PPOAgent.__init__(self, config=config, device=device, name=name)
+        # Create mock model first for dependency injection
+        from keisei.core.neural_network import ActorCritic
+        
+        policy_mapper = PolicyOutputMapper()
+        mock_model = ActorCritic(config.env.input_channels, policy_mapper.get_total_actions())
+        
+        # Call parent constructors with model parameter
+        PPOAgent.__init__(self, model=mock_model, config=config, device=device, name=name)
         BaseOpponent.__init__(self, name=name)
+        
+        # Override with MagicMock for testing
         self.model = MagicMock()
         self._is_ppo_agent_mock = True  # Flag to identify this mock
         # self.name is set by PPOAgent's __init__ via BaseOpponent
@@ -136,6 +145,7 @@ def mock_app_config():
             input_channels=INPUT_CHANNELS,
             num_actions_total=13527,  # Example value
             seed=42,
+            max_moves_per_game=500,  # Added missing parameter
         ),
         training=TrainingConfig(
             total_timesteps=1000,
@@ -164,7 +174,13 @@ def mock_app_config():
             weight_decay=0.0,
         ),
         evaluation=EvaluationConfig(
-            num_games=2, opponent_type="random", evaluation_interval_timesteps=50000
+            num_games=2, 
+            opponent_type="random", 
+            evaluation_interval_timesteps=50000,
+            enable_periodic_evaluation=False,  # Added missing parameter
+            max_moves_per_game=500,  # Added missing parameter
+            log_file_path_eval="/tmp/eval.log",  # Added missing parameter
+            wandb_log_eval=False,  # Added missing parameter
         ),
         logging=LoggingConfig(
             log_file="logs/test_evaluate_log.txt",
@@ -203,6 +219,7 @@ def mock_app_config_parallel(tmp_path):
             input_channels=INPUT_CHANNELS,
             num_actions_total=13527,
             seed=42,
+            max_moves_per_game=500,  # Added missing parameter
         ),
         training=TrainingConfig(
             total_timesteps=1000,
@@ -231,7 +248,13 @@ def mock_app_config_parallel(tmp_path):
             weight_decay=0.0,
         ),
         evaluation=EvaluationConfig(
-            num_games=2, opponent_type="random", evaluation_interval_timesteps=50000
+            num_games=2, 
+            opponent_type="random", 
+            evaluation_interval_timesteps=50000,
+            enable_periodic_evaluation=False,  # Added missing parameter
+            max_moves_per_game=500,  # Added missing parameter
+            log_file_path_eval="/tmp/eval_parallel.log",  # Added missing parameter
+            wandb_log_eval=False,  # Added missing parameter
         ),
         logging=LoggingConfig(
             log_file=str(tmp_path / "logs/test_evaluate_log_parallel.txt"),
@@ -977,9 +1000,13 @@ def test_evaluator_class_basic(monkeypatch, tmp_path, policy_mapper):
     # Patch load_evaluation_agent and initialize_opponent to return mocks
     class DummyAgent(PPOAgent):
         def __init__(self):
+            from keisei.core.neural_network import ActorCritic
+            
             config = make_test_config("cpu", INPUT_CHANNELS, PolicyOutputMapper())
+            policy_mapper = PolicyOutputMapper()
+            mock_model = ActorCritic(config.env.input_channels, policy_mapper.get_total_actions())
             super().__init__(
-                config=config, device=torch.device("cpu"), name="DummyAgent"
+                model=mock_model, config=config, device=torch.device("cpu"), name="DummyAgent"
             )
             self.model = MagicMock()
 
@@ -1053,6 +1080,7 @@ def make_test_config(device_str, input_channels, policy_mapper):
             input_channels=input_channels,
             num_actions_total=num_actions_total,
             seed=42,
+            max_moves_per_game=500,  # Added missing parameter
         ),
         training=TrainingConfig(
             total_timesteps=1,
@@ -1084,6 +1112,10 @@ def make_test_config(device_str, input_channels, policy_mapper):
             num_games=1,
             opponent_type="random",
             evaluation_interval_timesteps=50000,
+            enable_periodic_evaluation=False,  # Added missing parameter
+            max_moves_per_game=500,  # Added missing parameter
+            log_file_path_eval="/tmp/eval.log",  # Added missing parameter
+            wandb_log_eval=False,  # Added missing parameter
         ),
         logging=LoggingConfig(
             log_file="/tmp/eval.log", model_dir="/tmp/", run_name="test-eval-run"

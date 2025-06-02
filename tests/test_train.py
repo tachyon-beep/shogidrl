@@ -11,8 +11,15 @@ import pytest
 import torch
 
 from keisei.config_schema import AppConfig, ParallelConfig
+from keisei.core.neural_network import ActorCritic  # Added for dependency injection
 from keisei.core.ppo_agent import PPOAgent
 from keisei.utils import PolicyOutputMapper
+
+
+def _create_test_model(config):
+    """Helper function to create ActorCritic model for PPOAgent testing."""
+    mapper = PolicyOutputMapper()
+    return ActorCritic(config.env.input_channels, mapper.get_total_actions())
 
 # Local config constants for test compatibility with new config system
 INPUT_CHANNELS = 46
@@ -111,7 +118,10 @@ def test_train_resume_autodetect(tmp_path, mock_wandb_disabled):
         },
     }
     initial_agent_config = AppConfig.parse_obj(base_config_data)
-    agent = PPOAgent(config=initial_agent_config, device=torch.device(DEVICE))
+    
+    # Create model for dependency injection
+    model = _create_test_model(initial_agent_config)
+    agent = PPOAgent(model=model, config=initial_agent_config, device=torch.device(DEVICE))
 
     # Save the initial checkpoint in tmp_path (the savedir/parent directory)
     # This simulates a previous training run that saved a checkpoint in the savedir
@@ -396,7 +406,9 @@ def test_train_explicit_resume(tmp_path, mock_wandb_disabled):
     # The checkpoint name itself doesn't need to match the generated run name for explicit resume
     ckpt_path = checkpoint_save_dir / "my_explicit_checkpoint_ts100.pth"
 
-    agent = PPOAgent(config=initial_save_config_obj, device=torch.device(DEVICE))
+    # Create model for dependency injection
+    model = _create_test_model(initial_save_config_obj)
+    agent = PPOAgent(model=model, config=initial_save_config_obj, device=torch.device(DEVICE))
     agent.save_model(str(ckpt_path), global_timestep=100, total_episodes_completed=10)
 
     # Config for the actual training run that will resume

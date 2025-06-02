@@ -12,6 +12,7 @@ import tempfile
 from unittest.mock import Mock, patch
 
 import pytest
+import torch
 
 from keisei.config_schema import (
     AppConfig,
@@ -26,6 +27,18 @@ from keisei.config_schema import (
 from keisei.core.ppo_agent import PPOAgent
 from keisei.training.model_manager import ModelManager
 from keisei.training.trainer import Trainer
+
+
+def _create_mock_model_with_parameters():
+    """Helper to create a properly mocked model with parameters for optimizer."""
+    mock_model = Mock()
+    mock_model.to.return_value = mock_model
+    
+    # Create a proper mock parameter that behaves like a PyTorch tensor
+    mock_param = torch.nn.Parameter(torch.randn(10, 10))
+    mock_model.parameters.return_value = [mock_param]
+    
+    return mock_model
 
 
 class MockArgs:
@@ -139,8 +152,7 @@ class TestTrainerResumeState:
         feature_spec_mock.num_planes = 46
         mock_feature_specs.__getitem__.return_value = feature_spec_mock
 
-        mock_model = Mock()
-        mock_model.to.return_value = mock_model
+        mock_model = _create_mock_model_with_parameters()
         mock_model_factory.return_value = mock_model
 
         # Mock PPOAgent instance
@@ -274,8 +286,7 @@ class TestTrainerResumeState:
         feature_spec_mock.num_planes = 46
         mock_feature_specs.__getitem__.return_value = feature_spec_mock
 
-        mock_model = Mock()
-        mock_model.to.return_value = mock_model
+        mock_model = _create_mock_model_with_parameters()
         mock_model_factory.return_value = mock_model
 
         # Mock PPOAgent instance
@@ -387,8 +398,7 @@ class TestTrainerResumeState:
         feature_spec_mock.num_planes = 46
         mock_feature_specs.__getitem__.return_value = feature_spec_mock
 
-        mock_model = Mock()
-        mock_model.to.return_value = mock_model
+        mock_model = _create_mock_model_with_parameters()
         mock_model_factory.return_value = mock_model
 
         # Mock PPOAgent instance
@@ -478,8 +488,7 @@ class TestTrainerResumeState:
         feature_spec_mock.num_planes = 46
         mock_feature_specs.__getitem__.return_value = feature_spec_mock
 
-        mock_model = Mock()
-        mock_model.to.return_value = mock_model
+        mock_model = _create_mock_model_with_parameters()
         mock_model_factory.return_value = mock_model
 
         # Mock PPOAgent instance
@@ -563,8 +572,7 @@ class TestTrainerResumeState:
         feature_spec_mock.num_planes = 46
         mock_feature_specs.__getitem__.return_value = feature_spec_mock
 
-        mock_model = Mock()
-        mock_model.to.return_value = mock_model
+        mock_model = _create_mock_model_with_parameters()
         mock_model_factory.return_value = mock_model
 
         # Mock PPOAgent instance
@@ -680,8 +688,7 @@ class TestTrainerResumeState:
         feature_spec_mock.num_planes = 46
         mock_feature_specs.__getitem__.return_value = feature_spec_mock
 
-        mock_model = Mock()
-        mock_model.to.return_value = mock_model
+        mock_model = _create_mock_model_with_parameters()
         mock_model_factory.return_value = mock_model
 
         # Mock PPOAgent instance

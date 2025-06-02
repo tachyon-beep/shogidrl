@@ -4,7 +4,6 @@ Unit tests for PPOAgent model saving and loading.
 
 import os
 
-import pytest
 import torch
 
 from keisei.config_schema import (
@@ -17,20 +16,38 @@ from keisei.config_schema import (
     TrainingConfig,
     WandBConfig,
 )
+from keisei.core.neural_network import ActorCritic
 from keisei.core.ppo_agent import PPOAgent
-from keisei.shogi.shogi_game import ShogiGame
 from keisei.utils import PolicyOutputMapper
+
+
+def _create_test_model(config):
+    """Helper function to create ActorCritic model for PPOAgent testing."""
+    mapper = PolicyOutputMapper()
+    return ActorCritic(config.env.input_channels, mapper.get_total_actions())
 
 
 def test_model_save_and_load(tmp_path):
     """Test saving and loading of the PPO agent's model."""
     # Setup dimensions and policy mapper
+    policy_output_mapper = PolicyOutputMapper()
     config = AppConfig(
         parallel=ParallelConfig(
-            enabled=False, start_method="fork", num_envs=1, base_port=50000
+            enabled=False,
+            num_workers=4,
+            batch_size=32,
+            sync_interval=100,
+            compression_enabled=True,
+            timeout_seconds=10.0,
+            max_queue_size=1000,
+            worker_seed_offset=1000,
         ),
         env=EnvConfig(
-            device="cpu", input_channels=46, num_actions_total=13527, seed=42
+            device="cpu", 
+            input_channels=46, 
+            num_actions_total=policy_output_mapper.get_total_actions(), 
+            seed=42,
+            max_moves_per_game=512
         ),
         training=TrainingConfig(
             total_timesteps=500_000,
@@ -42,20 +59,53 @@ def test_model_save_and_load(tmp_path):
             clip_epsilon=0.2,
             value_loss_coeff=0.5,
             entropy_coef=0.01,
+            render_every_steps=1,
+            refresh_per_second=4,
+            enable_spinner=True,
+            input_features="core46",
+            tower_depth=9,
+            tower_width=256,
+            se_ratio=0.25,
+            model_type="resnet",
+            mixed_precision=False,
+            ddp=False,
+            gradient_clip_max_norm=0.5,
+            lambda_gae=0.95,
+            checkpoint_interval_timesteps=10000,
+            evaluation_interval_timesteps=50000,
+            weight_decay=0.0,
         ),
-        evaluation=EvaluationConfig(num_games=20, opponent_type="random"),
-        logging=LoggingConfig(log_file="logs/training_log.txt", model_dir="models/"),
-        wandb=WandBConfig(enabled=True, project="keisei-shogi", entity=None),
+        evaluation=EvaluationConfig(
+            num_games=20, 
+            opponent_type="random",
+            evaluation_interval_timesteps=50000,
+            enable_periodic_evaluation=False,
+            max_moves_per_game=512,
+            log_file_path_eval="/tmp/eval.log",
+            wandb_log_eval=False
+        ),
+        logging=LoggingConfig(
+            log_file="logs/training_log.txt", 
+            model_dir="models/",
+            run_name="test_run"
+        ),
+        wandb=WandBConfig(
+            enabled=True, 
+            project="keisei-shogi", 
+            entity=None,
+            run_name_prefix="test",
+            watch_model=False,
+            watch_log_freq=1000,
+            watch_log_type="all"
+        ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5),
     )
-    max_moves_per_game = 512  # Use a sensible default or pull from config if available
-    game_for_dims = ShogiGame(max_moves_per_game=max_moves_per_game)
-    obs_sample = game_for_dims.get_observation()
-    input_channels = config.env.input_channels  # Use config schema
 
-    policy_output_mapper = PolicyOutputMapper()
     device = config.env.device
-    agent = PPOAgent(config=config, device=torch.device(device))
+    
+    # Create model for dependency injection
+    model = _create_test_model(config)
+    agent = PPOAgent(model=model, config=config, device=torch.device(device))
     # Corrected to use agent.model instead of agent.policy
     original_model_state_dict = {
         k: v.cpu() for k, v in agent.model.state_dict().items()
@@ -68,7 +118,8 @@ def test_model_save_and_load(tmp_path):
     assert os.path.exists(model_path)
 
     # Create a new agent and load the model
-    new_agent = PPOAgent(config=config, device=torch.device(device))
+    new_model = _create_test_model(config)
+    new_agent = PPOAgent(model=new_model, config=config, device=torch.device(device))
     new_agent.load_model(model_path)
     # Corrected to use new_agent.model
     loaded_model_state_dict = {
@@ -82,20 +133,13 @@ def test_model_save_and_load(tmp_path):
         ), f"Model parameter mismatch for key: {key}"
 
     # Test loading into an agent with a different network instance but same architecture
-    third_agent = PPOAgent(config=config, device=torch.device(device))
-    # Access a specific layer's weights, e.g., the first conv layer's weights
-    # This depends on the structure of your ActorCritic model in neural_network.py
-    # Assuming self.model.conv is the first convolutional layer
-    if hasattr(third_agent.model, "conv") and hasattr(third_agent.model.conv, "weight"):
-        third_agent.model.conv.weight.data.fill_(0.12345)
-    elif hasattr(third_agent.model, "policy_head") and hasattr(
-        third_agent.model.policy_head, "weight"
-    ):  # Fallback to policy_head if conv not found
-        third_agent.model.policy_head.weight.data.fill_(0.12345)
-    else:
-        # If neither conv nor policy_head with weights are found, skip this specific modification part of the test
-        # or raise an error if this modification is critical for the test's intent.
-        pass
+    third_model = _create_test_model(config)
+    third_agent = PPOAgent(model=third_model, config=config, device=torch.device(device))
+    # Modify some parameters to test that loading restores original values
+    # Use a general approach that works with any model structure
+    for param in third_agent.model.parameters():
+        param.data.fill_(0.12345)
+        break  # Just modify the first parameter we find
 
     third_agent.load_model(model_path)
     # Corrected to use third_agent.model

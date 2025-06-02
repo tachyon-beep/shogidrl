@@ -13,7 +13,6 @@ import torch.nn.functional as F
 from keisei.config_schema import AppConfig
 from keisei.core.actor_critic_protocol import ActorCriticProtocol
 from keisei.core.experience_buffer import ExperienceBuffer
-from keisei.core.neural_network import ActorCritic
 from keisei.utils import PolicyOutputMapper
 
 if TYPE_CHECKING:
@@ -25,25 +24,31 @@ class PPOAgent:
 
     def __init__(
         self,
+        model: ActorCriticProtocol,
         config: AppConfig,
         device: torch.device,
         name: str = "PPOAgent",
     ):
         """
         Initialize the PPOAgent with model, optimizer, and PPO hyperparameters.
+        
+        Args:
+            model: ActorCritic model instance conforming to ActorCriticProtocol
+            config: Application configuration
+            device: PyTorch device for training
+            name: Agent name for identification
         """
         self.config = config
         self.device = device
         self.name = name
 
-        input_channels = config.env.input_channels
+        # Direct model assignment (dependency injection)
+        self.model: ActorCriticProtocol = model.to(self.device)
+        
+        # Initialize policy mapper
         policy_output_mapper = PolicyOutputMapper()
-
         self.policy_output_mapper = policy_output_mapper
         self.num_actions_total = self.policy_output_mapper.get_total_actions()
-        self.model: ActorCriticProtocol = ActorCritic(
-            input_channels, self.num_actions_total
-        ).to(self.device)
         # Add weight_decay from config if present, else default to 0.0
         weight_decay = getattr(config.training, "weight_decay", 0.0)
         self.optimizer = torch.optim.Adam(

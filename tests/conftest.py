@@ -345,6 +345,10 @@ def integration_test_config(policy_mapper, tmp_path):
             num_games=2,
             opponent_type="random",
             evaluation_interval_timesteps=200,
+            enable_periodic_evaluation=False,  # Added missing parameter
+            max_moves_per_game=200,  # Added missing parameter
+            log_file_path_eval=str(tmp_path / "integration_eval.log"),  # Added missing parameter
+            wandb_log_eval=False,  # Added missing parameter
         ),
         logging=LoggingConfig(
             log_file=str(tmp_path / "integration_test.log"),

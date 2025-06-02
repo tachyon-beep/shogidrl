@@ -11,6 +11,7 @@ import pytest
 import torch
 
 from keisei.core.experience_buffer import ExperienceBuffer  # Added import
+from keisei.core.neural_network import ActorCritic  # Added for dependency injection
 from keisei.core.ppo_agent import PPOAgent
 from keisei.shogi import ShogiGame  # Corrected import for ShogiGame
 from keisei.shogi.shogi_core_definitions import (  # Ensure MoveTuple is imported
@@ -19,11 +20,19 @@ from keisei.shogi.shogi_core_definitions import (  # Ensure MoveTuple is importe
 from keisei.utils import PolicyOutputMapper
 
 
+def _create_test_model(config):
+    """Helper function to create ActorCritic model for PPOAgent testing."""
+    mapper = PolicyOutputMapper()
+    return ActorCritic(config.env.input_channels, mapper.get_total_actions())
+
+
 def test_ppo_agent_init_and_select_action(policy_mapper, integration_test_config):
     """Test PPOAgent initializes and select_action returns a valid index."""
     mapper = policy_mapper
     config = integration_test_config
-    agent = PPOAgent(config=config, device=torch.device("cpu"))
+    # Create model for dependency injection
+    model = _create_test_model(config)
+    agent = PPOAgent(model=model, config=config, device=torch.device("cpu"))
     rng = np.random.default_rng(42)
     obs = rng.random((INPUT_CHANNELS, 9, 9)).astype(np.float32)
     game = ShogiGame(max_moves_per_game=512)
@@ -82,7 +91,9 @@ def test_ppo_agent_init_and_select_action(policy_mapper, integration_test_config
 def test_ppo_agent_learn(integration_test_config):
     """Test PPOAgent's learn method with dummy data from an ExperienceBuffer."""
     config = integration_test_config
-    agent = PPOAgent(config=config, device=torch.device("cpu"))
+    # Create model for dependency injection
+    model = _create_test_model(config)
+    agent = PPOAgent(model=model, config=config, device=torch.device("cpu"))
 
     buffer_size = 4  # Small buffer for testing
     experience_buffer = ExperienceBuffer(
@@ -161,7 +172,9 @@ def test_ppo_agent_learn_loss_components(integration_test_config):
     config = integration_test_config
     # Override specific settings for this test
     config.training.ppo_epochs = 2  # Multiple epochs to test learning behavior
-    agent = PPOAgent(config=config, device=torch.device("cpu"))
+    # Create model for dependency injection
+    model = _create_test_model(config)
+    agent = PPOAgent(model=model, config=config, device=torch.device("cpu"))
 
     buffer_size = 8  # Larger buffer for more realistic training
     experience_buffer = ExperienceBuffer(
@@ -267,6 +280,7 @@ def test_ppo_agent_learn_advantage_normalization():
             input_channels=INPUT_CHANNELS,
             num_actions_total=mapper.get_total_actions(),
             seed=42,
+            max_moves_per_game=500,  # Added missing parameter
         ),
         training=TrainingConfig(
             total_timesteps=1000,
@@ -295,7 +309,13 @@ def test_ppo_agent_learn_advantage_normalization():
             weight_decay=0.0,
         ),
         evaluation=EvaluationConfig(
-            num_games=1, opponent_type="random", evaluation_interval_timesteps=50000
+            num_games=1, 
+            opponent_type="random", 
+            evaluation_interval_timesteps=50000,
+            enable_periodic_evaluation=False,  # Added missing parameter
+            max_moves_per_game=500,  # Added missing parameter
+            log_file_path_eval="/tmp/eval.log",  # Added missing parameter
+            wandb_log_eval=False,  # Added missing parameter
         ),
         logging=LoggingConfig(
             log_file="/tmp/test.log", model_dir="/tmp/", run_name="test_run"
@@ -311,7 +331,9 @@ def test_ppo_agent_learn_advantage_normalization():
         ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
     )
-    agent = PPOAgent(config=config, device=torch.device("cpu"))
+    # Create model for dependency injection
+    model = _create_test_model(config)
+    agent = PPOAgent(model=model, config=config, device=torch.device("cpu"))
 
     buffer_size = 4
     experience_buffer = ExperienceBuffer(
@@ -392,6 +414,7 @@ def test_ppo_agent_learn_gradient_clipping():
             input_channels=INPUT_CHANNELS,
             num_actions_total=mapper.get_total_actions(),
             seed=42,
+            max_moves_per_game=500,
         ),
         training=TrainingConfig(
             total_timesteps=1000,
@@ -420,7 +443,13 @@ def test_ppo_agent_learn_gradient_clipping():
             weight_decay=0.0,
         ),
         evaluation=EvaluationConfig(
-            num_games=1, opponent_type="random", evaluation_interval_timesteps=50000
+            num_games=1, 
+            opponent_type="random", 
+            evaluation_interval_timesteps=50000,
+            enable_periodic_evaluation=False,
+            max_moves_per_game=500,
+            log_file_path_eval="/tmp/eval.log",
+            wandb_log_eval=False
         ),
         logging=LoggingConfig(
             log_file="/tmp/test.log", model_dir="/tmp/", run_name="test_run"
@@ -436,7 +465,8 @@ def test_ppo_agent_learn_gradient_clipping():
         ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
     )
-    agent = PPOAgent(config=config, device=torch.device("cpu"))
+    model = _create_test_model(config)
+    agent = PPOAgent(model=model, config=config, device=torch.device("cpu"))
 
     buffer_size = 4
     experience_buffer = ExperienceBuffer(
@@ -509,6 +539,7 @@ def test_ppo_agent_learn_empty_buffer_handling():
             input_channels=INPUT_CHANNELS,
             num_actions_total=mapper.get_total_actions(),
             seed=42,
+            max_moves_per_game=500,
         ),
         training=TrainingConfig(
             total_timesteps=1000,
@@ -537,7 +568,13 @@ def test_ppo_agent_learn_empty_buffer_handling():
             weight_decay=0.0,
         ),
         evaluation=EvaluationConfig(
-            num_games=1, opponent_type="random", evaluation_interval_timesteps=50000
+            num_games=1, 
+            opponent_type="random", 
+            evaluation_interval_timesteps=50000,
+            enable_periodic_evaluation=False,
+            max_moves_per_game=500,
+            log_file_path_eval="/tmp/eval.log",
+            wandb_log_eval=False
         ),
         logging=LoggingConfig(
             log_file="/tmp/test.log", model_dir="/tmp/", run_name="test_run"
@@ -553,7 +590,8 @@ def test_ppo_agent_learn_empty_buffer_handling():
         ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
     )
-    agent = PPOAgent(config=config, device=torch.device("cpu"))
+    model = _create_test_model(config)
+    agent = PPOAgent(model=model, config=config, device=torch.device("cpu"))
 
     # Create empty buffer
     experience_buffer = ExperienceBuffer(
@@ -615,6 +653,7 @@ def test_ppo_agent_learn_kl_divergence_tracking():
             input_channels=INPUT_CHANNELS,
             num_actions_total=mapper.get_total_actions(),
             seed=42,
+            max_moves_per_game=500,
         ),
         training=TrainingConfig(
             total_timesteps=1000,
@@ -643,7 +682,13 @@ def test_ppo_agent_learn_kl_divergence_tracking():
             weight_decay=0.0,
         ),
         evaluation=EvaluationConfig(
-            num_games=1, opponent_type="random", evaluation_interval_timesteps=50000
+            num_games=1, 
+            opponent_type="random", 
+            evaluation_interval_timesteps=50000,
+            enable_periodic_evaluation=False,
+            max_moves_per_game=500,
+            log_file_path_eval="/tmp/eval.log",
+            wandb_log_eval=False
         ),
         logging=LoggingConfig(
             log_file="/tmp/test.log", model_dir="/tmp/", run_name="test_run"
@@ -659,7 +704,8 @@ def test_ppo_agent_learn_kl_divergence_tracking():
         ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
     )
-    agent = PPOAgent(config=config, device=torch.device("cpu"))
+    model = _create_test_model(config)
+    agent = PPOAgent(model=model, config=config, device=torch.device("cpu"))
 
     buffer_size = 4
     experience_buffer = ExperienceBuffer(
@@ -736,6 +782,7 @@ def test_ppo_agent_learn_minibatch_processing():
             input_channels=INPUT_CHANNELS,
             num_actions_total=mapper.get_total_actions(),
             seed=42,
+            max_moves_per_game=500,
         ),
         training=TrainingConfig(
             total_timesteps=1000,
@@ -764,7 +811,13 @@ def test_ppo_agent_learn_minibatch_processing():
             weight_decay=0.0,
         ),
         evaluation=EvaluationConfig(
-            num_games=1, opponent_type="random", evaluation_interval_timesteps=50000
+            num_games=1, 
+            opponent_type="random", 
+            evaluation_interval_timesteps=50000,
+            enable_periodic_evaluation=False,
+            max_moves_per_game=500,
+            log_file_path_eval="/tmp/eval.log",
+            wandb_log_eval=False
         ),
         logging=LoggingConfig(
             log_file="/tmp/test.log", model_dir="/tmp/", run_name="test_run"
@@ -780,7 +833,8 @@ def test_ppo_agent_learn_minibatch_processing():
         ),
         demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
     )
-    agent = PPOAgent(config=config, device=torch.device("cpu"))
+    model = _create_test_model(config)
+    agent = PPOAgent(model=model, config=config, device=torch.device("cpu"))
 
     buffer_size = 5  # Odd size to test uneven minibatch splitting
     experience_buffer = ExperienceBuffer(
@@ -821,13 +875,15 @@ def test_ppo_agent_advantage_normalization_config_option(minimal_app_config):
     # Test with normalization enabled (default)
     config_enabled = minimal_app_config.model_copy()
     config_enabled.training.normalize_advantages = True
-    agent_enabled = PPOAgent(config=config_enabled, device=torch.device("cpu"))
+    model_enabled = _create_test_model(config_enabled)
+    agent_enabled = PPOAgent(model=model_enabled, config=config_enabled, device=torch.device("cpu"))
     assert agent_enabled.normalize_advantages is True
     
     # Test with normalization disabled
     config_disabled = minimal_app_config.model_copy()
     config_disabled.training.normalize_advantages = False
-    agent_disabled = PPOAgent(config=config_disabled, device=torch.device("cpu"))
+    model_disabled = _create_test_model(config_disabled)
+    agent_disabled = PPOAgent(model=model_disabled, config=config_disabled, device=torch.device("cpu"))
     assert agent_disabled.normalize_advantages is False
 
 
@@ -873,12 +929,14 @@ def test_ppo_agent_advantage_normalization_behavior_difference(minimal_app_confi
     # Test with normalization enabled
     config_enabled = minimal_app_config.model_copy()
     config_enabled.training.normalize_advantages = True
-    agent_enabled = PPOAgent(config=config_enabled, device=torch.device("cpu"))
+    model_enabled = _create_test_model(config_enabled)
+    agent_enabled = PPOAgent(model=model_enabled, config=config_enabled, device=torch.device("cpu"))
     
     # Test with normalization disabled  
     config_disabled = minimal_app_config.model_copy()
     config_disabled.training.normalize_advantages = False
-    agent_disabled = PPOAgent(config=config_disabled, device=torch.device("cpu"))
+    model_disabled = _create_test_model(config_disabled)
+    agent_disabled = PPOAgent(model=model_disabled, config=config_disabled, device=torch.device("cpu"))
 
     # Both agents should learn successfully regardless of normalization
     metrics_enabled = agent_enabled.learn(experience_buffer)

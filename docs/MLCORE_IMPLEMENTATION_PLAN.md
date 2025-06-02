@@ -2,13 +2,14 @@
 ## Progress Summary (Updated June 2, 2025)
 
 **Critical Items**: 1/1 ✅ **COMPLETED**
-**High Priority Items**: 1/2 ✅ **COMPLETED**
+**High Priority Items**: 2/2 ✅ **COMPLETED** 
 **Medium Priority Items**: 1/7 completed  
 **Low Priority Items**: 0/4 completed
 
 ### Recent Completions:
 - ✅ **June 2, 2025**: Silent Failure in Experience Buffer Batching - Critical issue resolved with comprehensive error handling and test coverage
 - ✅ **June 2, 2025**: Handling 'No Legal Moves' & Model NaN Issues - High priority issue resolved with upstream handling in StepManager
+- ✅ **June 2, 2025**: Model Injection for PPOAgent - High priority dependency injection implementation completed with zero deviations from plan
 
 ---
 
@@ -109,18 +110,19 @@ This document outlines an implementation plan to address the findings and recomm
 -   **Affected System(s)/File(s)**: System 4 / `core/neural_network.py`, `training/models/resnet_tower.py`, `core/base_actor_critic.py` (new), `core/__init__.py`, `tests/test_actor_critic_refactoring.py` (new)
 -   **Impact**: Eliminated ~120 lines of duplicated code, improved maintainability, ensured consistency between model implementations, enhanced error reporting
 
-### 2. Model Injection for PPOAgent
--   **Recommendation**: `PPOAgent` should receive the instantiated model (conforming to `ActorCriticProtocol`) as a constructor argument (dependency injection), rather than initializing a default model.
--   **Affected System(s)/File(s)**: System 5 / `core/ppo_agent.py`; System 6 / `training/trainer.py` (or wherever `PPOAgent` is instantiated).
--   **Actionable Steps**:
-    1.  Modify the `PPOAgent.__init__` method to accept an `actor_critic: ActorCriticProtocol` argument.
-    2.  Remove any default model instantiation within `PPOAgent`.
-    3.  Update the `Trainer` (or other instantiation points) to:
-        -   Instantiate the model using `ModelManager`.
-        -   Pass the instantiated model to the `PPOAgent` constructor.
-    4.  Update relevant unit tests for `PPOAgent`.
--   **Estimated Effort**: Small to Medium
--   **Impact**: Decouples `PPOAgent` from specific model implementations, improves testability and flexibility.
+### ✅ 2. Model Injection for PPOAgent - **RESOLVED (June 2, 2025)**
+-   **Original Recommendation**: `PPOAgent` should receive the instantiated model (conforming to `ActorCriticProtocol`) as a constructor argument (dependency injection), rather than initializing a default model.
+-   **Resolution Status**: **COMPLETED** ✅
+-   **Implementation Details**:
+    -   Modified `PPOAgent.__init__` constructor to require `model: ActorCriticProtocol` as first parameter
+    -   Removed internal default model creation from PPOAgent constructor
+    -   Updated `SetupManager.setup_training_components()` to use dependency injection pattern
+    -   Updated `agent_loading.load_evaluation_agent()` to create temporary model before PPOAgent instantiation
+    -   Updated all test files to use proper dependency injection with `_create_test_model()` helpers
+    -   Updated `MockPPOAgent` in test infrastructure to properly inject mock model
+-   **Affected Files**: `core/ppo_agent.py`, `training/setup_manager.py`, `utils/agent_loading.py`, all test files
+-   **Impact**: Successfully decoupled PPOAgent from specific model implementations, improved testability and eliminated unnecessary model instantiation
+-   **Validation**: Comprehensive comparison analysis confirmed zero deviations between implementation and plan
 
 ### 3. Implement Learning Rate Scheduling
 -   **Recommendation**: Implement configurable learning rate scheduling for the PPO optimizer.
