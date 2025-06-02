@@ -195,7 +195,9 @@ def test_experience_buffer_get_batch_stack_error():
     buf.clear()
     obs = torch.randn(46, 9, 9)
     legal_mask1 = torch.zeros(mapper.get_total_actions(), dtype=torch.bool)
-    legal_mask2 = torch.zeros(mapper.get_total_actions() + 1, dtype=torch.bool) # Different shape
+    legal_mask2 = torch.zeros(
+        mapper.get_total_actions() + 1, dtype=torch.bool
+    )  # Different shape
 
     buf.add(obs, 1, 1.0, 0.1, 0.5, False, legal_mask1)
     buf.add(obs, 2, 2.0, 0.2, 1.0, True, legal_mask2)

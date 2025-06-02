@@ -613,9 +613,9 @@ class TestHandleEpisodeEnd:
         # Verify win rates are calculated after this game (black wins)
         # black_wins becomes 1, total games becomes 1
         wandb_data = mock_logger.call_args[1]["wandb_data"]
-        assert wandb_data["black_win_rate"] == pytest.approx(1.0) # 1/1
-        assert wandb_data["white_win_rate"] == pytest.approx(0.0) # 0/1
-        assert wandb_data["draw_rate"] == pytest.approx(0.0)    # 0/1
+        assert wandb_data["black_win_rate"] == pytest.approx(1.0)  # 1/1
+        assert wandb_data["white_win_rate"] == pytest.approx(0.0)  # 0/1
+        assert wandb_data["draw_rate"] == pytest.approx(0.0)  # 0/1
         assert wandb_data["black_wins_total"] == 1
         assert wandb_data["white_wins_total"] == 0
         assert wandb_data["draws_total"] == 0

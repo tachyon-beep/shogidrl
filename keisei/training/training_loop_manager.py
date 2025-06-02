@@ -11,15 +11,20 @@ import torch.nn as nn
 STEP_MANAGER_NOT_AVAILABLE_MSG = "StepManager is not available"
 
 if TYPE_CHECKING:
+    from typing import Callable  # Added Callable
+
     from keisei.config_schema import AppConfig
     from keisei.core.experience_buffer import ExperienceBuffer
     from keisei.core.ppo_agent import PPOAgent
     from keisei.training.callbacks import Callback
     from keisei.training.display import TrainingDisplay
     from keisei.training.parallel import ParallelManager
-    from keisei.training.step_manager import EpisodeState, StepManager, StepResult  # Added StepResult
+    from keisei.training.step_manager import (
+        EpisodeState,
+        StepManager,
+        StepResult,
+    )  # Added StepResult
     from keisei.training.trainer import Trainer  # Forward reference
-    from typing import Callable  # Added Callable
 
 
 class TrainingLoopManager:
@@ -277,12 +282,14 @@ class TrainingLoopManager:
                 "draws": self.trainer.metrics_manager.draws,
             }
 
-            new_episode_state_after_end, episode_winner_color = self.step_manager.handle_episode_end(
-                updated_episode_state,
-                step_result,
-                current_cumulative_stats,
-                self.trainer.metrics_manager.total_episodes_completed,
-                log_both,
+            new_episode_state_after_end, episode_winner_color = (
+                self.step_manager.handle_episode_end(
+                    updated_episode_state,
+                    step_result,
+                    current_cumulative_stats,
+                    self.trainer.metrics_manager.total_episodes_completed,
+                    log_both,
+                )
             )
 
             if episode_winner_color == "black":
@@ -307,9 +314,7 @@ class TrainingLoopManager:
             return False  # Stop epoch
 
         if self.episode_state is None:
-            log_both(
-                "[ERROR] Episode state is None. Resetting.", also_to_wandb=True
-            )
+            log_both("[ERROR] Episode state is None. Resetting.", also_to_wandb=True)
             if self.step_manager is None:
                 raise RuntimeError(STEP_MANAGER_NOT_AVAILABLE_MSG)
             self.episode_state = self.step_manager.reset_episode()
@@ -336,7 +341,9 @@ class TrainingLoopManager:
             self.episode_state = self.step_manager.reset_episode()
             return True  # Continue epoch
 
-        self.episode_state = self._handle_successful_step(self.episode_state, step_result, log_both)
+        self.episode_state = self._handle_successful_step(
+            self.episode_state, step_result, log_both
+        )
 
         self.trainer.metrics_manager.global_timestep += 1
         self.steps_since_last_time_for_sps += 1
@@ -364,9 +371,7 @@ class TrainingLoopManager:
             else 0.0
         )
         d_rate = (
-            self.trainer.metrics_manager.draws / total_games
-            if total_games > 0
-            else 0.0
+            self.trainer.metrics_manager.draws / total_games if total_games > 0 else 0.0
         )
 
         self.trainer.metrics_manager.pending_progress_updates.update(

@@ -1047,7 +1047,7 @@ def test_game_termination_checkmate_stalemate(
             _set_game_termination(
                 game,
                 Color.WHITE if game.current_player == Color.BLACK else Color.BLACK,
-                "Tsumi"
+                "Tsumi",
             )
 
     assert (

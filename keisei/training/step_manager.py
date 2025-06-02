@@ -5,6 +5,7 @@ This module encapsulates the logic for executing single training steps,
 handling episode boundaries, and managing the interaction between the agent
 and the environment during training.
 """
+
 import time  # Added import
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -253,7 +254,7 @@ class StepManager:
         game_stats: Dict[str, int],  # Will be modified in place
         total_episodes_completed: int,
         logger_func: Callable[..., None],
-    ) -> Tuple[EpisodeState, Optional[str]]: # Return tuple
+    ) -> Tuple[EpisodeState, Optional[str]]:  # Return tuple
         """
         Handle the end of an episode, prepare for the next one, and log results.
 
@@ -316,9 +317,9 @@ class StepManager:
                 "black_wins_total": game_stats["black_wins"],
                 "white_wins_total": game_stats["white_wins"],
                 "draws_total": game_stats["draws"],
-                "black_win_rate": updated_black_win_rate, # Corrected key
-                "white_win_rate": updated_white_win_rate, # Corrected key
-                "draw_rate": updated_draw_rate,          # Corrected key
+                "black_win_rate": updated_black_win_rate,  # Corrected key
+                "white_win_rate": updated_white_win_rate,  # Corrected key
+                "draw_rate": updated_draw_rate,  # Corrected key
             },
             log_level="info",
         )
@@ -351,7 +352,10 @@ class StepManager:
                 "error",
             )
             # Return current state to allow caller to handle the error
-            return episode_state, final_winner_color # Return winner color even on reset failure
+            return (
+                episode_state,
+                final_winner_color,
+            )  # Return winner color even on reset failure
 
     def reset_episode(self) -> EpisodeState:
         """
@@ -491,9 +495,7 @@ class StepManager:
 
         return final_winner_color, reason_from_info
 
-    def _format_game_outcome_message(
-        self, winner: Optional[str], reason: str
-    ) -> str:
+    def _format_game_outcome_message(self, winner: Optional[str], reason: str) -> str:
         """Helper to format the game outcome message."""
         if winner == "black":
             return f"Black wins by {reason}."
