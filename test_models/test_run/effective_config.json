@@ -45,6 +45,7 @@
         "minibatch_size": 32,
         "mixed_precision": false,
         "model_type": "resnet",
+        "normalize_advantages": true,
         "ppo_epochs": 2,
         "refresh_per_second": 4,
         "render_every_steps": 1,

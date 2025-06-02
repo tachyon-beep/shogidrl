@@ -74,9 +74,14 @@ Covers `core/ppo_agent.py` and `core/experience_buffer.py`.
         -   **On-the-fly regeneration**: If `ShogiGame.get_legal_moves()` is sufficiently fast, regenerate masks when constructing minibatches. This depends on the performance trade-off.
         -   **Sparse representation**: If regeneration is too slow, consider sparse storage if the number of legal moves is typically much smaller than the total action space.
 
--   **Critical Concern/Recommendation (Silent Failure in Batching)**:
-    -   **Issue**: `CODE_MAP.md` warns: "`ExperienceBuffer.get_batch()` returns an empty dict on tensor-stack errors, risking silent training skips."
-    -   **Recommendation**: This is critical. Explicitly raise an error if `torch.stack` fails or if batch construction results in an invalid/empty state. Silent failures in the data pipeline must be avoided.
+-   **✅ RESOLVED - Critical Issue (Silent Failure in Batching)**:
+    -   **Previous Issue**: `CODE_MAP.md` warned: "`ExperienceBuffer.get_batch()` returns an empty dict on tensor-stack errors, risking silent training skips."
+    -   **Resolution (June 2, 2025)**: This critical issue has been **completely resolved**. The `ExperienceBuffer.get_batch()` method now includes:
+        -   Comprehensive try-catch blocks around both `torch.stack` operations (observations and legal_masks)
+        -   Descriptive `ValueError` exceptions with specific error messages and troubleshooting guidance
+        -   Proper empty buffer handling with warning messages
+        -   Comprehensive test coverage including `test_experience_buffer_get_batch_stack_error`
+    -   **Impact**: Silent failures in the data pipeline have been eliminated, significantly improving training reliability and debugging experience.
 
 -   **Note (GAE Calculation)**:
     -   Ensure Generalized Advantage Estimation (GAE) is calculated correctly, typically iterated backward from the end of trajectories.

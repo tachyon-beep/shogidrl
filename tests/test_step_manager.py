@@ -849,5 +849,205 @@ class TestPrepareAndHandleDemoMode:
                 mock_sleep.assert_not_called()
 
 
+class TestExecuteStepNoLegalMoves:
+    """Test StepManager behavior when no legal moves are available."""
+    
+    @pytest.fixture
+    def step_manager(self, mock_config, mock_components):
+        """Create a StepManager instance for testing."""
+        return StepManager(
+            config=mock_config,
+            game=mock_components["game"],
+            agent=mock_components["agent"],
+            policy_mapper=mock_components["policy_mapper"],
+            experience_buffer=mock_components["experience_buffer"],
+        )
+
+    @pytest.fixture
+    def mock_logger(self):
+        """Create a mock logger for testing."""
+        return Mock()
+
+    def test_execute_step_no_legal_moves_terminal_condition(
+        self, step_manager, mock_components, mock_logger
+    ):
+        """Test that execute_step handles no legal moves as terminal condition."""
+        # Arrange
+        mock_components["game"].get_legal_moves.return_value = []  # No legal moves
+        mock_board_repr = np.zeros((9, 9, 14))
+        mock_components["game"].get_board_representation.return_value = mock_board_repr
+        mock_components["game"].get_game_state.return_value = Mock()
+        
+        # Mock reset method and return value
+        mock_reset_obs = np.zeros((9, 9, 14))
+        mock_components["game"].reset = Mock(return_value=mock_reset_obs)
+        
+        # Create episode state
+        mock_obs = np.zeros((9, 9, 14))
+        mock_obs_tensor = torch.zeros((1, 14, 9, 9))
+        episode_state = EpisodeState(
+            current_obs=mock_obs,
+            current_obs_tensor=mock_obs_tensor,
+            episode_reward=0.0,
+            episode_length=0
+        )
+
+        # Act
+        result = step_manager.execute_step(episode_state, 100, mock_logger)
+
+        # Assert
+        assert isinstance(result, StepResult)
+        assert result.done is True
+        assert result.info["terminal_reason"] == "no_legal_moves"
+        assert result.next_obs is not None
+        assert abs(result.reward - 0.0) < 1e-6  # Use epsilon comparison for floats
+        
+        # Verify game was reset
+        mock_components["game"].reset.assert_called_once()
+        
+        # Verify agent.select_action was NOT called (upstream handling)
+        mock_components["agent"].select_action.assert_not_called()
+        
+        # Verify appropriate logging
+        mock_logger.assert_called()
+        log_calls = [call[0][0] for call in mock_logger.call_args_list]
+        terminal_logs = [log for log in log_calls if "no legal moves" in log.lower() or "terminal" in log.lower()]
+        assert len(terminal_logs) > 0, "Expected terminal log for no legal moves"
+
+    def test_execute_step_no_legal_moves_with_episode_state(
+        self, step_manager, mock_components, mock_logger
+    ):
+        """Test no legal moves handling with existing episode state."""
+        # Arrange
+        mock_obs = np.zeros((9, 9, 14))
+        mock_obs_tensor = torch.zeros((1, 14, 9, 9))
+        episode_state = EpisodeState(
+            current_obs=mock_obs,
+            current_obs_tensor=mock_obs_tensor,
+            episode_reward=10.0,
+            episode_length=5
+        )
+        
+        mock_components["game"].get_legal_moves.return_value = []  # No legal moves
+        mock_components["game"].get_board_representation.return_value = mock_obs
+        mock_components["game"].get_game_state.return_value = Mock()
+        
+        # Mock reset method and return value
+        mock_reset_obs = np.zeros((9, 9, 14))
+        mock_components["game"].reset = Mock(return_value=mock_reset_obs)
+
+        # Act
+        result = step_manager.execute_step(episode_state, 50, mock_logger)
+
+        # Assert
+        assert result.done is True
+        assert result.info["terminal_reason"] == "no_legal_moves"
+        
+        # Verify observation data is present in result
+        assert result.next_obs is not None
+        
+        # Verify game reset
+        mock_components["game"].reset.assert_called_once()
+
+    def test_execute_step_normal_flow_with_legal_moves(
+        self, step_manager, mock_components, mock_logger
+    ):
+        """Test that normal flow continues when legal moves are available."""
+        # Arrange
+        legal_moves = [(1, 2, 3, 4, 5), (2, 3, 4, 5, 6)]  # Mock legal moves
+        mock_obs = np.zeros((9, 9, 14))
+        mock_components["game"].get_legal_moves.return_value = legal_moves
+        mock_components["game"].get_board_representation.return_value = mock_obs
+        mock_components["game"].get_game_state.return_value = Mock()
+        
+        # Mock policy mapper
+        mock_legal_mask = torch.tensor([True, False, True])
+        mock_components["policy_mapper"].get_legal_mask.return_value = mock_legal_mask
+        
+        # Mock agent selection - should return 4 values
+        mock_selected_move = legal_moves[0]
+        mock_policy_index = 0
+        mock_log_prob = 0.5
+        mock_value = 0.3
+        mock_components["agent"].select_action.return_value = (
+            mock_selected_move, mock_policy_index, mock_log_prob, mock_value
+        )
+        
+        # Mock game execution - should return 4-tuple (next_obs, reward, done, info)
+        mock_next_obs = np.zeros((9, 9, 14))
+        mock_reward = 0.5
+        mock_done = False
+        mock_info = {}
+        mock_components["game"].make_move.return_value = (
+            mock_next_obs, mock_reward, mock_done, mock_info
+        )
+        
+        # Create episode state
+        mock_obs_tensor = torch.zeros((1, 14, 9, 9))
+        episode_state = EpisodeState(
+            current_obs=mock_obs,
+            current_obs_tensor=mock_obs_tensor,
+            episode_reward=0.0,
+            episode_length=0
+        )
+
+        # Act
+        result = step_manager.execute_step(episode_state, 10, mock_logger)
+
+        # Assert - should proceed normally, not terminate early
+        assert result.done is False  # Not terminal from no legal moves
+        
+        # Verify normal flow was followed
+        mock_components["game"].get_legal_moves.assert_called_once()
+        mock_components["policy_mapper"].get_legal_mask.assert_called_once_with(
+            legal_moves, device=step_manager.device
+        )
+        mock_components["agent"].select_action.assert_called_once()
+        mock_components["game"].make_move.assert_called_once()
+
+    def test_execute_step_no_legal_moves_logs_appropriate_level(
+        self, step_manager, mock_components, mock_logger
+    ):
+        """Test that no legal moves condition logs at appropriate level."""
+        # Arrange
+        mock_obs = np.zeros((9, 9, 14))
+        mock_components["game"].get_legal_moves.return_value = []
+        mock_components["game"].get_board_representation.return_value = mock_obs
+        mock_components["game"].get_game_state.return_value = Mock()
+        
+        # Mock reset method and return value
+        mock_reset_obs = np.zeros((9, 9, 14))
+        mock_components["game"].reset = Mock(return_value=mock_reset_obs)
+        
+        # Create episode state
+        mock_obs_tensor = torch.zeros((1, 14, 9, 9))
+        episode_state = EpisodeState(
+            current_obs=mock_obs,
+            current_obs_tensor=mock_obs_tensor,
+            episode_reward=0.0,
+            episode_length=0
+        )
+
+        # Act
+        step_manager.execute_step(episode_state, 75, mock_logger)
+
+        # Assert - verify logging was called
+        mock_logger.assert_called()
+        
+        # Check that logging mentions the terminal condition
+        log_calls = mock_logger.call_args_list
+        assert len(log_calls) > 0, "Expected at least one log call"
+        
+        # Look for terminal-related log messages
+        terminal_related_logs = []
+        for call in log_calls:
+            if len(call[0]) > 0:  # Check if there are positional arguments
+                log_message = str(call[0][0]).lower()
+                if "no legal moves" in log_message or "terminal" in log_message:
+                    terminal_related_logs.append(call)
+        
+        assert len(terminal_related_logs) > 0, "Expected terminal-related log message"
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

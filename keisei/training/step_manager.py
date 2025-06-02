@@ -103,6 +103,42 @@ class StepManager:
         try:
             # Get legal moves for current position
             legal_shogi_moves = self.game.get_legal_moves()
+            
+            # Check for no legal moves condition (terminal state)
+            if not legal_shogi_moves:
+                error_msg = (
+                    f"No legal moves available at timestep {global_timestep}. "
+                    f"Game should be in terminal state (checkmate/stalemate)."
+                )
+                logger_func(
+                    f"TERMINAL: {error_msg} Resetting episode.",
+                    True,  # also_to_wandb
+                    None,  # wandb_data
+                    "info",  # log_level
+                )
+
+                # Reset game and return failure result
+                reset_obs = self.game.reset()
+                reset_tensor = torch.tensor(
+                    reset_obs,
+                    dtype=torch.float32,
+                    device=self.device,
+                ).unsqueeze(0)
+
+                return StepResult(
+                    next_obs=reset_obs,
+                    next_obs_tensor=reset_tensor,
+                    reward=0.0,
+                    done=True,  # Terminal state
+                    info={"terminal_reason": "no_legal_moves"},
+                    selected_move=None,
+                    policy_index=0,
+                    log_prob=0.0,
+                    value_pred=0.0,
+                    success=False,
+                    error_message=error_msg,
+                )
+            
             legal_mask_tensor = self.policy_mapper.get_legal_mask(
                 legal_shogi_moves, device=self.device
             )

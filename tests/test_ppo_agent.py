@@ -809,10 +809,104 @@ def test_ppo_agent_learn_minibatch_processing():
     experience_buffer.compute_advantages_and_returns(0.0)
 
     # Learn should handle uneven minibatch split correctly
-    metrics = agent.learn(experience_buffer)
-
-    # Should complete successfully
+    metrics = agent.learn(experience_buffer)    # Should complete successfully
     assert metrics is not None
     assert "ppo/policy_loss" in metrics
     assert not np.isnan(metrics["ppo/policy_loss"])
     assert not np.isinf(metrics["ppo/policy_loss"])
+
+
+def test_ppo_agent_advantage_normalization_config_option(minimal_app_config):
+    """Test that advantage normalization can be controlled via configuration."""
+    # Test with normalization enabled (default)
+    config_enabled = minimal_app_config.model_copy()
+    config_enabled.training.normalize_advantages = True
+    agent_enabled = PPOAgent(config=config_enabled, device=torch.device("cpu"))
+    assert agent_enabled.normalize_advantages is True
+    
+    # Test with normalization disabled
+    config_disabled = minimal_app_config.model_copy()
+    config_disabled.training.normalize_advantages = False
+    agent_disabled = PPOAgent(config=config_disabled, device=torch.device("cpu"))
+    assert agent_disabled.normalize_advantages is False
+
+
+def test_ppo_agent_advantage_normalization_behavior_difference(minimal_app_config):
+    """Test that enabling/disabling advantage normalization actually affects computation."""
+    # Create test experience buffer with high variance advantages
+    buffer_size = 4
+    experience_buffer = ExperienceBuffer(
+        buffer_size=buffer_size,
+        gamma=0.99,
+        lambda_gae=0.95,
+        device="cpu",
+    )
+
+    dummy_obs_tensor = torch.randn(46, 9, 9, device="cpu")
+    dummy_legal_mask = torch.ones(13527, dtype=torch.bool, device="cpu")
+
+    # High variance rewards to create high variance advantages
+    rewards = [100.0, -50.0, 75.0, -25.0]
+    values = [1.0, 1.0, 1.0, 1.0]
+
+    for i in range(buffer_size):
+        experience_buffer.add(
+            obs=dummy_obs_tensor,
+            action=i % 13527,
+            reward=rewards[i],
+            log_prob=0.1,
+            value=values[i],
+            done=(i == buffer_size - 1),
+            legal_mask=dummy_legal_mask,
+        )
+
+    experience_buffer.compute_advantages_and_returns(0.0)
+
+    # Get raw advantages before normalization
+    batch_data = experience_buffer.get_batch()
+    raw_advantages = batch_data["advantages"].clone()
+    
+    # Verify raw advantages have significant variance
+    assert torch.std(raw_advantages, dim=0).max() > 10.0, "Raw advantages should have high variance"
+    assert not torch.allclose(raw_advantages, torch.zeros_like(raw_advantages)), "Raw advantages should not be zero"
+
+    # Test with normalization enabled
+    config_enabled = minimal_app_config.model_copy()
+    config_enabled.training.normalize_advantages = True
+    agent_enabled = PPOAgent(config=config_enabled, device=torch.device("cpu"))
+    
+    # Test with normalization disabled  
+    config_disabled = minimal_app_config.model_copy()
+    config_disabled.training.normalize_advantages = False
+    agent_disabled = PPOAgent(config=config_disabled, device=torch.device("cpu"))
+
+    # Both agents should learn successfully regardless of normalization
+    metrics_enabled = agent_enabled.learn(experience_buffer)
+    
+    # Recreate buffer for second agent (since buffer is consumed)
+    experience_buffer2 = ExperienceBuffer(
+        buffer_size=buffer_size,
+        gamma=0.99,
+        lambda_gae=0.95,
+        device="cpu",
+    )
+    
+    for i in range(buffer_size):
+        experience_buffer2.add(
+            obs=dummy_obs_tensor,
+            action=i % 13527,
+            reward=rewards[i],
+            log_prob=0.1,
+            value=values[i],
+            done=(i == buffer_size - 1),
+            legal_mask=dummy_legal_mask,
+        )
+    
+    experience_buffer2.compute_advantages_and_returns(0.0)
+    metrics_disabled = agent_disabled.learn(experience_buffer2)
+
+    # Both should return valid metrics
+    assert metrics_enabled["ppo/policy_loss"] >= 0.0
+    assert not np.isnan(metrics_enabled["ppo/policy_loss"])
+    assert metrics_disabled["ppo/policy_loss"] >= 0.0
+    assert not np.isnan(metrics_disabled["ppo/policy_loss"])

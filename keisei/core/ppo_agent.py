@@ -59,6 +59,8 @@ class PPOAgent:
         self.entropy_coef = config.training.entropy_coef
         self.ppo_epochs = config.training.ppo_epochs
         self.minibatch_size = config.training.minibatch_size
+        # Normalization options
+        self.normalize_advantages = getattr(config.training, "normalize_advantages", True)
 
         self.last_kl_div = 0.0  # Initialize KL divergence tracker
         self.gradient_clip_max_norm = (
@@ -183,10 +185,11 @@ class PPOAgent:
         returns_batch = batch_data["returns"].to(self.device)
         legal_masks_batch = batch_data["legal_masks"].to(self.device)
 
-        # Normalize advantages
-        advantages_batch = (advantages_batch - advantages_batch.mean()) / (
-            advantages_batch.std() + 1e-8
-        )
+        # Conditionally normalize advantages based on configuration
+        if self.normalize_advantages:
+            advantages_batch = (advantages_batch - advantages_batch.mean()) / (
+                advantages_batch.std() + 1e-8
+            )
 
         num_samples = obs_batch.shape[0]
         indices = np.arange(num_samples)

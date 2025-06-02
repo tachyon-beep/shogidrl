@@ -72,6 +72,10 @@ class TrainingConfig(BaseModel):
     weight_decay: float = Field(
         0.0, description="Weight decay (L2 regularization) for optimizer."
     )
+    # PPO-specific normalization options
+    normalize_advantages: bool = Field(
+        True, description="Enable advantage normalization in PPO training for improved stability."
+    )
 
     @validator("learning_rate")
     # pylint: disable=no-self-argument
