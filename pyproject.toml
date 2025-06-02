@@ -45,14 +45,10 @@ dev = [
 
 # Specifies that the 'keisei' package is found directly in the project root
 # (i.e., where pyproject.toml is located).
-[tool.setuptools]
-packages = ["keisei"]
-
-# If you prefer using find (e.g., if you add more packages later at the root):
-# [tool.setuptools.packages.find]
-# where = ["."]  # Look in the current directory (project root)
-# include = ["keisei*"] # Include the keisei package (and any future keisei_extra packages)
-# exclude = ["tests*"] # Exclude the tests directory from being treated as a package to install
+[tool.setuptools.packages.find]
+where = ["."]  # Look in the current directory (project root)
+include = ["keisei*"] # Include the keisei package (and any future keisei_extra packages)
+exclude = ["tests*"] # Exclude the tests directory from being treated as a package to install
 
 [pytest]
 addopts = "--pylint"
