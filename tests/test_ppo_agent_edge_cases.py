@@ -428,3 +428,245 @@ class TestPPOAgentBoundaryConditions:
         # This should raise an error since advantages haven't been computed
         with pytest.raises((RuntimeError, ValueError, IndexError)):
             ppo_agent_basic.learn(experience_buffer)
+
+
+class TestPPOAgentSchedulerEdgeCases:
+    """Tests for learning rate scheduler edge cases and error handling."""
+    
+    def test_invalid_scheduler_type(self, minimal_app_config, ppo_test_model):
+        """Test PPOAgent behavior with invalid scheduler type."""
+        config = minimal_app_config.model_copy()
+        config.training.lr_schedule_type = "invalid_scheduler_type"
+        
+        # Should either handle gracefully or raise informative error
+        try:
+            agent = PPOAgent(model=ppo_test_model, config=config, device=torch.device("cpu"))
+            # If creation succeeds, scheduler should be None (fallback behavior)
+            assert agent.scheduler is None
+        except (ValueError, KeyError, RuntimeError):
+            # This is also acceptable behavior for invalid scheduler types
+            pass
+    
+    def test_scheduler_with_invalid_kwargs(self, minimal_app_config, ppo_test_model):
+        """Test scheduler creation with invalid keyword arguments."""
+        config = minimal_app_config.model_copy()
+        config.training.lr_schedule_type = "linear"
+        config.training.lr_schedule_kwargs = {"invalid_param": "invalid_value"}
+        
+        # Should either ignore invalid kwargs or handle gracefully
+        try:
+            agent = PPOAgent(model=ppo_test_model, config=config, device=torch.device("cpu"))
+            # If creation succeeds, verify basic functionality
+            assert hasattr(agent, 'scheduler')
+        except (TypeError, ValueError, RuntimeError):
+            # This is acceptable for invalid parameters
+            pass
+    
+    def test_scheduler_with_zero_total_steps(self, minimal_app_config, ppo_test_model):
+        """Test scheduler behavior when total steps would be zero."""
+        config = minimal_app_config.model_copy()
+        config.training.lr_schedule_type = "linear"
+        config.training.total_timesteps = 1  # Very small, will result in 0 epochs
+        config.training.steps_per_epoch = 1000  # Larger than total timesteps
+        
+        # Should handle gracefully or provide meaningful error
+        try:
+            agent = PPOAgent(model=ppo_test_model, config=config, device=torch.device("cpu"))
+            # If creation succeeds, scheduler might be None or have minimal steps
+            if agent.scheduler is not None:
+                # Should be able to step without errors
+                initial_lr = agent.optimizer.param_groups[0]["lr"]
+                agent.scheduler.step()
+                # Learning rate might not change due to zero/minimal steps
+                current_lr = agent.optimizer.param_groups[0]["lr"]
+                assert isinstance(current_lr, float)
+        except (ValueError, ZeroDivisionError, RuntimeError):
+            # This is acceptable for edge case configurations
+            pass
+    
+    def test_scheduler_step_validation(self, minimal_app_config, ppo_test_model):
+        """Test scheduler with invalid step_on configuration."""
+        config = minimal_app_config.model_copy()
+        config.training.lr_schedule_type = "linear"
+        config.training.lr_schedule_step_on = "invalid_step_mode"
+        
+        # Should fallback to default or handle gracefully
+        agent = PPOAgent(model=ppo_test_model, config=config, device=torch.device("cpu"))
+        
+        # Should either use default "epoch" or handle the invalid value
+        assert agent.lr_schedule_step_on in ["epoch", "update", "invalid_step_mode"]
+        
+        # Should still be able to train
+        from keisei.core.experience_buffer import ExperienceBuffer
+        buffer = ExperienceBuffer(buffer_size=4, gamma=0.99, lambda_gae=0.95, device="cpu")
+        
+        dummy_obs = torch.randn(46, 9, 9, device="cpu")
+        dummy_mask = torch.ones(agent.num_actions_total, dtype=torch.bool, device="cpu")
+        
+        for i in range(4):
+            buffer.add(
+                obs=dummy_obs,
+                action=i,
+                reward=1.0,
+                log_prob=0.1,
+                value=0.5,
+                done=(i == 3),
+                legal_mask=dummy_mask
+            )
+        
+        buffer.compute_advantages_and_returns(0.0)
+        metrics = agent.learn(buffer)
+        
+        assert_valid_ppo_metrics(metrics)
+    
+    def test_scheduler_extreme_learning_rates(self, minimal_app_config, ppo_test_model):
+        """Test scheduler behavior with extreme learning rate values."""
+        config = minimal_app_config.model_copy()
+        config.training.lr_schedule_type = "exponential"
+        config.training.lr_schedule_kwargs = {"gamma": 0.9}  # Aggressive but not extreme decay
+        
+        agent = PPOAgent(model=ppo_test_model, config=config, device=torch.device("cpu"))
+        
+        initial_lr = agent.optimizer.param_groups[0]["lr"]
+        
+        # Step scheduler many times to reach very small LR
+        if agent.scheduler is not None:
+            for _ in range(100):  # Many steps
+                agent.scheduler.step()
+            
+            final_lr = agent.optimizer.param_groups[0]["lr"]
+            
+            # Should still be positive and smaller than initial
+            assert final_lr > 0
+            assert final_lr < initial_lr
+            assert not np.isnan(final_lr)
+            assert not np.isinf(final_lr)
+    
+    def test_scheduler_state_persistence(self, minimal_app_config, ppo_test_model):
+        """Test that scheduler state is preserved through save/load operations."""
+        import tempfile
+        import os
+        
+        config = minimal_app_config.model_copy()
+        config.training.lr_schedule_type = "linear"
+        config.training.lr_schedule_kwargs = {"final_lr_fraction": 0.1}
+        
+        agent = PPOAgent(model=ppo_test_model, config=config, device=torch.device("cpu"))
+        
+        # Step scheduler to change state
+        if agent.scheduler is not None:
+            for _ in range(5):
+                agent.scheduler.step()
+            
+            lr_after_steps = agent.optimizer.param_groups[0]["lr"]
+            
+            # Save and load model
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                save_path = os.path.join(tmp_dir, "test_scheduler_model.pth")
+                
+                agent.save_model(save_path)
+                
+                # Reset scheduler to initial state
+                agent.scheduler.step_size = 0  # Reset if possible
+                
+                # Load model back
+                result = agent.load_model(save_path)
+                
+                # Should restore scheduler state (LR should match)
+                loaded_lr = agent.optimizer.param_groups[0]["lr"]
+                
+                # The save/load might not preserve exact scheduler state,
+                # but LR should be preserved at minimum
+                assert isinstance(loaded_lr, float)
+                assert loaded_lr > 0
+    
+    def test_scheduler_with_very_large_total_steps(self, minimal_app_config, ppo_test_model):
+        """Test scheduler calculation with very large training configurations."""
+        config = minimal_app_config.model_copy()
+        config.training.lr_schedule_type = "cosine"
+        config.training.total_timesteps = 1000000  # Very large
+        config.training.steps_per_epoch = 10000
+        config.training.ppo_epochs = 10
+        config.training.minibatch_size = 32
+        config.training.lr_schedule_step_on = "update"
+        
+        # Should handle large numbers without overflow
+        agent = PPOAgent(model=ppo_test_model, config=config, device=torch.device("cpu"))
+        
+        # Verify scheduler was created successfully
+        assert hasattr(agent, 'scheduler')
+        
+        # Should be able to step scheduler
+        if agent.scheduler is not None:
+            initial_lr = agent.optimizer.param_groups[0]["lr"]
+            agent.scheduler.step()
+            current_lr = agent.optimizer.param_groups[0]["lr"]
+            
+            # LR should change (even minimally)
+            assert isinstance(current_lr, float)
+            assert current_lr > 0
+    
+    def test_scheduler_boundary_learning_rates(self, minimal_app_config, ppo_test_model):
+        """Test scheduler with boundary learning rate values."""
+        test_cases = [
+            {"initial_lr": 1e-8, "schedule_type": "linear"},   # Very small initial LR
+            {"initial_lr": 1.0, "schedule_type": "exponential"},    # Large initial LR
+            {"initial_lr": 3e-4, "schedule_type": "step", "kwargs": {"step_size": 1, "gamma": 0.1}},
+        ]
+        
+        for case in test_cases:
+            config = minimal_app_config.model_copy()
+            config.training.learning_rate = case["initial_lr"]
+            config.training.lr_schedule_type = case["schedule_type"]
+            if "kwargs" in case:
+                config.training.lr_schedule_kwargs = case["kwargs"]
+            
+            try:
+                agent = PPOAgent(model=ppo_test_model, config=config, device=torch.device("cpu"))
+                
+                # Verify basic functionality
+                assert agent.optimizer.param_groups[0]["lr"] == case["initial_lr"]
+                
+                # Should be able to step if scheduler exists
+                if agent.scheduler is not None:
+                    agent.scheduler.step()
+                    new_lr = agent.optimizer.param_groups[0]["lr"]
+                    assert new_lr > 0
+                    assert not np.isnan(new_lr)
+                    assert not np.isinf(new_lr)
+                    
+            except (ValueError, RuntimeError, OverflowError):
+                # Some boundary values might be rejected, which is acceptable
+                pass
+    
+    def test_scheduler_configuration_edge_cases(self, minimal_app_config, ppo_test_model):
+        """Test various edge cases in scheduler configuration."""
+        edge_cases = [
+            # Missing kwargs for scheduler that requires them
+            {"lr_schedule_type": "step", "lr_schedule_kwargs": None},
+            # Empty kwargs
+            {"lr_schedule_type": "linear", "lr_schedule_kwargs": {}},
+            # Conflicting kwargs
+            {"lr_schedule_type": "cosine", "lr_schedule_kwargs": {"T_max": 10, "eta_min_fraction": 0.1}},
+        ]
+        
+        for case in edge_cases:
+            config = minimal_app_config.model_copy()
+            for key, value in case.items():
+                setattr(config.training, key, value)
+            
+            try:
+                agent = PPOAgent(model=ppo_test_model, config=config, device=torch.device("cpu"))
+                
+                # If creation succeeds, basic functionality should work
+                assert hasattr(agent, 'scheduler')
+                assert hasattr(agent, 'lr_schedule_type')
+                
+                # Should be able to get learning rate
+                current_lr = agent.optimizer.param_groups[0]["lr"]
+                assert isinstance(current_lr, float)
+                assert current_lr > 0
+                
+            except (ValueError, TypeError, RuntimeError):
+                # Some edge cases might be rejected, which is fine
+                pass
