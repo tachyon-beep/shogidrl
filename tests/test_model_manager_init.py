@@ -2,12 +2,11 @@
 Unit tests for ModelManager initialization and basic utilities.
 """
 
-import os
 import tempfile
 from unittest.mock import Mock, patch
 
 import pytest
-import torch  # Added torch import
+import torch
 
 from keisei.config_schema import (
     AppConfig,
@@ -19,8 +18,7 @@ from keisei.config_schema import (
     TrainingConfig,
     WandBConfig,
 )
-from keisei.core.ppo_agent import PPOAgent
-from keisei.training.model_manager import ModelManager  # Updated import path
+from keisei.training.model_manager import ModelManager
 
 
 class MockArgs:
@@ -39,7 +37,13 @@ class MockArgs:
 def mock_config():
     """Create a mock AppConfig for testing."""
     return AppConfig(
-        env=EnvConfig(device="cpu", num_actions_total=1, input_channels=1, seed=42),
+        env=EnvConfig(
+            device="cpu", 
+            num_actions_total=1, 
+            input_channels=1, 
+            seed=42,
+            max_moves_per_game=500
+        ),
         training=TrainingConfig(
             total_timesteps=1,
             steps_per_epoch=1,
@@ -65,9 +69,19 @@ def mock_config():
             checkpoint_interval_timesteps=1,
             evaluation_interval_timesteps=1,
             weight_decay=0.0,
+            normalize_advantages=True,
+            lr_schedule_type=None,
+            lr_schedule_kwargs=None,
+            lr_schedule_step_on="epoch",
         ),
         evaluation=EvaluationConfig(
-            num_games=1, opponent_type="random", evaluation_interval_timesteps=1
+            enable_periodic_evaluation=True,
+            num_games=1, 
+            opponent_type="random", 
+            evaluation_interval_timesteps=1,
+            max_moves_per_game=500,
+            log_file_path_eval="test_eval.log",
+            wandb_log_eval=False,
         ),
         logging=LoggingConfig(
             log_file="test.log", model_dir=tempfile.gettempdir(), run_name=None
@@ -80,6 +94,7 @@ def mock_config():
             watch_model=False,
             watch_log_freq=1,
             watch_log_type="all",
+            log_model_artifact=False,
         ),
         parallel=ParallelConfig(
             enabled=False,
@@ -184,7 +199,7 @@ class TestModelManagerInitialization:
         assert manager.model_type == "cnn"
         assert manager.tower_depth == 8
         assert manager.tower_width == 128
-        assert manager.se_ratio == 0.1
+        assert abs(manager.se_ratio - 0.1) < 1e-9  # Use approximate comparison for float
         assert manager.obs_shape == (20, 9, 9)
 
     @patch("keisei.training.model_manager.GradScaler")

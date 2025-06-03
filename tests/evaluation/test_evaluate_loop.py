@@ -5,10 +5,9 @@ Tests for the core evaluation loop functionality.
 import torch
 
 from keisei.evaluation.loop import run_evaluation_loop
-from keisei.utils import PolicyOutputMapper
 from keisei.utils.opponents import SimpleRandomOpponent
 
-from tests.evaluation.conftest import INPUT_CHANNELS, MockPPOAgent, make_test_config
+from tests.evaluation.conftest import MockPPOAgent, make_test_config
 
 
 def test_run_evaluation_loop_basic(eval_logger_setup, policy_mapper):
@@ -26,7 +25,7 @@ def test_run_evaluation_loop_basic(eval_logger_setup, policy_mapper):
     max_moves = 5  # Keep games short for testing
 
     with logger_context as logger:
-        results = run_evaluation_loop(agent_to_eval, opponent, num_games, logger, max_moves, policy_mapper)
+        results = run_evaluation_loop(agent_to_eval, opponent, num_games, logger, max_moves, policy_mapper)  # type: ignore
 
     assert results["games_played"] == num_games
     assert "agent_wins" in results
