@@ -43,9 +43,9 @@ def apply_mocks(mock_list):
 
 @apply_mocks(COMMON_MAIN_MOCKS)
 def test_execute_full_evaluation_run_basic_random(
-    mock_torch_seed,
-    mock_np_seed,
-    mock_random_seed,
+    mock_torch_seed,  # pylint: disable=unused-argument
+    mock_np_seed,  # pylint: disable=unused-argument
+    mock_random_seed,  # pylint: disable=unused-argument
     mock_policy_output_mapper_class,
     mock_load_agent,
     mock_init_opponent,
@@ -324,7 +324,7 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(
     agent_opponent_path = "./agent_opponent.pth"
 
     # Set up side effects for loading different agents
-    def load_agent_side_effect(checkpoint_path, device, pol_mapper, in_channels):
+    def load_agent_side_effect(checkpoint_path, device, pol_mapper, in_channels):  # pylint: disable=unused-argument
         if checkpoint_path == agent_eval_path:
             return mock_agent_to_eval
         if checkpoint_path == agent_opponent_path:
@@ -336,7 +336,7 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(
 
     # Set up opponent initialization side effect
     def init_opponent_side_effect(
-        opponent_type, opponent_path, device, pol_mapper, in_channels
+        opponent_type, opponent_path, device, pol_mapper, in_channels  # pylint: disable=unused-argument
     ):
         if opponent_type == "ppo" and opponent_path == agent_opponent_path:
             return mock_opponent_agent
