@@ -9,7 +9,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from keisei.config_schema import AppConfig
+from keisei.config_schema import EvaluationConfig
+from keisei.training.utils import setup_directories
 from keisei.utils import load_config
 
 
@@ -17,7 +18,7 @@ def test_config_schema_matches_yaml():
     """Test that all fields in default_config.yaml are defined in the schema."""
     # Load raw YAML
     config_path = Path(__file__).parent.parent / "default_config.yaml"
-    with open(config_path, "r") as f:
+    with open(config_path, "r", encoding="utf-8") as f:
         yaml_data = yaml.safe_load(f)
 
     # Load via Pydantic schema
@@ -39,8 +40,6 @@ def test_config_schema_matches_yaml():
 
 def test_training_log_file_configuration():
     """Test that training log file configuration is properly processed."""
-    from keisei.training.utils import setup_directories
-
     config = load_config()
     run_name = "test_run"
 
@@ -69,8 +68,6 @@ def test_evaluation_log_file_configuration():
 
 def test_config_validation_with_missing_fields():
     """Test that config validation works properly with schema."""
-    from keisei.config_schema import AppConfig, EvaluationConfig, WandBConfig
-
     # Test that evaluation config validates field values properly
     with pytest.raises(Exception):  # Pydantic validation error
         EvaluationConfig(
@@ -174,9 +171,9 @@ def test_config_with_custom_yaml():
         # Test custom values are loaded
         assert config.evaluation.log_file_path_eval == "custom_eval.log"
         assert config.logging.log_file == "custom_training.log"
-        assert config.wandb.log_model_artifact == True
-        assert config.evaluation.wandb_log_eval == True
-        assert config.demo.enable_demo_mode == True
+        assert config.wandb.log_model_artifact is True
+        assert config.evaluation.wandb_log_eval is True
+        assert config.demo.enable_demo_mode is True
 
     finally:
         os.unlink(temp_path)

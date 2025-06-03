@@ -77,6 +77,12 @@ class TrainingConfig(BaseModel):
         True,
         description="Enable advantage normalization in PPO training for improved stability.",
     )
+    
+    # Value function clipping configuration
+    enable_value_clipping: bool = Field(
+        False,
+        description="Enable value function loss clipping to stabilize training.",
+    )
 
     # Learning Rate Scheduling Configuration
     lr_schedule_type: Optional[str] = Field(

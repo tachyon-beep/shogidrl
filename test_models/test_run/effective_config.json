@@ -39,6 +39,7 @@
         "clip_epsilon": 0.2,
         "ddp": false,
         "enable_spinner": false,
+        "enable_value_clipping": false,
         "entropy_coef": 0.01,
         "evaluation_interval_timesteps": 1000,
         "gamma": 0.99,

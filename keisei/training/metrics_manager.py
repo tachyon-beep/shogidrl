@@ -118,6 +118,8 @@ class MetricsManager:
         """
         ppo_metrics_parts = []
 
+        if "ppo/learning_rate" in learn_metrics:
+            ppo_metrics_parts.append(f"LR:{learn_metrics['ppo/learning_rate']:.2e}")
         if "ppo/kl_divergence_approx" in learn_metrics:
             ppo_metrics_parts.append(
                 f"KL:{learn_metrics['ppo/kl_divergence_approx']:.4f}"

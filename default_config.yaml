@@ -1,46 +1,290 @@
-# Example Keisei DRL Shogi configuration (YAML)
+# =============================================================================
+# KEISEI DRL SHOGI - COMPREHENSIVE CONFIGURATION
+# =============================================================================
+# This configuration file contains all available settings with schema defaults and comprehensive documentation.
+# Each section corresponds to a configuration class in keisei/config_schema.py
+#
+# CONFIGURATION VALIDATION:
+# - TrainingConfig: 3 validators (learning_rate > 0, lr_schedule_type validation, lr_schedule_step_on validation)
+# - EvaluationConfig: 3 validators (evaluation_interval_timesteps > 0, num_games > 0, max_moves_per_game > 0)
+# - ParallelConfig: 2 validators (num_workers > 0, batch_size > 0)
+# - Other configs: No validators (validated through Pydantic field constraints)
+#
+# CROSS-CONFIGURATION DEPENDENCIES:
+# - Device coordination: env.device used across training and evaluation
+# - Seed management: env.seed provides base for worker seed offsets in parallel mode
+# - Move limits: env.max_moves_per_game should align with evaluation.max_moves_per_game
+# - Timing alignment: training.steps_per_epoch should divide evenly into evaluation.evaluation_interval_timesteps
+# - Logging integration: logging.run_name used by wandb for experiment naming
+#
+# USAGE PATTERNS:
+# - Direct access: config.section.field (e.g., config.training.learning_rate)
+# - Parameter extraction: getattr() patterns for optional fields
+# - Manager integration: Each config section integrates with specific manager classes
+# - Validation flow: Schema validation → field validators → cross-field consistency checks
+#
+# =============================================================================
+
+# =============================================================================
+# ENVIRONMENT CONFIGURATION (EnvConfig)
+# =============================================================================
+# Controls the training environment, device settings, and game parameters.
+# Used by: Environment setup, device management, action space validation
 env:
+  # Random seed for reproducible experiments across training runs
   seed: 42
+  
+  # Computation device: "cpu" for CPU-only, "cuda" for GPU acceleration
   device: "cpu"
+  
+  # Neural network input channels for the observation space
+  # Standard Shogi board representation uses 46 channels
   input_channels: 46
+  
+  # Total number of possible actions in the action space
+  # Standard Shogi has 13,527 possible moves considering all piece movements and drops
+  num_actions_total: 13527
+  
+  # Maximum moves per game before declaring a draw
+  # Prevents infinite games and controls episode length
   max_moves_per_game: 500
+# =============================================================================
+# TRAINING CONFIGURATION (TrainingConfig)
+# =============================================================================
+# Core PPO training parameters, model architecture, and optimization settings.
+# Used by: TrainingLoopManager, PPO optimizer, model checkpointing, learning rate scheduling
 training:
+  # --- Core PPO Hyperparameters ---
+  # Initial learning rate for the Adam optimizer
   learning_rate: 0.0003
+  
+  # Discount factor for future rewards (gamma in RL literature)
   gamma: 0.99
+  
+  # PPO clipping parameter to prevent large policy updates
   clip_epsilon: 0.2
-  ppo_epochs: 4
+  
+  # Number of PPO optimization epochs per collected experience buffer
+  ppo_epochs: 10
+  
+  # Mini-batch size for PPO gradient updates
   minibatch_size: 64
+  
+  # Coefficient for value function loss in the combined loss
   value_loss_coeff: 0.5
+  
+  # Entropy regularization coefficient to encourage exploration
   entropy_coef: 0.01
+  
+  # Number of environment steps to collect per PPO training epoch
   steps_per_epoch: 2048
+  
+  # Total number of environment steps for the entire training run
   total_timesteps: 500000
-  checkpoint_interval_timesteps: 2000
+  
+  # Save model checkpoint every N timesteps
+  checkpoint_interval_timesteps: 10000
+  
+  # --- Advanced PPO Settings ---
+  # Lambda parameter for Generalized Advantage Estimation (GAE)
+  lambda_gae: 0.95
+  
+  # Maximum gradient norm for gradient clipping (prevents exploding gradients)
+  gradient_clip_max_norm: 0.5
+  
+  # L2 regularization weight decay for optimizer
+  weight_decay: 0.0
+  
+  # Enable advantage normalization for improved training stability
+  normalize_advantages: true
+  
+  # Enable value function loss clipping for additional stability
+  enable_value_clipping: false
+  
+  # --- Model Architecture Configuration ---
+  # Feature set for observation builder ("core46" for standard 46-channel representation)
+  input_features: "core46"
+  
+  # Model architecture type (currently supports "resnet")
+  model_type: "resnet"
+  
+  # Number of residual blocks in the ResNet tower
+  tower_depth: 9
+  
+  # Number of channels/width in the ResNet tower
+  tower_width: 256
+  
+  # Squeeze-and-Excitation block ratio (0.0 disables SE blocks)
+  se_ratio: 0.25
+  
+  # --- Training Optimization ---
+  # Enable mixed-precision training for faster computation and reduced memory
+  mixed_precision: false
+  
+  # Enable DistributedDataParallel for multi-GPU training
+  ddp: false
+  
+  # --- Display and Progress Settings ---
+  # Update frequency for expensive UI elements to reduce flicker
+  render_every_steps: 1
+  
+  # Rich Live display refresh rate (updates per second)
+  refresh_per_second: 4
+  
+  # Enable animated spinner in progress display
+  enable_spinner: true
+  
+  # --- Learning Rate Scheduling Configuration ---
+  # Type of learning rate scheduler: "linear", "cosine", "exponential", "step", or null to disable
+  lr_schedule_type: null
+  
+  # When to step the scheduler: "epoch" (per PPO epoch) or "update" (per minibatch update)
+  lr_schedule_step_on: "epoch"
+  
+  # Scheduler-specific parameters (see examples below)
+  lr_schedule_kwargs: null
+  
+  # Example scheduler configurations (uncomment one to enable):
+  # Linear decay (recommended for PPO):
+  # lr_schedule_type: "linear"
+  # lr_schedule_kwargs:
+  #   final_lr_fraction: 0.1      # End at 10% of initial learning rate
+  
+  # Cosine annealing:
+  # lr_schedule_type: "cosine"
+  # lr_schedule_kwargs:
+  #   eta_min_fraction: 0.05      # Minimum LR as fraction of initial
+  
+  # Exponential decay:
+  # lr_schedule_type: "exponential"
+  # lr_schedule_step_on: "update"
+  # lr_schedule_kwargs:
+  #   gamma: 0.9995               # Decay factor per step
+  
+  # Step decay:
+  # lr_schedule_type: "step"
+  # lr_schedule_kwargs:
+  #   step_size: 50               # Decay every 50 epochs/updates
+  #   gamma: 0.5                  # Multiply by 0.5 at each step
+# =============================================================================
+# EVALUATION CONFIGURATION (EvaluationConfig)
+# =============================================================================
+# Periodic evaluation settings for assessing training progress.
+# Used by: PeriodicEvaluationCallback, Evaluator class, performance monitoring
 evaluation:
+  # Enable periodic evaluation during training (recommended for monitoring progress)
   enable_periodic_evaluation: true
-  evaluation_interval_timesteps: 10000
+  
+  # Run evaluation every N timesteps (should be multiple of steps_per_epoch)
+  evaluation_interval_timesteps: 50000
+  
+  # Number of games to play during each evaluation session
   num_games: 20
+  
+  # Type of opponent for evaluation games
+  # Options: "random" (random moves), "heuristic" (rule-based), or other implemented opponents
   opponent_type: "random"
+  
+  # Maximum moves per evaluation game (prevents infinite games)
   max_moves_per_game: 500
+  
+  # File path for evaluation game logs and results
   log_file_path_eval: "eval_log.txt"
+  
+  # Enable Weights & Biases logging for evaluation metrics
   wandb_log_eval: false
+# =============================================================================
+# LOGGING CONFIGURATION (LoggingConfig)
+# =============================================================================
+# File paths and settings for training logs and model storage.
+# Used by: TrainingLoopManager, model checkpointing, run identification
 logging:
-  model_dir: "models"
-  log_file: "training_log.txt"
+  # Directory for saving model checkpoints and training artifacts
+  # Automatically creates subdirectories for each training run
+  model_dir: "models/"
+  
+  # Main training log file path (includes progress, metrics, and debug info)
+  log_file: "logs/training_log.txt"
+  
+  # Optional custom name for this training run
+  # If null, auto-generates name based on timestamp and configuration
+  run_name: null
+# =============================================================================
+# WEIGHTS & BIASES CONFIGURATION (WandBConfig)
+# =============================================================================
+# Integration settings for Weights & Biases experiment tracking.
+# Used by: W&B logging, experiment tracking, model artifact storage, hyperparameter sweeps
 wandb:
+  # Enable Weights & Biases logging and experiment tracking
   enabled: true
+  
+  # W&B project name for organizing experiments
+  project: "keisei-shogi-rl"
+  
+  # W&B entity (username or team name) - null uses default account
   entity: null
+  
+  # Prefix for automatically generated run names
+  run_name_prefix: "keisei"
+  
+  # Enable wandb.watch() to log model gradients and parameters
+  watch_model: true
+  
+  # Frequency for wandb.watch() logging (every N training steps)
+  watch_log_freq: 1000
+  
+  # Type of data to log with wandb.watch(): "gradients", "parameters", or "all"
+  watch_log_type: "all"
+  
+  # Enable logging of model checkpoints as W&B artifacts
   log_model_artifact: false
 
+# =============================================================================
+# PARALLEL PROCESSING CONFIGURATION (ParallelConfig)
+# =============================================================================
+# Multi-worker parallel experience collection for faster training.
+# Used by: ParallelManager, worker process coordination, distributed training
 parallel:
-  enabled: false                  # Enable parallel experience collection
-  num_workers: 4                  # Number of parallel workers for experience collection
-  batch_size: 32                  # Batch size for experience transmission from workers
-  sync_interval: 100              # Steps between model weight synchronization
-  compression_enabled: true       # Enable compression for model weight transmission
-  timeout_seconds: 10.0           # Timeout for worker communication operations
-  max_queue_size: 1000            # Maximum size of experience queues
-  worker_seed_offset: 1000        # Offset for worker random seeds to ensure diversity
+  # Enable parallel experience collection with multiple worker processes
+  enabled: false
+  
+  # Number of parallel worker processes for experience collection
+  # Recommended: number of CPU cores - 1 (leave one for main process)
+  num_workers: 4
+  
+  # Batch size for experience transmission from workers to main process
+  # Larger batches reduce communication overhead but increase memory usage
+  batch_size: 32
+  
+  # Steps between model weight synchronization across workers
+  # Lower values ensure workers have more up-to-date policy, higher values reduce overhead
+  sync_interval: 100
+  
+  # Enable compression for model weight transmission to reduce bandwidth
+  compression_enabled: true
+  
+  # Timeout for worker communication operations (seconds)
+  # Prevents hanging if workers become unresponsive
+  timeout_seconds: 10.0
+  
+  # Maximum size of experience queues between workers and main process
+  # Prevents memory overflow if main process falls behind in processing
+  max_queue_size: 1000
+  
+  # Random seed offset for worker processes to ensure diverse experience collection
+  # Worker i gets seed = base_seed + (i * worker_seed_offset)
+  worker_seed_offset: 1000
 
+# =============================================================================
+# DEMO MODE CONFIGURATION (DemoConfig)
+# =============================================================================
+# Settings for demo mode with visual move-by-move display.
+# Used by: StepManager for interactive demonstrations and debugging
 demo:
-  enable_demo_mode: false  # If true, enables demo mode with per-move delay and extra logging
-  demo_mode_delay: 0.01     # Delay in seconds between moves in demo mode
+  # Enable demo mode with per-move delays and enhanced logging
+  # Useful for visualizing agent behavior and debugging game sequences
+  enable_demo_mode: false
+  
+  # Delay in seconds between moves in demo mode
+  # Allows human observation of the game progression
+  demo_mode_delay: 0.5
