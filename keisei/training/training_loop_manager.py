@@ -129,8 +129,8 @@ class TrainingLoopManager:
                         also_to_wandb=True,
                     )
 
-                for callback_item in self.callbacks:
-                    callback_item.on_step_end(self.trainer)
+                # Execute step callbacks using centralized callback manager with error handling
+                self.trainer.callback_manager.execute_step_callbacks(self.trainer)
 
         except KeyboardInterrupt:
             log_both(
@@ -212,7 +212,7 @@ class TrainingLoopManager:
 
                     if experiences_collected > 0:
                         num_steps_collected += experiences_collected
-                        self.trainer.metrics_manager.global_timestep += (
+                        self.trainer.metrics_manager.increment_timestep_by(
                             experiences_collected
                         )
                         # Fix B11: Update SPS calculation counter for parallel mode
@@ -360,7 +360,7 @@ class TrainingLoopManager:
             self.episode_state, step_result, log_both
         )
 
-        self.trainer.metrics_manager.global_timestep += 1
+        self.trainer.metrics_manager.increment_timestep()
         self.steps_since_last_time_for_sps += 1
         return True  # Continue epoch
 

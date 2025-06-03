@@ -5,57 +5,71 @@ training/utils.py: Helper functions for setup and configuration in the Shogi RL 
 import glob
 import json
 import os
+import pickle
 import random
 import sys
-from typing import Any
+from typing import Optional
 
 import numpy as np
 import torch
 
 import wandb
+from keisei.config_schema import AppConfig
 
 
-def find_latest_checkpoint(model_dir_path):
+def _validate_checkpoint(checkpoint_path: str) -> bool:
+    """Validate checkpoint file integrity by attempting to load it.
+    
+    Args:
+        checkpoint_path: Path to checkpoint file to validate
+        
+    Returns:
+        True if checkpoint loads successfully, False otherwise
+    """
+    try:
+        # Attempt minimal load to check file integrity
+        torch.load(checkpoint_path, map_location='cpu')
+        return True
+    except (OSError, RuntimeError, EOFError, pickle.UnpicklingError) as e:
+        print(f"Corrupted checkpoint {checkpoint_path}: {e}", file=sys.stderr)
+        return False
+
+
+def find_latest_checkpoint(model_dir_path: str) -> Optional[str]:
     try:
         checkpoints = glob.glob(os.path.join(model_dir_path, "*.pth"))
         if not checkpoints:
             checkpoints = glob.glob(os.path.join(model_dir_path, "*.pt"))
         if not checkpoints:
             return None
+        
+        # Sort checkpoints by modification time (newest first)
         checkpoints.sort(key=os.path.getmtime, reverse=True)
-        return checkpoints[0]
-    except (OSError, FileNotFoundError) as e:
+        
+        # Find the first valid (non-corrupted) checkpoint
+        for checkpoint_path in checkpoints:
+            if _validate_checkpoint(checkpoint_path):
+                return checkpoint_path
+        
+        # If we get here, all checkpoints are corrupted
+        print("All checkpoint files in directory are corrupted or unreadable", file=sys.stderr)
+        return None
+        
+    except OSError as e:
         print(f"Error in find_latest_checkpoint: {e}", file=sys.stderr)
         return None
 
 
-def serialize_config(config_obj: Any) -> str:
-    if hasattr(config_obj, "dict"):
-        conf_dict = config_obj.dict()
-    else:
-        conf_dict = {}
-        if hasattr(config_obj, "__dict__"):
-            source_dict = config_obj.__dict__
-        elif isinstance(config_obj, dict):
-            source_dict = config_obj
-        else:
-            source_dict = {
-                key: getattr(config_obj, key)
-                for key in dir(config_obj)
-                if not key.startswith("__") and not callable(getattr(config_obj, key))
-            }
-        for k, v in source_dict.items():
-            if isinstance(v, (int, float, str, bool, list, dict, tuple)) or v is None:
-                conf_dict[k] = v
-            elif hasattr(v, "dict"):
-                conf_dict[k] = v.dict()
-            elif hasattr(v, "__dict__"):
-                conf_dict[k] = json.loads(serialize_config(v))
-    try:
-        return json.dumps(conf_dict, indent=4, sort_keys=True)
-    except TypeError as e:
-        print(f"Error serializing config: {e}", file=sys.stderr)
-        return "{}"
+def serialize_config(config: AppConfig) -> str:
+    """Serialize AppConfig to JSON string using Pydantic's built-in serialization.
+    
+    Args:
+        config: AppConfig instance to serialize
+        
+    Returns:
+        JSON string representation of the configuration
+    """
+    return config.model_dump_json(indent=4)
 
 
 def setup_directories(config, run_name):
@@ -113,3 +127,42 @@ def setup_wandb(config, run_name, run_artifact_dir):
             file=sys.stderr,
         )
     return is_active
+
+
+def apply_wandb_sweep_config():
+    """Apply W&B sweep configuration to override parameters.
+
+    Returns:
+        Dict[str, Any]: Dictionary of configuration overrides extracted from sweep parameters.
+                       Empty dict if no W&B sweep is active.
+    """
+    if wandb.run is None:
+        return {}
+
+    sweep_config = wandb.config
+    print(f"Running W&B sweep with config: {dict(sweep_config)}")
+
+    # Map W&B sweep parameters to config paths
+    sweep_param_mapping = {
+        "learning_rate": "training.learning_rate",
+        "gamma": "training.gamma",
+        "clip_epsilon": "training.clip_epsilon",
+        "ppo_epochs": "training.ppo_epochs",
+        "minibatch_size": "training.minibatch_size",
+        "value_loss_coeff": "training.value_loss_coeff",
+        "entropy_coef": "training.entropy_coef",
+        "tower_depth": "training.tower_depth",
+        "tower_width": "training.tower_width",
+        "se_ratio": "training.se_ratio",
+        "steps_per_epoch": "training.steps_per_epoch",
+        "gradient_clip_max_norm": "training.gradient_clip_max_norm",
+        "lambda_gae": "training.lambda_gae",
+    }
+
+    # Apply sweep parameters as overrides
+    sweep_overrides = {"wandb.enabled": True}  # Force enable W&B for sweeps
+    for sweep_key, config_path in sweep_param_mapping.items():
+        if hasattr(sweep_config, sweep_key):
+            sweep_overrides[config_path] = getattr(sweep_config, sweep_key)
+
+    return sweep_overrides

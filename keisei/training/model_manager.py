@@ -11,6 +11,7 @@ This module handles model-related concerns including:
 
 import os
 import shutil
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import torch
@@ -265,8 +266,8 @@ class ModelManager:
             # Add the model file
             artifact.add_file(model_path)
 
-            # Log the artifact with optional aliases
-            wandb.log_artifact(artifact, aliases=aliases)
+            # Log the artifact with retry logic for network failures
+            self._log_artifact_with_retry(artifact, aliases, model_path)
 
             aliases_str = f" with aliases {aliases}" if aliases else ""
             self.logger_func(
@@ -281,6 +282,44 @@ class ModelManager:
         except (OSError, RuntimeError, TypeError, ValueError) as e:
             self.logger_func(f"Error creating W&B artifact for {model_path}: {e}")
             return False
+
+    def _log_artifact_with_retry(
+        self,
+        artifact,
+        aliases: Optional[List[str]],
+        model_path: str,
+        max_retries: int = 3,
+        backoff_factor: float = 2.0,
+    ) -> None:
+        """
+        Log WandB artifact with retry logic for network failures.
+
+        Args:
+            artifact: WandB artifact to log
+            aliases: Optional list of aliases for the artifact
+            model_path: Path to model file (for error logging)
+            max_retries: Maximum number of retry attempts (default: 3)
+            backoff_factor: Multiplier for exponential backoff (default: 2.0)
+
+        Raises:
+            Exception: Re-raises the last exception if all retries fail
+        """
+        for attempt in range(max_retries):
+            try:
+                wandb.log_artifact(artifact, aliases=aliases)
+                return  # Success, exit retry loop
+            except (ConnectionError, TimeoutError, RuntimeError) as e:
+                if attempt == max_retries - 1:
+                    # Last attempt failed, re-raise the exception
+                    raise e
+
+                # Calculate backoff delay with exponential growth
+                delay = backoff_factor ** attempt
+                self.logger_func(
+                    f"WandB artifact upload attempt {attempt + 1} failed for {model_path}: {e}. "
+                    f"Retrying in {delay:.1f} seconds..."
+                )
+                time.sleep(delay)
 
     def save_final_model(
         self,

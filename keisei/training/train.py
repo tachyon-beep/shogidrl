@@ -7,13 +7,13 @@ import argparse
 import multiprocessing
 import sys
 
-import wandb  # Add wandb import for sweep support
 from keisei.config_schema import AppConfig
 
 # Import config module and related components
 from keisei.utils import load_config
 
 from .trainer import Trainer
+from .utils import apply_wandb_sweep_config
 
 
 def main():
@@ -107,41 +107,8 @@ def main():
     )
     args = parser.parse_args()
 
-    # Check if we're running inside a W&B sweep
-    if wandb.run is not None:
-        # We're inside a W&B sweep, use sweep config to override parameters
-        sweep_config = wandb.config
-        print(f"Running W&B sweep with config: {dict(sweep_config)}")
-
-        # Convert W&B sweep config to CLI overrides
-        sweep_overrides = {}
-
-        # Map W&B sweep parameters to config paths
-        sweep_param_mapping = {
-            "learning_rate": "training.learning_rate",
-            "gamma": "training.gamma",
-            "clip_epsilon": "training.clip_epsilon",
-            "ppo_epochs": "training.ppo_epochs",
-            "minibatch_size": "training.minibatch_size",
-            "value_loss_coeff": "training.value_loss_coeff",
-            "entropy_coef": "training.entropy_coef",
-            "tower_depth": "training.tower_depth",
-            "tower_width": "training.tower_width",
-            "se_ratio": "training.se_ratio",
-            "steps_per_epoch": "training.steps_per_epoch",
-            "gradient_clip_max_norm": "training.gradient_clip_max_norm",
-            "lambda_gae": "training.lambda_gae",
-        }
-
-        # Apply sweep parameters as overrides
-        for sweep_key, config_path in sweep_param_mapping.items():
-            if hasattr(sweep_config, sweep_key):
-                sweep_overrides[config_path] = getattr(sweep_config, sweep_key)
-
-        # Force enable W&B for sweeps
-        sweep_overrides["wandb.enabled"] = True
-    else:
-        sweep_overrides = {}
+    # Get W&B sweep overrides if running in a sweep
+    sweep_overrides = apply_wandb_sweep_config()
 
     # Build CLI overrides dict (dot notation)
     cli_overrides = {}

@@ -202,6 +202,17 @@ class MetricsManager:
         """Increment the global timestep counter."""
         self.stats.global_timestep += 1
 
+    def increment_timestep_by(self, amount: int) -> None:
+        """
+        Increment the global timestep counter by a specific amount.
+
+        Args:
+            amount: Number of timesteps to add
+        """
+        if amount < 0:
+            raise ValueError("Timestep increment amount must be non-negative")
+        self.stats.global_timestep += amount
+
     # === Properties for Backward Compatibility ===
 
     @property
