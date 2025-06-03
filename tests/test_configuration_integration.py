@@ -74,14 +74,36 @@ def test_config_validation_with_missing_fields():
     # Test that evaluation config validates field values properly
     with pytest.raises(Exception):  # Pydantic validation error
         EvaluationConfig(
-            evaluation_interval_timesteps=-1
-        )  # Invalid negative value should fail
+            enable_periodic_evaluation=True,
+            evaluation_interval_timesteps=-1,  # Invalid negative value should fail
+            num_games=20,
+            opponent_type="random",
+            max_moves_per_game=500,
+            log_file_path_eval="eval_log.txt",
+            wandb_log_eval=False,
+        )
 
     with pytest.raises(Exception):  # Pydantic validation error
-        EvaluationConfig(num_games=0)  # Invalid zero value should fail
+        EvaluationConfig(
+            enable_periodic_evaluation=True,
+            evaluation_interval_timesteps=1000,
+            num_games=0,  # Invalid zero value should fail
+            opponent_type="random",
+            max_moves_per_game=500,
+            log_file_path_eval="eval_log.txt",
+            wandb_log_eval=False,
+        )
 
     with pytest.raises(Exception):  # Pydantic validation error
-        EvaluationConfig(max_moves_per_game=-10)  # Invalid negative value should fail
+        EvaluationConfig(
+            enable_periodic_evaluation=True,
+            evaluation_interval_timesteps=1000,
+            num_games=20,
+            opponent_type="random",
+            max_moves_per_game=-10,  # Invalid negative value should fail
+            log_file_path_eval="eval_log.txt",
+            wandb_log_eval=False,
+        )
 
     # Test that minimal valid config works
     eval_config = EvaluationConfig(

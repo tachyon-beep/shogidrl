@@ -70,11 +70,19 @@ def mock_config():
             checkpoint_interval_timesteps=10000,
             evaluation_interval_timesteps=50000,
             weight_decay=0.0,
+            normalize_advantages=True,
+            lr_schedule_type=None,
+            lr_schedule_kwargs=None,
+            lr_schedule_step_on="epoch",
         ),
         evaluation=EvaluationConfig(
+            enable_periodic_evaluation=True,
             num_games=20,
             opponent_type="random",
             evaluation_interval_timesteps=50000,
+            max_moves_per_game=500,
+            log_file_path_eval="eval_log.txt",
+            wandb_log_eval=False,
         ),
         logging=LoggingConfig(
             log_file="test.log",
@@ -89,6 +97,7 @@ def mock_config():
             watch_model=False,
             watch_log_freq=1000,
             watch_log_type="all",
+            log_model_artifact=False,
         ),
         demo=DemoConfig(
             enable_demo_mode=False,
