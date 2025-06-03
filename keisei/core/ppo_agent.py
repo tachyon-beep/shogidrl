@@ -29,6 +29,8 @@ class PPOAgent:
         config: AppConfig,
         device: torch.device,
         name: str = "PPOAgent",
+        scaler=None,
+        use_mixed_precision: bool = False,
     ):
         """
         Initialize the PPOAgent with model, optimizer, and PPO hyperparameters.
@@ -42,6 +44,10 @@ class PPOAgent:
         self.config = config
         self.device = device
         self.name = name
+
+        # Mixed precision support
+        self.scaler = scaler
+        self.use_mixed_precision = use_mixed_precision
 
         # Direct model assignment (dependency injection)
         self.model: ActorCriticProtocol = model.to(self.device)
@@ -251,6 +257,7 @@ class PPOAgent:
             0.0,
             0.0,
         )
+        total_kl_div = 0.0
         num_updates = 0
 
         for _ in range(self.ppo_epochs):
@@ -269,14 +276,27 @@ class PPOAgent:
                 # Get new log_probs, entropy, and value from the model
                 # Note on entropy: legal_mask is now passed here. Entropy is calculated
                 # over legal actions only.
-                new_log_probs, entropy, new_values = self.model.evaluate_actions(
-                    obs_minibatch,
-                    actions_minibatch,
-                    legal_mask=legal_masks_minibatch,
-                )
+                if self.use_mixed_precision and self.scaler:
+                    # Mixed precision forward pass
+                    with torch.cuda.amp.autocast():
+                        new_log_probs, entropy, new_values = self.model.evaluate_actions(
+                            obs_minibatch,
+                            actions_minibatch,
+                            legal_mask=legal_masks_minibatch,
+                        )
+                else:
+                    # Standard precision forward pass
+                    new_log_probs, entropy, new_values = self.model.evaluate_actions(
+                        obs_minibatch,
+                        actions_minibatch,
+                        legal_mask=legal_masks_minibatch,
+                    )
 
                 # PPO Loss Calculation
                 ratio = torch.exp(new_log_probs - old_log_probs_minibatch)
+
+                # Calculate KL divergence approximation
+                kl_div = (old_log_probs_minibatch - new_log_probs).mean()
 
                 # Clipped surrogate objective
                 surr1 = ratio * advantages_minibatch
@@ -302,12 +322,28 @@ class PPOAgent:
                 )
 
                 self.optimizer.zero_grad()
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(),
-                    max_norm=self.gradient_clip_max_norm,  # Use config value
-                )  # Optional: gradient clipping
-                self.optimizer.step()
+                
+                # Fix B4: Use mixed precision for backward pass if enabled
+                if self.use_mixed_precision and self.scaler:
+                    # Mixed precision backward pass
+                    self.scaler.scale(loss).backward()
+                    # Unscale gradients before clipping
+                    self.scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(),
+                        max_norm=self.gradient_clip_max_norm,
+                    )
+                    # Update with scaler
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+                else:
+                    # Standard precision backward pass
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(),
+                        max_norm=self.gradient_clip_max_norm,
+                    )
+                    self.optimizer.step()
 
                 # Step scheduler on minibatch update if configured
                 if self.scheduler is not None and self.lr_schedule_step_on == "update":
@@ -316,6 +352,7 @@ class PPOAgent:
                 total_policy_loss_epoch += policy_loss.item()
                 total_value_loss_epoch += value_loss.item()
                 total_entropy_epoch += entropy_loss.item()
+                total_kl_div += kl_div.item()
                 num_updates += 1
 
         # Step scheduler on epoch if configured
@@ -332,12 +369,17 @@ class PPOAgent:
             total_value_loss_epoch / num_updates if num_updates > 0 else 0.0
         )
         avg_entropy = total_entropy_epoch / num_updates if num_updates > 0 else 0.0
+        avg_kl_div = total_kl_div / num_updates if num_updates > 0 else 0.0
+        
+        # Update tracked KL divergence
+        self.last_kl_div = avg_kl_div
+        
         # Compile metrics
         return {
             "ppo/policy_loss": avg_policy_loss,
             "ppo/value_loss": avg_value_loss,
             "ppo/entropy": avg_entropy,
-            "ppo/kl_divergence_approx": self.last_kl_div,
+            "ppo/kl_divergence_approx": avg_kl_div,
             "ppo/learning_rate": current_lr,
         }
 

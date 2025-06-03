@@ -241,20 +241,34 @@ class SessionManager:
         """Finalize the training session."""
         if self._is_wandb_active and wandb.run:
             try:
-                # Set a short timeout for WandB finalization to avoid hanging
-                import signal
+                # Fix B5: Use cross-platform threading.Timer instead of POSIX signal
+                import threading
+                
+                timeout_occurred = threading.Event()
+                
+                def timeout_handler():
+                    timeout_occurred.set()
 
-                def timeout_handler(signum, frame):
-                    raise TimeoutError("WandB finalization timed out")
-
-                # Set up timeout (10 seconds)
-                signal.signal(signal.SIGALRM, timeout_handler)
-                signal.alarm(10)
+                # Set up timeout (10 seconds) - cross-platform compatible
+                timer = threading.Timer(10.0, timeout_handler)
+                timer.start()
 
                 try:
-                    wandb.finish()
+                    # Check periodically if timeout occurred
+                    import time
+                    start_time = time.time()
+                    while not timeout_occurred.is_set() and (time.time() - start_time) < 10:
+                        try:
+                            wandb.finish()
+                            break  # Success, exit loop
+                        except Exception:
+                            time.sleep(0.1)  # Brief wait before retry
+                    
+                    if timeout_occurred.is_set():
+                        raise TimeoutError("WandB finalization timed out")
+                        
                 finally:
-                    signal.alarm(0)  # Cancel the alarm
+                    timer.cancel()  # Cancel the timer
 
             except (KeyboardInterrupt, TimeoutError):
                 print(

@@ -177,6 +177,9 @@ def main():
 
 
 if __name__ == "__main__":
+    # Fix B6: Add multiprocessing.freeze_support() for Windows compatibility
+    multiprocessing.freeze_support()
+    
     # Set multiprocessing start method for safety, especially with CUDA
     try:
         if multiprocessing.get_start_method(allow_none=True) != "spawn":

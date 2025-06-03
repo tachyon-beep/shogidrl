@@ -93,6 +93,19 @@ class TrainingLoopManager:
         self.steps_since_last_time_for_sps = 0
         self.last_display_update_time = time.time()
 
+        # Start parallel workers if parallel training is enabled
+        if self.parallel_manager and self.config.parallel.enabled:
+            if self.trainer.agent and self.trainer.agent.model:
+                log_both(f"Starting {self.config.parallel.num_workers} parallel workers...")
+                if self.parallel_manager.start_workers(self.trainer.agent.model):
+                    log_both("Parallel workers started successfully")
+                else:
+                    log_both("Failed to start parallel workers, falling back to sequential training")
+                    self.parallel_manager = None
+            else:
+                log_both("Cannot start parallel workers: model not available")
+                self.parallel_manager = None
+
         try:
             while self.trainer.global_timestep < self.config.training.total_timesteps:
                 self.current_epoch += 1
@@ -202,6 +215,8 @@ class TrainingLoopManager:
                         self.trainer.metrics_manager.global_timestep += (
                             experiences_collected
                         )
+                        # Fix B11: Update SPS calculation counter for parallel mode
+                        self.steps_since_last_time_for_sps += experiences_collected
 
                         log_both(
                             f"Collected {experiences_collected} experiences from workers "

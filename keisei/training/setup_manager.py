@@ -89,6 +89,8 @@ class SetupManager:
             model=model,
             config=self.config,
             device=self.device,
+            scaler=model_manager.scaler,
+            use_mixed_precision=model_manager.use_mixed_precision,
         )
 
         experience_buffer = ExperienceBuffer(

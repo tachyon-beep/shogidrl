@@ -287,7 +287,7 @@ class StepManager:
         self,
         episode_state: EpisodeState,
         step_result: StepResult,
-        game_stats: Dict[str, int],  # Will be modified in place
+        game_stats: Dict[str, int],  # Read-only, not modified
         total_episodes_completed: int,
         logger_func: Callable[..., None],
     ) -> Tuple[EpisodeState, Optional[str]]:  # Return tuple
@@ -297,7 +297,7 @@ class StepManager:
         Args:
             episode_state: Current episode state
             step_result: Result from the final step of the episode
-            game_stats: Running game statistics (e.g., black_wins, white_wins, draws) - WILL BE MODIFIED IN PLACE.
+            game_stats: Running game statistics (e.g., black_wins, white_wins, draws) - READ ONLY (not modified)
             total_episodes_completed: Total episodes completed so far (before this one)
             logger_func: Function for logging messages
 
@@ -311,31 +311,33 @@ class StepManager:
             final_winner_color, reason_from_info
         )
 
-        # Update game_stats in place with the outcome of the current episode
+        # Fix B2: Don't modify game_stats in place to avoid double counting
+        # Create a temporary copy for win rate calculations only
+        temp_game_stats = game_stats.copy()
         if final_winner_color == "black":
-            game_stats["black_wins"] += 1
+            temp_game_stats["black_wins"] += 1
         elif final_winner_color == "white":
-            game_stats["white_wins"] += 1
+            temp_game_stats["white_wins"] += 1
         elif final_winner_color is None:  # Draw
-            game_stats["draws"] += 1
+            temp_game_stats["draws"] += 1
 
-        # Calculate win rates for logging using the *updated* game_stats
+        # Calculate win rates for logging using the temporary game_stats
         updated_total_games = (
-            game_stats["black_wins"] + game_stats["white_wins"] + game_stats["draws"]
+            temp_game_stats["black_wins"] + temp_game_stats["white_wins"] + temp_game_stats["draws"]
         )
 
         updated_black_win_rate = (
-            game_stats["black_wins"] / updated_total_games
+            temp_game_stats["black_wins"] / updated_total_games
             if updated_total_games > 0
             else 0.0
         )
         updated_white_win_rate = (
-            game_stats["white_wins"] / updated_total_games
+            temp_game_stats["white_wins"] / updated_total_games
             if updated_total_games > 0
             else 0.0
         )
         updated_draw_rate = (
-            game_stats["draws"] / updated_total_games
+            temp_game_stats["draws"] / updated_total_games
             if updated_total_games > 0
             else 0.0
         )
@@ -350,9 +352,9 @@ class StepManager:
                 "episode_length": episode_state.episode_length,
                 "game_outcome": final_winner_color,
                 "game_reason": reason_from_info,
-                "black_wins_total": game_stats["black_wins"],
-                "white_wins_total": game_stats["white_wins"],
-                "draws_total": game_stats["draws"],
+                "black_wins_total": temp_game_stats["black_wins"],  # Use updated totals for logging
+                "white_wins_total": temp_game_stats["white_wins"],  # Use updated totals for logging
+                "draws_total": temp_game_stats["draws"],  # Use updated totals for logging
                 "black_win_rate": updated_black_win_rate,  # Corrected key
                 "white_win_rate": updated_white_win_rate,  # Corrected key
                 "draw_rate": updated_draw_rate,  # Corrected key
