@@ -211,6 +211,7 @@ class Evaluator:
                     self.num_games,
                     logger,
                     self.max_moves_per_game,
+                    self.policy_mapper,
                 )
                 logger.log(f"[Evaluator] Evaluation Summary: {results_summary}")
         except (RuntimeError, ValueError, OSError, TypeError, AttributeError) as e:

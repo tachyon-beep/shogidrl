@@ -68,7 +68,7 @@ def test_initialize_opponent_unknown_type(policy_mapper):
 def test_initialize_opponent_ppo(mock_load_agent, policy_mapper):
     """Test that initialize_opponent returns a PPOAgent when type is 'ppo' and path is provided."""
     mock_ppo_instance = MockPPOAgent(
-        config=make_test_config("cpu", INPUT_CHANNELS, PolicyOutputMapper()),
+        config=make_test_config(),
         device=torch.device("cpu"),
         name="MockPPOAgentForTest",
     )

@@ -12,6 +12,7 @@ import torch
 from keisei.core.ppo_agent import PPOAgent
 from keisei.evaluation.evaluate import Evaluator
 from keisei.utils.utils import BaseOpponent
+from tests.evaluation.conftest import make_test_config
 
 
 def test_evaluator_class_basic(monkeypatch, tmp_path, policy_mapper):
@@ -31,9 +32,8 @@ def test_evaluator_class_basic(monkeypatch, tmp_path, policy_mapper):
         def __init__(self):
             from keisei.core.neural_network import ActorCritic
             from keisei.utils import PolicyOutputMapper
-            from tests.evaluation.conftest import make_test_config
-
-            config = make_test_config("cpu", 46, PolicyOutputMapper())
+            
+            config = make_test_config()
             policy_mapper_instance = PolicyOutputMapper()
             mock_model = ActorCritic(
                 config.env.input_channels, policy_mapper_instance.get_total_actions()

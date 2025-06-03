@@ -9,50 +9,49 @@ W&B integration, and seeding.
 from unittest.mock import MagicMock, patch
 
 import pytest
-import torch
 
 from keisei.core.ppo_agent import PPOAgent
 from keisei.evaluation.evaluate import execute_full_evaluation_run
 from keisei.utils.utils import EvaluationLogger
-from keisei.utils.opponents import SimpleHeuristicOpponent, SimpleRandomOpponent
+from keisei.utils.opponents import SimpleHeuristicOpponent
+from keisei.utils.opponents import SimpleRandomOpponent
 from keisei.utils import PolicyOutputMapper
-from tests.evaluation.conftest import INPUT_CHANNELS, MockPPOAgent, make_test_config
 
 
 # Mock decorators for execute_full_evaluation_run tests
 COMMON_MAIN_MOCKS = [
-    patch("keisei.evaluation.evaluate.PolicyOutputMapper"),
-    patch("keisei.evaluation.evaluate.load_evaluation_agent"),
-    patch("keisei.evaluation.evaluate.initialize_opponent"),
-    patch("keisei.evaluation.evaluate.run_evaluation_loop"),
-    patch("keisei.evaluation.evaluate.EvaluationLogger"),
-    patch("random.seed"),
-    patch("numpy.random.seed"),
-    patch("torch.manual_seed"),
-    patch("keisei.evaluation.evaluate.load_config"),
+    "keisei.evaluation.evaluate.load_config",
+    "keisei.evaluation.evaluate.EvaluationLogger",  
+    "keisei.evaluation.evaluate.run_evaluation_loop",
+    "keisei.evaluation.evaluate.initialize_opponent",
+    "keisei.evaluation.evaluate.load_evaluation_agent",
+    "keisei.evaluation.evaluate.PolicyOutputMapper",
+    "random.seed",
+    "numpy.random.seed", 
+    "torch.manual_seed",
 ]
 
 
-def apply_mocks(mocks):
+def apply_mocks(mock_list):
     """Helper decorator to apply multiple patches consistently."""
     def decorator(func):
-        for mock in reversed(mocks):
-            func = mock(func)
+        for mock_path in reversed(mock_list):
+            func = patch(mock_path)(func)
         return func
     return decorator
 
 
 @apply_mocks(COMMON_MAIN_MOCKS)
 def test_execute_full_evaluation_run_basic_random(
-    mock_load_config,
     mock_torch_seed,
     mock_np_seed,
     mock_random_seed,
-    mock_eval_logger_class,
-    mock_run_loop,
-    mock_init_opponent,
-    mock_load_agent,
     mock_policy_output_mapper_class,
+    mock_load_agent,
+    mock_init_opponent,
+    mock_run_loop,
+    mock_eval_logger_class,
+    mock_load_config,
     mock_wandb_disabled,
     tmp_path,
 ):
@@ -134,6 +133,7 @@ def test_execute_full_evaluation_run_basic_random(
     assert pos_args[2] == num_games_to_run
     assert pos_args[3] == mock_logger_instance
     assert pos_args[4] == max_moves_for_game
+    assert pos_args[5] == policy_mapper_instance  # Now includes policy_mapper parameter
     assert not kw_args
 
     mock_wandb_disabled["init"].assert_not_called()
@@ -146,15 +146,15 @@ def test_execute_full_evaluation_run_basic_random(
 
 @apply_mocks(COMMON_MAIN_MOCKS)
 def test_execute_full_evaluation_run_heuristic_opponent_with_wandb(
-    mock_load_config,
     mock_torch_seed,
     mock_np_seed,
     mock_random_seed,
-    mock_eval_logger_class,
-    mock_run_loop,
-    mock_init_opponent,
-    mock_load_agent,
     mock_policy_output_mapper_class,
+    mock_load_agent,
+    mock_init_opponent,
+    mock_run_loop,
+    mock_eval_logger_class,
+    mock_load_config,
     mock_wandb_active,
     tmp_path,
 ):
@@ -246,6 +246,7 @@ def test_execute_full_evaluation_run_heuristic_opponent_with_wandb(
     assert run_loop_pos_args[2] == num_games_to_run
     assert run_loop_pos_args[3] == mock_logger_instance
     assert run_loop_pos_args[4] == max_moves_for_game
+    assert run_loop_pos_args[5] == policy_mapper_instance  # Now includes policy_mapper parameter
     assert not run_loop_kwargs
 
     # Verify W&B integration
@@ -285,15 +286,15 @@ def test_execute_full_evaluation_run_heuristic_opponent_with_wandb(
 
 @apply_mocks(COMMON_MAIN_MOCKS)
 def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(
-    mock_load_config,
     mock_torch_seed,
     mock_np_seed,
     mock_random_seed,
-    mock_eval_logger_class,
-    mock_run_loop,
-    mock_init_opponent,
-    mock_load_agent,
     mock_policy_output_mapper_class,
+    mock_load_agent,
+    mock_init_opponent,
+    mock_run_loop,
+    mock_eval_logger_class,
+    mock_load_config,
     mock_wandb_active,
     tmp_path,
 ):
@@ -351,7 +352,6 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(
     mock_init_opponent.side_effect = init_opponent_side_effect
 
     mock_logger_instance = MagicMock(spec=EvaluationLogger)
-    mock_eval_logger_class.return_value = MagicMock()  # Context manager mock
     mock_eval_logger_class.return_value.__enter__.return_value = mock_logger_instance
 
     expected_results = {
@@ -416,6 +416,7 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(
     assert run_loop_pos_args[2] == num_games_val
     assert run_loop_pos_args[3] == mock_logger_instance
     assert run_loop_pos_args[4] == max_moves_val
+    assert run_loop_pos_args[5] == policy_mapper_instance  # Now includes policy_mapper parameter
     assert not run_loop_kwargs
 
     # Verify W&B integration
@@ -455,15 +456,15 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(
 
 @apply_mocks(COMMON_MAIN_MOCKS)
 def test_execute_full_evaluation_run_with_seed(
-    mock_load_config,
     mock_torch_seed,
     mock_np_seed,
     mock_random_seed,
-    mock_eval_logger_class,
-    mock_run_loop,
-    mock_init_opponent,
-    mock_load_agent,
     mock_policy_output_mapper_class,
+    mock_load_agent,
+    mock_init_opponent,
+    mock_run_loop,
+    mock_eval_logger_class,
+    mock_load_config,
     mock_wandb_disabled,
     tmp_path,
 ):

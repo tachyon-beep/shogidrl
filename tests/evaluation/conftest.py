@@ -1,333 +1,79 @@
 """
-Common fixtures and utilities for evaluation tests.
+Shared fixtures and utilities for evaluation tests.
+
+This module contains common test fixtures, constants, and mock classes
+used across all evaluation test modules.
 """
 
-import os
-import tempfile
-from unittest.mock import MagicMock
-
-import numpy as np
+from unittest.mock import MagicMock, Mock
+from keisei.config_schema import AppConfig, EnvConfig, EvaluationConfig, LoggingConfig, TrainingConfig, WandBConfig, DemoConfig, ParallelConfig
+from keisei.utils import PolicyOutputMapper
 import pytest
-import torch
 
-from keisei.config_schema import (
-    AppConfig,
-    DemoConfig,
-    EnvConfig,
-    EvaluationConfig,
-    LoggingConfig,
-    ParallelConfig,
-    TrainingConfig,
-    WandBConfig,
-)
-from keisei.core.ppo_agent import PPOAgent
-from keisei.shogi.shogi_core_definitions import MoveTuple
-from keisei.shogi.shogi_game import ShogiGame
-from keisei.utils import BaseOpponent, EvaluationLogger, PolicyOutputMapper
+# Constants used across evaluation tests
+INPUT_CHANNELS = 46
 
-INPUT_CHANNELS = 46  # Use the default from config for tests
+# Mock PPO Agent class for testing
+class MockPPOAgent:
+    """Mock PPO Agent for testing purposes."""
+    
+    def __init__(self, *args, **kwargs):
+        self.device = "cpu"
+        self.name = kwargs.get("name", "MockAgent")
+        
+    def select_action(self, observation, legal_mask=None):
+        """Mock action selection - returns first legal action."""
+        if legal_mask is not None:
+            legal_indices = legal_mask.nonzero(as_tuple=True)[0]
+            if len(legal_indices) > 0:
+                return legal_indices[0].item()
+        return 0  # Fallback action
+        
+    def get_action_and_value(self, observation, legal_mask=None):
+        """Mock get_action_and_value method."""
+        import torch
+        action = self.select_action(observation, legal_mask)
+        return action, torch.tensor(0.0), torch.tensor(0.0)
+        
+    def load_model(self, checkpoint_path):
+        """Mock model loading."""
+        return {}
 
-
-# A mock PPOAgent for testing purposes
-# Inherit from PPOAgent to satisfy type hints for run_evaluation_loop, and BaseOpponent for other uses.
-class MockPPOAgent(PPOAgent, BaseOpponent):
-    def __init__(
-        self,
-        config,
-        device,
-        name="MockPPOAgentForTest",
-    ):
-        # Create mock model first for dependency injection
-        from keisei.core.neural_network import ActorCritic
-
-        policy_mapper = PolicyOutputMapper()
-        mock_model = ActorCritic(
-            config.env.input_channels, policy_mapper.get_total_actions()
-        )
-
-        # Call parent constructors with model parameter
-        PPOAgent.__init__(
-            self, model=mock_model, config=config, device=device, name=name
-        )
-        BaseOpponent.__init__(self, name=name)
-
-        # Override with MagicMock for testing
-        self.model = MagicMock()
-        self._is_ppo_agent_mock = True  # Flag to identify this mock
-        # self.name is set by PPOAgent's __init__ via BaseOpponent
-
-    def load_model(
-        self, file_path: str
-    ) -> dict:  # Parameter name changed to file_path, return type to dict
-        # print(f"MockPPOAgent: Pretending to load model from {file_path}")
-        return {}  # Return an empty dict as per PPOAgent
-
-    def select_action(
-        self,
-        obs: np.ndarray,
-        legal_mask: torch.Tensor,
-        *,
-        is_training: bool = True,
-    ):
-        # For test compatibility, always return a dummy move and values
-        # Assume legal_mask is a tensor of bools, pick the first True index
-        idx = int(legal_mask.nonzero(as_tuple=True)[0][0]) if legal_mask.any() else 0
-        return (None, idx, 0.0, 0.0)
-
-    def get_value(
-        self, obs_np: np.ndarray
-    ) -> float:  # obs_np type changed to np.ndarray
-        """Mocked get_value method."""
-        return 0.0  # Return a dummy float value
-
-    # If used as a BaseOpponent directly (e.g. PPO vs PPO where one is simplified)
-    def select_move(
-        self, game_instance: ShogiGame
-    ) -> MoveTuple:  # Return type changed back to MoveTuple
-        legal_moves = game_instance.get_legal_moves()
-        if not legal_moves:
-            raise ValueError("MockPPOAgent.select_move: No legal moves available.")
-        # Simplified for BaseOpponent interface, actual PPO logic is in select_action
-        obs_np = MagicMock(
-            spec=np.ndarray
-        )  # Dummy observation, spec for type hint if needed
-        legal_mask_tensor = MagicMock(
-            spec=torch.Tensor
-        )  # Dummy mask, spec for type hint
-        action_result = self.select_action(obs_np, legal_mask_tensor, is_training=False)
-        selected_move = action_result[0]
-        if selected_move is None:
-            # This should ideally not happen if legal_moves is not empty.
-            # Handle cases where select_action might return None for the move.
-            raise ValueError(
-                "MockPPOAgent.select_move: select_action returned None for a move despite legal moves being available."
-            )
-        return selected_move
-
-
-@pytest.fixture
-def policy_mapper():
-    return PolicyOutputMapper()
-
-
-@pytest.fixture
-def eval_logger_setup(tmp_path):
-    log_file = tmp_path / "test_eval.log"
-    logger = EvaluationLogger(str(log_file), also_stdout=False)
-    with logger:  # Ensure logger is used as a context manager
-        yield logger, str(log_file)
-    # logger.close() is handled by the context manager's __exit__
-
-
-@pytest.fixture
-def shogi_game_initial():
-    return ShogiGame()
-
-
-@pytest.fixture
-def mock_app_config():
-    """Returns a mock AppConfig for testing."""
-    return AppConfig(
-        env=EnvConfig(
-            device="cpu",
-            input_channels=INPUT_CHANNELS,
-            num_actions_total=13527,  # Example value
-            seed=42,
-            max_moves_per_game=500,  # Added missing parameter
-        ),
-        training=TrainingConfig(
-            total_timesteps=1000,
-            steps_per_epoch=200,
-            ppo_epochs=4,
-            minibatch_size=32,
-            learning_rate=0.0003,
-            gamma=0.99,
-            clip_epsilon=0.2,
-            value_loss_coeff=0.5,
-            entropy_coef=0.01,
-            render_every_steps=1,
-            refresh_per_second=4,
-            enable_spinner=True,
-            input_features="core46",
-            tower_depth=9,
-            tower_width=256,
-            se_ratio=0.25,
-            model_type="resnet",
-            mixed_precision=False,
-            ddp=False,
-            gradient_clip_max_norm=0.5,
-            lambda_gae=0.95,
-            checkpoint_interval_timesteps=10000,
-            evaluation_interval_timesteps=50000,
-            weight_decay=0.0,
-            normalize_advantages=True,
-            lr_schedule_type=None,
-            lr_schedule_kwargs=None,
-            lr_schedule_step_on="epoch",
-        ),
-        evaluation=EvaluationConfig(
-            num_games=2,
-            opponent_type="random",
-            evaluation_interval_timesteps=50000,
-            enable_periodic_evaluation=False,  # Added missing parameter
-            max_moves_per_game=500,  # Added missing parameter
-            log_file_path_eval="/tmp/eval.log",  # Added missing parameter
-            wandb_log_eval=False,  # Added missing parameter
-        ),
-        logging=LoggingConfig(
-            log_file="logs/test_evaluate_log.txt",
-            model_dir="models/test_evaluate_models/",
-            run_name="test_evaluate_run",
-        ),
-        wandb=WandBConfig(
-            enabled=False,
-            project="keisei-shogi-rl",
-            entity=None,
-            run_name_prefix="keisei",
-            watch_model=True,
-            watch_log_freq=1000,
-            watch_log_type="all",
-            log_model_artifact=False,
-        ),
-        parallel=ParallelConfig(
-            enabled=False,
-            num_workers=1,
-            batch_size=32,
-            sync_interval=100,
-            compression_enabled=True,
-            timeout_seconds=10.0,
-            max_queue_size=1000,
-            worker_seed_offset=1000,
-        ),
-        demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5),
-    )
-
-
-@pytest.fixture
-def mock_app_config_parallel(tmp_path):
-    """Returns a mock AppConfig with parallel enabled for testing."""
+def make_test_config():
+    """Create a minimal test configuration for evaluation tests."""
     return AppConfig(
         env=EnvConfig(
             device="cpu",
             input_channels=INPUT_CHANNELS,
             num_actions_total=13527,
             seed=42,
-            max_moves_per_game=500,  # Added missing parameter
+            max_moves_per_game=200,
         ),
         training=TrainingConfig(
-            total_timesteps=1000,
-            steps_per_epoch=200,
-            ppo_epochs=4,
-            minibatch_size=32,
-            learning_rate=0.0003,
-            gamma=0.99,
-            clip_epsilon=0.2,
-            value_loss_coeff=0.5,
-            entropy_coef=0.01,
-            render_every_steps=1,
-            refresh_per_second=4,
-            enable_spinner=True,
-            input_features="core46",
-            tower_depth=9,
-            tower_width=256,
-            se_ratio=0.25,
-            model_type="resnet",
-            mixed_precision=False,
-            ddp=False,
-            gradient_clip_max_norm=0.5,
-            lambda_gae=0.95,
-            checkpoint_interval_timesteps=10000,
-            evaluation_interval_timesteps=50000,
-            weight_decay=0.0,
-            normalize_advantages=True,
-            lr_schedule_type=None,
-            lr_schedule_kwargs=None,
-            lr_schedule_step_on="epoch",
-        ),
-        evaluation=EvaluationConfig(
-            num_games=2,
-            opponent_type="random",
-            evaluation_interval_timesteps=50000,
-            enable_periodic_evaluation=False,  # Added missing parameter
-            max_moves_per_game=500,  # Added missing parameter
-            log_file_path_eval="/tmp/eval_parallel.log",  # Added missing parameter
-            wandb_log_eval=False,  # Added missing parameter
-        ),
-        logging=LoggingConfig(
-            log_file=str(tmp_path / "logs/test_evaluate_log_parallel.txt"),
-            model_dir=str(tmp_path / "models/test_evaluate_models_parallel/"),
-            run_name="test_evaluate_run_parallel",
-        ),
-        wandb=WandBConfig(
-            enabled=False,
-            project="keisei-shogi-rl",
-            entity=None,
-            run_name_prefix="keisei",
-            watch_model=True,
-            watch_log_freq=1000,
-            watch_log_type="all",
-            log_model_artifact=False,
-        ),
-        parallel=ParallelConfig(  # Corrected ParallelConfig
-            enabled=True,
-            num_workers=2,
-            batch_size=32,
-            sync_interval=100,
-            compression_enabled=True,
-            timeout_seconds=10.0,
-            max_queue_size=1000,
-            worker_seed_offset=1000,
-        ),
-        demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5),
-    )
-
-
-# Helper to create a minimal AppConfig for test agents
-def make_test_config(device_str, input_channels, policy_mapper):
-    # If policy_mapper is a pytest fixture function, raise an error to prevent direct calls
-    if hasattr(policy_mapper, "_pytestfixturefunction"):
-        raise RuntimeError(
-            "policy_mapper fixture was passed directly; pass an instance instead."
-        )
-    try:
-        num_actions_total = policy_mapper.get_total_actions()
-    except (AttributeError, TypeError) as e:
-        raise ValueError(
-            "policy_mapper must provide a valid get_total_actions() method returning an int."
-        ) from e
-    return AppConfig(
-        env=EnvConfig(
-            device=device_str,
-            input_channels=input_channels,
-            num_actions_total=num_actions_total,
-            seed=42,
-            max_moves_per_game=500,  # Added missing parameter
-        ),
-        training=TrainingConfig(
-            total_timesteps=1,
-            steps_per_epoch=1,
+            total_timesteps=100,
+            steps_per_epoch=8,
             ppo_epochs=1,
-            minibatch_size=1,
-            learning_rate=1e-4,
+            minibatch_size=2,
+            learning_rate=1e-3,
             gamma=0.99,
             clip_epsilon=0.2,
             value_loss_coeff=0.5,
             entropy_coef=0.01,
+            render_every_steps=1,
+            refresh_per_second=4,
+            enable_spinner=False,
             input_features="core46",
+            tower_depth=2,
+            tower_width=64,
+            se_ratio=0.25,
             model_type="resnet",
             mixed_precision=False,
             ddp=False,
             gradient_clip_max_norm=0.5,
             lambda_gae=0.95,
-            checkpoint_interval_timesteps=10000,
-            evaluation_interval_timesteps=50000,
-            render_every_steps=1,
-            refresh_per_second=4,
-            enable_spinner=True,
-            tower_depth=9,
-            tower_width=256,
-            se_ratio=0.25,
-            weight_decay=0.0,  # Added missing argument
+            checkpoint_interval_timesteps=100,
+            evaluation_interval_timesteps=100,
+            weight_decay=0.0,
             normalize_advantages=True,
             lr_schedule_type=None,
             lr_schedule_kwargs=None,
@@ -336,34 +82,76 @@ def make_test_config(device_str, input_channels, policy_mapper):
         evaluation=EvaluationConfig(
             num_games=1,
             opponent_type="random",
-            evaluation_interval_timesteps=50000,
-            enable_periodic_evaluation=False,  # Added missing parameter
-            max_moves_per_game=500,  # Added missing parameter
-            log_file_path_eval="/tmp/eval.log",  # Added missing parameter
-            wandb_log_eval=False,  # Added missing parameter
+            evaluation_interval_timesteps=100,
+            enable_periodic_evaluation=False,
+            max_moves_per_game=200,
+            log_file_path_eval="eval_log.txt",
+            wandb_log_eval=False,
         ),
         logging=LoggingConfig(
-            log_file="/tmp/eval.log", model_dir="/tmp/", run_name="test-eval-run"
+            log_file="test.log",
+            model_dir="test_models",
+            run_name="test_run",
         ),
         wandb=WandBConfig(
             enabled=False,
-            project="eval",
+            project="test-project",
             entity=None,
-            run_name_prefix="test-eval-run",
+            run_name_prefix="test",
             watch_model=False,
             watch_log_freq=1000,
             watch_log_type="all",
             log_model_artifact=False,
         ),
-        demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
+        demo=DemoConfig(
+            enable_demo_mode=False,
+            demo_mode_delay=0.0,
+        ),
         parallel=ParallelConfig(
             enabled=False,
-            num_workers=4,
-            batch_size=32,
+            num_workers=1,
+            batch_size=2,
             sync_interval=100,
-            compression_enabled=True,
-            timeout_seconds=10.0,
-            max_queue_size=1000,
+            compression_enabled=False,
+            timeout_seconds=5.0,
+            max_queue_size=100,
             worker_seed_offset=1000,
         ),
     )
+
+@pytest.fixture
+def policy_mapper():
+    """Fixture providing PolicyOutputMapper instance."""
+    return PolicyOutputMapper()
+
+@pytest.fixture
+def test_config():
+    """Fixture providing test configuration."""
+    return make_test_config()
+
+@pytest.fixture
+def shogi_game_initial():
+    """Fixture providing a fresh ShogiGame instance for testing."""
+    from keisei.shogi.shogi_game import ShogiGame
+    return ShogiGame()
+
+@pytest.fixture
+def eval_logger_setup(tmp_path):
+    """Fixture providing evaluation logger setup for testing."""
+    from keisei.utils.utils import EvaluationLogger
+    log_file = tmp_path / "test_eval.log"
+    logger = EvaluationLogger(str(log_file), also_stdout=False)
+    
+    # Return a context manager that properly opens the logger
+    class LoggerContext:
+        def __init__(self, logger, log_file_path):
+            self.logger = logger
+            self.log_file_path = log_file_path
+            
+        def __enter__(self):
+            return self.logger.__enter__()
+            
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return self.logger.__exit__(exc_type, exc_val, exc_tb)
+    
+    return LoggerContext(logger, str(log_file)), str(log_file)

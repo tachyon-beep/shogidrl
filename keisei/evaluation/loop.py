@@ -27,6 +27,7 @@ def run_evaluation_loop(
     num_games: int,
     logger: EvaluationLogger,
     max_moves_per_game: int,
+    policy_mapper: PolicyOutputMapper,
 ) -> ResultsDict:
     import torch
 
@@ -54,7 +55,6 @@ def run_evaluation_loop(
                 game.game_over = True
                 break
             # Create proper legal mask using PolicyOutputMapper
-            policy_mapper = PolicyOutputMapper()
             device = agent_to_eval.device  # Use agent's device for consistency
             legal_mask = policy_mapper.get_legal_mask(legal_moves, device)
             move = None  # type: ignore

@@ -11,12 +11,12 @@ from keisei.utils.opponents import SimpleRandomOpponent
 from tests.evaluation.conftest import INPUT_CHANNELS, MockPPOAgent, make_test_config
 
 
-def test_run_evaluation_loop_basic(eval_logger_setup):
+def test_run_evaluation_loop_basic(eval_logger_setup, policy_mapper):
     """Test that run_evaluation_loop runs games and logs results correctly."""
-    logger, log_file_path = eval_logger_setup
+    logger_context, log_file_path = eval_logger_setup
 
     agent_to_eval = MockPPOAgent(
-        config=make_test_config("cpu", INPUT_CHANNELS, PolicyOutputMapper()),
+        config=make_test_config(),
         device=torch.device("cpu"),
         name="PPOAgentToEvaluate",
     )
@@ -25,7 +25,8 @@ def test_run_evaluation_loop_basic(eval_logger_setup):
     num_games = 2
     max_moves = 5  # Keep games short for testing
 
-    results = run_evaluation_loop(agent_to_eval, opponent, num_games, logger, max_moves)
+    with logger_context as logger:
+        results = run_evaluation_loop(agent_to_eval, opponent, num_games, logger, max_moves, policy_mapper)
 
     assert results["games_played"] == num_games
     assert "agent_wins" in results
