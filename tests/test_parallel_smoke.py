@@ -48,7 +48,9 @@ class TestParallelSmoke:
 
         # Collect results with timeout
         results = []
-        timeout = time.time() + 5  # 5 second timeout
+        # CI environments can be slower to spin up processes; allow a generous
+        # timeout so this smoke test does not fail sporadically.
+        timeout = time.time() + 15  # 15 second timeout
 
         while time.time() < timeout:
             try:

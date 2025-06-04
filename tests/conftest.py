@@ -20,13 +20,13 @@ from keisei.config_schema import (
 )
 from keisei.constants import (
     CORE_OBSERVATION_CHANNELS,
-    DEFAULT_GAMMA,
-    DEFAULT_LAMBDA_GAE,
-    DEFAULT_MAX_MOVES_PER_GAME,
-    DEFAULT_NUM_ACTIONS_TOTAL,
     SHOGI_BOARD_SIZE,
     TEST_BUFFER_SIZE,
 )
+from keisei.config_schema import EnvConfig, TrainingConfig
+
+TRAIN_DEFAULTS = TrainingConfig()
+ENV_DEFAULTS = EnvConfig()
 from keisei.utils import PolicyOutputMapper
 
 # Try to set the start method as early as possible for pytest runs
@@ -159,9 +159,9 @@ def minimal_env_config():
     return EnvConfig(
         device="cpu",
         input_channels=CORE_OBSERVATION_CHANNELS,
-        num_actions_total=DEFAULT_NUM_ACTIONS_TOTAL,
+        num_actions_total=ENV_DEFAULTS.num_actions_total,
         seed=42,
-        max_moves_per_game=DEFAULT_MAX_MOVES_PER_GAME,  # Standard limit for games
+        max_moves_per_game=ENV_DEFAULTS.max_moves_per_game,  # Standard limit for games
     )
 
 
@@ -174,7 +174,7 @@ def minimal_training_config():
         ppo_epochs=1,
         minibatch_size=2,
         learning_rate=1e-3,
-        gamma=DEFAULT_GAMMA,
+        gamma=TRAIN_DEFAULTS.gamma,
         clip_epsilon=0.2,
         value_loss_coeff=0.5,
         entropy_coef=0.01,
@@ -189,7 +189,7 @@ def minimal_training_config():
         mixed_precision=False,
         ddp=False,
         gradient_clip_max_norm=0.5,
-        lambda_gae=DEFAULT_LAMBDA_GAE,
+        lambda_gae=TRAIN_DEFAULTS.lambda_gae,
         checkpoint_interval_timesteps=1000,
         evaluation_interval_timesteps=1000,
         weight_decay=0.0,
@@ -331,7 +331,7 @@ def integration_test_config(policy_mapper, tmp_path):
             input_channels=CORE_OBSERVATION_CHANNELS,
             num_actions_total=policy_mapper.get_total_actions(),
             seed=42,
-            max_moves_per_game=DEFAULT_MAX_MOVES_PER_GAME,  # Standard limit for games
+            max_moves_per_game=ENV_DEFAULTS.max_moves_per_game,  # Standard limit for games
         ),
         training=TrainingConfig(
             total_timesteps=200,  # Small for integration tests
@@ -339,7 +339,7 @@ def integration_test_config(policy_mapper, tmp_path):
             ppo_epochs=2,
             minibatch_size=4,
             learning_rate=1e-3,
-            gamma=DEFAULT_GAMMA,
+            gamma=TRAIN_DEFAULTS.gamma,
             clip_epsilon=0.2,
             value_loss_coeff=0.5,
             entropy_coef=0.01,
@@ -354,7 +354,7 @@ def integration_test_config(policy_mapper, tmp_path):
             mixed_precision=False,
             ddp=False,
             gradient_clip_max_norm=0.5,
-            lambda_gae=DEFAULT_LAMBDA_GAE,
+            lambda_gae=TRAIN_DEFAULTS.lambda_gae,
             checkpoint_interval_timesteps=200,
             evaluation_interval_timesteps=200,
             weight_decay=0.0,
@@ -464,8 +464,8 @@ def populated_experience_buffer():
 
     buffer = ExperienceBuffer(
         buffer_size=TEST_BUFFER_SIZE,
-        gamma=DEFAULT_GAMMA,
-        lambda_gae=DEFAULT_LAMBDA_GAE,
+        gamma=TRAIN_DEFAULTS.gamma,
+        lambda_gae=TRAIN_DEFAULTS.lambda_gae,
         device="cpu",
     )
 
@@ -474,7 +474,7 @@ def populated_experience_buffer():
         CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cpu"
     )
     dummy_legal_mask = torch.ones(
-        DEFAULT_NUM_ACTIONS_TOTAL, dtype=torch.bool, device="cpu"
+        ENV_DEFAULTS.num_actions_total, dtype=torch.bool, device="cpu"
     )
 
     # Add varied experiences
@@ -514,7 +514,7 @@ def dummy_legal_mask():
     """Standard dummy legal mask for PPO tests."""
     import torch
 
-    mask = torch.ones(DEFAULT_NUM_ACTIONS_TOTAL, dtype=torch.bool, device="cpu")
+    mask = torch.ones(ENV_DEFAULTS.num_actions_total, dtype=torch.bool, device="cpu")
     mask[0] = False  # Make first action illegal for testing
     return mask
 
@@ -526,7 +526,7 @@ def create_test_experience_data(buffer_size: int, device: str = "cpu"):
     dummy_obs = torch.randn(
         CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device=device
     )
-    dummy_mask = torch.ones(DEFAULT_NUM_ACTIONS_TOTAL, dtype=torch.bool, device=device)
+    dummy_mask = torch.ones(ENV_DEFAULTS.num_actions_total, dtype=torch.bool, device=device)
 
     # Generate varied but consistent data
     experiences = []

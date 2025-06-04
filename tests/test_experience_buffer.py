@@ -6,13 +6,12 @@ import numpy as np
 import pytest
 import torch
 
+
 from keisei.constants import (
     CORE_OBSERVATION_CHANNELS,
-    DEFAULT_GAMMA,
-    DEFAULT_LAMBDA_GAE,
-    DEFAULT_NUM_ACTIONS_TOTAL,
     SHOGI_BOARD_SIZE,
 )
+
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.utils import PolicyOutputMapper
 
