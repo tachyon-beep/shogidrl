@@ -67,7 +67,7 @@ class TrainingLoopManager:
             self.parallel_manager = ParallelManager(
                 env_config=env_config,
                 model_config=model_config,
-                parallel_config=self.config.parallel.dict(),
+                parallel_config=self.config.parallel.model_dump(),
                 device=self.config.env.device,
             )
 

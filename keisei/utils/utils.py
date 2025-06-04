@@ -135,7 +135,7 @@ def load_config(
         mapped_overrides = _map_flat_overrides(cli_overrides)
         _merge_overrides(config_data, mapped_overrides)
     try:
-        config = AppConfig.parse_obj(config_data)
+        config = AppConfig.model_validate(config_data)
     except ValidationError as e:
         log_error_to_stderr("Utils", "Configuration validation error:")
         log_error_to_stderr("Utils", str(e))
