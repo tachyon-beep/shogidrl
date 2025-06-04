@@ -5,7 +5,6 @@ Provides queue-based communication between main process and worker processes,
 including experience collection and model synchronization.
 """
 
-import gzip
 import logging
 import multiprocessing as mp
 import queue
@@ -14,6 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
+from .utils import compress_array
 
 logger = logging.getLogger(__name__)
 
@@ -167,42 +167,25 @@ class WorkerCommunicator:
             np_array = tensor.cpu().numpy()
 
             if compress:
-                try:
-                    # Apply gzip compression
-                    array_bytes = np_array.tobytes()
-                    compressed_bytes = gzip.compress(array_bytes, compresslevel=6)
-
-                    total_original_size += len(array_bytes)
-                    total_compressed_size += len(compressed_bytes)
-
-                    model_data[key] = {
-                        "data": compressed_bytes,
-                        "shape": np_array.shape,
-                        "dtype": str(np_array.dtype),
-                        "compressed": True,
-                    }
-                except Exception as e:
-                    logger.warning(
-                        "Compression failed for %s, using uncompressed: %s", key, str(e)
-                    )
-                    # Fallback to uncompressed
-                    model_data[key] = {
-                        "data": np_array,
-                        "shape": np_array.shape,
-                        "dtype": str(np_array.dtype),
-                        "compressed": False,
-                    }
-                    total_original_size += np_array.nbytes
-                    total_compressed_size += np_array.nbytes
+                compressed = compress_array(np_array)
             else:
-                model_data[key] = {
+                compressed = {
                     "data": np_array,
                     "shape": np_array.shape,
                     "dtype": str(np_array.dtype),
                     "compressed": False,
                 }
-                total_original_size += np_array.nbytes
-                total_compressed_size += np_array.nbytes
+
+            model_data[key] = compressed
+            original_size = (
+                compressed.get("original_size", np_array.nbytes)
+                if compress
+                else np_array.nbytes
+            )
+            size = compressed.get("compressed_size", np_array.nbytes)
+
+            total_original_size += original_size
+            total_compressed_size += size
 
         compression_ratio = (
             total_original_size / total_compressed_size

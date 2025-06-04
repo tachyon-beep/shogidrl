@@ -15,10 +15,6 @@ import torch
 
 from keisei.constants import (
     CORE_OBSERVATION_CHANNELS,
-    DEFAULT_GAMMA,
-    DEFAULT_LAMBDA_GAE,
-    DEFAULT_NUM_ACTIONS_TOTAL,
-    DEFAULT_RANDOM_SEED,
     EPSILON_MEDIUM,
     SHOGI_BOARD_SIZE,
     TEST_ADVANTAGE_STD_THRESHOLD,
@@ -44,6 +40,8 @@ from keisei.constants import (
     TEST_UNEVEN_MINIBATCH_SIZE,
     TEST_VALUE_DEFAULT,
 )
+
+from tests.conftest import TRAIN_DEFAULTS, ENV_DEFAULTS
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.neural_network import ActorCritic
 from keisei.core.ppo_agent import PPOAgent
@@ -71,14 +69,14 @@ class TestPPOAgentLossComponents:
         )
         experience_buffer = ExperienceBuffer(
             buffer_size=buffer_size,
-            gamma=DEFAULT_GAMMA,
-            lambda_gae=DEFAULT_LAMBDA_GAE,
+            gamma=TRAIN_DEFAULTS.gamma,
+            lambda_gae=TRAIN_DEFAULTS.lambda_gae,
             device="cpu",
         )
 
         # Create deterministic data for more predictable testing
-        torch.manual_seed(DEFAULT_RANDOM_SEED)
-        np.random.seed(DEFAULT_RANDOM_SEED)
+        torch.manual_seed(ENV_DEFAULTS.seed)
+        np.random.seed(ENV_DEFAULTS.seed)
 
         dummy_obs_tensor = torch.randn(
             CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cpu"
@@ -165,8 +163,8 @@ class TestPPOAgentAdvantageNormalization:
         # Create data with high variance advantages to test normalization
         experience_buffer = ExperienceBuffer(
             buffer_size=buffer_size,
-            gamma=DEFAULT_GAMMA,
-            lambda_gae=DEFAULT_LAMBDA_GAE,
+            gamma=TRAIN_DEFAULTS.gamma,
+            lambda_gae=TRAIN_DEFAULTS.lambda_gae,
             device="cpu",
         )
 
@@ -174,7 +172,7 @@ class TestPPOAgentAdvantageNormalization:
             CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cpu"
         )
         dummy_legal_mask = torch.ones(
-            DEFAULT_NUM_ACTIONS_TOTAL, dtype=torch.bool, device="cpu"
+            ENV_DEFAULTS.num_actions_total, dtype=torch.bool, device="cpu"
         )
 
         # High variance rewards and values to create large advantage differences
@@ -184,7 +182,7 @@ class TestPPOAgentAdvantageNormalization:
         for i in range(buffer_size):
             experience_buffer.add(
                 obs=dummy_obs_tensor,
-                action=i % DEFAULT_NUM_ACTIONS_TOTAL,
+                action=i % ENV_DEFAULTS.num_actions_total,
                 reward=rewards[i],
                 log_prob=TEST_LOG_PROB_MULTIPLIER,
                 value=values[i],
@@ -232,15 +230,15 @@ class TestPPOAgentAdvantageNormalization:
         # Recreate buffer for second agent (since buffer is consumed)
         experience_buffer2 = ExperienceBuffer(
             buffer_size=buffer_size,
-            gamma=DEFAULT_GAMMA,
-            lambda_gae=DEFAULT_LAMBDA_GAE,
+            gamma=TRAIN_DEFAULTS.gamma,
+            lambda_gae=TRAIN_DEFAULTS.lambda_gae,
             device="cpu",
         )
 
         for i in range(buffer_size):
             experience_buffer2.add(
                 obs=dummy_obs_tensor,
-                action=i % DEFAULT_NUM_ACTIONS_TOTAL,
+                action=i % ENV_DEFAULTS.num_actions_total,
                 reward=rewards[i],
                 log_prob=TEST_LOG_PROB_MULTIPLIER,
                 value=values[i],
@@ -281,8 +279,8 @@ class TestPPOAgentGradientClipping:
         buffer_size = TEST_BUFFER_SIZE
         experience_buffer = ExperienceBuffer(
             buffer_size=buffer_size,
-            gamma=DEFAULT_GAMMA,
-            lambda_gae=DEFAULT_LAMBDA_GAE,
+            gamma=TRAIN_DEFAULTS.gamma,
+            lambda_gae=TRAIN_DEFAULTS.lambda_gae,
             device="cpu",
         )
 
@@ -335,8 +333,8 @@ class TestPPOAgentKLDivergence:
         buffer_size = TEST_BUFFER_SIZE
         experience_buffer = ExperienceBuffer(
             buffer_size=buffer_size,
-            gamma=DEFAULT_GAMMA,
-            lambda_gae=DEFAULT_LAMBDA_GAE,
+            gamma=TRAIN_DEFAULTS.gamma,
+            lambda_gae=TRAIN_DEFAULTS.lambda_gae,
             device="cpu",
         )
 
@@ -401,8 +399,8 @@ class TestPPOAgentMinibatchProcessing:
         )
         experience_buffer = ExperienceBuffer(
             buffer_size=buffer_size,
-            gamma=DEFAULT_GAMMA,
-            lambda_gae=DEFAULT_LAMBDA_GAE,
+            gamma=TRAIN_DEFAULTS.gamma,
+            lambda_gae=TRAIN_DEFAULTS.lambda_gae,
             device="cpu",
         )
 
@@ -445,8 +443,8 @@ class TestPPOAgentRobustness:
         # Create empty buffer
         experience_buffer = ExperienceBuffer(
             buffer_size=TEST_BUFFER_SIZE,
-            gamma=DEFAULT_GAMMA,
-            lambda_gae=DEFAULT_LAMBDA_GAE,
+            gamma=TRAIN_DEFAULTS.gamma,
+            lambda_gae=TRAIN_DEFAULTS.lambda_gae,
             device="cpu",
         )
 
@@ -480,8 +478,8 @@ class TestPPOAgentRobustness:
 
         experience_buffer = ExperienceBuffer(
             buffer_size=1,
-            gamma=DEFAULT_GAMMA,
-            lambda_gae=DEFAULT_LAMBDA_GAE,
+            gamma=TRAIN_DEFAULTS.gamma,
+            lambda_gae=TRAIN_DEFAULTS.lambda_gae,
             device="cpu",
         )
 
@@ -532,8 +530,8 @@ class TestPPOAgentSchedulerLearning:
         # Create simple experience buffer
         experience_buffer = ExperienceBuffer(
             buffer_size=TEST_BUFFER_SIZE,
-            gamma=DEFAULT_GAMMA,
-            lambda_gae=DEFAULT_LAMBDA_GAE,
+            gamma=TRAIN_DEFAULTS.gamma,
+            lambda_gae=TRAIN_DEFAULTS.lambda_gae,
             device="cpu",
         )
 

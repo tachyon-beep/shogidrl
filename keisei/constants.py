@@ -8,11 +8,9 @@ to improve maintainability and readability. Constants are organized by functiona
 # Shogi game constants
 SHOGI_BOARD_SIZE = 9
 SHOGI_BOARD_SQUARES = SHOGI_BOARD_SIZE * SHOGI_BOARD_SIZE  # 81
-DEFAULT_MAX_MOVES_PER_GAME = 500
 MOVE_COUNT_NORMALIZATION_FACTOR = 512.0
 
 # Action space and observation constants
-DEFAULT_NUM_ACTIONS_TOTAL = 13527  # Standard Shogi action space
 ALTERNATIVE_ACTION_SPACE = 6480  # Alternative/reduced action space
 CORE_OBSERVATION_CHANNELS = 46  # Standard 46-channel observation
 EXTENDED_OBSERVATION_CHANNELS = 51  # Extended observation with additional features
@@ -30,29 +28,12 @@ OBS_RESERVED_1 = 44
 OBS_RESERVED_2 = 45
 
 # Training constants
-DEFAULT_LEARNING_RATE = 3e-4
-DEFAULT_GAMMA = 0.99
-DEFAULT_CLIP_EPSILON = 0.2
-DEFAULT_VALUE_LOSS_COEFF = 0.5
-DEFAULT_ENTROPY_COEFF = 0.01
-DEFAULT_PPO_EPOCHS = 10
-DEFAULT_MINIBATCH_SIZE = 64
-DEFAULT_STEPS_PER_EPOCH = 2048
-DEFAULT_TOTAL_TIMESTEPS = 500000
-DEFAULT_CHECKPOINT_INTERVAL = 10000
 
 # GAE and advantage computation
-DEFAULT_LAMBDA_GAE = 0.95
-DEFAULT_GRADIENT_CLIP_MAX_NORM = 0.5
 
 # Model architecture defaults
-DEFAULT_TOWER_DEPTH = 9
-DEFAULT_TOWER_WIDTH = 256
-DEFAULT_SE_RATIO = 0.25
 
 # Rendering and display defaults
-DEFAULT_RENDER_EVERY_STEPS = 1
-DEFAULT_REFRESH_PER_SECOND = 4
 
 # Edge case test constants
 TEST_CONFIG_STEPS_PER_EPOCH = 32
@@ -60,37 +41,16 @@ TEST_CONFIG_TOWER_DEPTH = 3
 TEST_CONFIG_TOWER_WIDTH = 64
 
 # Parallel training defaults
-DEFAULT_NUM_WORKERS = 4
-DEFAULT_WORKER_BATCH_SIZE = 32
-DEFAULT_SYNC_INTERVAL = 100
-DEFAULT_WORKER_SEED_OFFSET = 1000
-DEFAULT_MAX_QUEUE_SIZE = 1000
 
 # Timeout and retry constants
-DEFAULT_TIMEOUT_SECONDS = 10.0
-DEFAULT_WANDB_TIMEOUT_SECONDS = 10.0
-DEFAULT_RETRY_COUNT = 3
-DEFAULT_RETRY_BACKOFF_FACTOR = 2.0
-DEFAULT_MAX_RETRY_DELAY = 60.0
 
 # Communication and buffer sizes
-DEFAULT_EXPERIENCE_BATCH_SIZE = 64
-DEFAULT_MAX_GAME_LENGTH = 200
-DEFAULT_GAMES_PER_WORKER = 10
-DEFAULT_WORKER_RESET_INTERVAL = 1000
 
 # Display update frequencies
-DEFAULT_RENDER_EVERY_STEPS = 1
-DEFAULT_REFRESH_PER_SECOND = 4
-DEFAULT_DEMO_MODE_DELAY = 0.5
 
 # Logging and formatting
-DEFAULT_JSON_INDENT = 2
-DEFAULT_CONFIG_JSON_INDENT = 4
 
 # Default evaluation parameters
-DEFAULT_EVALUATION_GAMES = 10
-DEFAULT_EVALUATION_INTERVAL_TIMESTEPS = 50000
 
 # Test-specific magic numbers
 TEST_THRESHOLD_HIGH = 0.9
@@ -100,18 +60,14 @@ TEST_EPSILON = 0.01
 TEST_MAX_DEPENDENCY_ISSUES = 20  # Updated from magic number 15
 
 # Common test dimensions
-TEST_BUFFER_SIZE = 32
+TEST_BUFFER_SIZE = 4  # Small buffer size for testing
 TEST_SMALL_BUFFER = 8
 TEST_BATCH_SIZE = 16
 
 # Default seed values
-DEFAULT_RANDOM_SEED = 42
 SEED_OFFSET_MULTIPLIER = 1000
 
 # Default computation settings
-DEFAULT_DEVICE = "cpu"
-DEFAULT_MIXED_PRECISION = False
-DEFAULT_DDP_ENABLED = False
 
 # File patterns and extensions
 CHECKPOINT_FILE_PATTERN = "*.pt"
@@ -119,9 +75,6 @@ CONFIG_FILE_EXTENSION = ".yaml"
 LOG_FILE_EXTENSION = ".log"
 
 # Directory and path defaults
-DEFAULT_MODEL_DIR = "models"
-DEFAULT_LOG_DIR = "logs"
-DEFAULT_WANDB_PROJECT = "keisei"
 
 # Common mathematical values used in RL
 EPSILON_SMALL = 1e-8  # Small epsilon for numerical stability
@@ -142,7 +95,6 @@ MAX_CONSECUTIVE_FAILURES = 10  # Maximum consecutive operation failures
 MIN_SUCCESS_RATE = 0.8  # Minimum acceptable success rate
 
 # Test constants
-TEST_BUFFER_SIZE = 4  # Small buffer size for testing
 TEST_MEDIUM_BUFFER_SIZE = 8  # Medium buffer size for testing
 TEST_ODD_BUFFER_SIZE = 5  # Odd buffer size for testing uneven splits
 TEST_UNEVEN_MINIBATCH_SIZE = 3  # Minibatch size that doesn't divide evenly
@@ -208,6 +160,8 @@ TEST_GAE_LAMBDA_DEFAULT = 0.95  # Default GAE lambda value for tests
 TEST_GAMMA_NINE_TENTHS = 0.9  # Gamma value of 0.9 for testing
 TEST_SCHEDULER_STEP_SIZE = 1  # Step size for step scheduler
 TEST_SCHEDULER_GAMMA = 0.1  # Gamma for step scheduler
+TEST_ETA_MIN_FRACTION = 0.1  # Eta min fraction for cosine scheduler
+TEST_T_MAX = 10  # T max for cosine scheduler
 TEST_REWARD_VALUE = 1.0  # Default reward value for testing
 TEST_ADVANTAGE_GAMMA_ZERO = 0.0  # Zero gamma for advantage computation testing
 TEST_GLOBAL_TIMESTEP_ZERO = 0  # Zero global timestep for testing
@@ -215,12 +169,5 @@ TEST_GLOBAL_TIMESTEP_NEGATIVE = -1  # Negative global timestep for error checkin
 
 # Additional edge case constants that were missing
 TEST_LARGE_MASK_SIZE = 20000  # Large mask size for dimension mismatch tests
-TEST_VALUE_HALF = 0.5  # Half value for experience buffer testing
-TEST_GAE_LAMBDA_DEFAULT = 0.95  # Default GAE lambda for buffer testing
-TEST_GAMMA_NINE_TENTHS = 0.9  # Nine tenths gamma for scheduler testing
-TEST_SCHEDULER_STEP_SIZE = 1  # Step size for step scheduler
-TEST_SCHEDULER_GAMMA = 0.1  # Gamma for step scheduler
-TEST_ETA_MIN_FRACTION = 0.1  # Eta min fraction for cosine scheduler
-TEST_T_MAX = 10  # T max for cosine scheduler
 TEST_STEP_THREE_DONE = 3  # Step 3 is done (for range(4) with 0-indexing)
 TEST_MINIMAL_BUFFER_SIZE = 2  # Minimal buffer size for edge case testing

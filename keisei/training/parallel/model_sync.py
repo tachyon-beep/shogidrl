@@ -14,6 +14,7 @@ from typing import Any, Dict
 import numpy as np
 import torch
 import torch.nn as nn
+from .utils import compress_array, decompress_array
 
 logger = logging.getLogger(__name__)
 
@@ -152,76 +153,12 @@ class ModelSynchronizer:
         )
 
     def _compress_array(self, array: np.ndarray) -> Dict[str, Any]:
-        """
-        Compress numpy array for efficient transmission using gzip compression.
-
-        Args:
-            array: Numpy array to compress
-
-        Returns:
-            Compressed array data with actual compression
-        """
-        try:
-            # Convert to bytes
-            array_bytes = array.tobytes()
-            original_size = len(array_bytes)
-
-            # Apply gzip compression
-            compressed_bytes = gzip.compress(array_bytes, compresslevel=6)
-            compressed_size = len(compressed_bytes)
-
-            compression_ratio = (
-                original_size / compressed_size if compressed_size > 0 else 1.0
-            )
-
-            return {
-                "data": compressed_bytes,
-                "shape": array.shape,
-                "dtype": str(array.dtype),
-                "compressed": True,
-                "compression_ratio": compression_ratio,
-                "original_size": original_size,
-                "compressed_size": compressed_size,
-            }
-        except Exception as e:
-            logger.warning("Compression failed, using uncompressed data: %s", str(e))
-            # Fallback to uncompressed
-            return {
-                "data": array,
-                "shape": array.shape,
-                "dtype": str(array.dtype),
-                "compressed": False,
-                "compression_ratio": 1.0,
-            }
+        """Wrapper around :func:`compress_array` for backward compatibility."""
+        return compress_array(array)
 
     def _decompress_array(self, compressed_data: Dict[str, Any]) -> np.ndarray:
-        """
-        Decompress array data.
-
-        Args:
-            compressed_data: Compressed array data
-
-        Returns:
-            Decompressed numpy array
-        """
-        try:
-            if compressed_data.get("compressed", False):
-                # Decompress gzip data
-                compressed_bytes = compressed_data["data"]
-                decompressed_bytes = gzip.decompress(compressed_bytes)
-
-                # Reconstruct numpy array
-                dtype = np.dtype(compressed_data["dtype"])
-                shape = compressed_data["shape"]
-                array = np.frombuffer(decompressed_bytes, dtype=dtype).reshape(shape)
-                return array
-            else:
-                # Data is not compressed, return as-is
-                return compressed_data["data"]
-        except Exception as e:
-            logger.error("Decompression failed: %s", str(e))
-            # Try to return raw data as fallback
-            return compressed_data["data"]
+        """Wrapper around :func:`decompress_array` for backward compatibility."""
+        return decompress_array(compressed_data)
 
     def get_sync_stats(self) -> Dict[str, Any]:
         """

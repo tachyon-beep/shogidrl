@@ -32,12 +32,15 @@ from .communication import WorkerCommunicator
 from .model_sync import ModelSynchronizer
 from .parallel_manager import ParallelManager
 from .self_play_worker import SelfPlayWorker
+from .utils import compress_array, decompress_array
 
 __all__ = [
     "ParallelManager",
     "SelfPlayWorker",
     "ModelSynchronizer",
     "WorkerCommunicator",
+    "compress_array",
+    "decompress_array",
 ]
 
 __version__ = "1.0.0"
