@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 import numpy as np
 import torch
 import torch.nn.functional as F
+from torch.cuda.amp import GradScaler
 
 from keisei.config_schema import AppConfig
 from keisei.core.actor_critic_protocol import ActorCriticProtocol
@@ -147,6 +148,13 @@ class PPOAgent:
             obs, dtype=torch.float32, device=self.device
         ).unsqueeze(0)
 
+        # Apply observation normalization if a compatible scaler is provided
+        if self.scaler is not None and not isinstance(self.scaler, GradScaler):
+            if hasattr(self.scaler, "transform"):
+                obs_tensor = self.scaler.transform(obs_tensor)
+            else:
+                obs_tensor = self.scaler(obs_tensor)
+
         if not legal_mask.any():
             log_error_to_stderr(
                 "PPOAgent",
@@ -160,13 +168,27 @@ class PPOAgent:
 
         # Get action, log_prob, and value from the ActorCritic model
         # Pass deterministic based on not is_training
-        (
-            selected_policy_index_tensor,
-            log_prob_tensor,
-            value_tensor,
-        ) = self.model.get_action_and_value(
-            obs_tensor, legal_mask=legal_mask, deterministic=not is_training
-        )
+        if is_training:
+            with torch.no_grad():
+                (
+                    selected_policy_index_tensor,
+                    log_prob_tensor,
+                    value_tensor,
+                ) = self.model.get_action_and_value(
+                    obs_tensor,
+                    legal_mask=legal_mask,
+                    deterministic=not is_training,
+                )
+        else:
+            (
+                selected_policy_index_tensor,
+                log_prob_tensor,
+                value_tensor,
+            ) = self.model.get_action_and_value(
+                obs_tensor,
+                legal_mask=legal_mask,
+                deterministic=not is_training,
+            )
 
         selected_policy_index_val = int(selected_policy_index_tensor.item())
         log_prob_val = float(log_prob_tensor.item())
@@ -201,6 +223,12 @@ class PPOAgent:
         obs_tensor = torch.as_tensor(
             obs_np, dtype=torch.float32, device=self.device
         ).unsqueeze(0)
+
+        if self.scaler is not None and not isinstance(self.scaler, GradScaler):
+            if hasattr(self.scaler, "transform"):
+                obs_tensor = self.scaler.transform(obs_tensor)
+            else:
+                obs_tensor = self.scaler(obs_tensor)
         with torch.no_grad():
             _, _, value_estimate = self.model.get_action_and_value(
                 obs_tensor, deterministic=True
@@ -234,6 +262,7 @@ class PPOAgent:
         obs_batch = batch_data["obs"].to(self.device)
         actions_batch = batch_data["actions"].to(self.device)
         old_log_probs_batch = batch_data["log_probs"].to(self.device)
+        old_values_batch = batch_data["values"].to(self.device)
         advantages_batch = batch_data["advantages"].to(self.device)
         returns_batch = batch_data["returns"].to(self.device)
         legal_masks_batch = batch_data["legal_masks"].to(self.device)
@@ -268,14 +297,25 @@ class PPOAgent:
                 obs_minibatch = obs_batch[minibatch_indices]
                 actions_minibatch = actions_batch[minibatch_indices]
                 old_log_probs_minibatch = old_log_probs_batch[minibatch_indices]
+                old_values_minibatch = old_values_batch[minibatch_indices]
                 advantages_minibatch = advantages_batch[minibatch_indices]
                 returns_minibatch = returns_batch[minibatch_indices]
                 legal_masks_minibatch = legal_masks_batch[minibatch_indices]
 
+                # Apply observation normalization if scaler provided
+                if (
+                    self.scaler is not None
+                    and not isinstance(self.scaler, GradScaler)
+                ):
+                    if hasattr(self.scaler, "transform"):
+                        obs_minibatch = self.scaler.transform(obs_minibatch)
+                    else:
+                        obs_minibatch = self.scaler(obs_minibatch)
+
                 # Get new log_probs, entropy, and value from the model
                 # Note on entropy: legal_mask is now passed here. Entropy is calculated
                 # over legal actions only.
-                if self.use_mixed_precision and self.scaler:
+                if self.use_mixed_precision and isinstance(self.scaler, GradScaler):
                     # Mixed precision forward pass
                     with torch.cuda.amp.autocast():
                         new_log_probs, entropy, new_values = (
@@ -307,10 +347,24 @@ class PPOAgent:
                 )
                 policy_loss = -torch.min(surr1, surr2).mean()
 
-                # Value loss (MSE)
-                value_loss = F.mse_loss(
-                    new_values.squeeze(), returns_minibatch.squeeze()
-                )
+                # Value loss with optional clipping
+                if self.config.training.enable_value_clipping:
+                    values_pred_clipped = old_values_minibatch + torch.clamp(
+                        new_values - old_values_minibatch,
+                        -self.clip_epsilon,
+                        self.clip_epsilon,
+                    )
+                    value_loss_unclipped = F.mse_loss(
+                        new_values.squeeze(), returns_minibatch.squeeze()
+                    )
+                    value_loss_clipped = F.mse_loss(
+                        values_pred_clipped.squeeze(), returns_minibatch.squeeze()
+                    )
+                    value_loss = torch.max(value_loss_unclipped, value_loss_clipped)
+                else:
+                    value_loss = F.mse_loss(
+                        new_values.squeeze(), returns_minibatch.squeeze()
+                    )
 
                 # Entropy bonus
                 entropy_loss = -entropy.mean()
@@ -325,7 +379,7 @@ class PPOAgent:
                 self.optimizer.zero_grad()
 
                 # Fix B4: Use mixed precision for backward pass if enabled
-                if self.use_mixed_precision and self.scaler:
+                if self.use_mixed_precision and isinstance(self.scaler, GradScaler):
                     # Mixed precision backward pass
                     self.scaler.scale(loss).backward()
                     # Unscale gradients before clipping
