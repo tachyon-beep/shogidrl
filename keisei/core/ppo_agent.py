@@ -143,7 +143,7 @@ class PPOAgent:
         """
         self.model.train(is_training)
 
-        obs_tensor = torch.tensor(
+        obs_tensor = torch.as_tensor(
             obs, dtype=torch.float32, device=self.device
         ).unsqueeze(0)
 
@@ -198,7 +198,7 @@ class PPOAgent:
     def get_value(self, obs_np: np.ndarray) -> float:
         """Get the value prediction from the critic for a given NumPy observation."""
         self.model.eval()
-        obs_tensor = torch.tensor(
+        obs_tensor = torch.as_tensor(
             obs_np, dtype=torch.float32, device=self.device
         ).unsqueeze(0)
         with torch.no_grad():
