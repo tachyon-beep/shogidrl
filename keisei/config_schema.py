@@ -5,7 +5,7 @@ Defines all configuration sections and their defaults.
 
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class EnvConfig(BaseModel):
@@ -97,14 +97,14 @@ class TrainingConfig(BaseModel):
         description="When to step the scheduler: 'epoch' (per PPO epoch) or 'update' (per minibatch update)",
     )
 
-    @validator("learning_rate")
+    @field_validator("learning_rate")
     # pylint: disable=no-self-argument
     def lr_positive(cls, v):
         if v <= 0:
             raise ValueError("learning_rate must be positive")
         return v
 
-    @validator("lr_schedule_type")
+    @field_validator("lr_schedule_type")
     def validate_lr_schedule_type(cls, v):  # pylint: disable=no-self-argument
         if v is not None and v not in ["linear", "cosine", "exponential", "step"]:
             raise ValueError(
@@ -112,7 +112,7 @@ class TrainingConfig(BaseModel):
             )
         return v
 
-    @validator("lr_schedule_step_on")
+    @field_validator("lr_schedule_step_on")
     def validate_lr_schedule_step_on(cls, v):  # pylint: disable=no-self-argument
         if v not in ["epoch", "update"]:
             raise ValueError("lr_schedule_step_on must be 'epoch' or 'update'")
@@ -140,21 +140,21 @@ class EvaluationConfig(BaseModel):
         False, description="Enable Weights & Biases logging for evaluation."
     )
 
-    @validator("evaluation_interval_timesteps")
+    @field_validator("evaluation_interval_timesteps")
     # pylint: disable=no-self-argument
     def evaluation_interval_positive(cls, v):
         if v <= 0:
             raise ValueError("evaluation_interval_timesteps must be positive")
         return v
 
-    @validator("num_games")
+    @field_validator("num_games")
     # pylint: disable=no-self-argument
     def num_games_positive(cls, v):
         if v <= 0:
             raise ValueError("num_games must be positive")
         return v
 
-    @validator("max_moves_per_game")
+    @field_validator("max_moves_per_game")
     # pylint: disable=no-self-argument
     def max_moves_positive(cls, v):
         if v <= 0:
@@ -218,14 +218,14 @@ class ParallelConfig(BaseModel):
         1000, description="Offset for worker random seeds to ensure diversity."
     )
 
-    @validator("num_workers")
+    @field_validator("num_workers")
     # pylint: disable=no-self-argument
     def workers_positive(cls, v):
         if v <= 0:
             raise ValueError("num_workers must be positive")
         return v
 
-    @validator("batch_size")
+    @field_validator("batch_size")
     # pylint: disable=no-self-argument
     def batch_size_positive(cls, v):
         if v <= 0:
@@ -252,5 +252,4 @@ class AppConfig(BaseModel):
     parallel: ParallelConfig
     demo: DemoConfig
 
-    class Config:
-        extra = "forbid"  # Disallow unknown fields for strict validation
+    model_config = {"extra": "forbid"}  # Disallow unknown fields for strict validation

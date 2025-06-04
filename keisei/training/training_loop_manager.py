@@ -67,7 +67,7 @@ class TrainingLoopManager:
             self.parallel_manager = ParallelManager(
                 env_config=env_config,
                 model_config=model_config,
-                parallel_config=self.config.parallel.dict(),
+                parallel_config=self.config.parallel.model_dump(),
                 device=self.config.env.device,
             )
 
@@ -101,7 +101,7 @@ class TrainingLoopManager:
                 log_both(
                     f"Starting {self.config.parallel.num_workers} parallel workers..."
                 )
-                if self.parallel_manager.start_workers(self.trainer.agent.model):
+                if self.parallel_manager.start_workers(cast(nn.Module, self.trainer.agent.model)):
                     log_both("Parallel workers started successfully")
                 else:
                     log_both(

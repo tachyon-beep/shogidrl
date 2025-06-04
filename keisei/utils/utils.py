@@ -135,7 +135,7 @@ def load_config(
         mapped_overrides = _map_flat_overrides(cli_overrides)
         _merge_overrides(config_data, mapped_overrides)
     try:
-        config = AppConfig.parse_obj(config_data)
+        config = AppConfig.model_validate(config_data)
     except ValidationError as e:
         log_error_to_stderr("Utils", "Configuration validation error:")
         log_error_to_stderr("Utils", str(e))
@@ -274,6 +274,8 @@ class PolicyOutputMapper:
                         and stored_move[0] is None
                         and stored_move[2] == move[2]
                         and stored_move[3] == move[3]
+                        and isinstance(stored_move[4], PieceType)
+                        and isinstance(move[4], PieceType)
                         and stored_move[4].value == move[4].value
                     ):  # Compare PieceType by value
                         idx = self.move_to_idx.get(stored_move)
