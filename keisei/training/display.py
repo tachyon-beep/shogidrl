@@ -2,7 +2,7 @@
 training/display.py: Rich UI management for the Shogi RL trainer.
 """
 
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Union, Optional
 
 from rich.console import Console, Group
 from rich.layout import Layout
@@ -20,13 +20,27 @@ from rich.progress import (
 )
 from rich.text import Text
 
+from keisei.config_schema import DisplayConfig
+from .display_components import DisplayComponent, ShogiBoard, Sparkline
+
 
 class TrainingDisplay:
     def __init__(self, config, trainer, rich_console: Console):
         self.config = config
+        self.display_config: DisplayConfig = getattr(config, "display", DisplayConfig())
         self.trainer = trainer
         self.rich_console = rich_console
         self.rich_log_messages = trainer.rich_log_messages
+
+        self.board_component: Optional[DisplayComponent] = None
+        self.trend_component: Optional[DisplayComponent] = None
+        self.elo_component: Optional[DisplayComponent] = None
+
+        if self.display_config.enable_board_display:
+            self.board_component = ShogiBoard()
+        if self.display_config.enable_trend_visualization:
+            self.trend_component = Sparkline(width=self.display_config.sparkline_width)
+
         self.progress_bar, self.training_task, self.layout, self.log_panel = (
             self._setup_rich_progress_display()
         )
@@ -102,10 +116,20 @@ class TrainingDisplay:
             expand=True,
         )
         layout = Layout(name="root")
-        layout.split_column(
-            Layout(name="main_log", ratio=1),
-            Layout(name="progress_display", size=2),
-        )
+        if self.display_config.enable_enhanced_layout:
+            layout.split_column(
+                Layout(name="main_log", ratio=1),
+                Layout(name="dashboard", ratio=self.display_config.dashboard_height_ratio),
+                Layout(name="progress_display", size=self.display_config.progress_bar_height),
+            )
+            layout["dashboard"].update(
+                Panel(Text("Dashboard placeholder"), border_style="blue")
+            )
+        else:
+            layout.split_column(
+                Layout(name="main_log", ratio=1),
+                Layout(name="progress_display", size=2),
+            )
         layout["main_log"].update(log_panel)
         layout["progress_display"].update(progress_bar)
         return progress_bar, training_task, layout, log_panel
