@@ -12,7 +12,6 @@ This module tests sophisticated PPO learning features including:
 
 import numpy as np
 import torch
-from keisei.config_schema import EnvConfig, TrainingConfig
 
 from keisei.constants import (
     CORE_OBSERVATION_CHANNELS,
@@ -42,8 +41,7 @@ from keisei.constants import (
     TEST_VALUE_DEFAULT,
 )
 
-TRAIN_DEFAULTS = TrainingConfig()
-ENV_DEFAULTS = EnvConfig()
+from tests.conftest import TRAIN_DEFAULTS, ENV_DEFAULTS
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.neural_network import ActorCritic
 from keisei.core.ppo_agent import PPOAgent

@@ -16,7 +16,6 @@ import tempfile
 import numpy as np
 import pytest
 import torch
-from keisei.config_schema import EnvConfig, TrainingConfig
 
 from keisei.constants import (
     CORE_OBSERVATION_CHANNELS,
@@ -68,8 +67,7 @@ from keisei.constants import (
     TEST_ZERO_LEARNING_RATE,
 )
 
-TRAIN_DEFAULTS = TrainingConfig()
-ENV_DEFAULTS = EnvConfig()
+from tests.conftest import TRAIN_DEFAULTS, ENV_DEFAULTS
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.ppo_agent import PPOAgent
 from tests.conftest import assert_valid_ppo_metrics

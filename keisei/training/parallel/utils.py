@@ -22,13 +22,15 @@ def compress_array(array: np.ndarray) -> Dict[str, Any]:
             "compressed_size": compressed_size,
         }
     except Exception:
-        # Fallback to uncompressed representation
+        # Fallback to uncompressed representation while preserving size metadata
         return {
             "data": array,
             "shape": array.shape,
             "dtype": str(array.dtype),
             "compressed": False,
             "compression_ratio": 1.0,
+            "original_size": array.nbytes,
+            "compressed_size": array.nbytes,
         }
 
 

@@ -5,15 +5,13 @@ Unit tests for ExperienceBuffer in experience_buffer.py
 import numpy as np
 import pytest
 import torch
-from keisei.config_schema import EnvConfig, TrainingConfig
+
 
 from keisei.constants import (
     CORE_OBSERVATION_CHANNELS,
     SHOGI_BOARD_SIZE,
 )
 
-TRAIN_DEFAULTS = TrainingConfig()
-ENV_DEFAULTS = EnvConfig()
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.utils import PolicyOutputMapper
 
