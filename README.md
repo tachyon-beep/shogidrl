@@ -56,6 +56,7 @@ For comprehensive technical details, see:
 - **Advanced PPO Implementation**: Clipped surrogate objectives, entropy regularization, and Generalized Advantage Estimation (GAE)
 - **Mixed Precision Training**: Automatic Mixed Precision (AMP) with GradScaler for memory efficiency and speed
 - **Distributed Training Support**: DistributedDataParallel (DDP) for multi-GPU training
+- **Parallel Self-Play Support**: Multi-process experience collection with `training/parallel`
 - **Intelligent Checkpointing**: Automatic model saving with resumption capabilities
 - **Gradient Management**: Configurable gradient clipping and optimization stability controls
 
@@ -69,8 +70,10 @@ For comprehensive technical details, see:
 - **Pydantic Configuration**: Type-safe, validated configuration with YAML loading
 - **Manager-Based Architecture**: 9 specialized managers for clean separation of concerns
 - **Rich Console UI**: Real-time training visualization with progress bars and metrics
+- **Unified Logger**: Consistent Rich-formatted logging via `utils/unified_logger.py`
 - **Comprehensive Logging**: Structured logging with file output and console formatting
 - **Weights & Biases Integration**: Professional experiment tracking and model artifact management
+- **Profiling Utilities**: Lightweight timing and cProfile helpers for development
 
 ### Evaluation & Monitoring
 - **Multi-Opponent Evaluation**: Test against random, heuristic, and other trained agents
@@ -83,6 +86,7 @@ For comprehensive technical details, see:
 - **Comprehensive Test Suite**: Unit tests, integration tests, and performance benchmarks
 - **Code Quality Tools**: Black formatting, mypy type checking, and security scanning
 - **Extensive Documentation**: Complete API documentation and usage guides
+- **Profiling Helpers**: Timing and cProfile utilities for performance debugging
 
 ## System Architecture
 
@@ -310,12 +314,15 @@ keisei/
 │
 ├── keisei/                     # Core library package
 │   ├── config_schema.py        # Pydantic configuration models
+│   ├── constants.py            # Shared board and observation constants
 │   │
 │   ├── core/                   # Core RL components
 │   │   ├── actor_critic_protocol.py # Model interface definition
+│   │   ├── base_actor_critic.py # Common ActorCritic helpers
 │   │   ├── neural_network.py   # Basic ActorCritic implementation
 │   │   ├── ppo_agent.py        # PPO algorithm implementation
 │   │   ├── experience_buffer.py # Experience storage and GAE
+│   │   ├── scheduler_factory.py # LR scheduler creation helpers
 │   │   └── __init__.py
 │   │
 │   ├── shogi/                  # Shogi game engine
@@ -345,6 +352,12 @@ keisei/
 │   │   ├── display_manager.py  # Rich UI and visualization
 │   │   ├── callback_manager.py # Training callbacks and events
 │   │   ├── setup_manager.py    # Component initialization
+│   │   ├── parallel/           # Multi-process experience collection
+│   │   │   ├── parallel_manager.py # Worker orchestration
+│   │   │   ├── self_play_worker.py # Self-play worker process
+│   │   │   ├── communication.py    # IPC utilities
+│   │   │   ├── model_sync.py       # Model synchronization
+│   │   │   └── utils.py            # Compression helpers
 │   │   └── utils.py            # Training utilities
 │   │
 │   ├── evaluation/             # Evaluation system
@@ -357,6 +370,8 @@ keisei/
 │       ├── checkpoint.py       # Checkpoint management utilities
 │       ├── move_formatting.py  # Move display and formatting
 │       ├── opponents.py        # Opponent implementations
+│       ├── unified_logger.py   # Rich console logging helper
+│       ├── profiling.py        # Development profiling tools
 │       ├── utils.py            # Core utilities and policy mapping
 │       └── __init__.py
 │
@@ -385,10 +400,11 @@ keisei/
 ```
 
 **Key Directories:**
-- **`keisei/core/`**: Core reinforcement learning components (PPO, neural networks, experience buffer)
+- **`keisei/core/`**: Core reinforcement learning components (PPO, base networks, schedulers)
 - **`keisei/shogi/`**: Complete Shogi game implementation with full rule support
-- **`keisei/training/`**: Manager-based training infrastructure with modular components
+- **`keisei/training/`**: Manager-based training infrastructure with parallel self-play support
 - **`keisei/evaluation/`**: Comprehensive evaluation system with multi-opponent support
+- **`keisei/utils/`**: Unified logger, profiling helpers, and utility functions
 - **`docs/`**: Extensive documentation including design documents and component details
 
 ## Technical Details
