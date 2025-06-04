@@ -13,6 +13,7 @@ from keisei.core.actor_critic_protocol import ActorCriticProtocol
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.ppo_agent import PPOAgent
 from keisei.utils import TrainingLogger
+from keisei.utils.unified_logger import log_error_to_stderr
 
 from .step_manager import StepManager
 
@@ -175,7 +176,7 @@ class SetupManager:
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 f.write(f"[{timestamp}] {message}\n")
         except (OSError, IOError) as e:
-            print(f"[SetupManager] Failed to log event: {e}", file=sys.stderr)
+            log_error_to_stderr("SetupManager", "Failed to log event", e)
 
     def log_run_info(
         self, session_manager, model_manager, agent, metrics_manager, log_both

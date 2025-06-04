@@ -9,8 +9,9 @@ import sys
 
 from keisei.config_schema import AppConfig
 from keisei.training.trainer import Trainer
-from keisei.training.utils import apply_wandb_sweep_config
+from keisei.training.utils import apply_wandb_sweep_config, build_cli_overrides
 from keisei.utils import load_config
+from keisei.utils.unified_logger import log_error_to_stderr
 
 
 def main():
@@ -51,14 +52,8 @@ def main():
     # Get W&B sweep overrides if running in a sweep
     sweep_overrides = apply_wandb_sweep_config()
 
-    # Build CLI overrides dict (dot notation)
-    cli_overrides = {}
-    if args.seed is not None:
-        cli_overrides["env.seed"] = args.seed
-    if args.device is not None:
-        cli_overrides["env.device"] = args.device
-    if args.total_timesteps is not None:
-        cli_overrides["training.total_timesteps"] = args.total_timesteps
+    # Build CLI overrides using shared utility
+    cli_overrides = build_cli_overrides(args)
 
     # Merge sweep overrides with CLI overrides (CLI takes precedence)
     final_overrides = {**sweep_overrides, **cli_overrides}
@@ -77,11 +72,8 @@ if __name__ == "__main__":
         if multiprocessing.get_start_method(allow_none=True) != "spawn":
             multiprocessing.set_start_method("spawn", force=True)
     except RuntimeError as e:
-        print(
-            f"Warning: Could not set multiprocessing start method to 'spawn': {e}. Using default: {multiprocessing.get_start_method(allow_none=True)}.",
-            file=sys.stderr,
-        )
+        log_error_to_stderr("TrainWandbSweep", f"Could not set multiprocessing start method to 'spawn': {e}. Using default: {multiprocessing.get_start_method(allow_none=True)}")
     except OSError as e:
-        print(f"Error setting multiprocessing start_method: {e}", file=sys.stderr)
+        log_error_to_stderr("TrainWandbSweep", f"Error setting multiprocessing start_method: {e}")
 
     main()

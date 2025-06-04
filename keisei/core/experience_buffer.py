@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 import torch  # Ensure torch is imported
+from keisei.utils.unified_logger import log_warning_to_stderr
 
 
 @dataclass
@@ -76,7 +77,7 @@ class ExperienceBuffer:
         else:
             # This case should ideally be handled by the training loop,
             # which calls learn() and then clear() when buffer is full.
-            print("Warning: ExperienceBuffer is full. Cannot add new experience.")
+            log_warning_to_stderr("ExperienceBuffer", "Buffer is full. Cannot add new experience.")
 
     def compute_advantages_and_returns(
         self, last_value: float
@@ -87,7 +88,7 @@ class ExperienceBuffer:
         Uses PyTorch tensor operations for GAE calculation.
         """
         if self.ptr == 0:
-            print("Warning: compute_advantages_and_returns called on an empty buffer.")
+            log_warning_to_stderr("ExperienceBuffer", "compute_advantages_and_returns called on an empty buffer.")
             self.advantages = []
             self.returns = []
             return
@@ -149,7 +150,7 @@ class ExperienceBuffer:
         if self.ptr == 0:
             # This should be handled by PPOAgent.learn() checking for empty batch_data
             # For safety, one might return structured empty tensors if needed upstream.
-            print("Warning: get_batch called on an empty or not-yet-computed buffer.")
+            log_warning_to_stderr("ExperienceBuffer", "get_batch called on an empty or not-yet-computed buffer.")
             return {}  # PPOAgent.learn already checks for this
 
         num_samples = self.ptr

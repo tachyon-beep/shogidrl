@@ -17,6 +17,7 @@ from typing import Any, Callable, Dict, Optional
 import wandb
 from keisei.config_schema import AppConfig
 from keisei.utils.utils import generate_run_name
+from keisei.utils.unified_logger import log_error_to_stderr, log_warning_to_stderr
 
 from . import utils
 
@@ -140,7 +141,7 @@ class SessionManager:
             )
             return bool(self._is_wandb_active)
         except Exception as e:  # Catch all exceptions for WandB setup
-            print(f"Warning: WandB setup failed: {e}", file=sys.stderr)
+            log_warning_to_stderr("SessionManager", f"WandB setup failed: {e}")
             self._is_wandb_active = False
             return False
 
@@ -158,7 +159,7 @@ class SessionManager:
             with open(config_path, "w", encoding="utf-8") as f:
                 f.write(effective_config_str)
         except (OSError, TypeError) as e:
-            print(f"Error saving effective_config.json: {e}", file=sys.stderr)
+            log_error_to_stderr("SessionManager", f"Error saving effective_config.json: {e}")
             raise RuntimeError(f"Failed to save effective config: {e}") from e
 
     def log_session_info(
@@ -235,7 +236,7 @@ class SessionManager:
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 f.write(f"[{timestamp}] --- SESSION START: {self._run_name} ---\n")
         except (OSError, IOError) as e:
-            print(f"Failed to log session start: {e}", file=sys.stderr)
+            log_error_to_stderr("SessionManager", f"Failed to log session start: {e}")
 
     def finalize_session(self) -> None:
         """Finalize the training session."""
@@ -271,17 +272,14 @@ class SessionManager:
                     timer.cancel()  # Cancel the timer
 
             except (KeyboardInterrupt, TimeoutError):
-                print(
-                    "Warning: WandB finalization interrupted or timed out",
-                    file=sys.stderr,
-                )
+                log_warning_to_stderr("SessionManager", "WandB finalization interrupted or timed out")
                 try:
                     # Force finish without waiting
                     wandb.finish(exit_code=1)
                 except Exception:
                     pass
             except Exception as e:  # Catch all exceptions for WandB finalization
-                print(f"Warning: WandB finalization failed: {e}", file=sys.stderr)
+                log_warning_to_stderr("SessionManager", f"WandB finalization failed: {e}")
 
     def setup_seeding(self) -> None:
         """Setup random seeding based on configuration."""

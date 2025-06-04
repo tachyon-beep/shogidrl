@@ -6,6 +6,7 @@ import time
 from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 
 import torch.nn as nn
+from keisei.utils.unified_logger import log_info_to_stderr
 
 # Constants
 STEP_MANAGER_NOT_AVAILABLE_MSG = "StepManager is not available"
@@ -143,7 +144,7 @@ class TrainingLoopManager:
             if hasattr(self.trainer, "logger") and self.trainer.logger:
                 self.trainer.logger.log(log_message)
             else:
-                print(log_message)
+                log_info_to_stderr("TrainingLoopManager", log_message)
             log_both(f"Training error in training loop: {e}", also_to_wandb=True)
             raise
 
@@ -402,14 +403,13 @@ class TrainingLoopManager:
             }
         )
 
-    def _handle_display_updates(self):
-        """Handles periodic display updates based on time and step intervals."""
-        if self.trainer.global_timestep % self.config.training.render_every_steps == 0:
-            if hasattr(self.display, "update_log_panel") and callable(
-                self.display.update_log_panel
-            ):
-                self.display.update_log_panel(self.trainer)
+    def _update_display_if_needed(self, extra_updates: Optional[dict] = None):
+        """
+        Shared helper method to update display with current progress.
 
+        Args:
+            extra_updates: Optional dictionary of additional updates to include
+        """
         current_time = time.time()
         display_update_interval = getattr(
             self.config.training, "rich_display_update_interval_seconds", 0.2
@@ -427,6 +427,11 @@ class TrainingLoopManager:
                 "current_epoch", self.current_epoch
             )
 
+            # Add any extra updates provided
+            if extra_updates:
+                for key, value in extra_updates.items():
+                    self.trainer.metrics_manager.pending_progress_updates.setdefault(key, value)
+
             if hasattr(self.display, "update_progress") and callable(
                 self.display.update_progress
             ):
@@ -440,6 +445,16 @@ class TrainingLoopManager:
             self.last_time_for_sps = current_time
             self.steps_since_last_time_for_sps = 0
             self.last_display_update_time = current_time
+
+    def _handle_display_updates(self):
+        """Handles periodic display updates based on time and step intervals."""
+        if self.trainer.global_timestep % self.config.training.render_every_steps == 0:
+            if hasattr(self.display, "update_log_panel") and callable(
+                self.display.update_log_panel
+            ):
+                self.display.update_log_panel(self.trainer)
+
+        self._update_display_if_needed()
 
     def _build_env_config(self) -> Dict[str, Any]:
         """Build environment configuration dictionary for parallel workers."""
@@ -464,36 +479,5 @@ class TrainingLoopManager:
 
     def _update_display_progress(self, num_steps_collected):
         """Update display with current progress during parallel collection."""
-        current_time = time.time()
-        display_update_interval = getattr(
-            self.config.training, "rich_display_update_interval_seconds", 0.2
-        )
-
-        if (current_time - self.last_display_update_time) > display_update_interval:
-            time_delta_sps = current_time - self.last_time_for_sps
-            current_speed = (
-                self.steps_since_last_time_for_sps / time_delta_sps
-                if time_delta_sps > 0
-                else 0.0
-            )
-
-            self.trainer.metrics_manager.pending_progress_updates.setdefault(
-                "current_epoch", self.current_epoch
-            )
-            self.trainer.metrics_manager.pending_progress_updates.setdefault(
-                "parallel_steps_collected", num_steps_collected
-            )
-
-            if hasattr(self.display, "update_progress") and callable(
-                self.display.update_progress
-            ):
-                self.display.update_progress(
-                    self.trainer,
-                    current_speed,
-                    self.trainer.metrics_manager.pending_progress_updates,
-                )
-            self.trainer.metrics_manager.pending_progress_updates.clear()
-
-            self.last_time_for_sps = current_time
-            self.steps_since_last_time_for_sps = 0
-            self.last_display_update_time = current_time
+        extra_updates = {"parallel_steps_collected": num_steps_collected}
+        self._update_display_if_needed(extra_updates)

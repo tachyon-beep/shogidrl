@@ -13,6 +13,7 @@ import pstats
 import time
 from contextlib import contextmanager
 from typing import Any, Callable, Dict
+from keisei.utils.unified_logger import log_info_to_stderr
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +109,7 @@ class PerformanceMonitor:
         """Print a summary of performance statistics."""
         stats = self.get_stats()
 
-        print("\n=== Performance Summary ===")
+        log_info_to_stderr("Profiling", "\n=== Performance Summary ===")
 
         # Group by operation type
         timing_ops = set()

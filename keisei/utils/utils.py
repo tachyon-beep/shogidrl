@@ -28,6 +28,7 @@ from rich.console import Console
 from rich.text import Text
 
 from keisei.config_schema import AppConfig
+from keisei.utils.unified_logger import log_error_to_stderr
 from keisei.shogi.shogi_core_definitions import (
     BoardMoveTuple,
     DropMoveTuple,
@@ -136,8 +137,8 @@ def load_config(
     try:
         config = AppConfig.parse_obj(config_data)
     except ValidationError as e:
-        print("Configuration validation error:")
-        print(e)
+        log_error_to_stderr("Utils", "Configuration validation error:")
+        log_error_to_stderr("Utils", str(e))
         raise
     return config
 
@@ -512,9 +513,9 @@ class TrainingLogger:
         ):  # Changed condition to use also_stdout_if_no_rich
             # Fallback to stdout if rich components are not provided and also_stdout_if_no_rich is True
             try:
-                print(full_message, file=sys.stderr)
+                log_error_to_stderr("TrainingLogger", full_message)
             except ImportError:
-                print(full_message, file=sys.stderr)
+                log_error_to_stderr("TrainingLogger", full_message)
 
 
 class EvaluationLogger:
@@ -552,7 +553,7 @@ class EvaluationLogger:
             self.log_file.flush()
 
         if self.also_stdout:
-            print(full_message, file=sys.stderr)  # Print to stderr for visibility
+            log_error_to_stderr("EvaluationLogger", full_message)
 
 
 def generate_run_name(config: "AppConfig", run_name: Optional[str] = None) -> str:

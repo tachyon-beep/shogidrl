@@ -14,6 +14,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .actor_critic_protocol import ActorCriticProtocol
+from keisei.utils.unified_logger import log_error_to_stderr
 
 
 class BaseActorCriticModel(nn.Module, ActorCriticProtocol, ABC):
@@ -92,11 +93,7 @@ class BaseActorCriticModel(nn.Module, ActorCriticProtocol, ABC):
             # This is a fallback: if probs are NaN (e.g. all legal actions masked out and all logits became -inf),
             # distribute probability uniformly over all actions to avoid erroring out in Categorical.
             # A better solution is for the caller to handle "no legal actions" gracefully.
-            print(
-                f"Warning: NaNs in probabilities in {self.__class__.__name__}.get_action_and_value. "
-                "Check legal_mask and logits. Defaulting to uniform.",
-                file=sys.stderr,
-            )
+            log_error_to_stderr(self.__class__.__name__, "NaNs in probabilities in get_action_and_value. Check legal_mask and logits. Defaulting to uniform.")
             probs = torch.ones_like(policy_logits) / policy_logits.shape[-1]
 
         dist = torch.distributions.Categorical(probs=probs)
@@ -165,11 +162,7 @@ class BaseActorCriticModel(nn.Module, ActorCriticProtocol, ABC):
         # Check for NaNs in probs (e.g. if all logits in a row were -inf due to masking)
         # Replace NaNs with uniform distribution for stability in entropy calculation for those rows
         if torch.isnan(probs).any():
-            print(
-                f"Warning: NaNs in probabilities in {self.__class__.__name__}.evaluate_actions. "
-                "Check legal_mask and logits. Defaulting to uniform for affected rows.",
-                file=sys.stderr,
-            )
+            log_error_to_stderr(self.__class__.__name__, "NaNs in probabilities in evaluate_actions. Check legal_mask and logits. Defaulting to uniform for affected rows.")
             nan_rows = torch.isnan(probs).any(dim=1)
             probs[nan_rows] = torch.ones_like(probs[nan_rows]) / policy_logits.shape[-1]
 

@@ -18,6 +18,15 @@ from keisei.config_schema import (
     TrainingConfig,
     WandBConfig,
 )
+from keisei.constants import (
+    SHOGI_BOARD_SIZE,
+    CORE_OBSERVATION_CHANNELS,
+    DEFAULT_NUM_ACTIONS_TOTAL,
+    DEFAULT_GAMMA,
+    DEFAULT_LAMBDA_GAE,
+    DEFAULT_MAX_MOVES_PER_GAME,
+    TEST_BUFFER_SIZE,
+)
 from keisei.utils import PolicyOutputMapper
 
 # Try to set the start method as early as possible for pytest runs
@@ -149,10 +158,10 @@ def minimal_env_config():
     """Minimal environment configuration for unit tests."""
     return EnvConfig(
         device="cpu",
-        input_channels=46,
-        num_actions_total=13527,
+        input_channels=CORE_OBSERVATION_CHANNELS,
+        num_actions_total=DEFAULT_NUM_ACTIONS_TOTAL,
         seed=42,
-        max_moves_per_game=200,  # Reasonable limit for test scenarios
+        max_moves_per_game=DEFAULT_MAX_MOVES_PER_GAME,  # Standard limit for games
     )
 
 
@@ -165,7 +174,7 @@ def minimal_training_config():
         ppo_epochs=1,
         minibatch_size=2,
         learning_rate=1e-3,
-        gamma=0.99,
+        gamma=DEFAULT_GAMMA,
         clip_epsilon=0.2,
         value_loss_coeff=0.5,
         entropy_coef=0.01,
@@ -180,7 +189,7 @@ def minimal_training_config():
         mixed_precision=False,
         ddp=False,
         gradient_clip_max_norm=0.5,
-        lambda_gae=0.95,
+        lambda_gae=DEFAULT_LAMBDA_GAE,
         checkpoint_interval_timesteps=1000,
         evaluation_interval_timesteps=1000,
         weight_decay=0.0,
@@ -319,10 +328,10 @@ def integration_test_config(policy_mapper, tmp_path):
     return AppConfig(
         env=EnvConfig(
             device="cpu",
-            input_channels=46,
+            input_channels=CORE_OBSERVATION_CHANNELS,
             num_actions_total=policy_mapper.get_total_actions(),
             seed=42,
-            max_moves_per_game=200,  # Reasonable limit for test scenarios
+            max_moves_per_game=DEFAULT_MAX_MOVES_PER_GAME,  # Standard limit for games
         ),
         training=TrainingConfig(
             total_timesteps=200,  # Small for integration tests
@@ -330,7 +339,7 @@ def integration_test_config(policy_mapper, tmp_path):
             ppo_epochs=2,
             minibatch_size=4,
             learning_rate=1e-3,
-            gamma=0.99,
+            gamma=DEFAULT_GAMMA,
             clip_epsilon=0.2,
             value_loss_coeff=0.5,
             entropy_coef=0.01,
@@ -345,7 +354,7 @@ def integration_test_config(policy_mapper, tmp_path):
             mixed_precision=False,
             ddp=False,
             gradient_clip_max_norm=0.5,
-            lambda_gae=0.95,
+            lambda_gae=DEFAULT_LAMBDA_GAE,
             checkpoint_interval_timesteps=200,
             evaluation_interval_timesteps=200,
             weight_decay=0.0,
@@ -409,7 +418,7 @@ def ppo_test_model():
     from keisei.utils import PolicyOutputMapper
 
     mapper = PolicyOutputMapper()
-    return ActorCritic(input_channels=46, num_actions_total=mapper.get_total_actions())
+    return ActorCritic(input_channels=CORE_OBSERVATION_CHANNELS, num_actions_total=mapper.get_total_actions())
 
 
 @pytest.fixture
@@ -451,15 +460,15 @@ def populated_experience_buffer():
     from keisei.core.experience_buffer import ExperienceBuffer
 
     buffer = ExperienceBuffer(
-        buffer_size=4,
-        gamma=0.99,
-        lambda_gae=0.95,
+        buffer_size=TEST_BUFFER_SIZE,
+        gamma=DEFAULT_GAMMA,
+        lambda_gae=DEFAULT_LAMBDA_GAE,
         device="cpu",
     )
 
     # Create consistent dummy data
-    dummy_obs_tensor = torch.randn(46, 9, 9, device="cpu")
-    dummy_legal_mask = torch.ones(13527, dtype=torch.bool, device="cpu")
+    dummy_obs_tensor = torch.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cpu")
+    dummy_legal_mask = torch.ones(DEFAULT_NUM_ACTIONS_TOTAL, dtype=torch.bool, device="cpu")
 
     # Add varied experiences
     rewards = [1.0, -0.5, 2.0, 0.0]
@@ -487,7 +496,7 @@ def dummy_observation():
     import torch
 
     rng = np.random.default_rng(42)
-    obs_np = rng.random((46, 9, 9)).astype(np.float32)
+    obs_np = rng.random((CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE)).astype(np.float32)
     return torch.from_numpy(obs_np).to(torch.device("cpu"))
 
 
@@ -496,7 +505,7 @@ def dummy_legal_mask():
     """Standard dummy legal mask for PPO tests."""
     import torch
 
-    mask = torch.ones(13527, dtype=torch.bool, device="cpu")
+    mask = torch.ones(DEFAULT_NUM_ACTIONS_TOTAL, dtype=torch.bool, device="cpu")
     mask[0] = False  # Make first action illegal for testing
     return mask
 
@@ -505,8 +514,8 @@ def create_test_experience_data(buffer_size: int, device: str = "cpu"):
     """Helper function to generate consistent dummy experience data."""
     import torch
 
-    dummy_obs = torch.randn(46, 9, 9, device=device)
-    dummy_mask = torch.ones(13527, dtype=torch.bool, device=device)
+    dummy_obs = torch.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device=device)
+    dummy_mask = torch.ones(DEFAULT_NUM_ACTIONS_TOTAL, dtype=torch.bool, device=device)
 
     # Generate varied but consistent data
     experiences = []

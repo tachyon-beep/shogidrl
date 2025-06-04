@@ -11,9 +11,10 @@ from keisei.config_schema import AppConfig
 
 # Import config module and related components
 from keisei.utils import load_config
+from keisei.utils.unified_logger import log_info_to_stderr, log_error_to_stderr
 
 from .trainer import Trainer
-from .utils import apply_wandb_sweep_config
+from .utils import apply_wandb_sweep_config, build_cli_overrides
 
 
 def main():
@@ -117,19 +118,9 @@ def main():
             k, v = override.split("=", 1)
             cli_overrides[k] = v
 
-    # Add direct CLI args as overrides if set
-    if args.seed is not None:
-        cli_overrides["env.seed"] = args.seed
-    if args.device is not None:
-        cli_overrides["env.device"] = args.device
-    if args.total_timesteps is not None:
-        cli_overrides["training.total_timesteps"] = args.total_timesteps
-    if args.savedir is not None:
-        cli_overrides["logging.model_dir"] = args.savedir
-    if args.render_every is not None:
-        cli_overrides["training.render_every_steps"] = args.render_every
-    if args.wandb_enabled:
-        cli_overrides["wandb.enabled"] = True
+    # Add direct CLI args as overrides using shared utility
+    direct_cli_overrides = build_cli_overrides(args)
+    cli_overrides.update(direct_cli_overrides)
     # Do NOT generate run_name here; let Trainer handle it for correct CLI/config/auto priority
 
     # Merge sweep overrides with CLI overrides (CLI takes precedence)
@@ -152,11 +143,8 @@ if __name__ == "__main__":
         if multiprocessing.get_start_method(allow_none=True) != "spawn":
             multiprocessing.set_start_method("spawn", force=True)
     except RuntimeError as e:
-        print(
-            f"Warning: Could not set multiprocessing start method to 'spawn': {e}. Using default: {multiprocessing.get_start_method(allow_none=True)}.",
-            file=sys.stderr,
-        )
+        log_error_to_stderr("Train", f"Could not set multiprocessing start method to 'spawn': {e}. Using default: {multiprocessing.get_start_method(allow_none=True)}")
     except Exception as e:
-        print(f"Error setting multiprocessing start_method: {e}", file=sys.stderr)
+        log_error_to_stderr("Train", f"Error setting multiprocessing start_method: {e}")
 
     main()

@@ -9,6 +9,7 @@ from rich.console import Console, Text
 from rich.live import Live
 
 from . import display
+from keisei.utils.unified_logger import log_error_to_stderr
 
 
 class DisplayManager:
@@ -121,12 +122,10 @@ class DisplayManager:
 
             console_log_path = os.path.join(output_dir, "full_console_output_rich.html")
             self.rich_console.save_html(console_log_path)
-            print(
-                f"Full Rich console output saved to {console_log_path}", file=sys.stderr
-            )
+            log_error_to_stderr("DisplayManager", f"Full Rich console output saved to {console_log_path}")
             return True
         except OSError as e:
-            print(f"Error saving Rich console log: {e}", file=sys.stderr)
+            log_error_to_stderr("DisplayManager", f"Error saving Rich console log: {e}")
             return False
 
     def print_rule(self, title: str, style: str = "bold green") -> None:

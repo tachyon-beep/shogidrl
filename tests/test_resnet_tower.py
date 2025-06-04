@@ -185,10 +185,11 @@ class TestGetActionAndValue:
                 obs_single, legal_mask=legal_mask, deterministic=False
             )
 
-        # Check that warning was printed
+        # Check that error was logged
         stderr_content = captured_stderr.getvalue()
-        assert "Warning: NaNs in probabilities" in stderr_content
+        assert "NaNs in probabilities in get_action_and_value" in stderr_content
         assert "Defaulting to uniform" in stderr_content
+        assert "[ActorCriticResTower] ERROR:" in stderr_content
 
         # Action should still be valid (0-99)
         assert 0 <= action.item() < 100
@@ -274,10 +275,11 @@ class TestEvaluateActions:
                 obs_batch, actions, legal_mask=legal_mask
             )
 
-        # Check that warning was printed
+        # Check that error was logged
         stderr_content = captured_stderr.getvalue()
-        assert "Warning: NaNs in probabilities" in stderr_content
+        assert "NaNs in probabilities in evaluate_actions" in stderr_content
         assert "Defaulting to uniform for affected rows" in stderr_content
+        assert "[ActorCriticResTower] ERROR:" in stderr_content
 
         # Results should still be valid (no NaNs)
         assert not torch.isnan(log_probs).any()

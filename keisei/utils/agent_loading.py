@@ -11,6 +11,7 @@ from keisei.utils.opponents import (
     SimpleHeuristicOpponent,
     SimpleRandomOpponent,
 )
+from keisei.utils.unified_logger import log_error_to_stderr, log_info_to_stderr
 
 
 def load_evaluation_agent(
@@ -35,7 +36,7 @@ def load_evaluation_agent(
     from keisei.core.ppo_agent import PPOAgent
 
     if not os.path.isfile(checkpoint_path):
-        print(f"Error: Checkpoint file {checkpoint_path} not found.")
+        log_error_to_stderr("AgentLoading", f"Checkpoint file {checkpoint_path} not found")
         raise FileNotFoundError(f"Checkpoint file {checkpoint_path} not found.")
     # Use dummy configs for required fields
     config = AppConfig(
@@ -124,7 +125,7 @@ def load_evaluation_agent(
 
     agent.load_model(checkpoint_path)
     agent.model.eval()
-    print(f"Loaded agent from {checkpoint_path} on device {device_str} for evaluation.")
+    log_info_to_stderr("AgentLoading", f"Loaded agent from {checkpoint_path} on device {device_str} for evaluation")
     return agent
 
 

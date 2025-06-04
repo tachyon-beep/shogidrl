@@ -127,9 +127,8 @@ class TestCheckpointValidation:
         assert "Corrupted checkpoint" in call_args
         assert str(corrupted_path) in call_args
 
-    @patch("builtins.print")
-    def test_find_latest_checkpoint_all_corrupted_message(self, mock_print, tmp_path):
-        """Test that find_latest_checkpoint prints message when all checkpoints are corrupted."""
+    def test_find_latest_checkpoint_all_corrupted_message(self, capsys, tmp_path):
+        """Test that find_latest_checkpoint logs message when all checkpoints are corrupted."""
         # Create corrupted checkpoint
         corrupted = tmp_path / "corrupted.pth"
         with open(corrupted, "wb") as f:
@@ -138,8 +137,7 @@ class TestCheckpointValidation:
         result = find_latest_checkpoint(str(tmp_path))
         assert result is None
         
-        # Verify the all-corrupted message was printed
-        mock_print.assert_any_call(
-            "All checkpoint files in directory are corrupted or unreadable",
-            file=pytest.importorskip("sys").stderr
-        )
+        # Verify the all-corrupted message was logged to stderr
+        captured = capsys.readouterr()
+        assert "All checkpoint files in directory are corrupted or unreadable" in captured.err
+        assert "[TrainingUtils] ERROR:" in captured.err

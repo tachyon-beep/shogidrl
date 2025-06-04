@@ -15,6 +15,7 @@ from keisei.core.actor_critic_protocol import ActorCriticProtocol
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.scheduler_factory import SchedulerFactory
 from keisei.utils import PolicyOutputMapper
+from keisei.utils.unified_logger import log_info_to_stderr, log_error_to_stderr
 
 if TYPE_CHECKING:
     from keisei.shogi.shogi_core_definitions import MoveTuple
@@ -67,10 +68,7 @@ class PPOAgent:
             )
         except Exception as e:
             # Fallback to default learning rate on error
-            print(
-                f"Warning: could not initialize optimizer with lr={config.training.learning_rate}, using default lr=1e-3 ({e})",
-                file=sys.stderr,
-            )
+            log_error_to_stderr("PPOAgent", f"Could not initialize optimizer with lr={config.training.learning_rate}, using default lr=1e-3: {e}")
             self.optimizer = torch.optim.Adam(
                 self.model.parameters(), lr=1e-3, weight_decay=weight_decay
             )
@@ -147,10 +145,7 @@ class PPOAgent:
         ).unsqueeze(0)
 
         if not legal_mask.any():
-            print(
-                "Warning: PPOAgent.select_action called with no legal moves (based on input legal_mask).",
-                file=sys.stderr,
-            )
+            log_error_to_stderr("PPOAgent", "select_action called with no legal moves (based on input legal_mask)")
             # Fallback behavior might be needed if model.get_action_and_value can't handle all-False mask.
             # neural_network.py's get_action_and_value attempts to handle this.
             # If this path is hit, it implies the caller might not have checked for no legal moves.
@@ -179,10 +174,7 @@ class PPOAgent:
                 selected_policy_index_val
             )
         except IndexError as e:
-            print(
-                f"Error in PPOAgent.select_action: Policy index {selected_policy_index_val} out of bounds. {e}",
-                file=sys.stderr,
-            )
+            log_error_to_stderr("PPOAgent", f"Policy index {selected_policy_index_val} out of bounds in select_action: {e}")
             # Handle by returning no move or re-raising, depending on desired robustness.
             return None, -1, 0.0, value_float
             # Or raise the error
@@ -221,9 +213,7 @@ class PPOAgent:
         current_lr = self.optimizer.param_groups[0]["lr"]
 
         if not batch_data or batch_data["obs"].shape[0] == 0:
-            print(
-                "Warning: PPOAgent.learn called with empty batch_data.", file=sys.stderr
-            )
+            log_error_to_stderr("PPOAgent", "learn called with empty batch_data")
             return {
                 "ppo/policy_loss": 0.0,
                 "ppo/value_loss": 0.0,
@@ -406,12 +396,12 @@ class PPOAgent:
             save_dict["lr_schedule_step_on"] = self.lr_schedule_step_on
 
         torch.save(save_dict, file_path)
-        print(f"PPOAgent model, optimizer, scheduler, and state saved to {file_path}")
+        log_info_to_stderr("PPOAgent", f"Model, optimizer, scheduler, and state saved to {file_path}")
 
     def load_model(self, file_path: str) -> Dict[str, Any]:
         """Loads the model, optimizer, scheduler, and training state from a file."""
         if not os.path.exists(file_path):
-            print(f"Error: Checkpoint file {file_path} not found.", file=sys.stderr)
+            log_error_to_stderr("PPOAgent", f"Checkpoint file {file_path} not found")
             return {
                 "global_timestep": 0,
                 "total_episodes_completed": 0,
@@ -441,7 +431,7 @@ class PPOAgent:
             }
             return result
         except (KeyError, RuntimeError, EOFError) as e:
-            print(f"Error loading checkpoint from {file_path}: {e}", file=sys.stderr)
+            log_error_to_stderr("PPOAgent", f"Error loading checkpoint from {file_path}: {e}")
             return {
                 "global_timestep": 0,
                 "total_episodes_completed": 0,

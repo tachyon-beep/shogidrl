@@ -18,6 +18,37 @@ from keisei.core.neural_network import ActorCritic
 from keisei.core.ppo_agent import PPOAgent
 from keisei.utils import PolicyOutputMapper
 from tests.conftest import assert_valid_ppo_metrics
+from keisei.constants import (
+    SHOGI_BOARD_SIZE,
+    CORE_OBSERVATION_CHANNELS,
+    DEFAULT_NUM_ACTIONS_TOTAL,
+    DEFAULT_GAMMA,
+    DEFAULT_LAMBDA_GAE,
+    DEFAULT_RANDOM_SEED,
+    EPSILON_MEDIUM,
+    TEST_BUFFER_SIZE,
+    TEST_MEDIUM_BUFFER_SIZE,
+    TEST_ODD_BUFFER_SIZE,
+    TEST_UNEVEN_MINIBATCH_SIZE,
+    TEST_LOG_PROB_MULTIPLIER,
+    TEST_LAST_VALUE,
+    TEST_PPO_EPOCHS,
+    TEST_MIXED_REWARDS,
+    TEST_MIXED_VALUES,
+    TEST_HIGH_VARIANCE_REWARDS,
+    TEST_HIGH_VARIANCE_VALUES,
+    TEST_EXTREME_REWARDS,
+    TEST_HIGH_LEARNING_RATE,
+    TEST_GRADIENT_CLIP_NORM,
+    TEST_SMALL_MINIBATCH,
+    TEST_ADVANTAGE_STD_THRESHOLD,
+    TEST_KL_DIVERGENCE_THRESHOLD,
+    TEST_VALUE_DEFAULT,
+    TEST_SCHEDULER_LEARNING_RATE,
+    TEST_SCHEDULER_FINAL_FRACTION,
+    TEST_SCHEDULER_TOTAL_TIMESTEPS,
+    TEST_SCHEDULER_STEPS_PER_EPOCH,
+)
 
 
 class TestPPOAgentLossComponents:
@@ -27,46 +58,46 @@ class TestPPOAgentLossComponents:
         """Test that PPOAgent.learn correctly computes and returns individual loss components."""
         # Override specific settings for this test
         config = integration_test_config.model_copy()
-        config.training.ppo_epochs = 2  # Multiple epochs to test learning behavior
+        config.training.ppo_epochs = TEST_PPO_EPOCHS  # Multiple epochs to test learning behavior
 
         agent = PPOAgent(
             model=ppo_test_model, config=config, device=torch.device("cpu")
         )
 
-        buffer_size = 8  # Larger buffer for more realistic training
+        buffer_size = TEST_MEDIUM_BUFFER_SIZE  # Larger buffer for more realistic training
         experience_buffer = ExperienceBuffer(
             buffer_size=buffer_size,
-            gamma=0.99,
-            lambda_gae=0.95,
+            gamma=DEFAULT_GAMMA,
+            lambda_gae=DEFAULT_LAMBDA_GAE,
             device="cpu",
         )
 
         # Create deterministic data for more predictable testing
-        torch.manual_seed(42)
-        np.random.seed(42)
+        torch.manual_seed(DEFAULT_RANDOM_SEED)
+        np.random.seed(DEFAULT_RANDOM_SEED)
 
-        dummy_obs_tensor = torch.randn(46, 9, 9, device="cpu")
+        dummy_obs_tensor = torch.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cpu")
         dummy_legal_mask = torch.ones(
             agent.num_actions_total, dtype=torch.bool, device="cpu"
         )
 
         # Create varied rewards and values to test advantage calculation
-        rewards = [1.0, -0.5, 2.0, 0.0, 1.5, -1.0, 0.5, 2.5]
-        values = [0.8, 0.2, 1.5, 0.1, 1.0, -0.3, 0.3, 2.0]
+        rewards = TEST_MIXED_REWARDS
+        values = TEST_MIXED_VALUES
 
         for i in range(buffer_size):
             experience_buffer.add(
                 obs=dummy_obs_tensor,
                 action=i % agent.num_actions_total,
                 reward=rewards[i],
-                log_prob=0.1 * (i + 1),  # Varied log probs
+                log_prob=TEST_LOG_PROB_MULTIPLIER * (i + 1),  # Varied log probs
                 value=values[i],
                 done=(i == buffer_size - 1),
                 legal_mask=dummy_legal_mask,
             )
 
         # Compute advantages with realistic last value
-        last_value = 1.2
+        last_value = TEST_LAST_VALUE
         experience_buffer.compute_advantages_and_returns(last_value)
 
         # Capture initial model parameters for change verification
@@ -89,7 +120,7 @@ class TestPPOAgentLossComponents:
         # Verify model parameters changed (learning occurred)
         final_params = [p.clone() for p in agent.model.parameters()]
         params_changed = any(
-            not torch.allclose(initial, final, atol=1e-6)
+            not torch.allclose(initial, final, atol=EPSILON_MEDIUM)
             for initial, final in zip(initial_params, final_params)
         )
         assert params_changed, "Model parameters should change after learning"
@@ -113,7 +144,7 @@ class TestPPOAgentAdvantageNormalization:
         # Test with normalization disabled
         config_disabled = minimal_app_config.model_copy()
         config_disabled.training.normalize_advantages = False
-        model_disabled = ActorCritic(46, PolicyOutputMapper().get_total_actions())
+        model_disabled = ActorCritic(CORE_OBSERVATION_CHANNELS, PolicyOutputMapper().get_total_actions())
         agent_disabled = PPOAgent(
             model=model_disabled, config=config_disabled, device=torch.device("cpu")
         )
@@ -121,29 +152,29 @@ class TestPPOAgentAdvantageNormalization:
 
     def test_advantage_normalization_behavior_difference(self, minimal_app_config):
         """Test that enabling/disabling advantage normalization actually affects computation."""
-        buffer_size = 8
+        buffer_size = TEST_MEDIUM_BUFFER_SIZE
 
         # Create data with high variance advantages to test normalization
         experience_buffer = ExperienceBuffer(
             buffer_size=buffer_size,
-            gamma=0.99,
-            lambda_gae=0.95,
+            gamma=DEFAULT_GAMMA,
+            lambda_gae=DEFAULT_LAMBDA_GAE,
             device="cpu",
         )
 
-        dummy_obs_tensor = torch.randn(46, 9, 9, device="cpu")
-        dummy_legal_mask = torch.ones(13527, dtype=torch.bool, device="cpu")
+        dummy_obs_tensor = torch.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cpu")
+        dummy_legal_mask = torch.ones(DEFAULT_NUM_ACTIONS_TOTAL, dtype=torch.bool, device="cpu")
 
         # High variance rewards and values to create large advantage differences
-        rewards = [100.0, -50.0, 75.0, -25.0, 50.0, -75.0, 25.0, -100.0]
-        values = [10.0, 5.0, 8.0, 3.0, 6.0, 2.0, 4.0, 1.0]
+        rewards = TEST_HIGH_VARIANCE_REWARDS
+        values = TEST_HIGH_VARIANCE_VALUES
 
         for i in range(buffer_size):
             experience_buffer.add(
                 obs=dummy_obs_tensor,
-                action=i % 13527,
+                action=i % DEFAULT_NUM_ACTIONS_TOTAL,
                 reward=rewards[i],
-                log_prob=0.1,
+                log_prob=TEST_LOG_PROB_MULTIPLIER,
                 value=values[i],
                 done=(i == buffer_size - 1),
                 legal_mask=dummy_legal_mask,
@@ -157,7 +188,7 @@ class TestPPOAgentAdvantageNormalization:
 
         # Verify raw advantages have significant variance
         assert (
-            torch.std(raw_advantages, dim=0).max() > 10.0
+            torch.std(raw_advantages, dim=0).max() > TEST_ADVANTAGE_STD_THRESHOLD
         ), "Raw advantages should have high variance"
         assert not torch.allclose(
             raw_advantages, torch.zeros_like(raw_advantages)
@@ -166,7 +197,7 @@ class TestPPOAgentAdvantageNormalization:
         # Test with normalization enabled
         config_enabled = minimal_app_config.model_copy()
         config_enabled.training.normalize_advantages = True
-        model_enabled = ActorCritic(46, PolicyOutputMapper().get_total_actions())
+        model_enabled = ActorCritic(CORE_OBSERVATION_CHANNELS, PolicyOutputMapper().get_total_actions())
         agent_enabled = PPOAgent(
             model=model_enabled, config=config_enabled, device=torch.device("cpu")
         )
@@ -174,7 +205,7 @@ class TestPPOAgentAdvantageNormalization:
         # Test with normalization disabled
         config_disabled = minimal_app_config.model_copy()
         config_disabled.training.normalize_advantages = False
-        model_disabled = ActorCritic(46, PolicyOutputMapper().get_total_actions())
+        model_disabled = ActorCritic(CORE_OBSERVATION_CHANNELS, PolicyOutputMapper().get_total_actions())
         agent_disabled = PPOAgent(
             model=model_disabled, config=config_disabled, device=torch.device("cpu")
         )
@@ -185,17 +216,17 @@ class TestPPOAgentAdvantageNormalization:
         # Recreate buffer for second agent (since buffer is consumed)
         experience_buffer2 = ExperienceBuffer(
             buffer_size=buffer_size,
-            gamma=0.99,
-            lambda_gae=0.95,
+            gamma=DEFAULT_GAMMA,
+            lambda_gae=DEFAULT_LAMBDA_GAE,
             device="cpu",
         )
 
         for i in range(buffer_size):
             experience_buffer2.add(
                 obs=dummy_obs_tensor,
-                action=i % 13527,
+                action=i % DEFAULT_NUM_ACTIONS_TOTAL,
                 reward=rewards[i],
-                log_prob=0.1,
+                log_prob=TEST_LOG_PROB_MULTIPLIER,
                 value=values[i],
                 done=(i == buffer_size - 1),
                 legal_mask=dummy_legal_mask,
@@ -220,38 +251,38 @@ class TestPPOAgentGradientClipping:
         """Test that gradient clipping is applied during learning."""
         # Use high learning rate to potentially create large gradients
         config = minimal_app_config.model_copy()
-        config.training.learning_rate = 1.0  # High learning rate
-        config.training.gradient_clip_max_norm = 0.5  # Explicit gradient clipping
+        config.training.learning_rate = TEST_HIGH_LEARNING_RATE  # High learning rate
+        config.training.gradient_clip_max_norm = TEST_GRADIENT_CLIP_NORM  # Explicit gradient clipping
         config.training.ppo_epochs = 1
-        config.training.minibatch_size = 2
+        config.training.minibatch_size = TEST_SMALL_MINIBATCH
 
         agent = PPOAgent(
             model=ppo_test_model, config=config, device=torch.device("cpu")
         )
 
-        buffer_size = 4
+        buffer_size = TEST_BUFFER_SIZE
         experience_buffer = ExperienceBuffer(
             buffer_size=buffer_size,
-            gamma=0.99,
-            lambda_gae=0.95,
+            gamma=DEFAULT_GAMMA,
+            lambda_gae=DEFAULT_LAMBDA_GAE,
             device="cpu",
         )
 
         # Create data that might produce large gradients
-        dummy_obs_tensor = torch.randn(46, 9, 9, device="cpu")
+        dummy_obs_tensor = torch.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cpu")
         dummy_legal_mask = torch.ones(
             agent.num_actions_total, dtype=torch.bool, device="cpu"
         )
 
         # Extreme reward values to potentially create large policy updates
-        rewards = [100.0, -100.0, 50.0, -50.0]
+        rewards = TEST_EXTREME_REWARDS
 
         for i in range(buffer_size):
             experience_buffer.add(
                 obs=dummy_obs_tensor,
                 action=i % agent.num_actions_total,
                 reward=rewards[i],
-                log_prob=0.1,
+                log_prob=TEST_LOG_PROB_MULTIPLIER,
                 value=0.0,
                 done=(i == buffer_size - 1),
                 legal_mask=dummy_legal_mask,
@@ -272,22 +303,22 @@ class TestPPOAgentKLDivergence:
     def test_kl_divergence_tracking(self, minimal_app_config, ppo_test_model):
         """Test that KL divergence is properly computed and tracked."""
         config = minimal_app_config.model_copy()
-        config.training.ppo_epochs = 2  # Multiple epochs to see KL divergence change
-        config.training.minibatch_size = 2
+        config.training.ppo_epochs = TEST_PPO_EPOCHS  # Multiple epochs to see KL divergence change
+        config.training.minibatch_size = TEST_SMALL_MINIBATCH
 
         agent = PPOAgent(
             model=ppo_test_model, config=config, device=torch.device("cpu")
         )
 
-        buffer_size = 4
+        buffer_size = TEST_BUFFER_SIZE
         experience_buffer = ExperienceBuffer(
             buffer_size=buffer_size,
-            gamma=0.99,
-            lambda_gae=0.95,
+            gamma=DEFAULT_GAMMA,
+            lambda_gae=DEFAULT_LAMBDA_GAE,
             device="cpu",
         )
 
-        dummy_obs_tensor = torch.randn(46, 9, 9, device="cpu")
+        dummy_obs_tensor = torch.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cpu")
         dummy_legal_mask = torch.ones(
             agent.num_actions_total, dtype=torch.bool, device="cpu"
         )
@@ -297,7 +328,7 @@ class TestPPOAgentKLDivergence:
                 obs=dummy_obs_tensor,
                 action=i % agent.num_actions_total,
                 reward=float(i),
-                log_prob=0.1,
+                log_prob=TEST_LOG_PROB_MULTIPLIER,
                 value=0.5,
                 done=(i == buffer_size - 1),
                 legal_mask=dummy_legal_mask,
@@ -320,7 +351,7 @@ class TestPPOAgentKLDivergence:
 
         # For multiple epochs with the same data, KL should generally be small
         # (policy shouldn't diverge dramatically from itself)
-        assert abs(kl_div) < 10.0, f"KL divergence {kl_div} seems too large"
+        assert abs(kl_div) < TEST_KL_DIVERGENCE_THRESHOLD, f"KL divergence {kl_div} seems too large"
 
 
 class TestPPOAgentMinibatchProcessing:
@@ -331,21 +362,21 @@ class TestPPOAgentMinibatchProcessing:
         # Test with buffer size that doesn't divide evenly by minibatch size
         config = minimal_app_config.model_copy()
         config.training.ppo_epochs = 1
-        config.training.minibatch_size = 3  # Doesn't divide evenly into 5
+        config.training.minibatch_size = TEST_UNEVEN_MINIBATCH_SIZE  # Doesn't divide evenly into 5
 
         agent = PPOAgent(
             model=ppo_test_model, config=config, device=torch.device("cpu")
         )
 
-        buffer_size = 5  # Odd size to test uneven minibatch splitting
+        buffer_size = TEST_ODD_BUFFER_SIZE  # Odd size to test uneven minibatch splitting
         experience_buffer = ExperienceBuffer(
             buffer_size=buffer_size,
-            gamma=0.99,
-            lambda_gae=0.95,
+            gamma=DEFAULT_GAMMA,
+            lambda_gae=DEFAULT_LAMBDA_GAE,
             device="cpu",
         )
 
-        dummy_obs_tensor = torch.randn(46, 9, 9, device="cpu")
+        dummy_obs_tensor = torch.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cpu")
         dummy_legal_mask = torch.ones(
             agent.num_actions_total, dtype=torch.bool, device="cpu"
         )
@@ -355,8 +386,8 @@ class TestPPOAgentMinibatchProcessing:
                 obs=dummy_obs_tensor,
                 action=i % agent.num_actions_total,
                 reward=float(i),
-                log_prob=0.1,
-                value=0.5,
+                log_prob=TEST_LOG_PROB_MULTIPLIER,
+                value=TEST_VALUE_DEFAULT,
                 done=(i == buffer_size - 1),
                 legal_mask=dummy_legal_mask,
             )
@@ -381,9 +412,9 @@ class TestPPOAgentRobustness:
 
         # Create empty buffer
         experience_buffer = ExperienceBuffer(
-            buffer_size=4,
-            gamma=0.99,
-            lambda_gae=0.95,
+            buffer_size=TEST_BUFFER_SIZE,
+            gamma=DEFAULT_GAMMA,
+            lambda_gae=DEFAULT_LAMBDA_GAE,
             device="cpu",
         )
 
@@ -417,12 +448,12 @@ class TestPPOAgentRobustness:
 
         experience_buffer = ExperienceBuffer(
             buffer_size=1,
-            gamma=0.99,
-            lambda_gae=0.95,
+            gamma=DEFAULT_GAMMA,
+            lambda_gae=DEFAULT_LAMBDA_GAE,
             device="cpu",
         )
 
-        dummy_obs_tensor = torch.randn(46, 9, 9, device="cpu")
+        dummy_obs_tensor = torch.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cpu")
         dummy_legal_mask = torch.ones(
             agent.num_actions_total, dtype=torch.bool, device="cpu"
         )
@@ -431,8 +462,8 @@ class TestPPOAgentRobustness:
             obs=dummy_obs_tensor,
             action=0,
             reward=1.0,
-            log_prob=0.1,
-            value=0.5,
+            log_prob=TEST_LOG_PROB_MULTIPLIER,
+            value=TEST_VALUE_DEFAULT,
             done=True,
             legal_mask=dummy_legal_mask,
         )
@@ -450,12 +481,12 @@ class TestPPOAgentSchedulerLearning:
     def test_learning_with_linear_scheduler(self, minimal_app_config, ppo_test_model):
         """Test that linear scheduler correctly modifies learning rate during learning."""
         config = minimal_app_config.model_copy()
-        config.training.learning_rate = 0.001
+        config.training.learning_rate = TEST_SCHEDULER_LEARNING_RATE
         config.training.lr_schedule_type = "linear"
         config.training.lr_schedule_step_on = "epoch"
-        config.training.lr_schedule_kwargs = {"final_lr_fraction": 0.1}
-        config.training.total_timesteps = 1000
-        config.training.steps_per_epoch = 100
+        config.training.lr_schedule_kwargs = {"final_lr_fraction": TEST_SCHEDULER_FINAL_FRACTION}
+        config.training.total_timesteps = TEST_SCHEDULER_TOTAL_TIMESTEPS
+        config.training.steps_per_epoch = TEST_SCHEDULER_STEPS_PER_EPOCH
         config.training.ppo_epochs = 1
 
         agent = PPOAgent(
@@ -464,13 +495,13 @@ class TestPPOAgentSchedulerLearning:
 
         # Create simple experience buffer
         experience_buffer = ExperienceBuffer(
-            buffer_size=4,
-            gamma=0.99,
-            lambda_gae=0.95,
+            buffer_size=TEST_BUFFER_SIZE,
+            gamma=DEFAULT_GAMMA,
+            lambda_gae=DEFAULT_LAMBDA_GAE,
             device="cpu",
         )
 
-        dummy_obs_tensor = torch.randn(46, 9, 9, device="cpu")
+        dummy_obs_tensor = torch.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cpu")
         dummy_legal_mask = torch.ones(
             agent.num_actions_total, dtype=torch.bool, device="cpu"
         )

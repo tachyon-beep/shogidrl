@@ -7,6 +7,13 @@ import pytest
 import torch
 
 from keisei.core.experience_buffer import ExperienceBuffer
+from keisei.constants import (
+    SHOGI_BOARD_SIZE,
+    CORE_OBSERVATION_CHANNELS,
+    DEFAULT_NUM_ACTIONS_TOTAL,
+    DEFAULT_GAMMA,
+    DEFAULT_LAMBDA_GAE,
+)
 from keisei.utils import PolicyOutputMapper
 
 
@@ -58,7 +65,7 @@ def test_experience_buffer_compute_advantages_and_returns():
 
     for i in range(3):
         buf.add(
-            obs=torch.randn(46, 9, 9),  # Dummy observation
+            obs=torch.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE),  # Dummy observation
             action=i,
             reward=rewards[i],
             log_prob=0.1,
@@ -109,8 +116,8 @@ def test_experience_buffer_get_batch():
     mapper = PolicyOutputMapper()
 
     # Create test data
-    obs1 = torch.randn(46, 9, 9)
-    obs2 = torch.randn(46, 9, 9)
+    obs1 = torch.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE)
+    obs2 = torch.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE)
     legal_mask1 = torch.zeros(mapper.get_total_actions(), dtype=torch.bool)
     legal_mask2 = torch.ones(mapper.get_total_actions(), dtype=torch.bool)
     legal_mask1[100] = True  # Make some actions legal
@@ -265,9 +272,10 @@ def test_experience_buffer_full_buffer_warning(capsys):
     # Try to add one more - should print warning and not add
     buf.add(torch.randn(46, 9, 9), 3, 3.0, 0.3, 1.5, True, dummy_legal_mask)
 
-    # Verify warning was printed
+    # Verify warning was logged to stderr
     captured = capsys.readouterr()
-    assert "Warning: ExperienceBuffer is full" in captured.out
+    assert "Buffer is full. Cannot add new experience." in captured.err
+    assert "[ExperienceBuffer] WARNING:" in captured.err
 
     # Buffer should still be size 2, not 3
     assert len(buf) == 2

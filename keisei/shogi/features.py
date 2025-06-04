@@ -6,6 +6,8 @@ from typing import Callable, Dict
 
 import numpy as np
 
+from ..constants import MOVE_COUNT_NORMALIZATION_FACTOR
+
 # Registry for feature builders
 FEATURE_REGISTRY: Dict[str, Callable] = {}
 
@@ -103,7 +105,7 @@ def build_core46(game) -> np.ndarray:
     obs[game.OBS_CURR_PLAYER_INDICATOR, :, :] = (
         1.0 if game.current_player == game.Color.BLACK else 0.0
     )
-    obs[game.OBS_MOVE_COUNT, :, :] = game.move_count / 512.0  # Normalize by max moves
+    obs[game.OBS_MOVE_COUNT, :, :] = game.move_count / MOVE_COUNT_NORMALIZATION_FACTOR  # Normalize by max moves
     obs[game.OBS_RESERVED_1, :, :] = 0.0  # Always zero-filled
     obs[game.OBS_RESERVED_2, :, :] = 0.0  # Always zero-filled
     return obs
