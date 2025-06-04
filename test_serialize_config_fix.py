@@ -7,9 +7,6 @@ import json
 import sys
 import os
 
-# Add the keisei module to the path
-sys.path.insert(0, '/home/john/keisei')
-
 from keisei.config_schema import AppConfig
 from keisei.utils import load_config
 from keisei.training.utils import serialize_config
@@ -19,7 +16,8 @@ def test_serialize_config():
     print("Testing simplified serialize_config function...")
     
     # Load default config
-    config = load_config('/home/john/keisei/default_config.yaml')
+    config_path = os.path.join(os.path.dirname(__file__), 'default_config.yaml')
+    config = load_config(config_path)
     
     # Test serialization
     try:

@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 import torch
+from .utils import decompress_array
 
 from keisei.core.actor_critic_protocol import ActorCriticProtocol
 from keisei.core.experience_buffer import Experience
@@ -412,9 +413,13 @@ class SelfPlayWorker(mp.Process):
             state_dict = {}
             for key, data in weights.items():
                 if isinstance(data, dict) and "data" in data:
-                    state_dict[key] = torch.from_numpy(data["data"])
+                    if data.get("compressed", False):
+                        array_np = decompress_array(data)
+                    else:
+                        array_np = data["data"]
+                    state_dict[key] = torch.from_numpy(array_np).to(self.device)
                 else:
-                    state_dict[key] = torch.from_numpy(data)
+                    state_dict[key] = torch.from_numpy(data).to(self.device)
 
             # Load weights
             self.model.load_state_dict(state_dict)

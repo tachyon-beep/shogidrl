@@ -16,20 +16,10 @@ import tempfile
 import numpy as np
 import pytest
 import torch
+from keisei.config_schema import EnvConfig, TrainingConfig
 
 from keisei.constants import (
     CORE_OBSERVATION_CHANNELS,
-    DEFAULT_CLIP_EPSILON,
-    DEFAULT_ENTROPY_COEFF,
-    DEFAULT_GAMMA,
-    DEFAULT_GRADIENT_CLIP_MAX_NORM,
-    DEFAULT_LAMBDA_GAE,
-    DEFAULT_LEARNING_RATE,
-    DEFAULT_NUM_ACTIONS_TOTAL,
-    DEFAULT_REFRESH_PER_SECOND,
-    DEFAULT_RENDER_EVERY_STEPS,
-    DEFAULT_SE_RATIO,
-    DEFAULT_VALUE_LOSS_COEFF,
     EPSILON_MEDIUM,
     SHOGI_BOARD_SIZE,
     TEST_ADVANTAGE_GAMMA_ZERO,
@@ -77,6 +67,9 @@ from keisei.constants import (
     TEST_ZERO_CLIP_EPSILON,
     TEST_ZERO_LEARNING_RATE,
 )
+
+TRAIN_DEFAULTS = TrainingConfig()
+ENV_DEFAULTS = EnvConfig()
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.ppo_agent import PPOAgent
 from tests.conftest import assert_valid_ppo_metrics
@@ -316,23 +309,23 @@ class TestPPOAgentConfigurationValidation:
             steps_per_epoch=TEST_CONFIG_STEPS_PER_EPOCH,
             ppo_epochs=TEST_SINGLE_EPOCH,
             minibatch_size=TEST_SMALL_MINIBATCH,
-            learning_rate=DEFAULT_LEARNING_RATE,
-            gamma=DEFAULT_GAMMA,
-            clip_epsilon=DEFAULT_CLIP_EPSILON,
-            value_loss_coeff=DEFAULT_VALUE_LOSS_COEFF,
-            entropy_coef=DEFAULT_ENTROPY_COEFF,
-            render_every_steps=DEFAULT_RENDER_EVERY_STEPS,
-            refresh_per_second=DEFAULT_REFRESH_PER_SECOND,
+            learning_rate=TRAIN_DEFAULTS.learning_rate,
+            gamma=TRAIN_DEFAULTS.gamma,
+            clip_epsilon=TRAIN_DEFAULTS.clip_epsilon,
+            value_loss_coeff=TRAIN_DEFAULTS.value_loss_coeff,
+            entropy_coef=TRAIN_DEFAULTS.entropy_coef,
+            render_every_steps=TRAIN_DEFAULTS.render_every_steps,
+            refresh_per_second=TRAIN_DEFAULTS.refresh_per_second,
             enable_spinner=False,
             input_features="core46",
             tower_depth=TEST_CONFIG_TOWER_DEPTH,
             tower_width=TEST_CONFIG_TOWER_WIDTH,
-            se_ratio=DEFAULT_SE_RATIO,
+            se_ratio=TRAIN_DEFAULTS.se_ratio,
             model_type="resnet",
             mixed_precision=False,
             ddp=False,
-            gradient_clip_max_norm=DEFAULT_GRADIENT_CLIP_MAX_NORM,
-            lambda_gae=DEFAULT_LAMBDA_GAE,
+            gradient_clip_max_norm=TRAIN_DEFAULTS.gradient_clip_max_norm,
+            lambda_gae=TRAIN_DEFAULTS.lambda_gae,
             checkpoint_interval_timesteps=TEST_SCHEDULER_TOTAL_TIMESTEPS,
             evaluation_interval_timesteps=TEST_SCHEDULER_TOTAL_TIMESTEPS,
             weight_decay=TEST_WEIGHT_DECAY_ZERO,
@@ -545,8 +538,8 @@ class TestPPOAgentBoundaryConditions:
         # Should still be able to learn (though may not change much)
         experience_buffer = ExperienceBuffer(
             buffer_size=TEST_BUFFER_SIZE,
-            gamma=DEFAULT_GAMMA,
-            lambda_gae=DEFAULT_LAMBDA_GAE,
+            gamma=TRAIN_DEFAULTS.gamma,
+            lambda_gae=TRAIN_DEFAULTS.lambda_gae,
             device="cpu",
         )
 
@@ -576,7 +569,7 @@ class TestPPOAgentBoundaryConditions:
         """Test learning when buffer has experiences but they get filtered out."""
         experience_buffer = ExperienceBuffer(
             buffer_size=TEST_MINIMAL_BUFFER_SIZE,
-            gamma=DEFAULT_GAMMA,
+            gamma=TRAIN_DEFAULTS.gamma,
             lambda_gae=TEST_GAE_LAMBDA_DEFAULT,
             device="cpu",
         )
@@ -680,8 +673,8 @@ class TestPPOAgentSchedulerEdgeCases:
         # Should still be able to train
         buffer = ExperienceBuffer(
             buffer_size=TEST_BUFFER_SIZE,
-            gamma=DEFAULT_GAMMA,
-            lambda_gae=DEFAULT_LAMBDA_GAE,
+            gamma=TRAIN_DEFAULTS.gamma,
+            lambda_gae=TRAIN_DEFAULTS.lambda_gae,
             device="cpu",
         )
 
