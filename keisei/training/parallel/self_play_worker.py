@@ -273,13 +273,13 @@ class SelfPlayWorker(mp.Process):
             experiences: List of Experience objects to send
         """
         try:
-            # Convert to list format for transmission
-            batch_data = experiences
+            # Convert experiences to batched tensor format for efficient IPC
+            batched_tensors = self._experiences_to_batch(experiences)
 
             # Add worker metadata
             batch_message = {
                 "worker_id": self.worker_id,
-                "experiences": batch_data,
+                "experiences": batched_tensors,  # Now sending batched tensors instead of individual objects
                 "batch_size": len(experiences),
                 "timestamp": time.time(),
                 "steps_collected": self.steps_collected,
@@ -289,6 +289,12 @@ class SelfPlayWorker(mp.Process):
             # Send to main process
             timeout = self.parallel_config.get("timeout_seconds", 10.0)
             self.experience_queue.put(batch_message, timeout=timeout)
+
+            logger.debug(
+                "Worker %d sent batch of %d experiences as tensors",
+                self.worker_id,
+                len(experiences),
+            )
 
         except queue.Full:
             logger.warning(

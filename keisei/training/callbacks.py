@@ -79,6 +79,11 @@ class EvaluationCallback(Callback):
                     )
                 return
 
+            # Type narrowing: assert that agent is not None
+            assert (
+                trainer.agent is not None
+            ), "Agent should be initialized at this point"
+
             # Ensure the model to be evaluated exists and is accessible
             # The Trainer now owns self.model directly.
             # PPOAgent also has a self.model attribute.

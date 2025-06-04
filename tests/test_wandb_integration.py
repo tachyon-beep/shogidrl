@@ -24,9 +24,8 @@ from keisei.config_schema import (
     WandBConfig,
 )
 from keisei.training.session_manager import SessionManager
-from keisei.training.utils import apply_wandb_sweep_config
 from keisei.training.trainer import Trainer
-from keisei.training.utils import setup_wandb
+from keisei.training.utils import apply_wandb_sweep_config, setup_wandb
 
 
 @pytest.fixture
@@ -291,17 +290,17 @@ class TestWandBArtifacts:
 
             # Verify retry attempts were logged (3 calls total: 2 retries + 1 final error)
             assert log_mock.call_count == 3
-            
+
             # Check first retry attempt
             first_call = log_mock.call_args_list[0]
             assert "WandB artifact upload attempt 1 failed" in first_call[0][0]
             assert "Retrying in 1.0 seconds" in first_call[0][0]
-            
+
             # Check second retry attempt
             second_call = log_mock.call_args_list[1]
-            assert "WandB artifact upload attempt 2 failed" in second_call[0][0] 
+            assert "WandB artifact upload attempt 2 failed" in second_call[0][0]
             assert "Retrying in 2.0 seconds" in second_call[0][0]
-            
+
             # Check final error
             final_call = log_mock.call_args_list[2]
             assert "Error creating W&B artifact" in final_call[0][0]
@@ -353,6 +352,7 @@ class TestWandBArtifacts:
 
         # Test Case 1: Success on second attempt
         call_count = 0
+
         def failing_log_artifact(artifact, aliases=None):
             nonlocal call_count
             call_count += 1
@@ -381,12 +381,12 @@ class TestWandBArtifacts:
 
             assert result is True
             assert call_count == 2  # Failed once, succeeded on retry
-            
+
             # Debug: Print all log calls to understand what's happening
             print(f"Log call count: {log_mock.call_count}")
             for i, call in enumerate(log_mock.call_args_list):
                 print(f"Call {i}: {call}")
-            
+
             # Verify retry message was logged
             assert log_mock.call_count >= 1  # Temporarily allow more calls to debug
             # Find the retry call among all calls
@@ -399,9 +399,11 @@ class TestWandBArtifacts:
             assert retry_found, "Retry message not found in log calls"
 
         # Test Case 2: All retries fail
-        mock_wandb_active["log_artifact"].side_effect = RuntimeError("Persistent network error")
+        mock_wandb_active["log_artifact"].side_effect = RuntimeError(
+            "Persistent network error"
+        )
         call_count = 0
-        
+
         with patch("keisei.training.utils.setup_wandb", return_value=True):
             trainer = Trainer(config=config, args=args)
             trainer.is_train_wandb_active = True
@@ -417,19 +419,19 @@ class TestWandBArtifacts:
             )
 
             assert result is False
-            
+
             # Verify 3 log calls: 2 retry attempts + 1 final error
             assert log_mock.call_count == 3
-            
+
             # Check retry messages
             first_retry = log_mock.call_args_list[0]
             assert "WandB artifact upload attempt 1 failed" in first_retry[0][0]
             assert "Retrying in 1.0 seconds" in first_retry[0][0]
-            
+
             second_retry = log_mock.call_args_list[1]
             assert "WandB artifact upload attempt 2 failed" in second_retry[0][0]
             assert "Retrying in 2.0 seconds" in second_retry[0][0]
-            
+
             final_error = log_mock.call_args_list[2]
             assert "Error creating W&B artifact" in final_error[0][0]
             assert final_error[1]["log_level"] == "error"

@@ -14,25 +14,27 @@ import numpy as np
 import torch
 
 import wandb
-from keisei.utils.unified_logger import log_error_to_stderr, log_info_to_stderr
 from keisei.config_schema import AppConfig
+from keisei.utils.unified_logger import log_error_to_stderr, log_info_to_stderr
 
 
 def _validate_checkpoint(checkpoint_path: str) -> bool:
     """Validate checkpoint file integrity by attempting to load it.
-    
+
     Args:
         checkpoint_path: Path to checkpoint file to validate
-        
+
     Returns:
         True if checkpoint loads successfully, False otherwise
     """
     try:
         # Attempt minimal load to check file integrity
-        torch.load(checkpoint_path, map_location='cpu')
+        torch.load(checkpoint_path, map_location="cpu")
         return True
     except (OSError, RuntimeError, EOFError, pickle.UnpicklingError) as e:
-        log_error_to_stderr("TrainingUtils", f"Corrupted checkpoint {checkpoint_path}: {e}")
+        log_error_to_stderr(
+            "TrainingUtils", f"Corrupted checkpoint {checkpoint_path}: {e}"
+        )
         return False
 
 
@@ -43,19 +45,22 @@ def find_latest_checkpoint(model_dir_path: str) -> Optional[str]:
             checkpoints = glob.glob(os.path.join(model_dir_path, "*.pt"))
         if not checkpoints:
             return None
-        
+
         # Sort checkpoints by modification time (newest first)
         checkpoints.sort(key=os.path.getmtime, reverse=True)
-        
+
         # Find the first valid (non-corrupted) checkpoint
         for checkpoint_path in checkpoints:
             if _validate_checkpoint(checkpoint_path):
                 return checkpoint_path
-        
+
         # If we get here, all checkpoints are corrupted
-        log_error_to_stderr("TrainingUtils", "All checkpoint files in directory are corrupted or unreadable")
+        log_error_to_stderr(
+            "TrainingUtils",
+            "All checkpoint files in directory are corrupted or unreadable",
+        )
         return None
-        
+
     except OSError as e:
         log_error_to_stderr("TrainingUtils", f"Error in find_latest_checkpoint: {e}")
         return None
@@ -63,10 +68,10 @@ def find_latest_checkpoint(model_dir_path: str) -> Optional[str]:
 
 def serialize_config(config: AppConfig) -> str:
     """Serialize AppConfig to JSON string using Pydantic's built-in serialization.
-    
+
     Args:
         config: AppConfig instance to serialize
-        
+
     Returns:
         JSON string representation of the configuration
     """
@@ -118,10 +123,15 @@ def setup_wandb(config, run_name, run_artifact_dir):
                 id=run_name,
             )
         except (TypeError, ValueError, OSError) as e:
-            log_error_to_stderr("TrainingUtils", f"Error initializing W&B: {e}. W&B logging disabled.")
+            log_error_to_stderr(
+                "TrainingUtils", f"Error initializing W&B: {e}. W&B logging disabled."
+            )
             is_active = False
     if not is_active:
-        log_info_to_stderr("TrainingUtils", "Weights & Biases logging is disabled or failed to initialize.")
+        log_info_to_stderr(
+            "TrainingUtils",
+            "Weights & Biases logging is disabled or failed to initialize.",
+        )
     return is_active
 
 
@@ -136,7 +146,9 @@ def apply_wandb_sweep_config():
         return {}
 
     sweep_config = wandb.config
-    log_info_to_stderr("TrainingUtils", f"Running W&B sweep with config: {dict(sweep_config)}")
+    log_info_to_stderr(
+        "TrainingUtils", f"Running W&B sweep with config: {dict(sweep_config)}"
+    )
 
     # Map W&B sweep parameters to config paths
     sweep_param_mapping = {
@@ -167,32 +179,32 @@ def apply_wandb_sweep_config():
 def build_cli_overrides(args) -> dict:
     """
     Build configuration overrides from command line arguments.
-    
+
     This function centralizes the logic for converting CLI arguments
     to configuration overrides, eliminating duplication between training scripts.
-    
+
     Args:
         args: Parsed command line arguments from argparse
-        
+
     Returns:
         dict: Configuration overrides in dot notation format
     """
     cli_overrides = {}
-    
+
     # Core overrides supported by both training scripts
-    if hasattr(args, 'seed') and args.seed is not None:
+    if hasattr(args, "seed") and args.seed is not None:
         cli_overrides["env.seed"] = args.seed
-    if hasattr(args, 'device') and args.device is not None:
+    if hasattr(args, "device") and args.device is not None:
         cli_overrides["env.device"] = args.device
-    if hasattr(args, 'total_timesteps') and args.total_timesteps is not None:
+    if hasattr(args, "total_timesteps") and args.total_timesteps is not None:
         cli_overrides["training.total_timesteps"] = args.total_timesteps
-    
+
     # Extended overrides only available in main training script
-    if hasattr(args, 'savedir') and args.savedir is not None:
+    if hasattr(args, "savedir") and args.savedir is not None:
         cli_overrides["logging.model_dir"] = args.savedir
-    if hasattr(args, 'render_every') and args.render_every is not None:
+    if hasattr(args, "render_every") and args.render_every is not None:
         cli_overrides["training.render_every_steps"] = args.render_every
-    if hasattr(args, 'wandb_enabled') and args.wandb_enabled:
+    if hasattr(args, "wandb_enabled") and args.wandb_enabled:
         cli_overrides["wandb.enabled"] = True
-    
+
     return cli_overrides

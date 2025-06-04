@@ -1,7 +1,7 @@
 """
 Tests for the Evaluator class.
 
-This module contains integration tests for the Evaluator class which provides 
+This module contains integration tests for the Evaluator class which provides
 a high-level interface for running complete evaluations.
 """
 
@@ -18,7 +18,7 @@ from tests.evaluation.conftest import make_test_config
 def test_evaluator_class_basic(monkeypatch, tmp_path, policy_mapper):
     """
     Integration test for the Evaluator class: random-vs-agent, no W&B, log to file.
-    
+
     This test verifies that the Evaluator class correctly:
     - Initializes with proper configuration
     - Loads agents and opponents through the evaluation system
@@ -32,7 +32,7 @@ def test_evaluator_class_basic(monkeypatch, tmp_path, policy_mapper):
         def __init__(self):
             from keisei.core.neural_network import ActorCritic
             from keisei.utils import PolicyOutputMapper
-            
+
             config = make_test_config()
             policy_mapper_instance = PolicyOutputMapper()
             mock_model = ActorCritic(
@@ -95,8 +95,8 @@ def test_evaluator_class_basic(monkeypatch, tmp_path, policy_mapper):
     # Verify results structure
     assert isinstance(results, dict)
     assert results["games_played"] == 1
-    assert "agent_wins" in results 
-    assert "opponent_wins" in results 
+    assert "agent_wins" in results
+    assert "opponent_wins" in results
     assert "draws" in results
 
     # Verify logging occurred

@@ -12,32 +12,32 @@ import pytest
 
 from keisei.core.ppo_agent import PPOAgent
 from keisei.evaluation.evaluate import execute_full_evaluation_run
-from keisei.utils.utils import EvaluationLogger
-from keisei.utils.opponents import SimpleHeuristicOpponent
-from keisei.utils.opponents import SimpleRandomOpponent
 from keisei.utils import PolicyOutputMapper
-
+from keisei.utils.opponents import SimpleHeuristicOpponent, SimpleRandomOpponent
+from keisei.utils.utils import EvaluationLogger
 
 # Mock decorators for execute_full_evaluation_run tests
 COMMON_MAIN_MOCKS = [
     "keisei.evaluation.evaluate.load_config",
-    "keisei.evaluation.evaluate.EvaluationLogger",  
+    "keisei.evaluation.evaluate.EvaluationLogger",
     "keisei.evaluation.evaluate.run_evaluation_loop",
     "keisei.evaluation.evaluate.initialize_opponent",
     "keisei.evaluation.evaluate.load_evaluation_agent",
     "keisei.evaluation.evaluate.PolicyOutputMapper",
     "random.seed",
-    "numpy.random.seed", 
+    "numpy.random.seed",
     "torch.manual_seed",
 ]
 
 
 def apply_mocks(mock_list):
     """Helper decorator to apply multiple patches consistently."""
+
     def decorator(func):
         for mock_path in reversed(mock_list):
             func = patch(mock_path)(func)
         return func
+
     return decorator
 
 
@@ -60,7 +60,7 @@ def test_execute_full_evaluation_run_basic_random(
 
     Verifies the complete evaluation pipeline works correctly including:
     - Agent loading from checkpoint
-    - Random opponent initialization  
+    - Random opponent initialization
     - Evaluation loop execution
     - Result aggregation
     - No W&B integration when disabled
@@ -246,7 +246,9 @@ def test_execute_full_evaluation_run_heuristic_opponent_with_wandb(
     assert run_loop_pos_args[2] == num_games_to_run
     assert run_loop_pos_args[3] == mock_logger_instance
     assert run_loop_pos_args[4] == max_moves_for_game
-    assert run_loop_pos_args[5] == policy_mapper_instance  # Now includes policy_mapper parameter
+    assert (
+        run_loop_pos_args[5] == policy_mapper_instance
+    )  # Now includes policy_mapper parameter
     assert not run_loop_kwargs
 
     # Verify W&B integration
@@ -324,7 +326,9 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(
     agent_opponent_path = "./agent_opponent.pth"
 
     # Set up side effects for loading different agents
-    def load_agent_side_effect(checkpoint_path, device, pol_mapper, in_channels):  # pylint: disable=unused-argument
+    def load_agent_side_effect(
+        checkpoint_path, device, pol_mapper, in_channels
+    ):  # pylint: disable=unused-argument
         if checkpoint_path == agent_eval_path:
             return mock_agent_to_eval
         if checkpoint_path == agent_opponent_path:
@@ -336,7 +340,11 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(
 
     # Set up opponent initialization side effect
     def init_opponent_side_effect(
-        opponent_type, opponent_path, device, pol_mapper, in_channels  # pylint: disable=unused-argument
+        opponent_type,
+        opponent_path,
+        device,
+        pol_mapper,
+        in_channels,  # pylint: disable=unused-argument
     ):
         if opponent_type == "ppo" and opponent_path == agent_opponent_path:
             return mock_opponent_agent
@@ -398,9 +406,7 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(
 
     # Verify agent loading - called once directly for agent_to_eval
     assert mock_load_agent.call_count == 1
-    mock_load_agent.assert_any_call(
-        agent_eval_path, "cpu", policy_mapper_instance, 46
-    )
+    mock_load_agent.assert_any_call(agent_eval_path, "cpu", policy_mapper_instance, 46)
 
     # Verify opponent initialization
     mock_init_opponent.assert_called_once_with(
@@ -416,7 +422,9 @@ def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(
     assert run_loop_pos_args[2] == num_games_val
     assert run_loop_pos_args[3] == mock_logger_instance
     assert run_loop_pos_args[4] == max_moves_val
-    assert run_loop_pos_args[5] == policy_mapper_instance  # Now includes policy_mapper parameter
+    assert (
+        run_loop_pos_args[5] == policy_mapper_instance
+    )  # Now includes policy_mapper parameter
     assert not run_loop_kwargs
 
     # Verify W&B integration

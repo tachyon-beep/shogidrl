@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 import torch  # Ensure torch is imported
+
 from keisei.utils.unified_logger import log_warning_to_stderr
 
 
@@ -33,21 +34,35 @@ class ExperienceBuffer:
         self.lambda_gae = lambda_gae
         self.device = torch.device(device)  # Store as torch.device
 
-        # Initialize buffers as empty lists
-        self.obs: list[torch.Tensor] = []  # Assuming obs are stored as tensors
-        self.actions: list[int] = []
-        self.rewards: list[float] = []
-        self.log_probs: list[float] = []
-        self.values: list[float] = []
-        self.dones: list[bool] = []
-        self.legal_masks: list[torch.Tensor] = []  # Added to store legal masks
-        self.advantages: list[torch.Tensor] = (
-            []
-        )  # Populated by compute_advantages_and_returns
-        self.returns: list[torch.Tensor] = (
-            []
-        )  # Populated by compute_advantages_and_returns
+        # Pre-allocate tensors for improved memory efficiency
+        # Observations: (buffer_size, 46, 9, 9) - Shogi board representation
+        self.obs = torch.zeros(
+            (buffer_size, 46, 9, 9), dtype=torch.float32, device=self.device
+        )
+        # Actions: (buffer_size,) - Action indices
+        self.actions = torch.zeros(buffer_size, dtype=torch.int64, device=self.device)
+        # Rewards: (buffer_size,) - Immediate rewards
+        self.rewards = torch.zeros(buffer_size, dtype=torch.float32, device=self.device)
+        # Log probabilities: (buffer_size,) - Action log probabilities
+        self.log_probs = torch.zeros(
+            buffer_size, dtype=torch.float32, device=self.device
+        )
+        # Values: (buffer_size,) - Value function estimates
+        self.values = torch.zeros(buffer_size, dtype=torch.float32, device=self.device)
+        # Done flags: (buffer_size,) - Episode termination flags
+        self.dones = torch.zeros(buffer_size, dtype=torch.bool, device=self.device)
+        # Legal masks: (buffer_size, 13527) - Legal action masks
+        self.legal_masks = torch.zeros(
+            (buffer_size, 13527), dtype=torch.bool, device=self.device
+        )
+        # Advantages and returns: populated by compute_advantages_and_returns
+        self.advantages = torch.zeros(
+            buffer_size, dtype=torch.float32, device=self.device
+        )
+        self.returns = torch.zeros(buffer_size, dtype=torch.float32, device=self.device)
         self.ptr = 0
+        # Flag to track if advantages and returns have been computed
+        self._advantages_computed = False
 
     def add(
         self,
@@ -65,19 +80,21 @@ class ExperienceBuffer:
         'legal_mask' is expected to be a PyTorch tensor on self.device.
         """
         if self.ptr < self.buffer_size:
-            # obs should already be on self.device and have shape (C,H,W) when passed from train.py
-            self.obs.append(obs)
-            self.actions.append(action)
-            self.rewards.append(reward)
-            self.log_probs.append(log_prob)
-            self.values.append(value)  # Storing scalar value estimates
-            self.dones.append(done)
-            self.legal_masks.append(legal_mask)  # Store legal_mask
+            # Store data using tensor indexing for better performance
+            self.obs[self.ptr] = obs.to(self.device)
+            self.actions[self.ptr] = action
+            self.rewards[self.ptr] = reward
+            self.log_probs[self.ptr] = log_prob
+            self.values[self.ptr] = value
+            self.dones[self.ptr] = done
+            self.legal_masks[self.ptr] = legal_mask.to(self.device)
             self.ptr += 1
         else:
             # This case should ideally be handled by the training loop,
             # which calls learn() and then clear() when buffer is full.
-            log_warning_to_stderr("ExperienceBuffer", "Buffer is full. Cannot add new experience.")
+            log_warning_to_stderr(
+                "ExperienceBuffer", "Buffer is full. Cannot add new experience."
+            )
 
     def compute_advantages_and_returns(
         self, last_value: float
@@ -88,38 +105,25 @@ class ExperienceBuffer:
         Uses PyTorch tensor operations for GAE calculation.
         """
         if self.ptr == 0:
-            log_warning_to_stderr("ExperienceBuffer", "compute_advantages_and_returns called on an empty buffer.")
-            self.advantages = []
-            self.returns = []
+            log_warning_to_stderr(
+                "ExperienceBuffer",
+                "compute_advantages_and_returns called on an empty buffer.",
+            )
             return
 
-        # Convert lists to tensors for GAE computation
-        rewards_tensor = torch.tensor(
-            self.rewards[: self.ptr], dtype=torch.float32, device=self.device
-        )
-        values_tensor = torch.tensor(
-            self.values[: self.ptr], dtype=torch.float32, device=self.device
-        )
-        # Dones tensor: 1.0 if not done, 0.0 if done (for mask)
-        dones_tensor = torch.tensor(
-            self.dones[: self.ptr], dtype=torch.float32, device=self.device
-        )
+        # Use tensor slices for GAE computation (much more efficient)
+        rewards_tensor = self.rewards[: self.ptr]
+        values_tensor = self.values[: self.ptr]
+        dones_tensor = self.dones[: self.ptr].float()  # Convert bool to float for mask
         masks_tensor = 1.0 - dones_tensor
 
-        advantages_list: list[torch.Tensor] = [
-            torch.tensor(0.0, device=self.device)
-        ] * self.ptr
-        returns_list: list[torch.Tensor] = [
-            torch.tensor(0.0, device=self.device)
-        ] * self.ptr
-        gae = torch.tensor(0.0, device=self.device)  # Ensure gae is always a tensor
-
-        # last_value is V(S_t+1) for the last state in the buffer
-        # If the last state was terminal, next_value should be 0, handled by mask.
+        # Initialize GAE variables
+        gae = torch.tensor(0.0, device=self.device)
         next_value_tensor = torch.tensor(
             last_value, dtype=torch.float32, device=self.device
         )
 
+        # Compute advantages and returns using reverse iteration
         for t in reversed(range(self.ptr)):
             if t == self.ptr - 1:
                 current_next_value = next_value_tensor
@@ -133,14 +137,12 @@ class ExperienceBuffer:
             )
             gae = delta + self.gamma * self.lambda_gae * masks_tensor[t] * gae
 
-            # Ensure scalar tensors by squeezing any extra dimensions
-            advantages_list[t] = gae.squeeze()  # Store as scalar tensor
-            returns_list[t] = (
-                gae + values_tensor[t]
-            ).squeeze()  # Store as scalar tensor
+            # Store computed values directly in pre-allocated tensors
+            self.advantages[t] = gae
+            self.returns[t] = gae + values_tensor[t]
 
-        self.advantages = advantages_list
-        self.returns = returns_list
+        # Mark that advantages have been computed
+        self._advantages_computed = True
 
     def get_batch(self) -> dict:
         """
@@ -150,57 +152,36 @@ class ExperienceBuffer:
         if self.ptr == 0:
             # This should be handled by PPOAgent.learn() checking for empty batch_data
             # For safety, one might return structured empty tensors if needed upstream.
-            log_warning_to_stderr("ExperienceBuffer", "get_batch called on an empty or not-yet-computed buffer.")
+            log_warning_to_stderr(
+                "ExperienceBuffer",
+                "get_batch called on an empty or not-yet-computed buffer.",
+            )
             return {}  # PPOAgent.learn already checks for this
+
+        if not self._advantages_computed:
+            raise RuntimeError(
+                "Cannot get batch: compute_advantages_and_returns() must be called first"
+            )
 
         num_samples = self.ptr
 
-        # --- Efficient Batching for Observations ---
-        # self.obs is a list of tensors, each (C,H,W), already on self.device.
-        # Stack them along a new batch dimension (dim=0).
-        try:
-            obs_tensor = torch.stack(self.obs[:num_samples], dim=0)
-        except RuntimeError as e:
-            # This might happen if tensors in self.obs are not on the same device or have inconsistent shapes.
-            # Should not happen if train.py\'s add() is consistent.
-            raise ValueError(
-                f"Failed to stack observation tensors: {e}. Check tensor shapes and devices."
-            ) from e
-
-        # --- Convert other lists to tensors ---
-        actions_tensor = torch.tensor(
-            self.actions[:num_samples], dtype=torch.int64, device=self.device
-        )
-        log_probs_tensor = torch.tensor(
-            self.log_probs[:num_samples], dtype=torch.float32, device=self.device
-        )
-        # self.values are scalar V(s_t) estimates stored as floats
-        values_tensor = torch.tensor(
-            self.values[:num_samples], dtype=torch.float32, device=self.device
-        )
-
-        advantages_tensor = torch.stack(self.advantages[:num_samples])
-        returns_tensor = torch.stack(self.returns[:num_samples])
-
-        # Dones can be bool or float, PPO often uses float for masking.
-        dones_tensor = torch.tensor(
-            self.dones[:num_samples], dtype=torch.bool, device=self.device
-        )
-
-        # Stack legal_masks (list of tensors) into a single tensor
-        # Assuming legal_masks are already on self.device
-        try:
-            legal_masks_tensor = torch.stack(self.legal_masks[:num_samples], dim=0)
-        except RuntimeError as e:
-            raise ValueError(
-                f"Failed to stack legal_mask tensors: {e}. Check tensor shapes and devices."
-            ) from e
+        # --- Efficient Batching with Pre-allocated Tensors ---
+        # All data is already stored as tensors, just slice to get the active portion
+        obs_tensor = self.obs[:num_samples]
+        actions_tensor = self.actions[:num_samples]
+        log_probs_tensor = self.log_probs[:num_samples]
+        values_tensor = self.values[:num_samples]
+        advantages_tensor = self.advantages[:num_samples]
+        returns_tensor = self.returns[:num_samples]
+        dones_tensor = self.dones[:num_samples]
+        legal_masks_tensor = self.legal_masks[:num_samples]
 
         return {
             "obs": obs_tensor,
             "actions": actions_tensor,
             "log_probs": log_probs_tensor,  # These are old_log_probs for PPO
             "values": values_tensor,  # These are old_V(s_t) for PPO, used with GAE
+            "rewards": self.rewards[:num_samples],  # Include rewards in batch data
             "advantages": advantages_tensor,
             "returns": returns_tensor,  # These are the GAE-based returns (targets for value func)
             "dones": dones_tensor,  # For record keeping or if needed by learn()
@@ -209,16 +190,11 @@ class ExperienceBuffer:
 
     def clear(self):
         """Clears all stored experiences from the buffer."""
-        self.obs.clear()
-        self.actions.clear()
-        self.rewards.clear()
-        self.log_probs.clear()
-        self.values.clear()
-        self.dones.clear()
-        self.legal_masks.clear()  # Clear legal_masks
-        self.advantages.clear()
-        self.returns.clear()
+        # With pre-allocated tensors, we just reset the pointer
+        # The tensor memory remains allocated for reuse
         self.ptr = 0
+        # Reset the computation flag when clearing buffer
+        self._advantages_computed = False
 
     def __len__(self):
         """Return the number of transitions currently in the buffer."""
@@ -279,23 +255,13 @@ class ExperienceBuffer:
             return None
 
         return {
-            "obs": torch.stack(self.obs[: self.ptr], dim=0),
-            "actions": torch.tensor(
-                self.actions[: self.ptr], dtype=torch.int64, device=self.device
-            ),
-            "rewards": torch.tensor(
-                self.rewards[: self.ptr], dtype=torch.float32, device=self.device
-            ),
-            "log_probs": torch.tensor(
-                self.log_probs[: self.ptr], dtype=torch.float32, device=self.device
-            ),
-            "values": torch.tensor(
-                self.values[: self.ptr], dtype=torch.float32, device=self.device
-            ),
-            "dones": torch.tensor(
-                self.dones[: self.ptr], dtype=torch.bool, device=self.device
-            ),
-            "legal_masks": torch.stack(self.legal_masks[: self.ptr], dim=0),
+            "obs": self.obs[: self.ptr],
+            "actions": self.actions[: self.ptr],
+            "rewards": self.rewards[: self.ptr],
+            "log_probs": self.log_probs[: self.ptr],
+            "values": self.values[: self.ptr],
+            "dones": self.dones[: self.ptr],
+            "legal_masks": self.legal_masks[: self.ptr],
         }
 
     def merge_from_parallel_buffers(
@@ -318,10 +284,10 @@ class ExperienceBuffer:
 
                 self.add(
                     obs=buffer.obs[i],
-                    action=buffer.actions[i],
-                    reward=buffer.rewards[i],
-                    log_prob=buffer.log_probs[i],
-                    value=buffer.values[i],
-                    done=buffer.dones[i],
+                    action=int(buffer.actions[i].item()),
+                    reward=float(buffer.rewards[i].item()),
+                    log_prob=float(buffer.log_probs[i].item()),
+                    value=float(buffer.values[i].item()),
+                    done=bool(buffer.dones[i].item()),
                     legal_mask=buffer.legal_masks[i],
                 )

@@ -17,69 +17,69 @@ import numpy as np
 import pytest
 import torch
 
-from keisei.core.experience_buffer import ExperienceBuffer
-from keisei.core.ppo_agent import PPOAgent
-from tests.conftest import assert_valid_ppo_metrics
 from keisei.constants import (
-    SHOGI_BOARD_SIZE,
     CORE_OBSERVATION_CHANNELS,
-    DEFAULT_NUM_ACTIONS_TOTAL,
-    DEFAULT_GAMMA,
-    DEFAULT_LAMBDA_GAE,
     DEFAULT_CLIP_EPSILON,
-    DEFAULT_LEARNING_RATE,
-    DEFAULT_VALUE_LOSS_COEFF,
     DEFAULT_ENTROPY_COEFF,
-    DEFAULT_RENDER_EVERY_STEPS,
-    DEFAULT_REFRESH_PER_SECOND,
-    DEFAULT_SE_RATIO,
+    DEFAULT_GAMMA,
     DEFAULT_GRADIENT_CLIP_MAX_NORM,
+    DEFAULT_LAMBDA_GAE,
+    DEFAULT_LEARNING_RATE,
+    DEFAULT_NUM_ACTIONS_TOTAL,
+    DEFAULT_REFRESH_PER_SECOND,
+    DEFAULT_RENDER_EVERY_STEPS,
+    DEFAULT_SE_RATIO,
+    DEFAULT_VALUE_LOSS_COEFF,
     EPSILON_MEDIUM,
+    SHOGI_BOARD_SIZE,
+    TEST_ADVANTAGE_GAMMA_ZERO,
+    TEST_BATCH_SIZE,
     TEST_BUFFER_SIZE,
-    TEST_SMALL_MINIBATCH,
-    TEST_SCHEDULER_TOTAL_TIMESTEPS,
-    TEST_SINGLE_LEGAL_ACTION_INDEX,
     TEST_CONFIG_STEPS_PER_EPOCH,
     TEST_CONFIG_TOWER_DEPTH,
     TEST_CONFIG_TOWER_WIDTH,
-    TEST_VERY_SMALL_LEARNING_RATE,
-    TEST_TINY_LEARNING_RATE,
-    TEST_PARAMETER_FILL_VALUE,
-    TEST_TIMEOUT_SECONDS,
-    TEST_NUM_WORKERS,
-    TEST_SYNC_INTERVAL,
-    TEST_BATCH_SIZE,
     TEST_DEMO_MODE_DELAY,
-    TEST_WATCH_LOG_FREQ,
+    TEST_ETA_MIN_FRACTION,
     TEST_EVALUATION_INTERVAL,
-    TEST_NEGATIVE_LEARNING_RATE,
-    TEST_ZERO_LEARNING_RATE,
-    TEST_NEGATIVE_GAMMA,
+    TEST_GAE_LAMBDA_DEFAULT,
     TEST_GAMMA_GREATER_THAN_ONE,
-    TEST_NEGATIVE_CLIP_EPSILON,
-    TEST_ZERO_CLIP_EPSILON,
+    TEST_GAMMA_NINE_TENTHS,
+    TEST_GLOBAL_TIMESTEP_NEGATIVE,
+    TEST_GLOBAL_TIMESTEP_ZERO,
     TEST_LARGE_INITIAL_LR,
-    TEST_SMALL_MASK_SIZE,
+    TEST_LARGE_MASK_SIZE,
+    TEST_LOG_PROB_VALUE,
+    TEST_MINIMAL_BUFFER_SIZE,
+    TEST_NEGATIVE_CLIP_EPSILON,
+    TEST_NEGATIVE_GAMMA,
+    TEST_NEGATIVE_LEARNING_RATE,
+    TEST_NUM_WORKERS,
+    TEST_PARAMETER_FILL_VALUE,
+    TEST_REWARD_VALUE,
+    TEST_SCHEDULER_FINAL_FRACTION,
+    TEST_SCHEDULER_GAMMA,
+    TEST_SCHEDULER_STEP_SIZE,
+    TEST_SCHEDULER_TOTAL_TIMESTEPS,
     TEST_SINGLE_EPOCH,
     TEST_SINGLE_GAME,
-    TEST_WEIGHT_DECAY_ZERO,
-    TEST_LOG_PROB_VALUE,
-    TEST_REWARD_VALUE,
-    TEST_ADVANTAGE_GAMMA_ZERO,
-    TEST_GLOBAL_TIMESTEP_ZERO,
-    TEST_GLOBAL_TIMESTEP_NEGATIVE,
-    TEST_SCHEDULER_FINAL_FRACTION,
-    TEST_LARGE_MASK_SIZE,
-    TEST_VALUE_HALF,
-    TEST_GAE_LAMBDA_DEFAULT,
-    TEST_GAMMA_NINE_TENTHS,
-    TEST_SCHEDULER_STEP_SIZE,
-    TEST_SCHEDULER_GAMMA,
-    TEST_ETA_MIN_FRACTION,
-    TEST_T_MAX,
+    TEST_SINGLE_LEGAL_ACTION_INDEX,
+    TEST_SMALL_MASK_SIZE,
+    TEST_SMALL_MINIBATCH,
     TEST_STEP_THREE_DONE,
-    TEST_MINIMAL_BUFFER_SIZE,
+    TEST_SYNC_INTERVAL,
+    TEST_T_MAX,
+    TEST_TIMEOUT_SECONDS,
+    TEST_TINY_LEARNING_RATE,
+    TEST_VALUE_HALF,
+    TEST_VERY_SMALL_LEARNING_RATE,
+    TEST_WATCH_LOG_FREQ,
+    TEST_WEIGHT_DECAY_ZERO,
+    TEST_ZERO_CLIP_EPSILON,
+    TEST_ZERO_LEARNING_RATE,
 )
+from keisei.core.experience_buffer import ExperienceBuffer
+from keisei.core.ppo_agent import PPOAgent
+from tests.conftest import assert_valid_ppo_metrics
 
 
 class TestPPOAgentErrorHandling:
@@ -92,7 +92,9 @@ class TestPPOAgentErrorHandling:
         # Wrong number of dimensions
         invalid_obs_1d = torch.randn(CORE_OBSERVATION_CHANNELS)
         invalid_obs_2d = torch.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE)
-        invalid_obs_4d = torch.randn(1, CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE)
+        invalid_obs_4d = torch.randn(
+            1, CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE
+        )
 
         # These should either handle gracefully or raise informative errors
         for invalid_obs in [invalid_obs_1d, invalid_obs_2d, invalid_obs_4d]:
@@ -106,8 +108,12 @@ class TestPPOAgentErrorHandling:
     ):
         """Test action selection with invalid legal mask shapes."""
         # Wrong size legal mask
-        invalid_mask_small = torch.ones(TEST_SMALL_MASK_SIZE, dtype=torch.bool, device="cpu")
-        invalid_mask_large = torch.ones(TEST_LARGE_MASK_SIZE, dtype=torch.bool, device="cpu")
+        invalid_mask_small = torch.ones(
+            TEST_SMALL_MASK_SIZE, dtype=torch.bool, device="cpu"
+        )
+        invalid_mask_large = torch.ones(
+            TEST_LARGE_MASK_SIZE, dtype=torch.bool, device="cpu"
+        )
 
         for invalid_mask in [invalid_mask_small, invalid_mask_large]:
             with pytest.raises((RuntimeError, ValueError, IndexError)):
@@ -138,7 +144,9 @@ class TestPPOAgentErrorHandling:
         # Wrong shape
         rng = np.random.default_rng(42)
         invalid_obs_1d = rng.random(CORE_OBSERVATION_CHANNELS).astype(np.float32)
-        invalid_obs_4d = rng.random((1, CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE)).astype(np.float32)
+        invalid_obs_4d = rng.random(
+            (1, CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE)
+        ).astype(np.float32)
 
         for invalid_obs in [invalid_obs_1d, invalid_obs_4d]:
             with pytest.raises((RuntimeError, ValueError)):
@@ -233,7 +241,9 @@ class TestPPOAgentModelPersistence:
 
             # Verify model was loaded (parameters should not all be TEST_PARAMETER_FILL_VALUE)
             all_999 = all(
-                torch.allclose(param.data, torch.full_like(param.data, TEST_PARAMETER_FILL_VALUE))
+                torch.allclose(
+                    param.data, torch.full_like(param.data, TEST_PARAMETER_FILL_VALUE)
+                )
                 for param in ppo_agent_basic.model.parameters()
             )
             assert not all_999, "Model parameters should be restored from saved state"
@@ -243,12 +253,10 @@ class TestPPOAgentModelPersistence:
     ):
         """Test that save/load preserves agent behavior."""
         # Get initial action selection
-        _, initial_idx, initial_log_prob, initial_value = (
-            ppo_agent_basic.select_action(
-                dummy_observation,
-                dummy_legal_mask,
-                is_training=False,  # Deterministic for consistency
-            )
+        _, initial_idx, initial_log_prob, initial_value = ppo_agent_basic.select_action(
+            dummy_observation,
+            dummy_legal_mask,
+            is_training=False,  # Deterministic for consistency
         )
 
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -279,7 +287,11 @@ class TestPPOAgentModelPersistence:
 
         # Should return error dictionary
         assert isinstance(result, dict)
-        assert "error" in result or result.get("global_timestep", TEST_GLOBAL_TIMESTEP_NEGATIVE) == TEST_GLOBAL_TIMESTEP_ZERO
+        assert (
+            "error" in result
+            or result.get("global_timestep", TEST_GLOBAL_TIMESTEP_NEGATIVE)
+            == TEST_GLOBAL_TIMESTEP_ZERO
+        )
 
     def test_save_to_invalid_path(self, ppo_agent_basic):
         """Test saving to invalid path."""
@@ -332,12 +344,24 @@ class TestPPOAgentConfigurationValidation:
 
         # Test invalid learning rate
         invalid_configs = [
-            base_config.model_copy(update={"learning_rate": TEST_NEGATIVE_LEARNING_RATE}),  # Negative LR
-            base_config.model_copy(update={"learning_rate": TEST_ZERO_LEARNING_RATE}),  # Zero LR
-            base_config.model_copy(update={"gamma": TEST_NEGATIVE_GAMMA}),  # Negative gamma
-            base_config.model_copy(update={"gamma": TEST_GAMMA_GREATER_THAN_ONE}),  # Gamma > 1
-            base_config.model_copy(update={"clip_epsilon": TEST_NEGATIVE_CLIP_EPSILON}),  # Negative epsilon
-            base_config.model_copy(update={"clip_epsilon": TEST_ZERO_CLIP_EPSILON}),  # Zero epsilon
+            base_config.model_copy(
+                update={"learning_rate": TEST_NEGATIVE_LEARNING_RATE}
+            ),  # Negative LR
+            base_config.model_copy(
+                update={"learning_rate": TEST_ZERO_LEARNING_RATE}
+            ),  # Zero LR
+            base_config.model_copy(
+                update={"gamma": TEST_NEGATIVE_GAMMA}
+            ),  # Negative gamma
+            base_config.model_copy(
+                update={"gamma": TEST_GAMMA_GREATER_THAN_ONE}
+            ),  # Gamma > 1
+            base_config.model_copy(
+                update={"clip_epsilon": TEST_NEGATIVE_CLIP_EPSILON}
+            ),  # Negative epsilon
+            base_config.model_copy(
+                update={"clip_epsilon": TEST_ZERO_CLIP_EPSILON}
+            ),  # Zero epsilon
         ]
 
         # PPOAgent should either reject invalid configs or handle them gracefully
@@ -386,7 +410,9 @@ class TestPPOAgentConfigurationValidation:
                     watch_log_type="all",
                     log_model_artifact=False,
                 ),
-                demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=TEST_DEMO_MODE_DELAY),
+                demo=DemoConfig(
+                    enable_demo_mode=False, demo_mode_delay=TEST_DEMO_MODE_DELAY
+                ),
                 parallel=ParallelConfig(
                     enabled=False,
                     num_workers=TEST_NUM_WORKERS,
@@ -419,7 +445,9 @@ class TestPPOAgentDevicePlacement:
         assert next(ppo_agent_basic.model.parameters()).device == torch.device("cpu")
 
         # All operations should work on CPU
-        dummy_obs = torch.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cpu")
+        dummy_obs = torch.randn(
+            CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cpu"
+        )
         dummy_mask = torch.ones(
             ppo_agent_basic.num_actions_total, dtype=torch.bool, device="cpu"
         )
@@ -454,7 +482,9 @@ class TestPPOAgentDevicePlacement:
         assert next(agent.model.parameters()).device.type == "cuda"
 
         # All operations should work on CUDA
-        dummy_obs = torch.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cuda")
+        dummy_obs = torch.randn(
+            CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cuda"
+        )
         dummy_mask = torch.ones(
             agent.num_actions_total, dtype=torch.bool, device="cuda"
         )
@@ -474,7 +504,12 @@ class TestPPOAgentDevicePlacement:
         """Test handling of inputs on wrong devices."""
         if torch.cuda.is_available():
             # Create CUDA tensor for CPU agent - this will be converted to numpy for select_action
-            cuda_obs = torch.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cuda")
+            cuda_obs = torch.randn(
+                CORE_OBSERVATION_CHANNELS,
+                SHOGI_BOARD_SIZE,
+                SHOGI_BOARD_SIZE,
+                device="cuda",
+            )
             cpu_mask = torch.ones(
                 ppo_agent_basic.num_actions_total, dtype=torch.bool, device="cpu"
             )
@@ -509,10 +544,15 @@ class TestPPOAgentBoundaryConditions:
 
         # Should still be able to learn (though may not change much)
         experience_buffer = ExperienceBuffer(
-            buffer_size=TEST_BUFFER_SIZE, gamma=DEFAULT_GAMMA, lambda_gae=DEFAULT_LAMBDA_GAE, device="cpu"
+            buffer_size=TEST_BUFFER_SIZE,
+            gamma=DEFAULT_GAMMA,
+            lambda_gae=DEFAULT_LAMBDA_GAE,
+            device="cpu",
         )
 
-        dummy_obs = torch.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cpu")
+        dummy_obs = torch.randn(
+            CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cpu"
+        )
         dummy_mask = torch.ones(agent.num_actions_total, dtype=torch.bool, device="cpu")
 
         for i in range(TEST_BUFFER_SIZE):
@@ -535,11 +575,16 @@ class TestPPOAgentBoundaryConditions:
     def test_zero_experiences_after_compute_advantages(self, ppo_agent_basic):
         """Test learning when buffer has experiences but they get filtered out."""
         experience_buffer = ExperienceBuffer(
-            buffer_size=TEST_MINIMAL_BUFFER_SIZE, gamma=DEFAULT_GAMMA, lambda_gae=TEST_GAE_LAMBDA_DEFAULT, device="cpu"
+            buffer_size=TEST_MINIMAL_BUFFER_SIZE,
+            gamma=DEFAULT_GAMMA,
+            lambda_gae=TEST_GAE_LAMBDA_DEFAULT,
+            device="cpu",
         )
 
         # Add experiences but don't call compute_advantages_and_returns
-        dummy_obs = torch.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cpu")
+        dummy_obs = torch.randn(
+            CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cpu"
+        )
         dummy_mask = torch.ones(
             ppo_agent_basic.num_actions_total, dtype=torch.bool, device="cpu"
         )
@@ -634,10 +679,15 @@ class TestPPOAgentSchedulerEdgeCases:
 
         # Should still be able to train
         buffer = ExperienceBuffer(
-            buffer_size=TEST_BUFFER_SIZE, gamma=DEFAULT_GAMMA, lambda_gae=DEFAULT_LAMBDA_GAE, device="cpu"
+            buffer_size=TEST_BUFFER_SIZE,
+            gamma=DEFAULT_GAMMA,
+            lambda_gae=DEFAULT_LAMBDA_GAE,
+            device="cpu",
         )
 
-        dummy_obs = torch.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cpu")
+        dummy_obs = torch.randn(
+            CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cpu"
+        )
         dummy_mask = torch.ones(agent.num_actions_total, dtype=torch.bool, device="cpu")
 
         for i in range(TEST_BUFFER_SIZE):
@@ -687,7 +737,9 @@ class TestPPOAgentSchedulerEdgeCases:
         """Test that scheduler state is preserved through save/load operations."""
         config = minimal_app_config.model_copy()
         config.training.lr_schedule_type = "linear"
-        config.training.lr_schedule_kwargs = {"final_lr_fraction": TEST_SCHEDULER_FINAL_FRACTION}
+        config.training.lr_schedule_kwargs = {
+            "final_lr_fraction": TEST_SCHEDULER_FINAL_FRACTION
+        }
 
         agent = PPOAgent(
             model=ppo_test_model, config=config, device=torch.device("cpu")
@@ -752,12 +804,21 @@ class TestPPOAgentSchedulerEdgeCases:
     ):
         """Test scheduler with boundary learning rate values."""
         test_cases = [
-            {"initial_lr": TEST_TINY_LEARNING_RATE, "schedule_type": "linear"},  # Very small initial LR
-            {"initial_lr": TEST_LARGE_INITIAL_LR, "schedule_type": "exponential"},  # Large initial LR
+            {
+                "initial_lr": TEST_TINY_LEARNING_RATE,
+                "schedule_type": "linear",
+            },  # Very small initial LR
+            {
+                "initial_lr": TEST_LARGE_INITIAL_LR,
+                "schedule_type": "exponential",
+            },  # Large initial LR
             {
                 "initial_lr": 3e-4,
                 "schedule_type": "step",
-                "kwargs": {"step_size": TEST_SCHEDULER_STEP_SIZE, "gamma": TEST_SCHEDULER_GAMMA},
+                "kwargs": {
+                    "step_size": TEST_SCHEDULER_STEP_SIZE,
+                    "gamma": TEST_SCHEDULER_GAMMA,
+                },
             },
         ]
 
@@ -800,7 +861,10 @@ class TestPPOAgentSchedulerEdgeCases:
             # Conflicting kwargs
             {
                 "lr_schedule_type": "cosine",
-                "lr_schedule_kwargs": {"T_max": TEST_T_MAX, "eta_min_fraction": TEST_ETA_MIN_FRACTION},
+                "lr_schedule_kwargs": {
+                    "T_max": TEST_T_MAX,
+                    "eta_min_fraction": TEST_ETA_MIN_FRACTION,
+                },
             },
         ]
 

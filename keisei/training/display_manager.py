@@ -8,8 +8,9 @@ from typing import Any, List, Optional
 from rich.console import Console, Text
 from rich.live import Live
 
-from . import display
 from keisei.utils.unified_logger import log_error_to_stderr
+
+from . import display
 
 
 class DisplayManager:
@@ -122,7 +123,10 @@ class DisplayManager:
 
             console_log_path = os.path.join(output_dir, "full_console_output_rich.html")
             self.rich_console.save_html(console_log_path)
-            log_error_to_stderr("DisplayManager", f"Full Rich console output saved to {console_log_path}")
+            log_error_to_stderr(
+                "DisplayManager",
+                f"Full Rich console output saved to {console_log_path}",
+            )
             return True
         except OSError as e:
             log_error_to_stderr("DisplayManager", f"Error saving Rich console log: {e}")

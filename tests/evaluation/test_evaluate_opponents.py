@@ -12,9 +12,7 @@ from keisei.shogi.shogi_game import ShogiGame
 from keisei.utils import PolicyOutputMapper
 from keisei.utils.agent_loading import initialize_opponent, load_evaluation_agent
 from keisei.utils.opponents import SimpleHeuristicOpponent, SimpleRandomOpponent
-
 from tests.evaluation.conftest import INPUT_CHANNELS, MockPPOAgent, make_test_config
-
 
 # --- Tests for Opponent Classes ---
 

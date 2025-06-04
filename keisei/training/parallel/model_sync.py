@@ -5,7 +5,9 @@ Handles efficient synchronization of model weights between the main training
 process and worker processes, including compression and versioning.
 """
 
+import gzip
 import logging
+import pickle
 import time
 from typing import Any, Dict
 
@@ -38,7 +40,7 @@ class ModelSynchronizer:
         self.sync_count = 0
 
         logger.info(
-            "Model synchronizer initialized (interval=%d, " "compression=%s)",
+            "Model synchronizer initialized (interval=%d, compression=%s)",
             sync_interval,
             compression_enabled,
         )
@@ -151,23 +153,46 @@ class ModelSynchronizer:
 
     def _compress_array(self, array: np.ndarray) -> Dict[str, Any]:
         """
-        Compress numpy array for efficient transmission.
+        Compress numpy array for efficient transmission using gzip compression.
 
         Args:
             array: Numpy array to compress
 
         Returns:
-            Compressed array data
+            Compressed array data with actual compression
         """
-        # Simple compression - in production could use more sophisticated methods
-        # like quantization or custom compression schemes
-        return {
-            "data": array,  # For now, no actual compression
-            "shape": array.shape,
-            "dtype": str(array.dtype),
-            "compressed": True,
-            "compression_ratio": 1.0,  # Would be actual ratio with real compression
-        }
+        try:
+            # Convert to bytes
+            array_bytes = array.tobytes()
+            original_size = len(array_bytes)
+
+            # Apply gzip compression
+            compressed_bytes = gzip.compress(array_bytes, compresslevel=6)
+            compressed_size = len(compressed_bytes)
+
+            compression_ratio = (
+                original_size / compressed_size if compressed_size > 0 else 1.0
+            )
+
+            return {
+                "data": compressed_bytes,
+                "shape": array.shape,
+                "dtype": str(array.dtype),
+                "compressed": True,
+                "compression_ratio": compression_ratio,
+                "original_size": original_size,
+                "compressed_size": compressed_size,
+            }
+        except Exception as e:
+            logger.warning("Compression failed, using uncompressed data: %s", str(e))
+            # Fallback to uncompressed
+            return {
+                "data": array,
+                "shape": array.shape,
+                "dtype": str(array.dtype),
+                "compressed": False,
+                "compression_ratio": 1.0,
+            }
 
     def _decompress_array(self, compressed_data: Dict[str, Any]) -> np.ndarray:
         """
@@ -179,8 +204,24 @@ class ModelSynchronizer:
         Returns:
             Decompressed numpy array
         """
-        # Simple decompression - matches _compress_array
-        return compressed_data["data"]
+        try:
+            if compressed_data.get("compressed", False):
+                # Decompress gzip data
+                compressed_bytes = compressed_data["data"]
+                decompressed_bytes = gzip.decompress(compressed_bytes)
+
+                # Reconstruct numpy array
+                dtype = np.dtype(compressed_data["dtype"])
+                shape = compressed_data["shape"]
+                array = np.frombuffer(decompressed_bytes, dtype=dtype).reshape(shape)
+                return array
+            else:
+                # Data is not compressed, return as-is
+                return compressed_data["data"]
+        except Exception as e:
+            logger.error("Decompression failed: %s", str(e))
+            # Try to return raw data as fallback
+            return compressed_data["data"]
 
     def get_sync_stats(self) -> Dict[str, Any]:
         """

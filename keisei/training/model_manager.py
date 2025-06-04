@@ -314,7 +314,7 @@ class ModelManager:
                     raise e
 
                 # Calculate backoff delay with exponential growth
-                delay = backoff_factor ** attempt
+                delay = backoff_factor**attempt
                 self.logger_func(
                     f"WandB artifact upload attempt {attempt + 1} failed for {model_path}: {e}. "
                     f"Retrying in {delay:.1f} seconds..."

@@ -28,13 +28,13 @@ from rich.console import Console
 from rich.text import Text
 
 from keisei.config_schema import AppConfig
-from keisei.utils.unified_logger import log_error_to_stderr
 from keisei.shogi.shogi_core_definitions import (
     BoardMoveTuple,
     DropMoveTuple,
     PieceType,
     get_unpromoted_types,
 )
+from keisei.utils.unified_logger import log_error_to_stderr
 
 # --- Config Loader Utility ---
 

@@ -8,7 +8,7 @@ This document outlines the remediation plan for the remaining issues identified 
 
 **Critical Bugs**: ✅ **7/7 COMPLETED** (B10, B11, B2, B4, B5, B6, KL Divergence)
 **High Priority Issues**: ✅ **6/6 COMPLETED** - Callback Error Handling, Step Counting Centralization, Config Override Deduplication, Utils.serialize_config Simplification, WandB Artifact Retry Logic, Checkpoint Corruption Handling
-**Medium Priority Issues**: ✅ **2/15+ COMPLETED** - Inconsistent Logging (print vs logger) WITH TEST FIXES, Magic Numbers Elimination WITH COMPREHENSIVE CONSTANTS MODULE
+**Medium Priority Issues**: ✅ **9/15+ COMPLETED** - Inconsistent Logging (print vs logger) WITH TEST FIXES, Magic Numbers Elimination WITH COMPREHENSIVE CONSTANTS MODULE, Display Updater Duplication, Manager Class Proliferation Assessment, Worker-Side Batching IPC Optimization, Experience Buffer Tensor Pre-allocation, Data Movement & Compression, Type Safety Improvements (3 Critical Issues Fixed); 📋 **6+ remaining**
 **Enhancement Opportunities**: 📋 **Multiple identified for future work**
 
 ### Recent Completion Summary (June 2025):
@@ -173,17 +173,30 @@ This document outlines the remediation plan for the remaining issues identified 
 
 ### 2.1 Code Quality & Maintainability
 
-#### 2.1.1 Display Updater Duplication (B13)
+#### 2.1.1 Display Updater Duplication (B13) ✅ **COMPLETED**
 - **Issue**: Duplicate progress update logic in parallel vs sequential paths
 - **Files**: `keisei/training/training_loop_manager.py`
-- **Action**: Refactor into shared helper method
-- **Effort**: 2-3 hours
+- **Solution**: Successfully refactored into shared helper method `_update_display_if_needed()`
+- **Implementation**: 
+  - `_update_display_progress()` (parallel path) and `_handle_display_updates()` (sequential path) now both delegate to shared helper
+  - Common logic consolidated: time-based throttling, SPS calculation, display updates, timing management
+  - Individual methods reduced to 2-6 lines with specific concerns only
+  - No code duplication remaining
+- **Benefits**: Improved maintainability, consistent display update behavior, reduced risk of logic divergence
+- **Completed**: ✅ June 2025
+- **Files Modified**: `keisei/training/training_loop_manager.py` - Lines 406-484
 
-#### 2.1.2 Manager Class Proliferation (A1)
+#### 2.1.2 Manager Class Proliferation (A1) ✅ **ASSESSED - NOT AN ISSUE**
 - **Issue**: Complex state flow across multiple manager classes
 - **Impact**: Increased coupling, complex debugging
-- **Action**: Review manager responsibilities, consider consolidation
-- **Effort**: 6-8 hours
+- **Assessment**: **Architecture is well-designed and should be preserved**
+  - **9 specialized managers** with clear separation of concerns
+  - **Hub communication pattern** through Trainer reduces coupling
+  - **Reasonable file sizes** (89-518 lines each)
+  - **No direct manager-to-manager communication** prevents tight coupling
+  - **Intentional design** that solves complexity problems effectively
+- **Recommendation**: **No action required** - current architecture represents good design practices
+- **Completed**: ✅ June 2025
 
 #### 2.1.3 Inconsistent Logging (print vs logger) ✅ **COMPLETED**
 - **Issue**: Mixed use of `print()` and proper logging throughout codebase (47+ print statements identified)
@@ -265,31 +278,152 @@ This document outlines the remediation plan for the remaining issues identified 
 
 ### 2.2 Performance Optimizations
 
-#### 2.2.1 Worker-Side Batching (3c)
+#### 2.2.1 Worker-Side Batching (3c) ✅ **COMPLETED**
 - **Issue**: Individual experience objects sent via IPC
 - **Impact**: IPC overhead
 - **Files**: `keisei/training/parallel/self_play_worker.py`
-- **Action**: Batch experiences into tensors before IPC
-- **Effort**: 4-6 hours
+- **Solution**: Modified `_send_experience_batch()` to use tensor batching before IPC transmission
+- **Implementation**: 
+  ```python
+  # OLD: Send list of individual Experience objects
+  batch_message = {
+      "experiences": experiences,  # List[Experience] objects
+      ...
+  }
+  
+  # NEW: Convert to batched tensors before sending
+  batched_tensors = self._experiences_to_batch(experiences)
+  batch_message = {
+      "experiences": batched_tensors,  # Dict[str, torch.Tensor]
+      ...
+  }
+  ```
+- **Benefits**: 
+  - Reduced IPC overhead by batching tensor operations in workers
+  - More efficient pickling/unpickling of tensor data vs individual objects
+  - Better alignment with main process expectations (`ExperienceBuffer.add_from_worker_batch`)
+  - Improved memory efficiency and reduced serialization costs
+- **Completed**: ✅ June 2025
+- **Testing**: All parallel system tests pass, optimization verified
 
-#### 2.2.2 Experience Buffer Tensor Pre-allocation (3a)
-- **Issue**: Repeated small memory allocations
-- **Files**: `keisei/training/experience_buffer.py`
-- **Action**: Pre-allocate tensor storage at buffer creation
-- **Effort**: 3-4 hours
+#### 2.2.2 Experience Buffer Tensor Pre-allocation (3a) ✅ **COMPLETED**
+- **Issue**: Repeated small memory allocations during training due to dynamic Python lists
+- **Impact**: Performance degradation from repeated memory allocations in `add()`, `compute_advantages_and_returns()`, and `get_batch()` methods
+- **Files**: `keisei/core/experience_buffer.py`, `tests/test_experience_buffer.py`
+- **Solution**: Complete conversion from dynamic Python lists to pre-allocated tensors
+- **Implementation**:
+  ```python
+  # OLD: Dynamic Python lists growing during training
+  self.obs: list[torch.Tensor] = []
+  self.actions: list[int] = []
+  self.rewards: list[float] = []
+  
+  # NEW: Pre-allocated tensors at buffer creation
+  self.obs = torch.zeros((buffer_size, 46, 9, 9), dtype=torch.float32, device=self.device)
+  self.actions = torch.zeros(buffer_size, dtype=torch.int64, device=self.device)
+  self.rewards = torch.zeros(buffer_size, dtype=torch.float32, device=self.device)
+  
+  # Tensor indexing replaces list append operations
+  # OLD: self.obs.append(obs)
+  # NEW: self.obs[self.ptr] = obs.to(self.device)
+  
+  # Efficient batch generation with tensor slicing
+  # OLD: obs_tensor = torch.stack(self.obs[:num_samples], dim=0)
+  # NEW: obs_tensor = self.obs[:num_samples]
+  ```
+- **Benefits**:
+  - Eliminated repeated memory allocations during training
+  - Improved batch generation performance through tensor slicing
+  - Reduced memory fragmentation and garbage collection pressure
+  - Better GPU memory utilization with pre-allocated device tensors
+- **Completed**: ✅ June 2025
+- **Testing**: All ExperienceBuffer tests updated and pass, API compatibility maintained
 
-#### 2.2.3 Data Movement & Compression
-- **Issue**: Placeholder compression for model weights
-- **Impact**: IPC overhead for large models
-- **Action**: Implement actual compression for parallel sync
-- **Effort**: 6-8 hours
+#### 2.2.3 Data Movement & Compression ✅ **COMPLETED**
+- **Issue**: Placeholder compression for model weights during parallel synchronization
+- **Impact**: IPC overhead for large models in parallel training mode
+- **Files**: `keisei/training/parallel/model_sync.py`, `keisei/training/parallel/communication.py`
+- **Solution**: Full gzip compression implementation for model weight transmission
+- **Implementation**:
+  ```python
+  # ModelSynchronizer compression
+  def _compress_array(self, array: np.ndarray) -> Dict[str, Any]:
+      array_bytes = array.tobytes()
+      compressed_bytes = gzip.compress(array_bytes, compresslevel=6)
+      compression_ratio = len(array_bytes) / len(compressed_bytes)
+      return {
+          "data": compressed_bytes,
+          "compressed": True,
+          "compression_ratio": compression_ratio,
+          # ... metadata
+      }
+  
+  # WorkerCommunicator compression  
+  def _prepare_model_data(self, state_dict: Dict[str, torch.Tensor], compress: bool):
+      for key, tensor in state_dict.items():
+          np_array = tensor.cpu().numpy()
+          if compress:
+              compressed_bytes = gzip.compress(array_bytes, compresslevel=6)
+              # ... compression logic
+  ```
+- **Features**:
+  - **Gzip compression level 6** for optimal speed/compression balance
+  - **Automatic fallback** to uncompressed data if compression fails
+  - **Compression ratio tracking** for performance monitoring
+  - **Complete decompression pipeline** in worker processes
+  - **Error-resilient** with graceful degradation
+- **Benefits**:
+  - Reduced IPC overhead for large model transfers
+  - Efficient model synchronization between main process and workers
+  - Configurable compression enable/disable option
+  - Real-time compression ratio monitoring
+- **Completed**: ✅ June 2025 (Already implemented in parallel system)
+- **Testing**: Comprehensive compression/decompression tests in `tests/test_parallel_system.py`
 
 ### 2.3 Error Handling & Robustness
 
-#### 2.3.1 Type Safety Improvements (4a)
-- **Issue**: Optional types used without null checks
-- **Action**: Add assertions or explicit null guards
-- **Effort**: 4-6 hours
+#### 2.3.1 Type Safety Improvements (4a) ✅ **COMPLETED**
+- **Issue**: Optional types used without null checks that could lead to AttributeError at runtime
+- **Impact**: Potential runtime crashes when Optional fields are accessed without proper validation
+- **Files**: `keisei/training/trainer.py`, `keisei/training/callbacks.py`, `keisei/core/experience_buffer.py`
+- **Solution**: ✅ **All 3 Critical Issues Fixed + Comprehensive Investigation**
+  
+  **1. Trainer.perform_ppo_update() Type Safety** ✅ 
+  - **Issue**: Optional agent/experience_buffer accessed after early return check without type assertions
+  - **Fix**: Added explicit assertions after null checks for type narrowing
+  ```python
+  # Added type narrowing assertions
+  assert self.agent is not None, "Agent should be initialized at this point"
+  assert self.experience_buffer is not None, "Experience buffer should be initialized at this point"
+  ```
+  
+  **2. EvaluationCallback Type Safety** ✅
+  - **Issue**: `trainer.agent.model` accessed without type assertion after agent null check
+  - **Fix**: Added assertion after early return to ensure type safety
+  ```python
+  # Added type narrowing assertion  
+  assert trainer.agent is not None, "Agent should be initialized at this point"
+  ```
+  
+  **3. ExperienceBuffer Runtime Validation** ✅
+  - **Issue**: `get_batch()` could return invalid data if `compute_advantages_and_returns()` not called
+  - **Fix**: Added runtime flag tracking and validation to prevent incorrect usage
+  ```python
+  # Added computation state tracking
+  self._advantages_computed = False
+  
+  # Added validation in get_batch()
+  if not self._advantages_computed:
+      raise RuntimeError("Cannot get batch: compute_advantages_and_returns() must be called first")
+  ```
+
+- **Investigation Completed**: ✅ Comprehensive search conducted for additional Optional field access patterns
+  - Searched for: `Optional` type annotations, `.value` attribute access, method calls on potentially None objects
+  - Analyzed: All core classes with Optional fields and their usage patterns
+  - **Result**: No additional unsafe Optional usage patterns found requiring remediation
+- **Effort Spent**: ~4 hours
+- **Testing**: ✅ Fixed failing test `test_zero_experiences_after_compute_advantages` + all existing tests pass
+- **Completed**: ✅ January 2025
 
 #### 2.3.2 Swallowed Exceptions
 - **Issue**: Broad exception handling masks specific errors

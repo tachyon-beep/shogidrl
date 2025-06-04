@@ -323,7 +323,9 @@ class StepManager:
 
         # Calculate win rates for logging using the temporary game_stats
         updated_total_games = (
-            temp_game_stats["black_wins"] + temp_game_stats["white_wins"] + temp_game_stats["draws"]
+            temp_game_stats["black_wins"]
+            + temp_game_stats["white_wins"]
+            + temp_game_stats["draws"]
         )
 
         updated_black_win_rate = (
@@ -352,9 +354,15 @@ class StepManager:
                 "episode_length": episode_state.episode_length,
                 "game_outcome": final_winner_color,
                 "game_reason": reason_from_info,
-                "black_wins_total": temp_game_stats["black_wins"],  # Use updated totals for logging
-                "white_wins_total": temp_game_stats["white_wins"],  # Use updated totals for logging
-                "draws_total": temp_game_stats["draws"],  # Use updated totals for logging
+                "black_wins_total": temp_game_stats[
+                    "black_wins"
+                ],  # Use updated totals for logging
+                "white_wins_total": temp_game_stats[
+                    "white_wins"
+                ],  # Use updated totals for logging
+                "draws_total": temp_game_stats[
+                    "draws"
+                ],  # Use updated totals for logging
                 "black_win_rate": updated_black_win_rate,  # Corrected key
                 "white_win_rate": updated_white_win_rate,  # Corrected key
                 "draw_rate": updated_draw_rate,  # Corrected key

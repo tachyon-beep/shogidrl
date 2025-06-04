@@ -11,7 +11,7 @@ from keisei.config_schema import AppConfig
 
 # Import config module and related components
 from keisei.utils import load_config
-from keisei.utils.unified_logger import log_info_to_stderr, log_error_to_stderr
+from keisei.utils.unified_logger import log_error_to_stderr, log_info_to_stderr
 
 from .trainer import Trainer
 from .utils import apply_wandb_sweep_config, build_cli_overrides
@@ -137,13 +137,16 @@ def main():
 if __name__ == "__main__":
     # Fix B6: Add multiprocessing.freeze_support() for Windows compatibility
     multiprocessing.freeze_support()
-    
+
     # Set multiprocessing start method for safety, especially with CUDA
     try:
         if multiprocessing.get_start_method(allow_none=True) != "spawn":
             multiprocessing.set_start_method("spawn", force=True)
     except RuntimeError as e:
-        log_error_to_stderr("Train", f"Could not set multiprocessing start method to 'spawn': {e}. Using default: {multiprocessing.get_start_method(allow_none=True)}")
+        log_error_to_stderr(
+            "Train",
+            f"Could not set multiprocessing start method to 'spawn': {e}. Using default: {multiprocessing.get_start_method(allow_none=True)}",
+        )
     except Exception as e:
         log_error_to_stderr("Train", f"Error setting multiprocessing start_method: {e}")
 

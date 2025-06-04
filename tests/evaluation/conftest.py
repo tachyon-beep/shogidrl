@@ -6,21 +6,33 @@ used across all evaluation test modules.
 """
 
 from unittest.mock import MagicMock, Mock
-from keisei.config_schema import AppConfig, EnvConfig, EvaluationConfig, LoggingConfig, TrainingConfig, WandBConfig, DemoConfig, ParallelConfig
-from keisei.utils import PolicyOutputMapper
+
 import pytest
+
+from keisei.config_schema import (
+    AppConfig,
+    DemoConfig,
+    EnvConfig,
+    EvaluationConfig,
+    LoggingConfig,
+    ParallelConfig,
+    TrainingConfig,
+    WandBConfig,
+)
+from keisei.utils import PolicyOutputMapper
 
 # Constants used across evaluation tests
 INPUT_CHANNELS = 46
 
+
 # Mock PPO Agent class for testing
 class MockPPOAgent:
     """Mock PPO Agent for testing purposes."""
-    
+
     def __init__(self, *args, **kwargs):
         self.device = "cpu"
         self.name = kwargs.get("name", "MockAgent")
-        
+
     def select_action(self, observation, legal_mask=None):
         """Mock action selection - returns first legal action."""
         if legal_mask is not None:
@@ -28,16 +40,18 @@ class MockPPOAgent:
             if len(legal_indices) > 0:
                 return legal_indices[0].item()
         return 0  # Fallback action
-        
+
     def get_action_and_value(self, observation, legal_mask=None):
         """Mock get_action_and_value method."""
         import torch
+
         action = self.select_action(observation, legal_mask)
         return action, torch.tensor(0.0), torch.tensor(0.0)
-        
+
     def load_model(self, checkpoint_path):
         """Mock model loading."""
         return {}
+
 
 def make_test_config():
     """Create a minimal test configuration for evaluation tests."""
@@ -119,39 +133,45 @@ def make_test_config():
         ),
     )
 
+
 @pytest.fixture
 def policy_mapper():
     """Fixture providing PolicyOutputMapper instance."""
     return PolicyOutputMapper()
+
 
 @pytest.fixture
 def test_config():
     """Fixture providing test configuration."""
     return make_test_config()
 
+
 @pytest.fixture
 def shogi_game_initial():
     """Fixture providing a fresh ShogiGame instance for testing."""
     from keisei.shogi.shogi_game import ShogiGame
+
     return ShogiGame()
+
 
 @pytest.fixture
 def eval_logger_setup(tmp_path):
     """Fixture providing evaluation logger setup for testing."""
     from keisei.utils.utils import EvaluationLogger
+
     log_file = tmp_path / "test_eval.log"
     logger = EvaluationLogger(str(log_file), also_stdout=False)
-    
+
     # Return a context manager that properly opens the logger
     class LoggerContext:
         def __init__(self, logger, log_file_path):
             self.logger = logger
             self.log_file_path = log_file_path
-            
+
         def __enter__(self):
             return self.logger.__enter__()
-            
+
         def __exit__(self, exc_type, exc_val, exc_tb):
             return self.logger.__exit__(exc_type, exc_val, exc_tb)
-    
+
     return LoggerContext(logger, str(log_file)), str(log_file)

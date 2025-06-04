@@ -4,11 +4,12 @@ test_utils_checkpoint_validation.py: Unit tests for checkpoint validation in uti
 
 import os
 import tempfile
+from unittest.mock import mock_open, patch
+
 import pytest
 import torch
-from unittest.mock import patch, mock_open
 
-from keisei.training.utils import find_latest_checkpoint, _validate_checkpoint
+from keisei.training.utils import _validate_checkpoint, find_latest_checkpoint
 
 
 class TestCheckpointValidation:
@@ -44,11 +45,11 @@ class TestCheckpointValidation:
         # Create multiple checkpoint files with different timestamps
         older_checkpoint = tmp_path / "checkpoint_1000.pth"
         newer_checkpoint = tmp_path / "checkpoint_2000.pth"
-        
+
         test_data = {"model_state_dict": {"layer.weight": torch.randn(10, 5)}}
         torch.save(test_data, older_checkpoint)
         torch.save(test_data, newer_checkpoint)
-        
+
         # Ensure newer has later modification time
         os.utime(newer_checkpoint, (1000, 1000))
         os.utime(older_checkpoint, (500, 500))
@@ -61,15 +62,15 @@ class TestCheckpointValidation:
         # Create valid older checkpoint and corrupted newer checkpoint
         older_checkpoint = tmp_path / "checkpoint_1000.pth"
         newer_corrupted = tmp_path / "checkpoint_2000.pth"
-        
+
         # Create valid older checkpoint
         test_data = {"model_state_dict": {"layer.weight": torch.randn(10, 5)}}
         torch.save(test_data, older_checkpoint)
-        
+
         # Create corrupted newer checkpoint
         with open(newer_corrupted, "wb") as f:
             f.write(b"corrupted data")
-        
+
         # Ensure newer has later modification time
         os.utime(newer_corrupted, (1000, 1000))
         os.utime(older_checkpoint, (500, 500))
@@ -82,7 +83,7 @@ class TestCheckpointValidation:
         # Create multiple corrupted checkpoint files
         corrupted1 = tmp_path / "checkpoint_1000.pth"
         corrupted2 = tmp_path / "checkpoint_2000.pth"
-        
+
         with open(corrupted1, "wb") as f:
             f.write(b"corrupted data 1")
         with open(corrupted2, "wb") as f:
@@ -107,7 +108,7 @@ class TestCheckpointValidation:
         truncated_checkpoint = tmp_path / "truncated.pth"
         with open(truncated_checkpoint, "wb") as f:
             f.write(b"PK")  # Just partial file header
-        
+
         assert _validate_checkpoint(str(truncated_checkpoint)) is False
 
     @patch("builtins.print")
@@ -117,10 +118,10 @@ class TestCheckpointValidation:
         corrupted_path = tmp_path / "corrupted.pth"
         with open(corrupted_path, "wb") as f:
             f.write(b"invalid data")
-        
+
         result = _validate_checkpoint(str(corrupted_path))
         assert result is False
-        
+
         # Verify error message was printed
         mock_print.assert_called()
         call_args = mock_print.call_args[0][0]
@@ -136,8 +137,11 @@ class TestCheckpointValidation:
 
         result = find_latest_checkpoint(str(tmp_path))
         assert result is None
-        
+
         # Verify the all-corrupted message was logged to stderr
         captured = capsys.readouterr()
-        assert "All checkpoint files in directory are corrupted or unreadable" in captured.err
+        assert (
+            "All checkpoint files in directory are corrupted or unreadable"
+            in captured.err
+        )
         assert "[TrainingUtils] ERROR:" in captured.err

@@ -15,7 +15,7 @@ from keisei.core.actor_critic_protocol import ActorCriticProtocol
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.scheduler_factory import SchedulerFactory
 from keisei.utils import PolicyOutputMapper
-from keisei.utils.unified_logger import log_info_to_stderr, log_error_to_stderr
+from keisei.utils.unified_logger import log_error_to_stderr, log_info_to_stderr
 
 if TYPE_CHECKING:
     from keisei.shogi.shogi_core_definitions import MoveTuple
@@ -68,7 +68,10 @@ class PPOAgent:
             )
         except Exception as e:
             # Fallback to default learning rate on error
-            log_error_to_stderr("PPOAgent", f"Could not initialize optimizer with lr={config.training.learning_rate}, using default lr=1e-3: {e}")
+            log_error_to_stderr(
+                "PPOAgent",
+                f"Could not initialize optimizer with lr={config.training.learning_rate}, using default lr=1e-3: {e}",
+            )
             self.optimizer = torch.optim.Adam(
                 self.model.parameters(), lr=1e-3, weight_decay=weight_decay
             )
@@ -145,7 +148,10 @@ class PPOAgent:
         ).unsqueeze(0)
 
         if not legal_mask.any():
-            log_error_to_stderr("PPOAgent", "select_action called with no legal moves (based on input legal_mask)")
+            log_error_to_stderr(
+                "PPOAgent",
+                "select_action called with no legal moves (based on input legal_mask)",
+            )
             # Fallback behavior might be needed if model.get_action_and_value can't handle all-False mask.
             # neural_network.py's get_action_and_value attempts to handle this.
             # If this path is hit, it implies the caller might not have checked for no legal moves.
@@ -174,7 +180,10 @@ class PPOAgent:
                 selected_policy_index_val
             )
         except IndexError as e:
-            log_error_to_stderr("PPOAgent", f"Policy index {selected_policy_index_val} out of bounds in select_action: {e}")
+            log_error_to_stderr(
+                "PPOAgent",
+                f"Policy index {selected_policy_index_val} out of bounds in select_action: {e}",
+            )
             # Handle by returning no move or re-raising, depending on desired robustness.
             return None, -1, 0.0, value_float
             # Or raise the error
@@ -269,10 +278,12 @@ class PPOAgent:
                 if self.use_mixed_precision and self.scaler:
                     # Mixed precision forward pass
                     with torch.cuda.amp.autocast():
-                        new_log_probs, entropy, new_values = self.model.evaluate_actions(
-                            obs_minibatch,
-                            actions_minibatch,
-                            legal_mask=legal_masks_minibatch,
+                        new_log_probs, entropy, new_values = (
+                            self.model.evaluate_actions(
+                                obs_minibatch,
+                                actions_minibatch,
+                                legal_mask=legal_masks_minibatch,
+                            )
                         )
                 else:
                     # Standard precision forward pass
@@ -312,7 +323,7 @@ class PPOAgent:
                 )
 
                 self.optimizer.zero_grad()
-                
+
                 # Fix B4: Use mixed precision for backward pass if enabled
                 if self.use_mixed_precision and self.scaler:
                     # Mixed precision backward pass
@@ -360,10 +371,10 @@ class PPOAgent:
         )
         avg_entropy = total_entropy_epoch / num_updates if num_updates > 0 else 0.0
         avg_kl_div = total_kl_div / num_updates if num_updates > 0 else 0.0
-        
+
         # Update tracked KL divergence
         self.last_kl_div = avg_kl_div
-        
+
         # Compile metrics
         return {
             "ppo/policy_loss": avg_policy_loss,
@@ -396,7 +407,9 @@ class PPOAgent:
             save_dict["lr_schedule_step_on"] = self.lr_schedule_step_on
 
         torch.save(save_dict, file_path)
-        log_info_to_stderr("PPOAgent", f"Model, optimizer, scheduler, and state saved to {file_path}")
+        log_info_to_stderr(
+            "PPOAgent", f"Model, optimizer, scheduler, and state saved to {file_path}"
+        )
 
     def load_model(self, file_path: str) -> Dict[str, Any]:
         """Loads the model, optimizer, scheduler, and training state from a file."""
@@ -431,7 +444,9 @@ class PPOAgent:
             }
             return result
         except (KeyError, RuntimeError, EOFError) as e:
-            log_error_to_stderr("PPOAgent", f"Error loading checkpoint from {file_path}: {e}")
+            log_error_to_stderr(
+                "PPOAgent", f"Error loading checkpoint from {file_path}: {e}"
+            )
             return {
                 "global_timestep": 0,
                 "total_episodes_completed": 0,

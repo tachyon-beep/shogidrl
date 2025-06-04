@@ -77,7 +77,7 @@ class TrainingConfig(BaseModel):
         True,
         description="Enable advantage normalization in PPO training for improved stability.",
     )
-    
+
     # Value function clipping configuration
     enable_value_clipping: bool = Field(
         False,

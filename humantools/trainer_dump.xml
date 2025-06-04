@@ -456,44 +456,11 @@ import argparse
 import multiprocessing
 import sys
 
-import wandb
 from keisei.config_schema import AppConfig
 from keisei.training.trainer import Trainer
+from keisei.training.utils import apply_wandb_sweep_config, build_cli_overrides
 from keisei.utils import load_config
-
-
-def apply_wandb_sweep_config():
-    """Apply W&B sweep configuration to override parameters."""
-    if wandb.run is None:
-        return {}
-
-    sweep_config = wandb.config
-    print(f"Running W&B sweep with config: {dict(sweep_config)}")
-
-    # Map W&B sweep parameters to config paths
-    sweep_param_mapping = {
-        "learning_rate": "training.learning_rate",
-        "gamma": "training.gamma",
-        "clip_epsilon": "training.clip_epsilon",
-        "ppo_epochs": "training.ppo_epochs",
-        "minibatch_size": "training.minibatch_size",
-        "value_loss_coeff": "training.value_loss_coeff",
-        "entropy_coef": "training.entropy_coef",
-        "tower_depth": "training.tower_depth",
-        "tower_width": "training.tower_width",
-        "se_ratio": "training.se_ratio",
-        "steps_per_epoch": "training.steps_per_epoch",
-        "gradient_clip_max_norm": "training.gradient_clip_max_norm",
-        "lambda_gae": "training.lambda_gae",
-    }
-
-    # Apply sweep parameters as overrides
-    sweep_overrides = {"wandb.enabled": True}  # Force enable W&B for sweeps
-    for sweep_key, config_path in sweep_param_mapping.items():
-        if hasattr(sweep_config, sweep_key):
-            sweep_overrides[config_path] = getattr(sweep_config, sweep_key)
-
-    return sweep_overrides
+from keisei.utils.unified_logger import log_error_to_stderr
 
 
 def main():
@@ -534,14 +501,8 @@ def main():
     # Get W&B sweep overrides if running in a sweep
     sweep_overrides = apply_wandb_sweep_config()
 
-    # Build CLI overrides dict (dot notation)
-    cli_overrides = {}
-    if args.seed is not None:
-        cli_overrides["env.seed"] = args.seed
-    if args.device is not None:
-        cli_overrides["env.device"] = args.device
-    if args.total_timesteps is not None:
-        cli_overrides["training.total_timesteps"] = args.total_timesteps
+    # Build CLI overrides using shared utility
+    cli_overrides = build_cli_overrides(args)
 
     # Merge sweep overrides with CLI overrides (CLI takes precedence)
     final_overrides = {**sweep_overrides, **cli_overrides}
@@ -560,12 +521,9 @@ if __name__ == "__main__":
         if multiprocessing.get_start_method(allow_none=True) != "spawn":
             multiprocessing.set_start_method("spawn", force=True)
     except RuntimeError as e:
-        print(
-            f"Warning: Could not set multiprocessing start method to 'spawn': {e}. Using default: {multiprocessing.get_start_method(allow_none=True)}.",
-            file=sys.stderr,
-        )
+        log_error_to_stderr("TrainWandbSweep", f"Could not set multiprocessing start method to 'spawn': {e}. Using default: {multiprocessing.get_start_method(allow_none=True)}")
     except OSError as e:
-        print(f"Error setting multiprocessing start_method: {e}", file=sys.stderr)
+        log_error_to_stderr("TrainWandbSweep", f"Error setting multiprocessing start_method: {e}")
 
     main()
 
@@ -586,6 +544,7 @@ from keisei.core.actor_critic_protocol import ActorCriticProtocol
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.ppo_agent import PPOAgent
 from keisei.utils import TrainingLogger
+from keisei.utils.unified_logger import log_error_to_stderr
 
 from .step_manager import StepManager
 
@@ -662,6 +621,8 @@ class SetupManager:
             model=model,
             config=self.config,
             device=self.device,
+            scaler=model_manager.scaler,
+            use_mixed_precision=model_manager.use_mixed_precision,
         )
 
         experience_buffer = ExperienceBuffer(
@@ -746,7 +707,7 @@ class SetupManager:
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 f.write(f"[{timestamp}] {message}\n")
         except (OSError, IOError) as e:
-            print(f"[SetupManager] Failed to log event: {e}", file=sys.stderr)
+            log_error_to_stderr("SetupManager", "Failed to log event", e)
 
     def log_run_info(
         self, session_manager, model_manager, agent, metrics_manager, log_both
@@ -790,13 +751,14 @@ import argparse
 import multiprocessing
 import sys
 
-import wandb  # Add wandb import for sweep support
 from keisei.config_schema import AppConfig
 
 # Import config module and related components
 from keisei.utils import load_config
+from keisei.utils.unified_logger import log_info_to_stderr, log_error_to_stderr
 
 from .trainer import Trainer
+from .utils import apply_wandb_sweep_config, build_cli_overrides
 
 
 def main():
@@ -890,41 +852,8 @@ def main():
     )
     args = parser.parse_args()
 
-    # Check if we're running inside a W&B sweep
-    if wandb.run is not None:
-        # We're inside a W&B sweep, use sweep config to override parameters
-        sweep_config = wandb.config
-        print(f"Running W&B sweep with config: {dict(sweep_config)}")
-
-        # Convert W&B sweep config to CLI overrides
-        sweep_overrides = {}
-
-        # Map W&B sweep parameters to config paths
-        sweep_param_mapping = {
-            "learning_rate": "training.learning_rate",
-            "gamma": "training.gamma",
-            "clip_epsilon": "training.clip_epsilon",
-            "ppo_epochs": "training.ppo_epochs",
-            "minibatch_size": "training.minibatch_size",
-            "value_loss_coeff": "training.value_loss_coeff",
-            "entropy_coef": "training.entropy_coef",
-            "tower_depth": "training.tower_depth",
-            "tower_width": "training.tower_width",
-            "se_ratio": "training.se_ratio",
-            "steps_per_epoch": "training.steps_per_epoch",
-            "gradient_clip_max_norm": "training.gradient_clip_max_norm",
-            "lambda_gae": "training.lambda_gae",
-        }
-
-        # Apply sweep parameters as overrides
-        for sweep_key, config_path in sweep_param_mapping.items():
-            if hasattr(sweep_config, sweep_key):
-                sweep_overrides[config_path] = getattr(sweep_config, sweep_key)
-
-        # Force enable W&B for sweeps
-        sweep_overrides["wandb.enabled"] = True
-    else:
-        sweep_overrides = {}
+    # Get W&B sweep overrides if running in a sweep
+    sweep_overrides = apply_wandb_sweep_config()
 
     # Build CLI overrides dict (dot notation)
     cli_overrides = {}
@@ -933,19 +862,9 @@ def main():
             k, v = override.split("=", 1)
             cli_overrides[k] = v
 
-    # Add direct CLI args as overrides if set
-    if args.seed is not None:
-        cli_overrides["env.seed"] = args.seed
-    if args.device is not None:
-        cli_overrides["env.device"] = args.device
-    if args.total_timesteps is not None:
-        cli_overrides["training.total_timesteps"] = args.total_timesteps
-    if args.savedir is not None:
-        cli_overrides["logging.model_dir"] = args.savedir
-    if args.render_every is not None:
-        cli_overrides["training.render_every_steps"] = args.render_every
-    if args.wandb_enabled:
-        cli_overrides["wandb.enabled"] = True
+    # Add direct CLI args as overrides using shared utility
+    direct_cli_overrides = build_cli_overrides(args)
+    cli_overrides.update(direct_cli_overrides)
     # Do NOT generate run_name here; let Trainer handle it for correct CLI/config/auto priority
 
     # Merge sweep overrides with CLI overrides (CLI takes precedence)
@@ -960,17 +879,17 @@ def main():
 
 
 if __name__ == "__main__":
+    # Fix B6: Add multiprocessing.freeze_support() for Windows compatibility
+    multiprocessing.freeze_support()
+    
     # Set multiprocessing start method for safety, especially with CUDA
     try:
         if multiprocessing.get_start_method(allow_none=True) != "spawn":
             multiprocessing.set_start_method("spawn", force=True)
     except RuntimeError as e:
-        print(
-            f"Warning: Could not set multiprocessing start method to 'spawn': {e}. Using default: {multiprocessing.get_start_method(allow_none=True)}.",
-            file=sys.stderr,
-        )
+        log_error_to_stderr("Train", f"Could not set multiprocessing start method to 'spawn': {e}. Using default: {multiprocessing.get_start_method(allow_none=True)}")
     except Exception as e:
-        print(f"Error setting multiprocessing start_method: {e}", file=sys.stderr)
+        log_error_to_stderr("Train", f"Error setting multiprocessing start_method: {e}")
 
     main()
 
@@ -1259,6 +1178,7 @@ from typing import Any, Callable, Dict, Optional
 import wandb
 from keisei.config_schema import AppConfig
 from keisei.utils.utils import generate_run_name
+from keisei.utils.unified_logger import log_error_to_stderr, log_warning_to_stderr
 
 from . import utils
 
@@ -1382,7 +1302,7 @@ class SessionManager:
             )
             return bool(self._is_wandb_active)
         except Exception as e:  # Catch all exceptions for WandB setup
-            print(f"Warning: WandB setup failed: {e}", file=sys.stderr)
+            log_warning_to_stderr("SessionManager", f"WandB setup failed: {e}")
             self._is_wandb_active = False
             return False
 
@@ -1400,7 +1320,7 @@ class SessionManager:
             with open(config_path, "w", encoding="utf-8") as f:
                 f.write(effective_config_str)
         except (OSError, TypeError) as e:
-            print(f"Error saving effective_config.json: {e}", file=sys.stderr)
+            log_error_to_stderr("SessionManager", f"Error saving effective_config.json: {e}")
             raise RuntimeError(f"Failed to save effective config: {e}") from e
 
     def log_session_info(
@@ -1477,39 +1397,50 @@ class SessionManager:
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 f.write(f"[{timestamp}] --- SESSION START: {self._run_name} ---\n")
         except (OSError, IOError) as e:
-            print(f"Failed to log session start: {e}", file=sys.stderr)
+            log_error_to_stderr("SessionManager", f"Failed to log session start: {e}")
 
     def finalize_session(self) -> None:
         """Finalize the training session."""
         if self._is_wandb_active and wandb.run:
             try:
-                # Set a short timeout for WandB finalization to avoid hanging
-                import signal
+                # Fix B5: Use cross-platform threading.Timer instead of POSIX signal
+                import threading
+                
+                timeout_occurred = threading.Event()
+                
+                def timeout_handler():
+                    timeout_occurred.set()
 
-                def timeout_handler(signum, frame):
-                    raise TimeoutError("WandB finalization timed out")
-
-                # Set up timeout (10 seconds)
-                signal.signal(signal.SIGALRM, timeout_handler)
-                signal.alarm(10)
+                # Set up timeout (10 seconds) - cross-platform compatible
+                timer = threading.Timer(10.0, timeout_handler)
+                timer.start()
 
                 try:
-                    wandb.finish()
+                    # Check periodically if timeout occurred
+                    import time
+                    start_time = time.time()
+                    while not timeout_occurred.is_set() and (time.time() - start_time) < 10:
+                        try:
+                            wandb.finish()
+                            break  # Success, exit loop
+                        except Exception:
+                            time.sleep(0.1)  # Brief wait before retry
+                    
+                    if timeout_occurred.is_set():
+                        raise TimeoutError("WandB finalization timed out")
+                        
                 finally:
-                    signal.alarm(0)  # Cancel the alarm
+                    timer.cancel()  # Cancel the timer
 
             except (KeyboardInterrupt, TimeoutError):
-                print(
-                    "Warning: WandB finalization interrupted or timed out",
-                    file=sys.stderr,
-                )
+                log_warning_to_stderr("SessionManager", "WandB finalization interrupted or timed out")
                 try:
                     # Force finish without waiting
                     wandb.finish(exit_code=1)
                 except Exception:
                     pass
             except Exception as e:  # Catch all exceptions for WandB finalization
-                print(f"Warning: WandB finalization failed: {e}", file=sys.stderr)
+                log_warning_to_stderr("SessionManager", f"WandB finalization failed: {e}")
 
     def setup_seeding(self) -> None:
         """Setup random seeding based on configuration."""
@@ -1543,57 +1474,72 @@ training/utils.py: Helper functions for setup and configuration in the Shogi RL 
 import glob
 import json
 import os
+import pickle
 import random
 import sys
-from typing import Any
+from typing import Optional
 
 import numpy as np
 import torch
 
 import wandb
+from keisei.utils.unified_logger import log_error_to_stderr, log_info_to_stderr
+from keisei.config_schema import AppConfig
 
 
-def find_latest_checkpoint(model_dir_path):
+def _validate_checkpoint(checkpoint_path: str) -> bool:
+    """Validate checkpoint file integrity by attempting to load it.
+    
+    Args:
+        checkpoint_path: Path to checkpoint file to validate
+        
+    Returns:
+        True if checkpoint loads successfully, False otherwise
+    """
+    try:
+        # Attempt minimal load to check file integrity
+        torch.load(checkpoint_path, map_location='cpu')
+        return True
+    except (OSError, RuntimeError, EOFError, pickle.UnpicklingError) as e:
+        log_error_to_stderr("TrainingUtils", f"Corrupted checkpoint {checkpoint_path}: {e}")
+        return False
+
+
+def find_latest_checkpoint(model_dir_path: str) -> Optional[str]:
     try:
         checkpoints = glob.glob(os.path.join(model_dir_path, "*.pth"))
         if not checkpoints:
             checkpoints = glob.glob(os.path.join(model_dir_path, "*.pt"))
         if not checkpoints:
             return None
+        
+        # Sort checkpoints by modification time (newest first)
         checkpoints.sort(key=os.path.getmtime, reverse=True)
-        return checkpoints[0]
-    except (OSError, FileNotFoundError) as e:
-        print(f"Error in find_latest_checkpoint: {e}", file=sys.stderr)
+        
+        # Find the first valid (non-corrupted) checkpoint
+        for checkpoint_path in checkpoints:
+            if _validate_checkpoint(checkpoint_path):
+                return checkpoint_path
+        
+        # If we get here, all checkpoints are corrupted
+        log_error_to_stderr("TrainingUtils", "All checkpoint files in directory are corrupted or unreadable")
+        return None
+        
+    except OSError as e:
+        log_error_to_stderr("TrainingUtils", f"Error in find_latest_checkpoint: {e}")
         return None
 
 
-def serialize_config(config_obj: Any) -> str:
-    if hasattr(config_obj, "dict"):
-        conf_dict = config_obj.dict()
-    else:
-        conf_dict = {}
-        if hasattr(config_obj, "__dict__"):
-            source_dict = config_obj.__dict__
-        elif isinstance(config_obj, dict):
-            source_dict = config_obj
-        else:
-            source_dict = {
-                key: getattr(config_obj, key)
-                for key in dir(config_obj)
-                if not key.startswith("__") and not callable(getattr(config_obj, key))
-            }
-        for k, v in source_dict.items():
-            if isinstance(v, (int, float, str, bool, list, dict, tuple)) or v is None:
-                conf_dict[k] = v
-            elif hasattr(v, "dict"):
-                conf_dict[k] = v.dict()
-            elif hasattr(v, "__dict__"):
-                conf_dict[k] = json.loads(serialize_config(v))
-    try:
-        return json.dumps(conf_dict, indent=4, sort_keys=True)
-    except TypeError as e:
-        print(f"Error serializing config: {e}", file=sys.stderr)
-        return "{}"
+def serialize_config(config: AppConfig) -> str:
+    """Serialize AppConfig to JSON string using Pydantic's built-in serialization.
+    
+    Args:
+        config: AppConfig instance to serialize
+        
+    Returns:
+        JSON string representation of the configuration
+    """
+    return config.model_dump_json(indent=4)
 
 
 def setup_directories(config, run_name):
@@ -1641,16 +1587,84 @@ def setup_wandb(config, run_name, run_artifact_dir):
                 id=run_name,
             )
         except (TypeError, ValueError, OSError) as e:
-            print(
-                f"Error initializing W&B: {e}. W&B logging disabled.", file=sys.stderr
-            )
+            log_error_to_stderr("TrainingUtils", f"Error initializing W&B: {e}. W&B logging disabled.")
             is_active = False
     if not is_active:
-        print(
-            "Weights & Biases logging is disabled or failed to initialize.",
-            file=sys.stderr,
-        )
+        log_info_to_stderr("TrainingUtils", "Weights & Biases logging is disabled or failed to initialize.")
     return is_active
+
+
+def apply_wandb_sweep_config():
+    """Apply W&B sweep configuration to override parameters.
+
+    Returns:
+        Dict[str, Any]: Dictionary of configuration overrides extracted from sweep parameters.
+                       Empty dict if no W&B sweep is active.
+    """
+    if wandb.run is None:
+        return {}
+
+    sweep_config = wandb.config
+    log_info_to_stderr("TrainingUtils", f"Running W&B sweep with config: {dict(sweep_config)}")
+
+    # Map W&B sweep parameters to config paths
+    sweep_param_mapping = {
+        "learning_rate": "training.learning_rate",
+        "gamma": "training.gamma",
+        "clip_epsilon": "training.clip_epsilon",
+        "ppo_epochs": "training.ppo_epochs",
+        "minibatch_size": "training.minibatch_size",
+        "value_loss_coeff": "training.value_loss_coeff",
+        "entropy_coef": "training.entropy_coef",
+        "tower_depth": "training.tower_depth",
+        "tower_width": "training.tower_width",
+        "se_ratio": "training.se_ratio",
+        "steps_per_epoch": "training.steps_per_epoch",
+        "gradient_clip_max_norm": "training.gradient_clip_max_norm",
+        "lambda_gae": "training.lambda_gae",
+    }
+
+    # Apply sweep parameters as overrides
+    sweep_overrides = {"wandb.enabled": True}  # Force enable W&B for sweeps
+    for sweep_key, config_path in sweep_param_mapping.items():
+        if hasattr(sweep_config, sweep_key):
+            sweep_overrides[config_path] = getattr(sweep_config, sweep_key)
+
+    return sweep_overrides
+
+
+def build_cli_overrides(args) -> dict:
+    """
+    Build configuration overrides from command line arguments.
+    
+    This function centralizes the logic for converting CLI arguments
+    to configuration overrides, eliminating duplication between training scripts.
+    
+    Args:
+        args: Parsed command line arguments from argparse
+        
+    Returns:
+        dict: Configuration overrides in dot notation format
+    """
+    cli_overrides = {}
+    
+    # Core overrides supported by both training scripts
+    if hasattr(args, 'seed') and args.seed is not None:
+        cli_overrides["env.seed"] = args.seed
+    if hasattr(args, 'device') and args.device is not None:
+        cli_overrides["env.device"] = args.device
+    if hasattr(args, 'total_timesteps') and args.total_timesteps is not None:
+        cli_overrides["training.total_timesteps"] = args.total_timesteps
+    
+    # Extended overrides only available in main training script
+    if hasattr(args, 'savedir') and args.savedir is not None:
+        cli_overrides["logging.model_dir"] = args.savedir
+    if hasattr(args, 'render_every') and args.render_every is not None:
+        cli_overrides["training.render_every_steps"] = args.render_every
+    if hasattr(args, 'wandb_enabled') and args.wandb_enabled:
+        cli_overrides["wandb.enabled"] = True
+    
+    return cli_overrides
 
 ]]></file>
   <file path="training_loop_manager.py"><![CDATA[
@@ -1662,6 +1676,7 @@ import time
 from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 
 import torch.nn as nn
+from keisei.utils.unified_logger import log_info_to_stderr
 
 # Constants
 STEP_MANAGER_NOT_AVAILABLE_MSG = "StepManager is not available"
@@ -1749,6 +1764,19 @@ class TrainingLoopManager:
         self.steps_since_last_time_for_sps = 0
         self.last_display_update_time = time.time()
 
+        # Start parallel workers if parallel training is enabled
+        if self.parallel_manager and self.config.parallel.enabled:
+            if self.trainer.agent and self.trainer.agent.model:
+                log_both(f"Starting {self.config.parallel.num_workers} parallel workers...")
+                if self.parallel_manager.start_workers(self.trainer.agent.model):
+                    log_both("Parallel workers started successfully")
+                else:
+                    log_both("Failed to start parallel workers, falling back to sequential training")
+                    self.parallel_manager = None
+            else:
+                log_both("Cannot start parallel workers: model not available")
+                self.parallel_manager = None
+
         try:
             while self.trainer.global_timestep < self.config.training.total_timesteps:
                 self.current_epoch += 1
@@ -1772,8 +1800,8 @@ class TrainingLoopManager:
                         also_to_wandb=True,
                     )
 
-                for callback_item in self.callbacks:
-                    callback_item.on_step_end(self.trainer)
+                # Execute step callbacks using centralized callback manager with error handling
+                self.trainer.callback_manager.execute_step_callbacks(self.trainer)
 
         except KeyboardInterrupt:
             log_both(
@@ -1786,7 +1814,7 @@ class TrainingLoopManager:
             if hasattr(self.trainer, "logger") and self.trainer.logger:
                 self.trainer.logger.log(log_message)
             else:
-                print(log_message)
+                log_info_to_stderr("TrainingLoopManager", log_message)
             log_both(f"Training error in training loop: {e}", also_to_wandb=True)
             raise
 
@@ -1855,9 +1883,11 @@ class TrainingLoopManager:
 
                     if experiences_collected > 0:
                         num_steps_collected += experiences_collected
-                        self.trainer.metrics_manager.global_timestep += (
+                        self.trainer.metrics_manager.increment_timestep_by(
                             experiences_collected
                         )
+                        # Fix B11: Update SPS calculation counter for parallel mode
+                        self.steps_since_last_time_for_sps += experiences_collected
 
                         log_both(
                             f"Collected {experiences_collected} experiences from workers "
@@ -2001,7 +2031,7 @@ class TrainingLoopManager:
             self.episode_state, step_result, log_both
         )
 
-        self.trainer.metrics_manager.global_timestep += 1
+        self.trainer.metrics_manager.increment_timestep()
         self.steps_since_last_time_for_sps += 1
         return True  # Continue epoch
 
@@ -2043,14 +2073,13 @@ class TrainingLoopManager:
             }
         )
 
-    def _handle_display_updates(self):
-        """Handles periodic display updates based on time and step intervals."""
-        if self.trainer.global_timestep % self.config.training.render_every_steps == 0:
-            if hasattr(self.display, "update_log_panel") and callable(
-                self.display.update_log_panel
-            ):
-                self.display.update_log_panel(self.trainer)
+    def _update_display_if_needed(self, extra_updates: Optional[dict] = None):
+        """
+        Shared helper method to update display with current progress.
 
+        Args:
+            extra_updates: Optional dictionary of additional updates to include
+        """
         current_time = time.time()
         display_update_interval = getattr(
             self.config.training, "rich_display_update_interval_seconds", 0.2
@@ -2068,6 +2097,11 @@ class TrainingLoopManager:
                 "current_epoch", self.current_epoch
             )
 
+            # Add any extra updates provided
+            if extra_updates:
+                for key, value in extra_updates.items():
+                    self.trainer.metrics_manager.pending_progress_updates.setdefault(key, value)
+
             if hasattr(self.display, "update_progress") and callable(
                 self.display.update_progress
             ):
@@ -2081,6 +2115,16 @@ class TrainingLoopManager:
             self.last_time_for_sps = current_time
             self.steps_since_last_time_for_sps = 0
             self.last_display_update_time = current_time
+
+    def _handle_display_updates(self):
+        """Handles periodic display updates based on time and step intervals."""
+        if self.trainer.global_timestep % self.config.training.render_every_steps == 0:
+            if hasattr(self.display, "update_log_panel") and callable(
+                self.display.update_log_panel
+            ):
+                self.display.update_log_panel(self.trainer)
+
+        self._update_display_if_needed()
 
     def _build_env_config(self) -> Dict[str, Any]:
         """Build environment configuration dictionary for parallel workers."""
@@ -2105,39 +2149,8 @@ class TrainingLoopManager:
 
     def _update_display_progress(self, num_steps_collected):
         """Update display with current progress during parallel collection."""
-        current_time = time.time()
-        display_update_interval = getattr(
-            self.config.training, "rich_display_update_interval_seconds", 0.2
-        )
-
-        if (current_time - self.last_display_update_time) > display_update_interval:
-            time_delta_sps = current_time - self.last_time_for_sps
-            current_speed = (
-                self.steps_since_last_time_for_sps / time_delta_sps
-                if time_delta_sps > 0
-                else 0.0
-            )
-
-            self.trainer.metrics_manager.pending_progress_updates.setdefault(
-                "current_epoch", self.current_epoch
-            )
-            self.trainer.metrics_manager.pending_progress_updates.setdefault(
-                "parallel_steps_collected", num_steps_collected
-            )
-
-            if hasattr(self.display, "update_progress") and callable(
-                self.display.update_progress
-            ):
-                self.display.update_progress(
-                    self.trainer,
-                    current_speed,
-                    self.trainer.metrics_manager.pending_progress_updates,
-                )
-            self.trainer.metrics_manager.pending_progress_updates.clear()
-
-            self.last_time_for_sps = current_time
-            self.steps_since_last_time_for_sps = 0
-            self.last_display_update_time = current_time
+        extra_updates = {"parallel_steps_collected": num_steps_collected}
+        self._update_display_if_needed(extra_updates)
 
 ]]></file>
   <file path="trainer.py"><![CDATA[
@@ -2277,6 +2290,9 @@ class Trainer(CompatibilityMixin):
             self.env_manager.reset_game()
             if not self.step_manager:
                 raise RuntimeError("StepManager not initialized")
+            
+            # Type narrowing: assert that step_manager is not None
+            assert self.step_manager is not None, "StepManager should be initialized at this point"
             return self.step_manager.reset_episode()
         except (RuntimeError, ValueError, OSError) as e:
             log_both(
@@ -2295,6 +2311,10 @@ class Trainer(CompatibilityMixin):
                 also_to_wandb=True,
             )
             return
+
+        # Type narrowing: assert that agent and experience_buffer are not None
+        assert self.agent is not None, "Agent should be initialized at this point"
+        assert self.experience_buffer is not None, "Experience buffer should be initialized at this point"
 
         with torch.no_grad():
             last_value_pred_for_gae = self.agent.get_value(current_obs_np)
@@ -2705,6 +2725,17 @@ class MetricsManager:
         """Increment the global timestep counter."""
         self.stats.global_timestep += 1
 
+    def increment_timestep_by(self, amount: int) -> None:
+        """
+        Increment the global timestep counter by a specific amount.
+
+        Args:
+            amount: Number of timesteps to add
+        """
+        if amount < 0:
+            raise ValueError("Timestep increment amount must be non-negative")
+        self.stats.global_timestep += amount
+
     # === Properties for Backward Compatibility ===
 
     @property
@@ -2770,6 +2801,7 @@ from rich.console import Console, Text
 from rich.live import Live
 
 from . import display
+from keisei.utils.unified_logger import log_error_to_stderr
 
 
 class DisplayManager:
@@ -2882,12 +2914,10 @@ class DisplayManager:
 
             console_log_path = os.path.join(output_dir, "full_console_output_rich.html")
             self.rich_console.save_html(console_log_path)
-            print(
-                f"Full Rich console output saved to {console_log_path}", file=sys.stderr
-            )
+            log_error_to_stderr("DisplayManager", f"Full Rich console output saved to {console_log_path}")
             return True
         except OSError as e:
-            print(f"Error saving Rich console log: {e}", file=sys.stderr)
+            log_error_to_stderr("DisplayManager", f"Error saving Rich console log: {e}")
             return False
 
     def print_rule(self, title: str, style: str = "bold green") -> None:
@@ -2941,6 +2971,7 @@ This module handles model-related concerns including:
 
 import os
 import shutil
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import torch
@@ -3195,8 +3226,8 @@ class ModelManager:
             # Add the model file
             artifact.add_file(model_path)
 
-            # Log the artifact with optional aliases
-            wandb.log_artifact(artifact, aliases=aliases)
+            # Log the artifact with retry logic for network failures
+            self._log_artifact_with_retry(artifact, aliases, model_path)
 
             aliases_str = f" with aliases {aliases}" if aliases else ""
             self.logger_func(
@@ -3211,6 +3242,44 @@ class ModelManager:
         except (OSError, RuntimeError, TypeError, ValueError) as e:
             self.logger_func(f"Error creating W&B artifact for {model_path}: {e}")
             return False
+
+    def _log_artifact_with_retry(
+        self,
+        artifact,
+        aliases: Optional[List[str]],
+        model_path: str,
+        max_retries: int = 3,
+        backoff_factor: float = 2.0,
+    ) -> None:
+        """
+        Log WandB artifact with retry logic for network failures.
+
+        Args:
+            artifact: WandB artifact to log
+            aliases: Optional list of aliases for the artifact
+            model_path: Path to model file (for error logging)
+            max_retries: Maximum number of retry attempts (default: 3)
+            backoff_factor: Multiplier for exponential backoff (default: 2.0)
+
+        Raises:
+            Exception: Re-raises the last exception if all retries fail
+        """
+        for attempt in range(max_retries):
+            try:
+                wandb.log_artifact(artifact, aliases=aliases)
+                return  # Success, exit retry loop
+            except (ConnectionError, TimeoutError, RuntimeError) as e:
+                if attempt == max_retries - 1:
+                    # Last attempt failed, re-raise the exception
+                    raise e
+
+                # Calculate backoff delay with exponential growth
+                delay = backoff_factor ** attempt
+                self.logger_func(
+                    f"WandB artifact upload attempt {attempt + 1} failed for {model_path}: {e}. "
+                    f"Retrying in {delay:.1f} seconds..."
+                )
+                time.sleep(delay)
 
     def save_final_model(
         self,
@@ -3737,7 +3806,7 @@ class StepManager:
         self,
         episode_state: EpisodeState,
         step_result: StepResult,
-        game_stats: Dict[str, int],  # Will be modified in place
+        game_stats: Dict[str, int],  # Read-only, not modified
         total_episodes_completed: int,
         logger_func: Callable[..., None],
     ) -> Tuple[EpisodeState, Optional[str]]:  # Return tuple
@@ -3747,7 +3816,7 @@ class StepManager:
         Args:
             episode_state: Current episode state
             step_result: Result from the final step of the episode
-            game_stats: Running game statistics (e.g., black_wins, white_wins, draws) - WILL BE MODIFIED IN PLACE.
+            game_stats: Running game statistics (e.g., black_wins, white_wins, draws) - READ ONLY (not modified)
             total_episodes_completed: Total episodes completed so far (before this one)
             logger_func: Function for logging messages
 
@@ -3761,31 +3830,33 @@ class StepManager:
             final_winner_color, reason_from_info
         )
 
-        # Update game_stats in place with the outcome of the current episode
+        # Fix B2: Don't modify game_stats in place to avoid double counting
+        # Create a temporary copy for win rate calculations only
+        temp_game_stats = game_stats.copy()
         if final_winner_color == "black":
-            game_stats["black_wins"] += 1
+            temp_game_stats["black_wins"] += 1
         elif final_winner_color == "white":
-            game_stats["white_wins"] += 1
+            temp_game_stats["white_wins"] += 1
         elif final_winner_color is None:  # Draw
-            game_stats["draws"] += 1
+            temp_game_stats["draws"] += 1
 
-        # Calculate win rates for logging using the *updated* game_stats
+        # Calculate win rates for logging using the temporary game_stats
         updated_total_games = (
-            game_stats["black_wins"] + game_stats["white_wins"] + game_stats["draws"]
+            temp_game_stats["black_wins"] + temp_game_stats["white_wins"] + temp_game_stats["draws"]
         )
 
         updated_black_win_rate = (
-            game_stats["black_wins"] / updated_total_games
+            temp_game_stats["black_wins"] / updated_total_games
             if updated_total_games > 0
             else 0.0
         )
         updated_white_win_rate = (
-            game_stats["white_wins"] / updated_total_games
+            temp_game_stats["white_wins"] / updated_total_games
             if updated_total_games > 0
             else 0.0
         )
         updated_draw_rate = (
-            game_stats["draws"] / updated_total_games
+            temp_game_stats["draws"] / updated_total_games
             if updated_total_games > 0
             else 0.0
         )
@@ -3800,9 +3871,9 @@ class StepManager:
                 "episode_length": episode_state.episode_length,
                 "game_outcome": final_winner_color,
                 "game_reason": reason_from_info,
-                "black_wins_total": game_stats["black_wins"],
-                "white_wins_total": game_stats["white_wins"],
-                "draws_total": game_stats["draws"],
+                "black_wins_total": temp_game_stats["black_wins"],  # Use updated totals for logging
+                "white_wins_total": temp_game_stats["white_wins"],  # Use updated totals for logging
+                "draws_total": temp_game_stats["draws"],  # Use updated totals for logging
                 "black_win_rate": updated_black_win_rate,  # Corrected key
                 "white_win_rate": updated_white_win_rate,  # Corrected key
                 "draw_rate": updated_draw_rate,  # Corrected key
@@ -4073,6 +4144,9 @@ class EvaluationCallback(Callback):
                         also_to_wandb=True,
                     )
                 return
+
+            # Type narrowing: assert that agent is not None
+            assert trainer.agent is not None, "Agent should be initialized at this point"
 
             # Ensure the model to be evaluated exists and is accessible
             # The Trainer now owns self.model directly.
@@ -4507,12 +4581,14 @@ Provides queue-based communication between main process and worker processes,
 including experience collection and model synchronization.
 """
 
+import gzip
 import logging
 import multiprocessing as mp
 import queue
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+import numpy as np
 import torch
 
 logger = logging.getLogger(__name__)
@@ -4649,7 +4725,7 @@ class WorkerCommunicator:
         self, state_dict: Dict[str, torch.Tensor], compress: bool
     ) -> Dict[str, Any]:
         """
-        Prepare model state dict for transmission.
+        Prepare model state dict for transmission with actual compression.
 
         Args:
             state_dict: PyTorch model state dictionary
@@ -4660,18 +4736,38 @@ class WorkerCommunicator:
         """
         # Convert tensors to numpy arrays for transmission
         model_data = {}
+        total_original_size = 0
+        total_compressed_size = 0
+        
         for key, tensor in state_dict.items():
             np_array = tensor.cpu().numpy()
-
+            
             if compress:
-                # Simple compression using numpy's compressed format
-                # In production, could use more sophisticated compression
-                model_data[key] = {
-                    "data": np_array,
-                    "shape": np_array.shape,
-                    "dtype": str(np_array.dtype),
-                    "compressed": True,
-                }
+                try:
+                    # Apply gzip compression
+                    array_bytes = np_array.tobytes()
+                    compressed_bytes = gzip.compress(array_bytes, compresslevel=6)
+                    
+                    total_original_size += len(array_bytes)
+                    total_compressed_size += len(compressed_bytes)
+                    
+                    model_data[key] = {
+                        "data": compressed_bytes,
+                        "shape": np_array.shape,
+                        "dtype": str(np_array.dtype),
+                        "compressed": True,
+                    }
+                except Exception as e:
+                    logger.warning("Compression failed for %s, using uncompressed: %s", key, str(e))
+                    # Fallback to uncompressed
+                    model_data[key] = {
+                        "data": np_array,
+                        "shape": np_array.shape,
+                        "dtype": str(np_array.dtype),
+                        "compressed": False,
+                    }
+                    total_original_size += np_array.nbytes
+                    total_compressed_size += np_array.nbytes
             else:
                 model_data[key] = {
                     "data": np_array,
@@ -4679,11 +4775,18 @@ class WorkerCommunicator:
                     "dtype": str(np_array.dtype),
                     "compressed": False,
                 }
+                total_original_size += np_array.nbytes
+                total_compressed_size += np_array.nbytes
+
+        compression_ratio = total_original_size / total_compressed_size if total_compressed_size > 0 else 1.0
 
         return {
             "model_data": model_data,
             "timestamp": time.time(),
             "compressed": compress,
+            "compression_ratio": compression_ratio,
+            "total_original_size": total_original_size,
+            "total_compressed_size": total_compressed_size,
         }
 
     def get_queue_info(self) -> Dict[str, List[int]]:
@@ -4727,7 +4830,9 @@ Handles efficient synchronization of model weights between the main training
 process and worker processes, including compression and versioning.
 """
 
+import gzip
 import logging
+import pickle
 import time
 from typing import Any, Dict
 
@@ -4760,7 +4865,7 @@ class ModelSynchronizer:
         self.sync_count = 0
 
         logger.info(
-            "Model synchronizer initialized (interval=%d, " "compression=%s)",
+            "Model synchronizer initialized (interval=%d, compression=%s)",
             sync_interval,
             compression_enabled,
         )
@@ -4873,23 +4978,44 @@ class ModelSynchronizer:
 
     def _compress_array(self, array: np.ndarray) -> Dict[str, Any]:
         """
-        Compress numpy array for efficient transmission.
+        Compress numpy array for efficient transmission using gzip compression.
 
         Args:
             array: Numpy array to compress
 
         Returns:
-            Compressed array data
+            Compressed array data with actual compression
         """
-        # Simple compression - in production could use more sophisticated methods
-        # like quantization or custom compression schemes
-        return {
-            "data": array,  # For now, no actual compression
-            "shape": array.shape,
-            "dtype": str(array.dtype),
-            "compressed": True,
-            "compression_ratio": 1.0,  # Would be actual ratio with real compression
-        }
+        try:
+            # Convert to bytes
+            array_bytes = array.tobytes()
+            original_size = len(array_bytes)
+            
+            # Apply gzip compression
+            compressed_bytes = gzip.compress(array_bytes, compresslevel=6)
+            compressed_size = len(compressed_bytes)
+            
+            compression_ratio = original_size / compressed_size if compressed_size > 0 else 1.0
+            
+            return {
+                "data": compressed_bytes,
+                "shape": array.shape,
+                "dtype": str(array.dtype),
+                "compressed": True,
+                "compression_ratio": compression_ratio,
+                "original_size": original_size,
+                "compressed_size": compressed_size,
+            }
+        except Exception as e:
+            logger.warning("Compression failed, using uncompressed data: %s", str(e))
+            # Fallback to uncompressed
+            return {
+                "data": array,
+                "shape": array.shape,
+                "dtype": str(array.dtype),
+                "compressed": False,
+                "compression_ratio": 1.0,
+            }
 
     def _decompress_array(self, compressed_data: Dict[str, Any]) -> np.ndarray:
         """
@@ -4901,8 +5027,24 @@ class ModelSynchronizer:
         Returns:
             Decompressed numpy array
         """
-        # Simple decompression - matches _compress_array
-        return compressed_data["data"]
+        try:
+            if compressed_data.get("compressed", False):
+                # Decompress gzip data
+                compressed_bytes = compressed_data["data"]
+                decompressed_bytes = gzip.decompress(compressed_bytes)
+                
+                # Reconstruct numpy array
+                dtype = np.dtype(compressed_data["dtype"])
+                shape = compressed_data["shape"]
+                array = np.frombuffer(decompressed_bytes, dtype=dtype).reshape(shape)
+                return array
+            else:
+                # Data is not compressed, return as-is
+                return compressed_data["data"]
+        except Exception as e:
+            logger.error("Decompression failed: %s", str(e))
+            # Try to return raw data as fallback
+            return compressed_data["data"]
 
     def get_sync_stats(self) -> Dict[str, Any]:
         """
@@ -5200,13 +5342,13 @@ class SelfPlayWorker(mp.Process):
             experiences: List of Experience objects to send
         """
         try:
-            # Convert to list format for transmission
-            batch_data = experiences
+            # Convert experiences to batched tensor format for efficient IPC
+            batched_tensors = self._experiences_to_batch(experiences)
 
             # Add worker metadata
             batch_message = {
                 "worker_id": self.worker_id,
-                "experiences": batch_data,
+                "experiences": batched_tensors,  # Now sending batched tensors instead of individual objects
                 "batch_size": len(experiences),
                 "timestamp": time.time(),
                 "steps_collected": self.steps_collected,
@@ -5216,6 +5358,11 @@ class SelfPlayWorker(mp.Process):
             # Send to main process
             timeout = self.parallel_config.get("timeout_seconds", 10.0)
             self.experience_queue.put(batch_message, timeout=timeout)
+
+            logger.debug(
+                "Worker %d sent batch of %d experiences as tensors", 
+                self.worker_id, len(experiences)
+            )
 
         except queue.Full:
             logger.warning(

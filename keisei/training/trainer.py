@@ -134,6 +134,11 @@ class Trainer(CompatibilityMixin):
             self.env_manager.reset_game()
             if not self.step_manager:
                 raise RuntimeError("StepManager not initialized")
+
+            # Type narrowing: assert that step_manager is not None
+            assert (
+                self.step_manager is not None
+            ), "StepManager should be initialized at this point"
             return self.step_manager.reset_episode()
         except (RuntimeError, ValueError, OSError) as e:
             log_both(
@@ -152,6 +157,12 @@ class Trainer(CompatibilityMixin):
                 also_to_wandb=True,
             )
             return
+
+        # Type narrowing: assert that agent and experience_buffer are not None
+        assert self.agent is not None, "Agent should be initialized at this point"
+        assert (
+            self.experience_buffer is not None
+        ), "Experience buffer should be initialized at this point"
 
         with torch.no_grad():
             last_value_pred_for_gae = self.agent.get_value(current_obs_np)

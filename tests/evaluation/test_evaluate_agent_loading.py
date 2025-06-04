@@ -9,7 +9,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from keisei.utils.agent_loading import load_evaluation_agent
-
 from tests.evaluation.conftest import INPUT_CHANNELS
 
 

@@ -16,8 +16,8 @@ from typing import Any, Callable, Dict, Optional
 
 import wandb
 from keisei.config_schema import AppConfig
-from keisei.utils.utils import generate_run_name
 from keisei.utils.unified_logger import log_error_to_stderr, log_warning_to_stderr
+from keisei.utils.utils import generate_run_name
 
 from . import utils
 
@@ -159,7 +159,9 @@ class SessionManager:
             with open(config_path, "w", encoding="utf-8") as f:
                 f.write(effective_config_str)
         except (OSError, TypeError) as e:
-            log_error_to_stderr("SessionManager", f"Error saving effective_config.json: {e}")
+            log_error_to_stderr(
+                "SessionManager", f"Error saving effective_config.json: {e}"
+            )
             raise RuntimeError(f"Failed to save effective config: {e}") from e
 
     def log_session_info(
@@ -244,9 +246,9 @@ class SessionManager:
             try:
                 # Fix B5: Use cross-platform threading.Timer instead of POSIX signal
                 import threading
-                
+
                 timeout_occurred = threading.Event()
-                
+
                 def timeout_handler():
                     timeout_occurred.set()
 
@@ -257,29 +259,37 @@ class SessionManager:
                 try:
                     # Check periodically if timeout occurred
                     import time
+
                     start_time = time.time()
-                    while not timeout_occurred.is_set() and (time.time() - start_time) < 10:
+                    while (
+                        not timeout_occurred.is_set()
+                        and (time.time() - start_time) < 10
+                    ):
                         try:
                             wandb.finish()
                             break  # Success, exit loop
                         except Exception:
                             time.sleep(0.1)  # Brief wait before retry
-                    
+
                     if timeout_occurred.is_set():
                         raise TimeoutError("WandB finalization timed out")
-                        
+
                 finally:
                     timer.cancel()  # Cancel the timer
 
             except (KeyboardInterrupt, TimeoutError):
-                log_warning_to_stderr("SessionManager", "WandB finalization interrupted or timed out")
+                log_warning_to_stderr(
+                    "SessionManager", "WandB finalization interrupted or timed out"
+                )
                 try:
                     # Force finish without waiting
                     wandb.finish(exit_code=1)
                 except Exception:
                     pass
             except Exception as e:  # Catch all exceptions for WandB finalization
-                log_warning_to_stderr("SessionManager", f"WandB finalization failed: {e}")
+                log_warning_to_stderr(
+                    "SessionManager", f"WandB finalization failed: {e}"
+                )
 
     def setup_seeding(self) -> None:
         """Setup random seeding based on configuration."""

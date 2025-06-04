@@ -19,12 +19,12 @@ from keisei.config_schema import (
     WandBConfig,
 )
 from keisei.constants import (
-    SHOGI_BOARD_SIZE,
     CORE_OBSERVATION_CHANNELS,
-    DEFAULT_NUM_ACTIONS_TOTAL,
     DEFAULT_GAMMA,
     DEFAULT_LAMBDA_GAE,
     DEFAULT_MAX_MOVES_PER_GAME,
+    DEFAULT_NUM_ACTIONS_TOTAL,
+    SHOGI_BOARD_SIZE,
     TEST_BUFFER_SIZE,
 )
 from keisei.utils import PolicyOutputMapper
@@ -418,7 +418,10 @@ def ppo_test_model():
     from keisei.utils import PolicyOutputMapper
 
     mapper = PolicyOutputMapper()
-    return ActorCritic(input_channels=CORE_OBSERVATION_CHANNELS, num_actions_total=mapper.get_total_actions())
+    return ActorCritic(
+        input_channels=CORE_OBSERVATION_CHANNELS,
+        num_actions_total=mapper.get_total_actions(),
+    )
 
 
 @pytest.fixture
@@ -467,8 +470,12 @@ def populated_experience_buffer():
     )
 
     # Create consistent dummy data
-    dummy_obs_tensor = torch.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cpu")
-    dummy_legal_mask = torch.ones(DEFAULT_NUM_ACTIONS_TOTAL, dtype=torch.bool, device="cpu")
+    dummy_obs_tensor = torch.randn(
+        CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cpu"
+    )
+    dummy_legal_mask = torch.ones(
+        DEFAULT_NUM_ACTIONS_TOTAL, dtype=torch.bool, device="cpu"
+    )
 
     # Add varied experiences
     rewards = [1.0, -0.5, 2.0, 0.0]
@@ -496,7 +503,9 @@ def dummy_observation():
     import torch
 
     rng = np.random.default_rng(42)
-    obs_np = rng.random((CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE)).astype(np.float32)
+    obs_np = rng.random(
+        (CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE)
+    ).astype(np.float32)
     return torch.from_numpy(obs_np).to(torch.device("cpu"))
 
 
@@ -514,7 +523,9 @@ def create_test_experience_data(buffer_size: int, device: str = "cpu"):
     """Helper function to generate consistent dummy experience data."""
     import torch
 
-    dummy_obs = torch.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device=device)
+    dummy_obs = torch.randn(
+        CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device=device
+    )
     dummy_mask = torch.ones(DEFAULT_NUM_ACTIONS_TOTAL, dtype=torch.bool, device=device)
 
     # Generate varied but consistent data

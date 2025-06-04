@@ -38,11 +38,11 @@ def mock_config():
     """Create a mock AppConfig for testing."""
     return AppConfig(
         env=EnvConfig(
-            device="cpu", 
-            num_actions_total=1, 
-            input_channels=1, 
+            device="cpu",
+            num_actions_total=1,
+            input_channels=1,
             seed=42,
-            max_moves_per_game=500
+            max_moves_per_game=500,
         ),
         training=TrainingConfig(
             total_timesteps=1,
@@ -76,8 +76,8 @@ def mock_config():
         ),
         evaluation=EvaluationConfig(
             enable_periodic_evaluation=True,
-            num_games=1, 
-            opponent_type="random", 
+            num_games=1,
+            opponent_type="random",
             evaluation_interval_timesteps=1,
             max_moves_per_game=500,
             log_file_path_eval="test_eval.log",
@@ -199,7 +199,9 @@ class TestModelManagerInitialization:
         assert manager.model_type == "cnn"
         assert manager.tower_depth == 8
         assert manager.tower_width == 128
-        assert abs(manager.se_ratio - 0.1) < 1e-9  # Use approximate comparison for float
+        assert (
+            abs(manager.se_ratio - 0.1) < 1e-9
+        )  # Use approximate comparison for float
         assert manager.obs_shape == (20, 9, 9)
 
     @patch("keisei.training.model_manager.GradScaler")

@@ -13,6 +13,7 @@ import pstats
 import time
 from contextlib import contextmanager
 from typing import Any, Callable, Dict
+
 from keisei.utils.unified_logger import log_info_to_stderr
 
 logger = logging.getLogger(__name__)

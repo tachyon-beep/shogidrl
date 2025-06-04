@@ -6,14 +6,14 @@ import numpy as np
 import pytest
 import torch
 
-from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.constants import (
-    SHOGI_BOARD_SIZE,
     CORE_OBSERVATION_CHANNELS,
-    DEFAULT_NUM_ACTIONS_TOTAL,
     DEFAULT_GAMMA,
     DEFAULT_LAMBDA_GAE,
+    DEFAULT_NUM_ACTIONS_TOTAL,
+    SHOGI_BOARD_SIZE,
 )
+from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.utils import PolicyOutputMapper
 
 
@@ -46,8 +46,11 @@ def test_experience_buffer_add_and_len():
         torch.ones(1), 4, 2.0, 0.0, 0.0, False, dummy_legal_mask
     )  # Added log_prob=0.0, value=0.0, done=False, dummy_legal_mask
     assert len(buf) == 3
-    assert buf.actions == [1, 2, 3]
-    assert buf.rewards == [0.5, 1.0, -1.0]
+    # Test the actual data through the public API by getting a batch
+    buf.compute_advantages_and_returns(0.0)
+    batch = buf.get_batch()
+    assert torch.equal(batch["actions"], torch.tensor([1, 2, 3]))
+    assert torch.allclose(batch["rewards"], torch.tensor([0.5, 1.0, -1.0]))
 
 
 def test_experience_buffer_compute_advantages_and_returns():
@@ -65,7 +68,9 @@ def test_experience_buffer_compute_advantages_and_returns():
 
     for i in range(3):
         buf.add(
-            obs=torch.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE),  # Dummy observation
+            obs=torch.randn(
+                CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE
+            ),  # Dummy observation
             action=i,
             reward=rewards[i],
             log_prob=0.1,
@@ -106,8 +111,12 @@ def test_experience_buffer_compute_advantages_empty_buffer():
     # Should handle empty buffer gracefully
     buf.compute_advantages_and_returns(0.0)
 
-    assert len(buf.advantages) == 0
-    assert len(buf.returns) == 0
+    # With tensor pre-allocation, advantages tensor exists but all values are zero
+    assert len(buf) == 0  # No experiences added
+    assert buf.ptr == 0  # Pointer should be at start
+    # Test that get_batch returns empty when no experiences added
+    empty_batch = buf.get_batch()
+    assert empty_batch == {}  # Should return empty dict when no data
 
 
 def test_experience_buffer_get_batch():
@@ -182,23 +191,23 @@ def test_experience_buffer_get_batch_empty():
 
 
 def test_experience_buffer_get_batch_stack_error():
-    """Test that get_batch raises ValueError on tensor stack error."""
+    """Test that add() raises RuntimeError on tensor shape mismatch (improved with pre-allocation)."""
     buf = ExperienceBuffer(buffer_size=2, gamma=0.99, lambda_gae=0.95)
     mapper = PolicyOutputMapper()
 
-    # Create obs tensors with different shapes to cause a stack error
+    # Create obs tensors with different shapes to cause a shape error
     obs1 = torch.randn(46, 9, 9)
     obs2 = torch.randn(46, 8, 8)  # Different shape
     legal_mask = torch.zeros(mapper.get_total_actions(), dtype=torch.bool)
 
     buf.add(obs1, 1, 1.0, 0.1, 0.5, False, legal_mask)
-    buf.add(obs2, 2, 2.0, 0.2, 1.0, True, legal_mask)
-    buf.compute_advantages_and_returns(0.0)
 
-    with pytest.raises(ValueError, match="Failed to stack observation tensors"):
-        buf.get_batch()
+    # With tensor pre-allocation, shape errors are caught during add() rather than get_batch()
+    # This is actually better behavior - fail fast at insertion time
+    with pytest.raises(RuntimeError, match="The expanded size of the tensor"):
+        buf.add(obs2, 2, 2.0, 0.2, 1.0, True, legal_mask)
 
-    # Test for legal_mask stacking error
+    # Test for legal_mask shape error - also caught at add() time now
     buf.clear()
     obs = torch.randn(46, 9, 9)
     legal_mask1 = torch.zeros(mapper.get_total_actions(), dtype=torch.bool)
@@ -207,11 +216,10 @@ def test_experience_buffer_get_batch_stack_error():
     )  # Different shape
 
     buf.add(obs, 1, 1.0, 0.1, 0.5, False, legal_mask1)
-    buf.add(obs, 2, 2.0, 0.2, 1.0, True, legal_mask2)
-    buf.compute_advantages_and_returns(0.0)
 
-    with pytest.raises(ValueError, match="Failed to stack legal_mask tensors"):
-        buf.get_batch()
+    # Legal mask shape error should also be caught at add() time
+    with pytest.raises(RuntimeError, match="The expanded size of the tensor"):
+        buf.add(obs, 2, 2.0, 0.2, 1.0, True, legal_mask2)
 
 
 def test_experience_buffer_clear():
@@ -229,32 +237,23 @@ def test_experience_buffer_clear():
 
     # Verify buffer has data
     assert len(buf) == 2
-    assert len(buf.obs) == 2
-    assert len(buf.actions) == 2
-    assert len(buf.rewards) == 2
-    assert len(buf.log_probs) == 2
-    assert len(buf.values) == 2
-    assert len(buf.dones) == 2
-    assert len(buf.legal_masks) == 2
-    assert len(buf.advantages) == 2
-    assert len(buf.returns) == 2
-    assert buf.ptr == 2
+    assert buf.ptr == 2  # Pointer should be at 2
+
+    # Verify that data exists by checking the batch
+    batch = buf.get_batch()
+    assert batch["obs"].shape[0] == 2  # 2 observations
+    assert batch["actions"].shape[0] == 2  # 2 actions
 
     # Clear buffer
     buf.clear()
 
     # Verify all data is cleared
     assert len(buf) == 0
-    assert len(buf.obs) == 0
-    assert len(buf.actions) == 0
-    assert len(buf.rewards) == 0
-    assert len(buf.log_probs) == 0
-    assert len(buf.values) == 0
-    assert len(buf.dones) == 0
-    assert len(buf.legal_masks) == 0
-    assert len(buf.advantages) == 0
-    assert len(buf.returns) == 0
     assert buf.ptr == 0
+    # With tensor pre-allocation, tensors still exist but pointer is reset
+    # Test that get_batch returns empty when ptr == 0
+    empty_batch = buf.get_batch()
+    assert empty_batch == {}  # Should return empty dict when no data
 
 
 def test_experience_buffer_full_buffer_warning(capsys):
@@ -279,7 +278,12 @@ def test_experience_buffer_full_buffer_warning(capsys):
 
     # Buffer should still be size 2, not 3
     assert len(buf) == 2
-    assert buf.actions == [1, 2]  # Should not contain the third action
+    # Test the actual data through the public API
+    buf.compute_advantages_and_returns(0.0)
+    batch = buf.get_batch()
+    assert torch.equal(
+        batch["actions"], torch.tensor([1, 2])
+    )  # Should not contain the third action
 
 
 def test_experience_buffer_device_consistency():

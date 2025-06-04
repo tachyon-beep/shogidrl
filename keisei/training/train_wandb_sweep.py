@@ -72,8 +72,13 @@ if __name__ == "__main__":
         if multiprocessing.get_start_method(allow_none=True) != "spawn":
             multiprocessing.set_start_method("spawn", force=True)
     except RuntimeError as e:
-        log_error_to_stderr("TrainWandbSweep", f"Could not set multiprocessing start method to 'spawn': {e}. Using default: {multiprocessing.get_start_method(allow_none=True)}")
+        log_error_to_stderr(
+            "TrainWandbSweep",
+            f"Could not set multiprocessing start method to 'spawn': {e}. Using default: {multiprocessing.get_start_method(allow_none=True)}",
+        )
     except OSError as e:
-        log_error_to_stderr("TrainWandbSweep", f"Error setting multiprocessing start_method: {e}")
+        log_error_to_stderr(
+            "TrainWandbSweep", f"Error setting multiprocessing start_method: {e}"
+        )
 
     main()

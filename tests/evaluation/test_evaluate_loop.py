@@ -6,7 +6,6 @@ import torch
 
 from keisei.evaluation.loop import run_evaluation_loop
 from keisei.utils.opponents import SimpleRandomOpponent
-
 from tests.evaluation.conftest import MockPPOAgent, make_test_config
 
 

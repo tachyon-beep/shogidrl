@@ -5,12 +5,14 @@ Provides queue-based communication between main process and worker processes,
 including experience collection and model synchronization.
 """
 
+import gzip
 import logging
 import multiprocessing as mp
 import queue
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+import numpy as np
 import torch
 
 logger = logging.getLogger(__name__)
@@ -147,7 +149,7 @@ class WorkerCommunicator:
         self, state_dict: Dict[str, torch.Tensor], compress: bool
     ) -> Dict[str, Any]:
         """
-        Prepare model state dict for transmission.
+        Prepare model state dict for transmission with actual compression.
 
         Args:
             state_dict: PyTorch model state dictionary
@@ -158,18 +160,40 @@ class WorkerCommunicator:
         """
         # Convert tensors to numpy arrays for transmission
         model_data = {}
+        total_original_size = 0
+        total_compressed_size = 0
+
         for key, tensor in state_dict.items():
             np_array = tensor.cpu().numpy()
 
             if compress:
-                # Simple compression using numpy's compressed format
-                # In production, could use more sophisticated compression
-                model_data[key] = {
-                    "data": np_array,
-                    "shape": np_array.shape,
-                    "dtype": str(np_array.dtype),
-                    "compressed": True,
-                }
+                try:
+                    # Apply gzip compression
+                    array_bytes = np_array.tobytes()
+                    compressed_bytes = gzip.compress(array_bytes, compresslevel=6)
+
+                    total_original_size += len(array_bytes)
+                    total_compressed_size += len(compressed_bytes)
+
+                    model_data[key] = {
+                        "data": compressed_bytes,
+                        "shape": np_array.shape,
+                        "dtype": str(np_array.dtype),
+                        "compressed": True,
+                    }
+                except Exception as e:
+                    logger.warning(
+                        "Compression failed for %s, using uncompressed: %s", key, str(e)
+                    )
+                    # Fallback to uncompressed
+                    model_data[key] = {
+                        "data": np_array,
+                        "shape": np_array.shape,
+                        "dtype": str(np_array.dtype),
+                        "compressed": False,
+                    }
+                    total_original_size += np_array.nbytes
+                    total_compressed_size += np_array.nbytes
             else:
                 model_data[key] = {
                     "data": np_array,
@@ -177,11 +201,22 @@ class WorkerCommunicator:
                     "dtype": str(np_array.dtype),
                     "compressed": False,
                 }
+                total_original_size += np_array.nbytes
+                total_compressed_size += np_array.nbytes
+
+        compression_ratio = (
+            total_original_size / total_compressed_size
+            if total_compressed_size > 0
+            else 1.0
+        )
 
         return {
             "model_data": model_data,
             "timestamp": time.time(),
             "compressed": compress,
+            "compression_ratio": compression_ratio,
+            "total_original_size": total_original_size,
+            "total_compressed_size": total_compressed_size,
         }
 
     def get_queue_info(self) -> Dict[str, List[int]]:

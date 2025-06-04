@@ -6,6 +6,7 @@ import time
 from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 
 import torch.nn as nn
+
 from keisei.utils.unified_logger import log_info_to_stderr
 
 # Constants
@@ -97,11 +98,15 @@ class TrainingLoopManager:
         # Start parallel workers if parallel training is enabled
         if self.parallel_manager and self.config.parallel.enabled:
             if self.trainer.agent and self.trainer.agent.model:
-                log_both(f"Starting {self.config.parallel.num_workers} parallel workers...")
+                log_both(
+                    f"Starting {self.config.parallel.num_workers} parallel workers..."
+                )
                 if self.parallel_manager.start_workers(self.trainer.agent.model):
                     log_both("Parallel workers started successfully")
                 else:
-                    log_both("Failed to start parallel workers, falling back to sequential training")
+                    log_both(
+                        "Failed to start parallel workers, falling back to sequential training"
+                    )
                     self.parallel_manager = None
             else:
                 log_both("Cannot start parallel workers: model not available")
@@ -430,7 +435,9 @@ class TrainingLoopManager:
             # Add any extra updates provided
             if extra_updates:
                 for key, value in extra_updates.items():
-                    self.trainer.metrics_manager.pending_progress_updates.setdefault(key, value)
+                    self.trainer.metrics_manager.pending_progress_updates.setdefault(
+                        key, value
+                    )
 
             if hasattr(self.display, "update_progress") and callable(
                 self.display.update_progress
