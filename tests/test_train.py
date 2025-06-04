@@ -118,7 +118,7 @@ def test_train_resume_autodetect(tmp_path, mock_wandb_disabled):
             "base_port": 50000,
         },
     }
-    initial_agent_config = AppConfig.parse_obj(base_config_data)
+    initial_agent_config = AppConfig.model_validate(base_config_data)
 
     # Create model for dependency injection
     model = _create_test_model(initial_agent_config)
@@ -402,7 +402,7 @@ def test_train_explicit_resume(tmp_path, mock_wandb_disabled):
             "base_port": 50000,
         },
     }
-    initial_save_config_obj = AppConfig.parse_obj(initial_save_config_dict)
+    initial_save_config_obj = AppConfig.model_validate(initial_save_config_dict)
 
     checkpoint_save_dir = tmp_path / "initial_save_dir"  # As per logging.model_dir
     checkpoint_save_dir.mkdir(parents=True, exist_ok=True)
