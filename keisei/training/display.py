@@ -41,7 +41,8 @@ class TrainingDisplay:
         if self.display_config.enable_board_display:
             self.board_component = ShogiBoard(
                 use_unicode=self.display_config.board_unicode_pieces,
-                show_moves=self.display_config.show_text_moves and self.config.demo.enable_demo_mode,
+                show_moves=self.display_config.show_text_moves
+                and self.config.demo.enable_demo_mode,
                 max_moves=self.display_config.move_list_length,
             )
         if self.display_config.enable_trend_visualization:
@@ -56,7 +57,9 @@ class TrainingDisplay:
             self.log_panel,
         ) = self._setup_rich_progress_display()
 
-    def _create_compact_layout(self, log_panel: Panel, progress_bar: Progress) -> Layout:
+    def _create_compact_layout(
+        self, log_panel: Panel, progress_bar: Progress
+    ) -> Layout:
         layout = Layout(name="root")
         layout.split_column(
             Layout(name="main_log", ratio=1),
@@ -66,12 +69,16 @@ class TrainingDisplay:
         layout["progress_display"].update(progress_bar)
         return layout
 
-    def _create_enhanced_layout(self, log_panel: Panel, progress_bar: Progress) -> Layout:
+    def _create_enhanced_layout(
+        self, log_panel: Panel, progress_bar: Progress
+    ) -> Layout:
         layout = Layout(name="root")
         layout.split_column(
             Layout(name="main_log", ratio=1),
             Layout(name="dashboard", ratio=self.display_config.dashboard_height_ratio),
-            Layout(name="progress_display", size=self.display_config.progress_bar_height),
+            Layout(
+                name="progress_display", size=self.display_config.progress_bar_height
+            ),
         )
         layout["dashboard"].split_row(
             Layout(name="board_panel"),
@@ -184,12 +191,18 @@ class TrainingDisplay:
                     self.layout["board_panel"].update(
                         self.board_component.render(
                             trainer.game,
-                            trainer.step_manager.move_history if trainer.step_manager else None,
+                            (
+                                trainer.step_manager.move_history
+                                if trainer.step_manager
+                                else None
+                            ),
                             trainer.policy_output_mapper,
                         )
                     )
                 except Exception as e:
-                    self.rich_console.log(f"Error rendering board: {e}", style="bold red")
+                    self.rich_console.log(
+                        f"Error rendering board: {e}", style="bold red"
+                    )
                     self.layout["board_panel"].update(Panel(Text("No board")))
             if self.trend_component:
                 trends = []
@@ -212,13 +225,19 @@ class TrainingDisplay:
                         "KL: " + self.trend_component.generate(hist.kl_divergences[-w:])
                     )
                 if hist.win_rates_history:
-                    wr_values = [d.get("win_rate_black", 0.0) for d in hist.win_rates_history]
+                    wr_values = [
+                        d.get("win_rate_black", 0.0) for d in hist.win_rates_history
+                    ]
                     trends.append(
                         "Win%: " + self.trend_component.generate(wr_values[-w:])
                     )
                 trend_text = "\n".join(trends) if trends else "Collecting data..."
                 self.layout["trends_panel"].update(
-                    Panel(Text(trend_text, style="cyan"), border_style="cyan", title="Metric Trends")
+                    Panel(
+                        Text(trend_text, style="cyan"),
+                        border_style="cyan",
+                        title="Metric Trends",
+                    )
                 )
             if self.elo_component_enabled:
                 elo = trainer.metrics_manager.elo_system
@@ -229,8 +248,26 @@ class TrainingDisplay:
                     "",
                     f"Assessment: {elo.get_strength_assessment()}",
                 ]
+                snap = getattr(trainer, "evaluation_elo_snapshot", None)
+                if snap:
+                    lines.extend(
+                        [
+                            "",
+                            f"Current {snap['current_id']}: {snap['current_rating']:.0f}",
+                            f"Opp {snap['opponent_id']}: {snap['opponent_rating']:.0f}",
+                            f"Last result: {snap['last_outcome']}",
+                        ]
+                    )
+                    if snap.get("top_ratings"):
+                        lines.append("")
+                        for mid, rating in snap["top_ratings"]:
+                            lines.append(f"{mid}: {rating:.0f}")
                 self.layout["elo_panel"].update(
-                    Panel(Text("\n".join(lines), style="yellow"), border_style="yellow", title="Elo Ratings")
+                    Panel(
+                        Text("\n".join(lines), style="yellow"),
+                        border_style="yellow",
+                        title="Elo Ratings",
+                    )
                 )
 
     def start(self):
