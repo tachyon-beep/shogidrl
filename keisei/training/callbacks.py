@@ -3,6 +3,9 @@ training/callbacks.py: Periodic task callbacks for the Shogi RL trainer.
 """
 
 import os
+from pathlib import Path
+
+from keisei.evaluation.elo_registry import EloRegistry
 from abc import ABC
 from typing import TYPE_CHECKING
 
@@ -54,6 +57,8 @@ class CheckpointCallback(Callback):
                         f"Checkpoint saved via ModelManager to {ckpt_save_path}",
                         also_to_wandb=True,
                     )
+                    if hasattr(trainer, "previous_model_selector"):
+                        trainer.previous_model_selector.add_checkpoint(ckpt_save_path)
             else:
                 if trainer.log_both:
                     trainer.log_both(
@@ -101,6 +106,17 @@ class EvaluationCallback(Callback):
                 trainer.model_dir, f"eval_checkpoint_ts{trainer.global_timestep+1}.pth"
             )
 
+            opponent_ckpt = None
+            if hasattr(trainer, "previous_model_selector"):
+                opponent_ckpt = trainer.previous_model_selector.get_random_checkpoint()
+            if opponent_ckpt is None:
+                if trainer.log_both:
+                    trainer.log_both(
+                        "[INFO] EvaluationCallback: No previous checkpoint available for Elo evaluation.",
+                        also_to_wandb=False,
+                    )
+                return
+
             # Save the current agent state for evaluation
             trainer.agent.save_model(
                 eval_ckpt_path,
@@ -117,11 +133,9 @@ class EvaluationCallback(Callback):
             current_model.eval()  # Set the agent's model to eval mode
             if trainer.execute_full_evaluation_run is not None:
                 eval_results = trainer.execute_full_evaluation_run(
-                    agent_checkpoint_path=eval_ckpt_path,  # Use the saved checkpoint for eval
-                    opponent_type=getattr(self.eval_cfg, "opponent_type", "random"),
-                    opponent_checkpoint_path=getattr(
-                        self.eval_cfg, "opponent_checkpoint_path", None
-                    ),
+                    agent_checkpoint_path=eval_ckpt_path,
+                    opponent_type="ppo",
+                    opponent_checkpoint_path=str(opponent_ckpt),
                     num_games=getattr(self.eval_cfg, "num_games", 20),
                     max_moves_per_game=getattr(
                         self.eval_cfg,
@@ -141,6 +155,9 @@ class EvaluationCallback(Callback):
                     wandb_group=trainer.run_name,
                     wandb_reinit=True,
                     logger_also_stdout=False,
+                    elo_registry_path=getattr(self.eval_cfg, "elo_registry_path", None),
+                    agent_id=os.path.basename(eval_ckpt_path),
+                    opponent_id=os.path.basename(str(opponent_ckpt)),
                 )
                 current_model.train()  # Set model back to train mode
                 if trainer.log_both is not None:
@@ -153,5 +170,40 @@ class EvaluationCallback(Callback):
                             else {"eval_summary": str(eval_results)}
                         ),
                     )
+
+                if getattr(self.eval_cfg, "elo_registry_path", None):
+                    try:
+                        registry = EloRegistry(Path(self.eval_cfg.elo_registry_path))
+                        snapshot = {
+                            "current_id": os.path.basename(eval_ckpt_path),
+                            "current_rating": registry.get_rating(
+                                os.path.basename(eval_ckpt_path)
+                            ),
+                            "opponent_id": os.path.basename(str(opponent_ckpt)),
+                            "opponent_rating": registry.get_rating(
+                                os.path.basename(str(opponent_ckpt))
+                            ),
+                            "last_outcome": (
+                                "win"
+                                if eval_results
+                                and eval_results.get("win_rate", 0)
+                                > eval_results.get("loss_rate", 0)
+                                else (
+                                    "loss"
+                                    if eval_results
+                                    and eval_results.get("loss_rate", 0)
+                                    > eval_results.get("win_rate", 0)
+                                    else "draw"
+                                )
+                            ),
+                            "top_ratings": sorted(
+                                registry.ratings.items(),
+                                key=lambda x: x[1],
+                                reverse=True,
+                            )[:3],
+                        }
+                        trainer.evaluation_elo_snapshot = snapshot
+                    except Exception:  # noqa: BLE001
+                        trainer.evaluation_elo_snapshot = None
             else:  # if execute_full_evaluation_run is None
                 current_model.train()  # Ensure model is set back to train mode
