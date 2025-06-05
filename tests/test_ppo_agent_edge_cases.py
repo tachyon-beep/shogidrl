@@ -360,12 +360,12 @@ class TestPPOAgentConfigurationValidation:
             # Create minimal app config with invalid training config
             from keisei.config_schema import (
                 AppConfig,
-                DemoConfig,
                 EnvConfig,
                 EvaluationConfig,
                 LoggingConfig,
                 ParallelConfig,
                 WandBConfig,
+                DisplayConfig,
             )
 
             app_config = AppConfig(
@@ -401,8 +401,8 @@ class TestPPOAgentConfigurationValidation:
                     watch_log_type="all",
                     log_model_artifact=False,
                 ),
-                demo=DemoConfig(
-                    enable_demo_mode=False, demo_mode_delay=TEST_DEMO_MODE_DELAY
+                display=DisplayConfig(
+                    display_moves=False, turn_tick=TEST_DEMO_MODE_DELAY
                 ),
                 parallel=ParallelConfig(
                     enabled=False,

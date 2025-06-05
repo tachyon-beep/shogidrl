@@ -38,8 +38,8 @@ This guide explains how to run the DRL Shogi Client for training a Reinforcement
     *   `env.device`: Set to "cuda" for GPU training or "cpu".
     *   `logging.model_dir`: Directory where models will be saved (default: `models/`).
     *   `logging.log_file`: Path to the training log file (default: `logs/shogi_training_log.txt`).
-    *   `demo.enable_demo_mode`: If true, enables demo mode with per-move logging and delay for easier observation.
-    *   `demo.demo_mode_delay`: Delay in seconds between moves in demo mode (default: 0.5).
+    *   `display.display_moves`: If true, shows each move and waits between turns for easier observation.
+    *   `display.turn_tick`: Delay in seconds between moves when displaying moves (default: 0.5).
 *   The `keisei/shogi/shogi_engine.py` and related files define the game environment.
 *   The `keisei/neural_network.py` defines the `ActorCritic` model.
 *   The `keisei/ppo_agent.py` implements the PPO algorithm.
@@ -55,14 +55,14 @@ This guide explains how to run the DRL Shogi Client for training a Reinforcement
     ```bash
     python train.py --config default_config.yaml
     ```
-    * To enable demo mode, set `demo.enable_demo_mode: true` in your config file, or override via CLI:
+    * To enable move display, set `display.display_moves: true` in your config file, or override via CLI:
       ```bash
-      python train.py --config default_config.yaml --override demo.enable_demo_mode=true
+      python train.py --config default_config.yaml --override display.display_moves=true
       ```
 
 3.  **Monitoring Training:**
     *   Training progress, including episode rewards, losses, and evaluation results, will be printed to the console.
-    *   If demo mode is enabled, each move will be logged with a delay for easier observation.
+    *   If move display is enabled, each move will be shown with a delay for easier observation.
     *   Detailed logs are saved to the file specified by `logging.log_file` (default: `logs/shogi_training_log.txt`).
     *   Model checkpoints will be saved periodically to the directory specified by `logging.model_dir` (default: `models/`). The filename will indicate the episode number, e.g., `ppo_shogi_agent_episode_X.pth`.
 

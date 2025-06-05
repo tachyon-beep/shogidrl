@@ -158,7 +158,7 @@ class MetricsManager:
         return count / time_window_hours if time_window_hours > 0 else 0.0
 
     def get_win_loss_draw_rates(self, window_size: int = 100) -> Dict[str, float]:
-        recent = list(self.win_loss_draw_history)[-window_size:]
+        recent = sorted(self.win_loss_draw_history, key=lambda t: t[1])[-window_size:]
         if not recent:
             return {"win": 0.0, "loss": 0.0, "draw": 0.0}
         total = len(recent)
