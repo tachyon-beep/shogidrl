@@ -56,12 +56,46 @@ class ShogiBoard:
         return piece.symbol()
 
     def _generate_ascii_board(self, board_state) -> str:
-        all_symbols = [self._piece_to_symbol(p) for row in board_state.board for p in row]
-        all_symbols.append(self._piece_to_symbol(None))
+        if self.use_unicode:
+            reference_symbols = [
+                "歩",
+                "香",
+                "桂",
+                "銀",
+                "金",
+                "角",
+                "飛",
+                "王",
+                "と",
+                "成香",
+                "成桂",
+                "成銀",
+                "馬",
+                "竜",
+                "・",
+            ]
+        else:
+            reference_symbols = [
+                "P",
+                "L",
+                "N",
+                "S",
+                "G",
+                "B",
+                "R",
+                "K",
+                "+P",
+                "+L",
+                "+N",
+                "+S",
+                "+B",
+                "+R",
+                ".",
+            ]
+            cell_width = max(wcswidth(sym) for sym in reference_symbols)
 
-        cell_width = max(wcswidth(sym) for sym in all_symbols)
-
-        header = " " * (cell_width + 1) + " ".join(
+        start_padding = cell_width - 1 if self.use_unicode else cell_width
+        header = " " * start_padding + " ".join(
             str(n).rjust(cell_width) for n in range(9, 0, -1)
         )
         lines: List[str] = [header]
