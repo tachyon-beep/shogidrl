@@ -54,8 +54,14 @@ class ShogiBoard:
         return piece.symbol()
 
     def _generate_ascii_board(self, board_state) -> str:
-        lines: List[str] = ["  9 8 7 6 5 4 3 2 1"]
-        cell_width = 2 if self.use_unicode else 1
+
+        if self.use_unicode:
+            header = "  " + "".join(f"{i}  " for i in range(9, 0, -1))
+        else:
+            header = "  " + "".join(f"{i} " for i in range(9, 0, -1))
+
+        lines: List[str] = [header]
+
         for r_idx, row in enumerate(board_state.board):
             line_parts: List[str] = [f"{9 - r_idx} "]
             for piece in reversed(row):
