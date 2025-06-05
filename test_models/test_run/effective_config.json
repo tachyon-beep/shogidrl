@@ -44,7 +44,10 @@
         "opponent_type": "random",
         "max_moves_per_game": 500,
         "log_file_path_eval": "eval_log.txt",
-        "wandb_log_eval": false
+        "wandb_log_eval": false,
+        "elo_registry_path": null,
+        "agent_id": null,
+        "opponent_id": null
     },
     "logging": {
         "log_file": "test_training.log",
@@ -74,5 +77,21 @@
     "demo": {
         "enable_demo_mode": false,
         "demo_mode_delay": 0.0
+    },
+    "display": {
+        "enable_board_display": true,
+        "enable_trend_visualization": true,
+        "enable_elo_ratings": true,
+        "enable_enhanced_layout": true,
+        "board_unicode_pieces": true,
+        "board_highlight_last_move": true,
+        "sparkline_width": 15,
+        "trend_history_length": 100,
+        "elo_initial_rating": 1500.0,
+        "elo_k_factor": 32.0,
+        "dashboard_height_ratio": 2,
+        "progress_bar_height": 4,
+        "show_text_moves": true,
+        "move_list_length": 10
     }
 }
