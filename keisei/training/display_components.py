@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import Protocol, Optional, List, Sequence
 
-from rich.console import RenderableType
+from keisei.utils.unified_logger import log_error_to_stderr
+
+from rich.console import RenderableType, Group
 from rich.panel import Panel
 from rich.text import Text
 
@@ -20,8 +22,10 @@ class DisplayComponent(Protocol):
 class ShogiBoard:
     """ASCII representation of the current Shogi board state."""
 
-    def __init__(self, use_unicode: bool = True) -> None:
+    def __init__(self, use_unicode: bool = True, show_moves: bool = False, max_moves: int = 10) -> None:
         self.use_unicode = use_unicode
+        self.show_moves = show_moves
+        self.max_moves = max_moves
 
     def _piece_to_symbol(self, piece) -> str:
         if not piece:
@@ -57,12 +61,31 @@ class ShogiBoard:
             lines.append("".join(line_parts))
         return "\n".join(lines)
 
-    def render(self, board_state=None) -> RenderableType:  # type: ignore[override]
+    def _move_to_usi(self, move_tuple, policy_mapper) -> str:
+        try:
+            return policy_mapper.shogi_move_to_usi(move_tuple)
+        except (ValueError, KeyError):
+            return str(move_tuple)
+        except Exception as e:  # noqa: BLE001
+            log_error_to_stderr("ShogiBoard", f"Unexpected error in _move_to_usi: {e}")
+            raise
+
+    def render(self, board_state=None, move_history=None, policy_mapper=None) -> RenderableType:  # type: ignore[override]
         if not board_state:
             return Panel(Text("No active game"), title="Shogi Board")
 
         ascii_board = self._generate_ascii_board(board_state)
-        return Panel(Text(ascii_board), title="Current Position", border_style="blue")
+        board_panel = Panel(Text(ascii_board), title="Current Position", border_style="blue")
+
+        if not self.show_moves or not move_history or policy_mapper is None:
+            return board_panel
+
+        last_moves = move_history[-self.max_moves :]
+        lines = [self._move_to_usi(mv, policy_mapper) for mv in last_moves]
+        start_idx = len(move_history) - len(last_moves) + 1
+        formatted = [f"{start_idx + i:3d}: {mv}" for i, mv in enumerate(lines)]
+        moves_panel = Panel(Text("\n".join(formatted)), border_style="yellow", title="Recent Moves")
+        return Group(board_panel, moves_panel)
 
 
 class Sparkline:

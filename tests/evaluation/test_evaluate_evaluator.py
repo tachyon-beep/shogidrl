@@ -88,6 +88,9 @@ def test_evaluator_class_basic(monkeypatch, tmp_path, policy_mapper):
         wandb_entity_eval=None,
         wandb_run_name_eval=None,
         logger_also_stdout=False,
+        elo_registry_path=str(tmp_path / "elo.json"),
+        agent_id="agentA",
+        opponent_id="oppB",
     )
 
     results = evaluator.evaluate()
@@ -104,3 +107,5 @@ def test_evaluator_class_basic(monkeypatch, tmp_path, policy_mapper):
         log_content = f.read()
     assert "Starting Shogi Agent Evaluation" in log_content
     assert "[Evaluator] Evaluation Summary:" in log_content
+    elo_file = tmp_path / "elo.json"
+    assert elo_file.exists()

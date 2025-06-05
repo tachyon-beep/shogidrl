@@ -40,7 +40,9 @@ class TrainingDisplay:
 
         if self.display_config.enable_board_display:
             self.board_component = ShogiBoard(
-                use_unicode=self.display_config.board_unicode_pieces
+                use_unicode=self.display_config.board_unicode_pieces,
+                show_moves=self.display_config.show_text_moves and self.config.demo.enable_demo_mode,
+                max_moves=self.display_config.move_list_length,
             )
         if self.display_config.enable_trend_visualization:
             self.trend_component = Sparkline(width=self.display_config.sparkline_width)
@@ -180,7 +182,11 @@ class TrainingDisplay:
             if self.board_component:
                 try:
                     self.layout["board_panel"].update(
-                        self.board_component.render(trainer.game)
+                        self.board_component.render(
+                            trainer.game,
+                            trainer.step_manager.move_history if trainer.step_manager else None,
+                            trainer.policy_output_mapper,
+                        )
                     )
                 except Exception as e:
                     self.rich_console.log(f"Error rendering board: {e}", style="bold red")
@@ -188,9 +194,27 @@ class TrainingDisplay:
             if self.trend_component:
                 trends = []
                 hist = trainer.metrics_manager.history
+                w = self.display_config.sparkline_width
                 if hist.learning_rates:
                     trends.append(
-                        self.trend_component.generate(hist.learning_rates[-self.display_config.sparkline_width :])
+                        "LR: " + self.trend_component.generate(hist.learning_rates[-w:])
+                    )
+                if hist.policy_losses:
+                    trends.append(
+                        "PL: " + self.trend_component.generate(hist.policy_losses[-w:])
+                    )
+                if hist.value_losses:
+                    trends.append(
+                        "VL: " + self.trend_component.generate(hist.value_losses[-w:])
+                    )
+                if hist.kl_divergences:
+                    trends.append(
+                        "KL: " + self.trend_component.generate(hist.kl_divergences[-w:])
+                    )
+                if hist.win_rates_history:
+                    wr_values = [d.get("win_rate_black", 0.0) for d in hist.win_rates_history]
+                    trends.append(
+                        "Win%: " + self.trend_component.generate(wr_values[-w:])
                     )
                 trend_text = "\n".join(trends) if trends else "Collecting data..."
                 self.layout["trends_panel"].update(

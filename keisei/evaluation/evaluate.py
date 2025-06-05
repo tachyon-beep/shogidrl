@@ -5,6 +5,7 @@ evaluate.py: Main script for evaluating PPO Shogi agents.
 import argparse
 import os
 import random
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 import numpy as np
@@ -15,8 +16,13 @@ import wandb  # Ensure wandb is imported for W&B logging
 from keisei.core.ppo_agent import PPOAgent
 from keisei.evaluation.loop import ResultsDict, run_evaluation_loop
 from keisei.utils import BaseOpponent, EvaluationLogger, PolicyOutputMapper
+from keisei.evaluation.elo_registry import EloRegistry
 from keisei.utils.agent_loading import initialize_opponent, load_evaluation_agent
 from keisei.utils.utils import load_config
+from keisei.utils.unified_logger import (
+    log_error_to_stderr,
+    log_info_to_stderr,
+)
 
 if TYPE_CHECKING:
     pass  # torch already imported above
@@ -49,6 +55,9 @@ class Evaluator:
         wandb_extra_config: Optional[dict] = None,
         wandb_reinit: Optional[bool] = None,
         wandb_group: Optional[str] = None,
+        elo_registry_path: Optional[str] = None,
+        agent_id: Optional[str] = None,
+        opponent_id: Optional[str] = None,
     ):
         """
         Initialize the Evaluator with all configuration and dependencies.
@@ -70,11 +79,15 @@ class Evaluator:
         self.wandb_extra_config = wandb_extra_config
         self.wandb_reinit = wandb_reinit
         self.wandb_group = wandb_group
+        self.elo_registry_path = elo_registry_path
+        self.agent_id = agent_id
+        self.opponent_id = opponent_id
         self._wandb_active: bool = False
         self._wandb_run: Optional[Any] = None
         self._logger: Optional[EvaluationLogger] = None
         self._agent: Optional[PPOAgent] = None
         self._opponent: Optional[Union[PPOAgent, BaseOpponent]] = None
+        self._elo_registry: Optional[EloRegistry] = None
 
     def _setup(self) -> None:
         """
@@ -88,7 +101,7 @@ class Evaluator:
                 np.random.seed(self.seed)
                 if self.device_str == "cuda":
                     torch.cuda.manual_seed_all(self.seed)
-                print(f"[Evaluator] Set random seed to: {self.seed}")
+                log_info_to_stderr("Evaluator", f"Set random seed to: {self.seed}")
             except (ValueError, TypeError, RuntimeError) as e:
                 raise RuntimeError("Failed to set random seed") from e
 
@@ -118,13 +131,15 @@ class Evaluator:
                     wandb_kwargs["group"] = self.wandb_group
                 try:
                     self._wandb_run = wandb.init(**wandb_kwargs)  # type: ignore
-                    print(
-                        f"[Evaluator] W&B logging enabled: {self._wandb_run.name if self._wandb_run else ''}"
+                    log_info_to_stderr(
+                        "Evaluator",
+                        f"W&B logging enabled: {self._wandb_run.name if self._wandb_run else ''}",
                     )
                     self._wandb_active = True
                 except (OSError, RuntimeError, ValueError) as e:
-                    print(
-                        f"[Evaluator] Error initializing W&B: {e}. W&B logging disabled."
+                    log_error_to_stderr(
+                        "Evaluator",
+                        f"Error initializing W&B: {e}. W&B logging disabled.",
                     )
                     self._wandb_active = False
             except (
@@ -134,7 +149,7 @@ class Evaluator:
                 ImportError,
                 AttributeError,
             ) as e:
-                print(f"[Evaluator] Error during W&B initialization: {e}")
+                log_error_to_stderr("Evaluator", f"Error during W&B initialization: {e}")
                 self._wandb_active = False
 
         # Ensure log directory exists
@@ -154,6 +169,12 @@ class Evaluator:
             )
         except (OSError, ValueError, TypeError) as e:
             raise RuntimeError(f"Failed to initialize EvaluationLogger: {e}") from e
+
+        if self.elo_registry_path:
+            try:
+                self._elo_registry = EloRegistry(Path(self.elo_registry_path))
+            except Exception as e:  # noqa: BLE001
+                log_error_to_stderr("Evaluator", f"Error loading Elo registry: {e}")
         # Agent and opponent
         # Load input_channels from config
         try:
@@ -215,7 +236,7 @@ class Evaluator:
                 )
                 logger.log(f"[Evaluator] Evaluation Summary: {results_summary}")
         except (RuntimeError, ValueError, OSError, TypeError, AttributeError) as e:
-            print(f"[Evaluator] Error during evaluation run: {e}")
+            log_error_to_stderr("Evaluator", f"Error during evaluation run: {e}")
             results_summary = None
 
         if self._wandb_active and results_summary is not None:
@@ -232,16 +253,26 @@ class Evaluator:
                 )
 
             except (OSError, RuntimeError, ValueError, AttributeError, TypeError) as e:
-                print(
-                    f"[Evaluator] Error logging final W&B metrics: {e}"
-                )  # Added print
+                log_error_to_stderr(
+                    "Evaluator", f"Error logging final W&B metrics: {e}"
+                )
+
+        if self._elo_registry and results_summary is not None:
+            if self.agent_id and self.opponent_id:
+                try:
+                    self._elo_registry.update_ratings(
+                        self.agent_id, self.opponent_id, results_summary["game_results"]
+                    )
+                    self._elo_registry.save()
+                except Exception as e:  # noqa: BLE001
+                    log_error_to_stderr("Evaluator", f"Error updating Elo registry: {e}")
         if self._wandb_active and self._wandb_run:
             try:
                 self._wandb_run.finish()  # type: ignore
                 if hasattr(wandb, "finish"):
                     wandb.finish()  # Also call global wandb.finish() for test mocks
             except (OSError, RuntimeError, ValueError, AttributeError) as e:
-                print(f"[Evaluator] Error finishing W&B run: {e}")
+                log_error_to_stderr("Evaluator", f"Error finishing W&B run: {e}")
         return results_summary
 
 
@@ -263,6 +294,9 @@ def execute_full_evaluation_run(
     wandb_extra_config: Optional[dict] = None,
     wandb_reinit: Optional[bool] = None,
     wandb_group: Optional[str] = None,
+    elo_registry_path: Optional[str] = None,
+    agent_id: Optional[str] = None,
+    opponent_id: Optional[str] = None,
 ) -> Optional[ResultsDict]:
     """
     Legacy-compatible wrapper for Evaluator class. Runs a full evaluation and returns the results dict.
@@ -285,6 +319,9 @@ def execute_full_evaluation_run(
         wandb_extra_config=wandb_extra_config,
         wandb_reinit=wandb_reinit,
         wandb_group=wandb_group,
+        elo_registry_path=elo_registry_path,
+        agent_id=agent_id,
+        opponent_id=opponent_id,
     )
     return evaluator.evaluate()
 
@@ -311,6 +348,9 @@ def main_cli():
     parser.add_argument("--logger_also_stdout", action="store_true")
     parser.add_argument("--wandb_reinit", action="store_true")
     parser.add_argument("--wandb_group", default=None)
+    parser.add_argument("--elo_registry_path", default=None)
+    parser.add_argument("--agent_id", default=None)
+    parser.add_argument("--opponent_id", default=None)
     args = parser.parse_args()
 
     # Minimal PolicyOutputMapper for CLI use
@@ -333,5 +373,8 @@ def main_cli():
         logger_also_stdout=args.logger_also_stdout,
         wandb_reinit=args.wandb_reinit,
         wandb_group=args.wandb_group,
+        elo_registry_path=args.elo_registry_path,
+        agent_id=args.agent_id,
+        opponent_id=args.opponent_id,
     )
-    print("Evaluation results:", results)
+    log_info_to_stderr("Evaluator", f"Evaluation results: {results}")
