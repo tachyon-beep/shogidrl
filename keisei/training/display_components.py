@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Protocol, Optional, List, Sequence
+from wcwidth import wcswidth
 
 from wcwidth import wcswidth
 
@@ -74,6 +75,7 @@ class ShogiBoard:
             line_parts: List[str] = [row_header]
             for piece in reversed(row):
                 symbol = self._piece_to_symbol(piece)
+
                 line_parts.append(pad(symbol) + " ")
             lines.append("".join(line_parts).rstrip())
         return "\n".join(lines)
