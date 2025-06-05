@@ -10,13 +10,13 @@ import torch
 
 from keisei.config_schema import (
     AppConfig,
-    DemoConfig,
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
     ParallelConfig,
     TrainingConfig,
     WandBConfig,
+    DisplayConfig,
 )
 from keisei.training.model_manager import ModelManager
 
@@ -106,7 +106,7 @@ def mock_config():
             max_queue_size=1000,
             worker_seed_offset=1000,
         ),
-        demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
+        display=DisplayConfig(display_moves=False, turn_tick=0.0),
     )
 
 

@@ -10,13 +10,13 @@ import pytest
 
 from keisei.config_schema import (
     AppConfig,
-    DemoConfig,
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
     ParallelConfig,
     TrainingConfig,
     WandBConfig,
+    DisplayConfig,
 )
 from keisei.constants import (
     CORE_OBSERVATION_CHANNELS,
@@ -240,11 +240,11 @@ def disabled_wandb_config():
 
 
 @pytest.fixture
-def test_demo_config():
-    """Demo configuration for testing."""
-    return DemoConfig(
-        enable_demo_mode=False,
-        demo_mode_delay=0.0,  # No delays in tests
+def test_display_config():
+    """Display configuration for testing."""
+    return DisplayConfig(
+        display_moves=False,
+        turn_tick=0.0,  # No delays in tests
     )
 
 
@@ -270,7 +270,7 @@ def minimal_app_config(
     test_evaluation_config,
     test_logging_config,
     disabled_wandb_config,
-    test_demo_config,
+    test_display_config,
     disabled_parallel_config,
 ):
     """Complete minimal AppConfig for unit tests."""
@@ -280,7 +280,7 @@ def minimal_app_config(
         evaluation=test_evaluation_config,
         logging=test_logging_config,
         wandb=disabled_wandb_config,
-        demo=test_demo_config,
+        display=test_display_config,
         parallel=disabled_parallel_config,
     )
 
@@ -307,7 +307,7 @@ def fast_app_config(
     test_evaluation_config,
     test_logging_config,
     disabled_wandb_config,
-    test_demo_config,
+    test_display_config,
     disabled_parallel_config,
 ):
     """Complete AppConfig optimized for very fast test execution."""
@@ -317,7 +317,7 @@ def fast_app_config(
         evaluation=test_evaluation_config,
         logging=test_logging_config,
         wandb=disabled_wandb_config,
-        demo=test_demo_config,
+        display=test_display_config,
         parallel=disabled_parallel_config,
     )
 
@@ -389,9 +389,9 @@ def integration_test_config(policy_mapper, tmp_path):
             watch_log_type="all",
             log_model_artifact=False,
         ),
-        demo=DemoConfig(
-            enable_demo_mode=False,
-            demo_mode_delay=0.0,
+        display=DisplayConfig(
+            display_moves=False,
+            turn_tick=0.0,
         ),
         parallel=ParallelConfig(
             enabled=False,

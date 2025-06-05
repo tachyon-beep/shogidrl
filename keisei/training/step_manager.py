@@ -83,6 +83,7 @@ class StepManager:
         self.experience_buffer = experience_buffer
         self.device = torch.device(config.env.device)
         self.move_history: List[Tuple] = []
+        self.move_log: List[str] = []
 
     def execute_step(
         self,
@@ -144,9 +145,9 @@ class StepManager:
                 legal_shogi_moves, device=self.device
             )
 
-            # Prepare demo mode info if needed
+            # Prepare display move info if needed
             piece_info_for_demo = None
-            if self.config.demo.enable_demo_mode and legal_shogi_moves:
+            if self.config.display.display_moves and legal_shogi_moves:
                 piece_info_for_demo = self._prepare_demo_info(legal_shogi_moves)
 
             # Agent action selection
@@ -190,8 +191,8 @@ class StepManager:
                     error_message=error_msg,
                 )
 
-            # Handle demo mode logging and delay
-            if self.config.demo.enable_demo_mode:
+            # Handle display move logging and delay
+            if self.config.display.display_moves:
                 self._handle_demo_mode(
                     selected_shogi_move,
                     episode_state.episode_length,
@@ -418,6 +419,7 @@ class StepManager:
             device=self.device,
         ).unsqueeze(0)
         self.move_history.clear()
+        self.move_log.clear()
 
         return EpisodeState(
             current_obs=reset_obs,
@@ -507,17 +509,12 @@ class StepManager:
             piece_info_for_demo,
         )
 
-        # Log the move
-        logger_func(
-            f"Move {episode_length + 1}: {current_player_name} played {move_str}",
-            False,  # also_to_wandb
-            None,  # wandb_data
-            "info",  # log_level
-        )
+        log_msg = f"Move {episode_length + 1}: {current_player_name} played {move_str}"
+        self.move_log.append(log_msg)
         self.move_history.append(selected_move)
 
         # Add delay for easier observation
-        demo_delay = self.config.demo.demo_mode_delay
+        demo_delay = self.config.display.turn_tick
         if demo_delay > 0:
             time.sleep(demo_delay)
 

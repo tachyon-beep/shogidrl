@@ -8,13 +8,13 @@ import pytest
 
 from keisei.config_schema import (
     AppConfig,
-    DemoConfig,
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
     ParallelConfig,
     TrainingConfig,
     WandBConfig,
+    DisplayConfig,
 )
 from keisei.training.models.resnet_tower import ActorCriticResTower, ResidualBlock
 from keisei.training.trainer import Trainer
@@ -97,7 +97,7 @@ def make_config_and_args(**overrides):
         watch_log_type="all",
         log_model_artifact=False,
     )
-    demo = DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5)
+    display = DisplayConfig(display_moves=False, turn_tick=0.5)
 
     config = AppConfig(
         parallel=ParallelConfig(
@@ -115,7 +115,7 @@ def make_config_and_args(**overrides):
         evaluation=evaluation,
         logging=logging,
         wandb=wandb,
-        demo=demo,
+        display=display,
     )
     args = DummyArgs(**overrides)
     return config, args

@@ -157,7 +157,7 @@ def test_config_with_custom_yaml():
             "max_queue_size": 500,
             "worker_seed_offset": 100,
         },
-        "demo": {"enable_demo_mode": True, "demo_mode_delay": 0.1},
+        "display": {"display_moves": True, "turn_tick": 0.1},
     }
 
     # Write to temporary file and load
@@ -173,7 +173,7 @@ def test_config_with_custom_yaml():
         assert config.logging.log_file == "custom_training.log"
         assert config.wandb.log_model_artifact is True
         assert config.evaluation.wandb_log_eval is True
-        assert config.demo.enable_demo_mode is True
+        assert config.display.display_moves is True
 
     finally:
         os.unlink(temp_path)

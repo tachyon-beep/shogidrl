@@ -60,6 +60,6 @@ parallel:
   max_queue_size: 1000
   worker_seed_offset: 1000
 
-demo:
-  enable_demo_mode: true
-  demo_mode_delay: 0.5
+display:
+  display_moves: true
+  turn_tick: 0.5

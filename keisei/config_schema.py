@@ -271,6 +271,14 @@ class DisplayConfig(BaseModel):
     enable_enhanced_layout: bool = Field(
         True, description="Use enhanced dashboard layout"
     )
+    display_moves: bool = Field(
+        False,
+        description="Show full move descriptions and delay between turns",
+    )
+    turn_tick: float = Field(
+        0.5,
+        description="Delay in seconds between turns when display_moves is enabled",
+    )
     board_unicode_pieces: bool = Field(True, description="Use Unicode pieces")
     board_highlight_last_move: bool = Field(True, description="Highlight last move")
     sparkline_width: int = Field(15, description="Sparkline width in characters")
@@ -303,7 +311,7 @@ class AppConfig(BaseModel):
     logging: LoggingConfig
     wandb: WandBConfig
     parallel: ParallelConfig
-    demo: DemoConfig
+    demo: Optional[DemoConfig] = None
     display: DisplayConfig = Field(default_factory=DisplayConfig)
 
     model_config = {"extra": "forbid"}  # Disallow unknown fields for strict validation
