@@ -341,7 +341,7 @@ save_config_to_json(config, "experiment_config.json")
 ### Dependencies
 - **W&B Version**: Monitor W&B API changes
 - **PyTorch Compatibility**: Ensure seeding works across PyTorch versions
-- **Python Version**: Compatible with Python 3.8+
+- **Python Version**: Compatible with Python 3.12+
 - **Operating System**: Cross-platform compatibility maintained
 
 ### Monitoring Points

@@ -12,3 +12,7 @@ display:
   sparkline_width: 20
   dashboard_height_ratio: 3
   progress_bar_height: 5
+  show_moves_trend: true
+  show_completion_rate: true
+  show_enhanced_win_rates: true
+  show_turns_trend: true
