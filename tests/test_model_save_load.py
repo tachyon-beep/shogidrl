@@ -75,6 +75,7 @@ def test_model_save_and_load(tmp_path):
             evaluation_interval_timesteps=50000,
             weight_decay=0.0,
             normalize_advantages=True,
+            enable_value_clipping=False,
             lr_schedule_type=None,
             lr_schedule_kwargs=None,
             lr_schedule_step_on="epoch",
@@ -87,6 +88,10 @@ def test_model_save_and_load(tmp_path):
             max_moves_per_game=512,
             log_file_path_eval="/tmp/eval.log",
             wandb_log_eval=False,
+            elo_registry_path=None,
+            agent_id=None,
+            opponent_id=None,
+            previous_model_pool_size=5,
         ),
         logging=LoggingConfig(
             log_file="logs/training_log.txt", model_dir="models/", run_name="test_run"

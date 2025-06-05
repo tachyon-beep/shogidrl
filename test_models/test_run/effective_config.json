@@ -47,7 +47,8 @@
         "wandb_log_eval": false,
         "elo_registry_path": null,
         "agent_id": null,
-        "opponent_id": null
+        "opponent_id": null,
+        "previous_model_pool_size": 5
     },
     "logging": {
         "log_file": "test_training.log",

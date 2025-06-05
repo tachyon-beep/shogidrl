@@ -29,7 +29,7 @@ from .adaptive_display import AdaptiveDisplayManager
 class TrainingDisplay:
     def __init__(self, config, trainer, rich_console: Console):
         self.config = config
-        self.display_config: DisplayConfig = getattr(config, "display", DisplayConfig())
+        self.display_config: DisplayConfig = config.display
         self.trainer = trainer
         self.rich_console = rich_console
         self.rich_log_messages = trainer.rich_log_messages
