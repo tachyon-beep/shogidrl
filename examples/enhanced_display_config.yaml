@@ -1,0 +1,14 @@
+# Example configuration enabling the enhanced TUI dashboard
+
+# Load defaults first, then override display settings below
+
+# Note: only overridden keys need to be specified
+
+display:
+  enable_board_display: true
+  enable_trend_visualization: true
+  enable_elo_ratings: true
+  enable_enhanced_layout: true
+  sparkline_width: 20
+  dashboard_height_ratio: 3
+  progress_bar_height: 5

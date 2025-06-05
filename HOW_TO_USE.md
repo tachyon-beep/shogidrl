@@ -135,4 +135,19 @@ print(results)
     *   `Saved model checkpoint to models/ppo_shogi_agent_episode_X.pth`
 *   **Model Checkpoints (`models/`):** Saved PyTorch models (`.pth` files).
 
+## 8. Enhanced TUI Dashboard
+
+The training script includes an optional Rich-based dashboard with an ASCII board,
+metric trends and Elo ratings. These features are controlled by the `display`
+section of the configuration. To enable the dashboard, use the defaults in
+`default_config.yaml` or provide an override file such as
+`examples/enhanced_display_config.yaml`:
+
+```bash
+python train.py --config examples/enhanced_display_config.yaml
+```
+
+See `docs/development/tui_display_quick_reference.md` for a description of each
+option.
+
 This guide provides the basic steps to get the training process started. For more advanced operations, hyperparameter tuning, and troubleshooting, refer to the `OPS_PLAN.md` and the source code documentation.

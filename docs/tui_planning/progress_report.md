@@ -14,14 +14,16 @@ This document tracks the implementation status for the multi-phase TUI enhanceme
   - Elo rating system with history
   - Initial dashboard panels wired into `TrainingDisplay`
 
+- **Phase 3 – Layout and Adaptation**
+  - Enhanced dashboard layout implemented
+  - Adaptive display manager selects layout based on terminal size
+
 ## In Progress
 
-- **Phase 3 – Layout and Adaptation**
-  - Enhanced layout scaffolding present
-  - Adaptive display manager to be added
+- **Phase 4 – Polish and Documentation**
 
 ## Next Steps
 
-1. Finalise adaptive layout switching based on terminal size
-2. Integrate layout selection with `DisplayManager`
-3. Document usage and configuration options
+1. Document configuration options and usage
+2. Provide example configs and screenshots
+3. Capture profiling results in `performance_notes.md`
