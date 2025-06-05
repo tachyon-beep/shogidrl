@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Protocol, Optional, List, Sequence
 
+from wcwidth import wcswidth
+
 from keisei.utils.unified_logger import log_error_to_stderr
 
 from rich.console import RenderableType, Group
@@ -53,12 +55,27 @@ class ShogiBoard:
         return piece.symbol()
 
     def _generate_ascii_board(self, board_state) -> str:
-        lines: List[str] = ["  9 8 7 6 5 4 3 2 1"]
+        all_symbols = [self._piece_to_symbol(p) for row in board_state.board for p in row]
+        all_symbols.append(self._piece_to_symbol(None))
+
+        cell_width = max(wcswidth(sym) for sym in all_symbols)
+
+        header = " " * (cell_width + 1) + " ".join(
+            str(n).rjust(cell_width) for n in range(9, 0, -1)
+        )
+        lines: List[str] = [header]
+
+        def pad(sym: str) -> str:
+            padding = cell_width - wcswidth(sym)
+            return sym + (" " * padding)
+
         for r_idx, row in enumerate(board_state.board):
-            line_parts: List[str] = [f"{9 - r_idx} "]
+            row_header = str(9 - r_idx).rjust(cell_width) + " "
+            line_parts: List[str] = [row_header]
             for piece in reversed(row):
-                line_parts.append(f"{self._piece_to_symbol(piece)} ")
-            lines.append("".join(line_parts))
+                symbol = self._piece_to_symbol(piece)
+                line_parts.append(pad(symbol) + " ")
+            lines.append("".join(line_parts).rstrip())
         return "\n".join(lines)
 
     def _move_to_usi(self, move_tuple, policy_mapper) -> str:

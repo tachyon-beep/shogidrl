@@ -19,7 +19,8 @@ dependencies = [
     "wandb>=0.17.0", # wandb will pull in its own dependencies like GitPython, pydantic, sentry-sdk, setproctitle
     "pydantic>=2.11.0,<3.0", # Explicitly add Pydantic as it's used in config_schema.py
     "rich>=13.0.0", # Used directly in training/display.py, display_manager.py, and utils/utils.py
-    "PyYAML>=6.0" # Moved from dev dependencies since it's used in utils/utils.py
+    "PyYAML>=6.0", # Moved from dev dependencies since it's used in utils/utils.py
+    "wcwidth>=0.2.5"
 ]
 
 [project.optional-dependencies]
