@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Protocol, Optional, List, Sequence
 
+from keisei.utils.unified_logger import log_error_to_stderr
+
 from rich.console import RenderableType, Group
 from rich.panel import Panel
 from rich.text import Text
@@ -62,8 +64,11 @@ class ShogiBoard:
     def _move_to_usi(self, move_tuple, policy_mapper) -> str:
         try:
             return policy_mapper.shogi_move_to_usi(move_tuple)
-        except Exception:
+        except (ValueError, KeyError):
             return str(move_tuple)
+        except Exception as e:  # noqa: BLE001
+            log_error_to_stderr("ShogiBoard", f"Unexpected error in _move_to_usi: {e}")
+            raise
 
     def render(self, board_state=None, move_history=None, policy_mapper=None) -> RenderableType:  # type: ignore[override]
         if not board_state:

@@ -19,6 +19,10 @@ from keisei.utils import BaseOpponent, EvaluationLogger, PolicyOutputMapper
 from keisei.evaluation.elo_registry import EloRegistry
 from keisei.utils.agent_loading import initialize_opponent, load_evaluation_agent
 from keisei.utils.utils import load_config
+from keisei.utils.unified_logger import (
+    log_error_to_stderr,
+    log_info_to_stderr,
+)
 
 if TYPE_CHECKING:
     pass  # torch already imported above
@@ -97,7 +101,7 @@ class Evaluator:
                 np.random.seed(self.seed)
                 if self.device_str == "cuda":
                     torch.cuda.manual_seed_all(self.seed)
-                print(f"[Evaluator] Set random seed to: {self.seed}")
+                log_info_to_stderr("Evaluator", f"Set random seed to: {self.seed}")
             except (ValueError, TypeError, RuntimeError) as e:
                 raise RuntimeError("Failed to set random seed") from e
 
@@ -127,13 +131,15 @@ class Evaluator:
                     wandb_kwargs["group"] = self.wandb_group
                 try:
                     self._wandb_run = wandb.init(**wandb_kwargs)  # type: ignore
-                    print(
-                        f"[Evaluator] W&B logging enabled: {self._wandb_run.name if self._wandb_run else ''}"
+                    log_info_to_stderr(
+                        "Evaluator",
+                        f"W&B logging enabled: {self._wandb_run.name if self._wandb_run else ''}",
                     )
                     self._wandb_active = True
                 except (OSError, RuntimeError, ValueError) as e:
-                    print(
-                        f"[Evaluator] Error initializing W&B: {e}. W&B logging disabled."
+                    log_error_to_stderr(
+                        "Evaluator",
+                        f"Error initializing W&B: {e}. W&B logging disabled.",
                     )
                     self._wandb_active = False
             except (
@@ -143,7 +149,7 @@ class Evaluator:
                 ImportError,
                 AttributeError,
             ) as e:
-                print(f"[Evaluator] Error during W&B initialization: {e}")
+                log_error_to_stderr("Evaluator", f"Error during W&B initialization: {e}")
                 self._wandb_active = False
 
         # Ensure log directory exists
@@ -168,7 +174,7 @@ class Evaluator:
             try:
                 self._elo_registry = EloRegistry(Path(self.elo_registry_path))
             except Exception as e:  # noqa: BLE001
-                print(f"[Evaluator] Error loading Elo registry: {e}")
+                log_error_to_stderr("Evaluator", f"Error loading Elo registry: {e}")
         # Agent and opponent
         # Load input_channels from config
         try:
@@ -230,7 +236,7 @@ class Evaluator:
                 )
                 logger.log(f"[Evaluator] Evaluation Summary: {results_summary}")
         except (RuntimeError, ValueError, OSError, TypeError, AttributeError) as e:
-            print(f"[Evaluator] Error during evaluation run: {e}")
+            log_error_to_stderr("Evaluator", f"Error during evaluation run: {e}")
             results_summary = None
 
         if self._wandb_active and results_summary is not None:
@@ -247,9 +253,9 @@ class Evaluator:
                 )
 
             except (OSError, RuntimeError, ValueError, AttributeError, TypeError) as e:
-                print(
-                    f"[Evaluator] Error logging final W&B metrics: {e}"
-                )  # Added print
+                log_error_to_stderr(
+                    "Evaluator", f"Error logging final W&B metrics: {e}"
+                )
 
         if self._elo_registry and results_summary is not None:
             if self.agent_id and self.opponent_id:
@@ -259,14 +265,14 @@ class Evaluator:
                     )
                     self._elo_registry.save()
                 except Exception as e:  # noqa: BLE001
-                    print(f"[Evaluator] Error updating Elo registry: {e}")
+                    log_error_to_stderr("Evaluator", f"Error updating Elo registry: {e}")
         if self._wandb_active and self._wandb_run:
             try:
                 self._wandb_run.finish()  # type: ignore
                 if hasattr(wandb, "finish"):
                     wandb.finish()  # Also call global wandb.finish() for test mocks
             except (OSError, RuntimeError, ValueError, AttributeError) as e:
-                print(f"[Evaluator] Error finishing W&B run: {e}")
+                log_error_to_stderr("Evaluator", f"Error finishing W&B run: {e}")
         return results_summary
 
 
@@ -371,4 +377,4 @@ def main_cli():
         agent_id=args.agent_id,
         opponent_id=args.opponent_id,
     )
-    print("Evaluation results:", results)
+    log_info_to_stderr("Evaluator", f"Evaluation results: {results}")
