@@ -137,10 +137,13 @@ def test_run_epoch_functionality(mock_trainer):
     # Mock display update
     mock_trainer.display.update_display = Mock()
 
+    # Create a mock log_both function
+    mock_log_both = Mock()
+
     # Test that _run_epoch executes without error
     try:
         # The method should complete one epoch
-        manager._run_epoch()
+        manager._run_epoch(mock_log_both)
 
         # Verify that key components were called
         assert mock_trainer.step_manager.take_step.called
