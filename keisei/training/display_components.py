@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol, Optional, List, Sequence
 
-from rich.console import RenderableType
+from rich.console import RenderableType, Group
 from rich.panel import Panel
 from rich.text import Text
 

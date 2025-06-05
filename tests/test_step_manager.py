@@ -796,6 +796,7 @@ class TestPrepareAndHandleDemoMode:
                     None,  # wandb_data
                     "info",  # log_level
                 )
+                assert step_manager.move_history[-1] == selected_move
 
     def test_handle_demo_mode_no_current_player(
         self, step_manager, mock_logger, mock_components
