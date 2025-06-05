@@ -182,7 +182,8 @@ class TrainingDisplay:
                     self.layout["board_panel"].update(
                         self.board_component.render(trainer.game)
                     )
-                except Exception:
+                except Exception as e:
+                    self.rich_console.log(f"Error rendering board: {e}", style="bold red")
                     self.layout["board_panel"].update(Panel(Text("No board")))
             if self.trend_component:
                 trends = []
