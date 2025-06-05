@@ -18,12 +18,11 @@ This document tracks the implementation status for the multi-phase TUI enhanceme
   - Enhanced dashboard layout implemented
   - Adaptive display manager selects layout based on terminal size
 
-## In Progress
-
 - **Phase 4 – Polish and Documentation**
+  - Configuration options documented
+  - Example configs provided
+  - Profiling notes captured in `performance_notes.md`
 
-## Next Steps
+## Status
 
-1. Document configuration options and usage
-2. Provide example configs and screenshots
-3. Capture profiling results in `performance_notes.md`
+All phases are complete. The TUI upgrade is production-ready.

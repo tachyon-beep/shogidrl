@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Reusable Rich display components for the training TUI."""
+
+from __future__ import annotations
 
 from typing import Protocol, Optional, List, Sequence
 

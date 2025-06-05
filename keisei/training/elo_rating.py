@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Elo rating calculation utility for training progress."""
+
+from __future__ import annotations
 
 from typing import Dict, List, Optional
 
