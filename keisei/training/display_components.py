@@ -140,7 +140,13 @@ class ShogiBoard:
             log_error_to_stderr("ShogiBoard", f"Unexpected error in _move_to_usi: {e}")
             raise
 
-    def render(self, board_state=None, move_history=None, policy_mapper=None) -> RenderableType:  # type: ignore[override]
+    def render(
+        self,
+        board_state=None,
+        move_history=None,
+        policy_mapper=None,
+        move_strings=None,
+    ) -> RenderableType:  # type: ignore[override]
         if not board_state:
             return Panel(Text("No active game"), title="Shogi Board")
 
@@ -149,7 +155,19 @@ class ShogiBoard:
             Text(ascii_board), title="Current Position", border_style="blue"
         )
 
-        if not self.show_moves or not move_history or policy_mapper is None:
+        if not self.show_moves:
+            return board_panel
+
+        if move_strings:
+            indent = " " * self.indent_spaces
+            last_msgs = move_strings[-self.max_moves :]
+            formatted = [f"{indent}{msg}" for msg in last_msgs]
+            moves_panel = Panel(
+                Text("\n".join(formatted)), border_style="yellow", title="Recent Moves"
+            )
+            return Group(board_panel, moves_panel)
+
+        if not move_history or policy_mapper is None:
             return board_panel
 
         indent = " " * self.indent_spaces

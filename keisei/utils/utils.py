@@ -65,9 +65,9 @@ FLAT_KEY_TO_NESTED = {
     "WANDB_ENABLED": "wandb.enabled",
     "WANDB_PROJECT": "wandb.project",
     "WANDB_ENTITY": "wandb.entity",
-    # Demo
-    "ENABLE_DEMO_MODE": "demo.enable_demo_mode",
-    "DEMO_MODE_DELAY": "demo.demo_mode_delay",
+    # Display moves
+    "DISPLAY_MOVES": "display.display_moves",
+    "TURN_TICK": "display.turn_tick",
 }
 
 

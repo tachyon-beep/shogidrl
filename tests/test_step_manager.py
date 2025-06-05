@@ -27,9 +27,9 @@ def mock_config():
     config = Mock(spec=AppConfig)
     config.env = Mock()
     config.env.device = "cpu"
-    config.demo = Mock()
-    config.demo.enable_demo_mode = False
-    config.demo.demo_mode_delay = 0.0
+    config.display = Mock()
+    config.display.display_moves = False
+    config.display.turn_tick = 0.0
     return config
 
 
@@ -386,8 +386,8 @@ class TestExecuteStep:
     ):
         """Test step execution with demo mode enabled."""
         # Enable demo mode
-        step_manager.config.demo.enable_demo_mode = True
-        step_manager.config.demo.demo_mode_delay = 0.1
+        step_manager.config.display.display_moves = True
+        step_manager.config.display.turn_tick = 0.1
 
         # Setup mocks
         legal_moves = [(1, 2, 3, 4, 5)]
@@ -775,28 +775,21 @@ class TestPrepareAndHandleDemoMode:
             mock_format.return_value = "formatted_move"
 
             with patch("time.sleep") as mock_sleep:
-                step_manager.config.demo.demo_mode_delay = 0.5
+                step_manager.config.display.turn_tick = 0.5
 
                 step_manager._handle_demo_mode(
                     selected_move, episode_length, piece_info, mock_logger
                 )
 
-                # Verify format function was called
                 mock_format.assert_called_once_with(
                     selected_move, step_manager.policy_mapper, piece_info
                 )
 
-                # Verify sleep was called
                 mock_sleep.assert_called_once_with(0.5)
 
-                # Verify logging
-                mock_logger.assert_called_once_with(
-                    "Move 11: TestPlayer played formatted_move",
-                    False,  # also_to_wandb
-                    None,  # wandb_data
-                    "info",  # log_level
-                )
+                mock_logger.assert_not_called()
                 assert step_manager.move_history[-1] == selected_move
+                assert step_manager.move_log[-1].startswith("Move 11: TestPlayer")
 
     def test_handle_demo_mode_no_current_player(
         self, step_manager, mock_logger, mock_components
@@ -818,10 +811,8 @@ class TestPrepareAndHandleDemoMode:
                 selected_move, episode_length, piece_info, mock_logger
             )
 
-            # Should use "Unknown" as player name
-            mock_logger.assert_called_once()
-            log_message = mock_logger.call_args[0][0]
-            assert "Unknown played formatted_move" in log_message
+            mock_logger.assert_not_called()
+            assert "Unknown" in step_manager.move_log[-1]
 
     def test_handle_demo_mode_no_delay(
         self, step_manager, mock_logger, mock_components
@@ -840,7 +831,7 @@ class TestPrepareAndHandleDemoMode:
             mock_format.return_value = "formatted_move"
 
             with patch("time.sleep") as mock_sleep:
-                step_manager.config.demo.demo_mode_delay = 0.0
+                step_manager.config.display.turn_tick = 0.0
 
                 step_manager._handle_demo_mode(
                     selected_move, episode_length, piece_info, mock_logger

@@ -238,6 +238,11 @@ class TrainingDisplay:
                                 else None
                             ),
                             trainer.policy_output_mapper,
+                            (
+                                trainer.step_manager.move_log
+                                if trainer.step_manager
+                                else None
+                            ),
                         )
                     )
                 except Exception as e:

@@ -11,13 +11,13 @@ import pytest
 
 from keisei.config_schema import (
     AppConfig,
-    DemoConfig,
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
     ParallelConfig,
     TrainingConfig,
     WandBConfig,
+    DisplayConfig,
 )
 from keisei.training.env_manager import EnvManager
 
@@ -97,7 +97,7 @@ def mock_config():
             watch_log_type="all",  # Added default
             log_model_artifact=False,
         ),
-        demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5),  # Added default
+        display=DisplayConfig(display_moves=False, turn_tick=0.5),  # Added default
     )
 
 
