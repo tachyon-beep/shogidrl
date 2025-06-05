@@ -67,5 +67,5 @@ psutil==6.1.0           # Useful for monitoring system resources during dev/test
 tomlkit==0.13.2         # For parsing pyproject.toml, used by black, pylint, etc.
 types-requests==2.32.0.20250515 # Type stubs
 types-tqdm==4.67.0.20250516     # Type stubs
-wcwidth==0.2.13              # Used to compute display widths in TUI
+
 
