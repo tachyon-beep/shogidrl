@@ -19,6 +19,7 @@ requests==2.32.3   # For API interactions (e.g. W&B)
 triton==3.3.0      # For PyTorch, especially with NVIDIA GPUs
 wandb==0.19.11     # Experiment tracking
 rich==14.0.0       # Rich text and beautiful formatting in CLIs
+wcwidth==0.2.13    # Accurate unicode width calculation
 
 # Indirect dependencies (usually managed by pip, but can be pinned for stability)
 certifi==2025.4.26
