@@ -151,9 +151,9 @@ class Sparkline:
 
     def generate(self, values: Sequence[float]) -> str:
         if not values:
-            return "".join([" " for _ in range(self.width)])
+            return " " * self.width
         if len(values) < 2:
-            return "".join(["─" for _ in range(self.width)])
+            return "─" * self.width
 
         min_v = min(values)
         max_v = max(values)
