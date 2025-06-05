@@ -40,6 +40,8 @@ class TrainingDisplay:
             self.board_component = ShogiBoard()
         if self.display_config.enable_trend_visualization:
             self.trend_component = Sparkline(width=self.display_config.sparkline_width)
+        if self.display_config.enable_elo_ratings:
+            self.elo_component = True  # placeholder flag
 
         self.progress_bar, self.training_task, self.layout, self.log_panel = (
             self._setup_rich_progress_display()
@@ -122,8 +124,17 @@ class TrainingDisplay:
                 Layout(name="dashboard", ratio=self.display_config.dashboard_height_ratio),
                 Layout(name="progress_display", size=self.display_config.progress_bar_height),
             )
-            layout["dashboard"].update(
-                Panel(Text("Dashboard placeholder"), border_style="blue")
+            layout["dashboard"].split_row(
+                Layout(name="board_panel"),
+                Layout(name="trends_panel"),
+                Layout(name="elo_panel"),
+            )
+            layout["board_panel"].update(Panel(Text("..."), title="Shogi Board"))
+            layout["trends_panel"].update(
+                Panel(Text("Collecting data..."), title="Trends")
+            )
+            layout["elo_panel"].update(
+                Panel(Text("Elo pending"), title="Elo Ratings")
             )
         else:
             layout.split_column(
@@ -147,6 +158,37 @@ class TrainingDisplay:
             self.log_panel.renderable = updated_panel_content
         else:
             self.log_panel.renderable = Text("")
+        if self.display_config.enable_enhanced_layout:
+            if self.board_component:
+                try:
+                    self.layout["board_panel"].update(
+                        self.board_component.render(trainer.game)
+                    )
+                except Exception:
+                    self.layout["board_panel"].update(Panel(Text("No board")))
+            if self.trend_component:
+                trends = []
+                hist = trainer.metrics_manager.history
+                if hist.learning_rates:
+                    trends.append(
+                        self.trend_component.generate(hist.learning_rates[-self.display_config.sparkline_width :])
+                    )
+                trend_text = "\n".join(trends) if trends else "Collecting data..."
+                self.layout["trends_panel"].update(
+                    Panel(Text(trend_text, style="cyan"), border_style="cyan", title="Metric Trends")
+                )
+            if self.elo_component:
+                elo = trainer.metrics_manager.elo_system
+                lines = [
+                    f"Black: {elo.black_rating:.0f}",
+                    f"White: {elo.white_rating:.0f}",
+                    f"Diff: {elo.black_rating - elo.white_rating:+.0f}",
+                    "",
+                    f"Assessment: {elo.get_strength_assessment()}",
+                ]
+                self.layout["elo_panel"].update(
+                    Panel(Text("\n".join(lines), style="yellow"), border_style="yellow", title="Elo Ratings")
+                )
 
     def start(self):
         return Live(

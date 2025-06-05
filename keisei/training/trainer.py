@@ -82,7 +82,11 @@ class Trainer(CompatibilityMixin):
         self.logger = TrainingLogger(self.log_file_path, self.rich_console)
         self.model_manager = ModelManager(config, args, self.device, self.logger.log)
         self.env_manager = EnvManager(config, self.logger.log)
-        self.metrics_manager = MetricsManager()
+        self.metrics_manager = MetricsManager(
+            history_size=config.display.trend_history_length,
+            elo_initial_rating=config.display.elo_initial_rating,
+            elo_k_factor=config.display.elo_k_factor,
+        )
         self.callback_manager = CallbackManager(config, self.model_dir)
         self.setup_manager = SetupManager(config, self.device)
 
