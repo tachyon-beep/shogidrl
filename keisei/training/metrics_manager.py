@@ -4,9 +4,10 @@ metrics_manager.py: Manages training statistics, metrics tracking, and formattin
 
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, List
 
 from keisei.shogi.shogi_core_definitions import Color
+from .elo_rating import EloRatingSystem
 
 
 @dataclass
@@ -20,6 +21,40 @@ class TrainingStats:
     draws: int = 0
 
 
+class MetricsHistory:
+    """Track historical metrics required for trend visualisation and Elo."""
+
+    def __init__(self, max_history: int = 1000) -> None:
+        self.max_history = max_history
+        self.win_rates_history: List[Dict[str, float]] = []
+        self.learning_rates: List[float] = []
+        self.policy_losses: List[float] = []
+        self.value_losses: List[float] = []
+        self.kl_divergences: List[float] = []
+
+    def _trim(self, values: List[Any]) -> None:
+        while len(values) > self.max_history:
+            values.pop(0)
+
+    def add_episode_data(self, win_rates: Dict[str, float]) -> None:
+        self.win_rates_history.append(win_rates)
+        self._trim(self.win_rates_history)
+
+    def add_ppo_data(self, metrics: Dict[str, float]) -> None:
+        if "ppo/learning_rate" in metrics:
+            self.learning_rates.append(metrics["ppo/learning_rate"])
+            self._trim(self.learning_rates)
+        if "ppo/policy_loss" in metrics:
+            self.policy_losses.append(metrics["ppo/policy_loss"])
+            self._trim(self.policy_losses)
+        if "ppo/value_loss" in metrics:
+            self.value_losses.append(metrics["ppo/value_loss"])
+            self._trim(self.value_losses)
+        if "ppo/kl_divergence_approx" in metrics:
+            self.kl_divergences.append(metrics["ppo/kl_divergence_approx"])
+            self._trim(self.kl_divergences)
+
+
 class MetricsManager:
     """
     Manages training statistics, PPO metrics formatting, and progress tracking.
@@ -31,10 +66,19 @@ class MetricsManager:
     - Rate calculations and reporting
     """
 
-    def __init__(self):
-        """Initialize metrics manager with zero statistics."""
+    def __init__(
+        self,
+        history_size: int = 1000,
+        elo_initial_rating: float = 1500.0,
+        elo_k_factor: float = 32.0,
+    ) -> None:
+        """Initialize metrics manager with zero statistics and helpers."""
         self.stats = TrainingStats()
         self.pending_progress_updates: Dict[str, Any] = {}
+        self.history = MetricsHistory(max_history=history_size)
+        self.elo_system = EloRatingSystem(
+            initial_rating=elo_initial_rating, k_factor=elo_k_factor
+        )
 
     # === Statistics Management ===
 
@@ -56,8 +100,10 @@ class MetricsManager:
             self.stats.white_wins += 1
         else:
             self.stats.draws += 1
-
-        return self.get_win_rates_dict()
+        win_rates = self.get_win_rates_dict()
+        self.history.add_episode_data(win_rates)
+        self.elo_system.update_ratings(winner_color)
+        return win_rates
 
     def get_win_rates(self) -> Tuple[float, float, float]:
         """
@@ -130,7 +176,7 @@ class MetricsManager:
             ppo_metrics_parts.append(f"ValL:{learn_metrics['ppo/value_loss']:.4f}")
         if "ppo/entropy" in learn_metrics:
             ppo_metrics_parts.append(f"Ent:{learn_metrics['ppo/entropy']:.4f}")
-
+        self.history.add_ppo_data(learn_metrics)
         return " ".join(ppo_metrics_parts)
 
     def format_ppo_metrics_for_logging(self, learn_metrics: Dict[str, float]) -> str:

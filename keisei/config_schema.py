@@ -243,6 +243,23 @@ class DemoConfig(BaseModel):
     )
 
 
+class DisplayConfig(BaseModel):
+    """Configuration for optional TUI display features."""
+
+    enable_board_display: bool = Field(True, description="Show ASCII board panel")
+    enable_trend_visualization: bool = Field(True, description="Show metric trends")
+    enable_elo_ratings: bool = Field(True, description="Show Elo rating panel")
+    enable_enhanced_layout: bool = Field(True, description="Use enhanced dashboard layout")
+    board_unicode_pieces: bool = Field(True, description="Use Unicode pieces")
+    board_highlight_last_move: bool = Field(True, description="Highlight last move")
+    sparkline_width: int = Field(15, description="Sparkline width in characters")
+    trend_history_length: int = Field(100, description="Number of history points to keep")
+    elo_initial_rating: float = Field(1500.0, description="Initial Elo rating")
+    elo_k_factor: float = Field(32.0, description="Elo K-factor")
+    dashboard_height_ratio: int = Field(2, description="Layout ratio for dashboard")
+    progress_bar_height: int = Field(4, description="Progress bar height")
+
+
 class AppConfig(BaseModel):
     env: EnvConfig
     training: TrainingConfig
@@ -251,5 +268,6 @@ class AppConfig(BaseModel):
     wandb: WandBConfig
     parallel: ParallelConfig
     demo: DemoConfig
+    display: DisplayConfig = Field(default_factory=DisplayConfig)
 
     model_config = {"extra": "forbid"}  # Disallow unknown fields for strict validation
