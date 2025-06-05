@@ -323,7 +323,10 @@ class TrainingLoopManager:
             )
             self.trainer.metrics_manager.update_episode_stats(winner_color_enum)
 
-            self._log_episode_metrics(updated_episode_state)
+            result_str = (
+                "win" if episode_winner_color in ("black", "white") else "draw"
+            )
+            self._log_episode_metrics(updated_episode_state, result_str)
             return new_episode_state_after_end
         else:
             return updated_episode_state
@@ -371,11 +374,12 @@ class TrainingLoopManager:
         self.steps_since_last_time_for_sps += 1
         return True  # Continue epoch
 
-    def _log_episode_metrics(self, episode_state: "EpisodeState"):
+    def _log_episode_metrics(self, episode_state: "EpisodeState", result: str):
         """Logs metrics at the end of an episode."""
         ep_len = episode_state.episode_length
         ep_rew = episode_state.episode_reward
         ep_metrics_str = f"L:{ep_len} R:{ep_rew:.2f}"
+        self.trainer.metrics_manager.log_episode_metrics(ep_len, ep_len, result)
 
         total_games = (
             self.trainer.metrics_manager.black_wins

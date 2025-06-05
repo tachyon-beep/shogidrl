@@ -3,8 +3,10 @@ metrics_manager.py: Manages training statistics, metrics tracking, and formattin
 """
 
 import json
+import time
+from collections import deque
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple, List
+from typing import Any, Dict, Optional, Tuple, List, Deque
 
 from keisei.shogi.shogi_core_definitions import Color
 from .elo_rating import EloRatingSystem
@@ -79,6 +81,11 @@ class MetricsManager:
         self.elo_system = EloRatingSystem(
             initial_rating=elo_initial_rating, k_factor=elo_k_factor
         )
+        # Enhanced metric storage
+        self.moves_per_game: Deque[int] = deque(maxlen=history_size)
+        self.turns_per_game: Deque[int] = deque(maxlen=history_size)
+        self.games_completed_timestamps: Deque[float] = deque(maxlen=history_size)
+        self.win_loss_draw_history: Deque[Tuple[str, float]] = deque(maxlen=history_size)
 
     # === Statistics Management ===
 
@@ -130,6 +137,39 @@ class MetricsManager:
             "win_rate_white": white_rate,
             "win_rate_draw": draw_rate,
         }
+
+    # === Enhanced Metrics ===
+
+    def log_episode_metrics(self, moves_made: int, turns_count: int, result: str) -> None:
+        """Record metrics for a completed episode."""
+        self.moves_per_game.append(moves_made)
+        self.turns_per_game.append(turns_count)
+        now = time.time()
+        self.games_completed_timestamps.append(now)
+        self.win_loss_draw_history.append((result, now))
+
+    def get_moves_per_game_trend(self, window_size: int = 100) -> List[float]:
+        data = list(self.moves_per_game)[-window_size:]
+        return data
+
+    def get_games_completion_rate(self, time_window_hours: float = 1.0) -> float:
+        cutoff = time.time() - time_window_hours * 3600
+        count = sum(ts >= cutoff for ts in self.games_completed_timestamps)
+        return count / time_window_hours if time_window_hours > 0 else 0.0
+
+    def get_win_loss_draw_rates(self, window_size: int = 100) -> Dict[str, float]:
+        recent = list(self.win_loss_draw_history)[-window_size:]
+        if not recent:
+            return {"win": 0.0, "loss": 0.0, "draw": 0.0}
+        total = len(recent)
+        wins = sum(1 for r, _ in recent if r == "win")
+        losses = sum(1 for r, _ in recent if r == "loss")
+        draws = sum(1 for r, _ in recent if r == "draw")
+        return {"win": wins / total, "loss": losses / total, "draw": draws / total}
+
+    def get_average_turns_trend(self, window_size: int = 100) -> List[float]:
+        data = list(self.turns_per_game)[-window_size:]
+        return data
 
     def format_episode_metrics(self, episode_length: int, episode_reward: float) -> str:
         """

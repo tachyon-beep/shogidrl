@@ -22,7 +22,12 @@ from rich.progress import (
 from rich.text import Text
 
 from keisei.config_schema import DisplayConfig
-from .display_components import ShogiBoard, Sparkline
+from .display_components import (
+    ShogiBoard,
+    Sparkline,
+    MultiMetricSparkline,
+    RollingAverageCalculator,
+)
 from .adaptive_display import AdaptiveDisplayManager
 
 
@@ -36,6 +41,8 @@ class TrainingDisplay:
 
         self.board_component: Optional[ShogiBoard] = None
         self.trend_component: Optional[Sparkline] = None
+        self.multi_trend_component: Optional[MultiMetricSparkline] = None
+        self.completion_rate_calc: Optional[RollingAverageCalculator] = None
         self.elo_component_enabled: bool = False
         self.using_enhanced_layout: bool = False
 
@@ -49,6 +56,13 @@ class TrainingDisplay:
             )
         if self.display_config.enable_trend_visualization:
             self.trend_component = Sparkline(width=self.display_config.sparkline_width)
+            self.multi_trend_component = MultiMetricSparkline(
+                width=self.display_config.sparkline_width,
+                metrics=["Moves", "Turns"],
+            )
+            self.completion_rate_calc = RollingAverageCalculator(
+                self.display_config.metrics_window_size
+            )
         if self.display_config.enable_elo_ratings:
             self.elo_component_enabled = True
 
@@ -260,17 +274,45 @@ class TrainingDisplay:
                     )
                 trend_text = "\n".join(trends) if trends else "Collecting data..."
 
+                multi_panel = None
+                if self.multi_trend_component:
+                    moves_tr = trainer.metrics_manager.get_moves_per_game_trend(
+                        self.display_config.metrics_window_size
+                    )
+                    turns_tr = trainer.metrics_manager.get_average_turns_trend(
+                        self.display_config.metrics_window_size
+                    )
+                    if moves_tr:
+                        self.multi_trend_component.add_data_point(
+                            "Moves", moves_tr[-1]
+                        )
+                    if turns_tr:
+                        self.multi_trend_component.add_data_point(
+                            "Turns", turns_tr[-1]
+                        )
+                    multi_panel = self.multi_trend_component.render_with_trendlines()
+
+                completion_line = ""
+                if self.completion_rate_calc:
+                    rate = trainer.metrics_manager.get_games_completion_rate()
+                    avg_rate = self.completion_rate_calc.add_value(rate)
+                    direction = self.completion_rate_calc.get_trend_direction()
+                    completion_line = f"Games/hr: {avg_rate:.2f} {direction}"
+
                 metrics_table = self._build_metrics_table(hist)
                 model_graphic = Text(
                     "Model evolution: "
                     + "=" * len(trainer.previous_model_selector.get_all()),
                     style="magenta",
                 )
+                group_items = [metrics_table, Text(trend_text, style="cyan"), model_graphic]
+                if multi_panel is not None:
+                    group_items.append(multi_panel)
+                if completion_line:
+                    group_items.append(Text(completion_line, style="green"))
                 self.layout["trends_panel"].update(
                     Panel(
-                        Group(
-                            metrics_table, Text(trend_text, style="cyan"), model_graphic
-                        ),
+                        Group(*group_items),
                         border_style="cyan",
                         title="Metric Trends",
                     )
