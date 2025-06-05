@@ -148,6 +148,10 @@ class EvaluationConfig(BaseModel):
     opponent_id: Optional[str] = Field(
         None, description="Identifier for the opponent model"
     )
+    previous_model_pool_size: int = Field(
+        5,
+        description="Number of previous checkpoints to keep for Elo evaluation.",
+    )
 
     @field_validator("evaluation_interval_timesteps")
     # pylint: disable=no-self-argument
@@ -168,6 +172,12 @@ class EvaluationConfig(BaseModel):
     def max_moves_positive(cls, v):
         if v <= 0:
             raise ValueError("max_moves_per_game must be positive")
+        return v
+
+    @field_validator("previous_model_pool_size")
+    def pool_size_positive(cls, v):  # pylint: disable=no-self-argument
+        if v <= 0:
+            raise ValueError("previous_model_pool_size must be positive")
         return v
 
 
@@ -258,21 +268,24 @@ class DisplayConfig(BaseModel):
     enable_board_display: bool = Field(True, description="Show ASCII board panel")
     enable_trend_visualization: bool = Field(True, description="Show metric trends")
     enable_elo_ratings: bool = Field(True, description="Show Elo rating panel")
-    enable_enhanced_layout: bool = Field(True, description="Use enhanced dashboard layout")
+    enable_enhanced_layout: bool = Field(
+        True, description="Use enhanced dashboard layout"
+    )
     board_unicode_pieces: bool = Field(True, description="Use Unicode pieces")
     board_highlight_last_move: bool = Field(True, description="Highlight last move")
     sparkline_width: int = Field(15, description="Sparkline width in characters")
-    trend_history_length: int = Field(100, description="Number of history points to keep")
+    trend_history_length: int = Field(
+        100, description="Number of history points to keep"
+    )
     elo_initial_rating: float = Field(1500.0, description="Initial Elo rating")
     elo_k_factor: float = Field(32.0, description="Elo K-factor")
     dashboard_height_ratio: int = Field(2, description="Layout ratio for dashboard")
     progress_bar_height: int = Field(4, description="Progress bar height")
     show_text_moves: bool = Field(
-        True, description="Display recent moves under the board when demo mode is active"
+        True,
+        description="Display recent moves under the board when demo mode is active",
     )
-    move_list_length: int = Field(
-        10, description="Number of recent moves to display"
-    )
+    move_list_length: int = Field(10, description="Number of recent moves to display")
 
 
 class AppConfig(BaseModel):

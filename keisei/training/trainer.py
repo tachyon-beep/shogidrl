@@ -21,6 +21,7 @@ from .display_manager import DisplayManager
 from .env_manager import EnvManager
 from .metrics_manager import MetricsManager
 from .model_manager import ModelManager
+from .previous_model_selector import PreviousModelSelector
 from .session_manager import SessionManager
 from .setup_manager import SetupManager
 from .step_manager import EpisodeState, StepManager
@@ -87,6 +88,10 @@ class Trainer(CompatibilityMixin):
             elo_initial_rating=config.display.elo_initial_rating,
             elo_k_factor=config.display.elo_k_factor,
         )
+        self.previous_model_selector = PreviousModelSelector(
+            pool_size=config.evaluation.previous_model_pool_size
+        )
+        self.evaluation_elo_snapshot = None
         self.callback_manager = CallbackManager(config, self.model_dir)
         self.setup_manager = SetupManager(config, self.device)
 

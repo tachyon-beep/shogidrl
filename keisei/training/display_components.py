@@ -23,10 +23,19 @@ class DisplayComponent(Protocol):
 class ShogiBoard:
     """ASCII representation of the current Shogi board state."""
 
-    def __init__(self, use_unicode: bool = True, show_moves: bool = False, max_moves: int = 10) -> None:
+    def __init__(
+        self,
+        use_unicode: bool = True,
+        show_moves: bool = False,
+        max_moves: int = 10,
+        indent_spaces: int = 0,
+        vertical_offset: int = 0,
+    ) -> None:
         self.use_unicode = use_unicode
         self.show_moves = show_moves
         self.max_moves = max_moves
+        self.indent_spaces = indent_spaces
+        self.vertical_offset = vertical_offset
 
     def _piece_to_symbol(self, piece) -> str:
         if not piece:
@@ -96,9 +105,12 @@ class ShogiBoard:
         widths = [wcswidth(sym) or len(sym) for sym in reference_symbols]
         cell_width = max(widths)
 
+        indent = " " * self.indent_spaces
         start_padding = cell_width - 1 if self.use_unicode else cell_width
-        header = " " * start_padding + " ".join(
-            str(n).rjust(cell_width) for n in range(9, 0, -1)
+        header = (
+            indent
+            + " " * start_padding
+            + " ".join(str(n).rjust(cell_width) for n in range(9, 0, -1))
         )
         lines: List[str] = [header]
 
@@ -109,12 +121,13 @@ class ShogiBoard:
 
         for r_idx, row in enumerate(board_state.board):
             row_header = str(9 - r_idx).rjust(cell_width) + " "
-            line_parts: List[str] = [row_header]
+            line_parts: List[str] = [indent + row_header]
             for piece in reversed(row):
                 symbol = self._piece_to_symbol(piece)
 
                 line_parts.append(pad(symbol) + " ")
             lines.append("".join(line_parts).rstrip())
+        lines = ["" for _ in range(self.vertical_offset)] + lines
         return "\n".join(lines)
 
     def _move_to_usi(self, move_tuple, policy_mapper) -> str:
@@ -131,16 +144,21 @@ class ShogiBoard:
             return Panel(Text("No active game"), title="Shogi Board")
 
         ascii_board = self._generate_ascii_board(board_state)
-        board_panel = Panel(Text(ascii_board), title="Current Position", border_style="blue")
+        board_panel = Panel(
+            Text(ascii_board), title="Current Position", border_style="blue"
+        )
 
         if not self.show_moves or not move_history or policy_mapper is None:
             return board_panel
 
+        indent = " " * self.indent_spaces
         last_moves = move_history[-self.max_moves :]
         lines = [self._move_to_usi(mv, policy_mapper) for mv in last_moves]
         start_idx = len(move_history) - len(last_moves) + 1
-        formatted = [f"{start_idx + i:3d}: {mv}" for i, mv in enumerate(lines)]
-        moves_panel = Panel(Text("\n".join(formatted)), border_style="yellow", title="Recent Moves")
+        formatted = [f"{indent}{start_idx + i:3d}: {mv}" for i, mv in enumerate(lines)]
+        moves_panel = Panel(
+            Text("\n".join(formatted)), border_style="yellow", title="Recent Moves"
+        )
         return Group(board_panel, moves_panel)
 
 
@@ -173,5 +191,9 @@ class Sparkline:
 
     def render(self, values: Optional[Sequence[float]] = None, title: str = "Trends") -> RenderableType:  # type: ignore[override]
         values = values or []
-        spark = self.generate(list(values)) if values else "".join(["─" for _ in range(self.width)])
+        spark = (
+            self.generate(list(values))
+            if values
+            else "".join(["─" for _ in range(self.width)])
+        )
         return Panel(Text(f"{title}: {spark}", style="cyan"), border_style="cyan")
