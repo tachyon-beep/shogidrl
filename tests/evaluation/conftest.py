@@ -11,13 +11,13 @@ import pytest
 
 from keisei.config_schema import (
     AppConfig,
-    DemoConfig,
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
     ParallelConfig,
     TrainingConfig,
     WandBConfig,
+    DisplayConfig,
 )
 from keisei.utils import PolicyOutputMapper
 
@@ -117,9 +117,9 @@ def make_test_config():
             watch_log_type="all",
             log_model_artifact=False,
         ),
-        demo=DemoConfig(
-            enable_demo_mode=False,
-            demo_mode_delay=0.0,
+        display=DisplayConfig(
+            display_moves=False,
+            turn_tick=0.0,
         ),
         parallel=ParallelConfig(
             enabled=False,

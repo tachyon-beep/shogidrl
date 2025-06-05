@@ -39,7 +39,7 @@ class TestIntegrationSmoke:
             )
             config.logging.model_dir = temp_dir
             config.wandb.enabled = False  # Disable W&B for CI
-            config.demo.enable_demo_mode = False  # Disable demo mode for speed
+            config.display.display_moves = False  # Disable move display for speed
 
             # Create mock args object with explicit None values for trainer attributes
             mock_args = MagicMock()

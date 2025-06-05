@@ -8,13 +8,13 @@ import torch
 
 from keisei.config_schema import (
     AppConfig,
-    DemoConfig,
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
     ParallelConfig,
     TrainingConfig,
     WandBConfig,
+    DisplayConfig,
 )
 from keisei.core.neural_network import ActorCritic
 from keisei.core.ppo_agent import PPOAgent
@@ -106,7 +106,7 @@ def test_model_save_and_load(tmp_path):
             watch_log_type="all",
             log_model_artifact=False,
         ),
-        demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5),
+        display=DisplayConfig(display_moves=False, turn_tick=0.5),
     )
 
     device = config.env.device

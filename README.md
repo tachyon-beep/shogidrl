@@ -137,7 +137,7 @@ class AppConfig(BaseModel):
     evaluation: EvaluationConfig # Evaluation schedules and parameters
     logging: LoggingConfig   # File paths, log levels, Rich UI settings
     wandb: WandBConfig      # Experiment tracking configuration
-    demo: DemoConfig        # Demo mode and visualization settings
+    display: DisplayConfig  # Visualization and move display settings
 ```
 
 **Configuration Features:**

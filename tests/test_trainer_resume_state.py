@@ -16,13 +16,13 @@ import torch
 
 from keisei.config_schema import (
     AppConfig,
-    DemoConfig,
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
     ParallelConfig,
     TrainingConfig,
     WandBConfig,
+    DisplayConfig,
 )
 from keisei.core.ppo_agent import PPOAgent
 from keisei.training.model_manager import ModelManager
@@ -109,7 +109,7 @@ def mock_config():
             watch_log_type="all",
             log_model_artifact=False,
         ),
-        demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5),
+        display=DisplayConfig(display_moves=False, turn_tick=0.5),
         parallel=ParallelConfig(
             enabled=False,
             num_workers=4,

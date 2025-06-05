@@ -14,13 +14,13 @@ import pytest
 
 from keisei.config_schema import (
     AppConfig,
-    DemoConfig,
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
     ParallelConfig,
     TrainingConfig,
     WandBConfig,
+    DisplayConfig,
 )
 from keisei.training.session_manager import SessionManager
 from keisei.training.trainer import Trainer
@@ -92,9 +92,9 @@ def mock_app_config():
             watch_log_freq=1000,
             watch_log_type="all",
         ),
-        demo=DemoConfig(
-            enable_demo_mode=False,
-            demo_mode_delay=0.5,
+        display=DisplayConfig(
+            display_moves=False,
+            turn_tick=0.5,
         ),
         parallel=ParallelConfig(
             enabled=False,

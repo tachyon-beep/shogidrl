@@ -103,7 +103,7 @@ class TestEnvManagerSeeding:
     def setup_method(self):
         """Setup test environment."""
         from keisei.config_schema import (
-            DemoConfig,
+            DisplayConfig,
             EnvConfig,
             EvaluationConfig,
             LoggingConfig,
@@ -159,7 +159,7 @@ class TestEnvManagerSeeding:
                 watch_log_freq=1000,
                 watch_log_type="all",
             ),
-            demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5),
+            display=DisplayConfig(display_moves=False, turn_tick=0.5),
         )
 
     def test_env_manager_seeding_integration(self):
@@ -307,7 +307,7 @@ class TestSeedingIntegration:
     def test_full_system_seeding_workflow(self):
         """Test complete seeding workflow from config to game."""
         from keisei.config_schema import (
-            DemoConfig,
+            DisplayConfig,
             EnvConfig,
             EvaluationConfig,
             LoggingConfig,
@@ -363,7 +363,7 @@ class TestSeedingIntegration:
                 watch_log_freq=1000,
                 watch_log_type="all",
             ),
-            demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5),
+            display=DisplayConfig(display_moves=False, turn_tick=0.5),
         )
         env_manager = EnvManager(config=config)
 
@@ -383,7 +383,7 @@ class TestSeedingIntegration:
     def test_seeding_with_real_training_components(self):
         """Test seeding works with actual training components."""
         from keisei.config_schema import (
-            DemoConfig,
+            DisplayConfig,
             EnvConfig,
             EvaluationConfig,
             LoggingConfig,
@@ -439,7 +439,7 @@ class TestSeedingIntegration:
                 watch_log_freq=1000,
                 watch_log_type="all",
             ),
-            demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5),
+            display=DisplayConfig(display_moves=False, turn_tick=0.5),
         )
         env_manager = EnvManager(config=config)
 

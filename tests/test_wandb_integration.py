@@ -15,13 +15,13 @@ import pytest
 import wandb
 from keisei.config_schema import (
     AppConfig,
-    DemoConfig,
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
     ParallelConfig,
     TrainingConfig,
     WandBConfig,
+    DisplayConfig,
 )
 from keisei.training.session_manager import SessionManager
 from keisei.training.trainer import Trainer
@@ -116,7 +116,7 @@ def make_test_config(**overrides) -> AppConfig:
         log_model_artifact=False,
     )
 
-    demo = DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0)
+    display = DisplayConfig(display_moves=False, turn_tick=0.0)
 
     return AppConfig(
         parallel=ParallelConfig(
@@ -134,7 +134,7 @@ def make_test_config(**overrides) -> AppConfig:
         evaluation=evaluation,
         logging=logging,
         wandb=wandb,
-        demo=demo,
+        display=display,
     )
 
 
