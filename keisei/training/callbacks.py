@@ -203,7 +203,12 @@ class EvaluationCallback(Callback):
                             )[:3],
                         }
                         trainer.evaluation_elo_snapshot = snapshot
-                    except Exception:  # noqa: BLE001
+                    except Exception as e:  # noqa: BLE001
+                        if trainer.log_both is not None:
+                            trainer.log_both(
+                                f"[ERROR] Failed to update Elo registry: {type(e).__name__}: {e}",
+                                also_to_wandb=True,
+                            )
                         trainer.evaluation_elo_snapshot = None
             else:  # if execute_full_evaluation_run is None
                 current_model.train()  # Ensure model is set back to train mode
