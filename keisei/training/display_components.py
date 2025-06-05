@@ -5,8 +5,6 @@ from __future__ import annotations
 from typing import Protocol, Optional, List, Sequence
 from wcwidth import wcswidth
 
-from wcwidth import wcswidth
-
 from keisei.utils.unified_logger import log_error_to_stderr
 
 from rich.console import RenderableType, Group
@@ -92,7 +90,10 @@ class ShogiBoard:
                 "+R",
                 ".",
             ]
-            cell_width = max(wcswidth(sym) for sym in reference_symbols)
+        
+        # Handle case where wcswidth returns None
+        widths = [wcswidth(sym) or len(sym) for sym in reference_symbols]
+        cell_width = max(widths)
 
         start_padding = cell_width - 1 if self.use_unicode else cell_width
         header = " " * start_padding + " ".join(
@@ -101,7 +102,8 @@ class ShogiBoard:
         lines: List[str] = [header]
 
         def pad(sym: str) -> str:
-            padding = cell_width - wcswidth(sym)
+            width = wcswidth(sym) or len(sym)
+            padding = cell_width - width
             return sym + (" " * padding)
 
         for r_idx, row in enumerate(board_state.board):
