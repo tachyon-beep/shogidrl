@@ -74,7 +74,6 @@ class ShogiBoard:
                 "竜",
                 "・",
             ]
-            cell_width = max(wcswidth(sym) for sym in reference_symbols)
         else:
             reference_symbols = [
                 "P",
