@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Protocol, Optional, List, Sequence
+from wcwidth import wcswidth
 
 from keisei.utils.unified_logger import log_error_to_stderr
 
@@ -54,10 +55,13 @@ class ShogiBoard:
 
     def _generate_ascii_board(self, board_state) -> str:
         lines: List[str] = ["  9 8 7 6 5 4 3 2 1"]
+        cell_width = 2 if self.use_unicode else 1
         for r_idx, row in enumerate(board_state.board):
             line_parts: List[str] = [f"{9 - r_idx} "]
             for piece in reversed(row):
-                line_parts.append(f"{self._piece_to_symbol(piece)} ")
+                symbol = self._piece_to_symbol(piece)
+                padding = max(0, cell_width - wcswidth(symbol))
+                line_parts.append(symbol + " " * (padding + 1))
             lines.append("".join(line_parts))
         return "\n".join(lines)
 
