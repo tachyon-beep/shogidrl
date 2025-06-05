@@ -1,11 +1,13 @@
 from keisei.training.metrics_manager import MetricsManager
-import time
+from unittest.mock import patch
 
 
 def test_log_episode_metrics_and_rates():
     mm = MetricsManager(history_size=10)
     mm.log_episode_metrics(40, 40, "win")
-    time.sleep(0.01)
+    with patch("time.time") as mock_time:
+        mock_time.side_effect = [1000, 1000.01]  # Simulate time progression
+        mm.log_episode_metrics(30, 30, "loss")
     mm.log_episode_metrics(30, 30, "loss")
     rates = mm.get_win_loss_draw_rates(window_size=2)
     assert rates["win"] == 0.5
