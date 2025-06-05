@@ -13,6 +13,8 @@ def test_display_config_defaults():
     assert config.enable_board_display is True
     assert config.sparkline_width == 15
     assert config.elo_initial_rating == 1500.0
+    assert config.show_moves_trend is True
+    assert config.show_completion_rate is True
 
 
 def test_metrics_history_trimming():
