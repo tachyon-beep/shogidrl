@@ -1,6 +1,7 @@
 from keisei.config_schema import DisplayConfig
 from keisei.training.adaptive_display import AdaptiveDisplayManager
 from keisei.training.display_components import Sparkline, ShogiBoard
+from rich.console import Group
 from keisei.training.elo_rating import EloRatingSystem
 from keisei.training.metrics_manager import MetricsHistory
 from keisei.shogi.shogi_core_definitions import Color
@@ -62,3 +63,16 @@ def test_shogi_board_basic_render():
     board = ShogiBoard()
     panel = board.render(DummyBoard())
     assert panel.title == "Current Position"
+
+
+def test_shogi_board_render_with_moves():
+    board = ShogiBoard(show_moves=True, max_moves=2)
+    move_history = [(1, 2, 3, 4, 5), (2, 3, 4, 5, 6), (3, 4, 5, 6, 7)]
+
+    class DummyMapper:
+        def shogi_move_to_usi(self, mv):
+            return "".join(str(x) for x in mv)
+
+    group = board.render(DummyBoard(), move_history, DummyMapper())
+    assert isinstance(group, Group)
+    assert "Recent Moves" in group.renderables[1].title
