@@ -1,5 +1,6 @@
 from keisei.config_schema import DisplayConfig
 from keisei.training.metrics_manager import MetricsHistory
+from keisei.shogi.shogi_core_definitions import Color
 
 
 def test_display_config_defaults():
@@ -22,3 +23,19 @@ def test_metrics_history_trimming():
         })
     assert len(history.learning_rates) == 3
     assert len(history.policy_losses) == 3
+
+from keisei.training.elo_rating import EloRatingSystem
+from keisei.training.display_components import Sparkline
+
+
+def test_elo_rating_updates():
+    elo = EloRatingSystem()
+    initial = elo.black_rating
+    elo.update_ratings(Color.BLACK)
+    assert elo.black_rating > initial
+
+
+def test_sparkline_generation():
+    spark = Sparkline(width=5)
+    s = spark.generate([1, 2, 3, 4, 5])
+    assert len(s) == 5

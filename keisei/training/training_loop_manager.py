@@ -6,6 +6,7 @@ import time
 from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 
 import torch.nn as nn
+from keisei.shogi.shogi_core_definitions import Color
 
 from keisei.utils.unified_logger import log_info_to_stderr
 
@@ -313,14 +314,14 @@ class TrainingLoopManager:
                 )
             )
 
-            if episode_winner_color == "black":
-                self.trainer.metrics_manager.black_wins += 1
-            elif episode_winner_color == "white":
-                self.trainer.metrics_manager.white_wins += 1
-            elif episode_winner_color is None:
-                self.trainer.metrics_manager.draws += 1
-
-            self.trainer.metrics_manager.total_episodes_completed += 1
+            winner_color_enum = (
+                Color.BLACK
+                if episode_winner_color == "black"
+                else Color.WHITE
+                if episode_winner_color == "white"
+                else None
+            )
+            self.trainer.metrics_manager.update_episode_stats(winner_color_enum)
 
             self._log_episode_metrics(updated_episode_state)
             return new_episode_state_after_end
