@@ -82,6 +82,7 @@ class StepManager:
         self.policy_mapper = policy_mapper
         self.experience_buffer = experience_buffer
         self.device = torch.device(config.env.device)
+        self.move_history: List[Tuple] = []
 
     def execute_step(
         self,
@@ -416,6 +417,7 @@ class StepManager:
             dtype=torch.float32,
             device=self.device,
         ).unsqueeze(0)
+        self.move_history.clear()
 
         return EpisodeState(
             current_obs=reset_obs,
@@ -512,6 +514,7 @@ class StepManager:
             None,  # wandb_data
             "info",  # log_level
         )
+        self.move_history.append(selected_move)
 
         # Add delay for easier observation
         demo_delay = self.config.demo.demo_mode_delay

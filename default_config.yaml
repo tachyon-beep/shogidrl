@@ -190,9 +190,12 @@ evaluation:
   
   # File path for evaluation game logs and results
   log_file_path_eval: "eval_log.txt"
-  
+
   # Enable Weights & Biases logging for evaluation metrics
   wandb_log_eval: false
+  elo_registry_path: null
+  agent_id: null
+  opponent_id: null
 # =============================================================================
 # LOGGING CONFIGURATION (LoggingConfig)
 # =============================================================================
@@ -306,3 +309,5 @@ display:
   elo_k_factor: 32.0                # K-factor for Elo updates
   dashboard_height_ratio: 2         # Relative height for dashboard section
   progress_bar_height: 4            # Height of progress bar section
+  show_text_moves: true             # Display recent moves under board
+  move_list_length: 10              # Number of moves to show
