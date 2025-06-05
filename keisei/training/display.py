@@ -22,6 +22,7 @@ from rich.text import Text
 
 from keisei.config_schema import DisplayConfig
 from .display_components import DisplayComponent, ShogiBoard, Sparkline
+from .adaptive_display import AdaptiveDisplayManager
 
 
 class TrainingDisplay:
@@ -35,6 +36,7 @@ class TrainingDisplay:
         self.board_component: Optional[DisplayComponent] = None
         self.trend_component: Optional[DisplayComponent] = None
         self.elo_component: Optional[DisplayComponent] = None
+        self.using_enhanced_layout: bool = False
 
         if self.display_config.enable_board_display:
             self.board_component = ShogiBoard()
@@ -43,9 +45,41 @@ class TrainingDisplay:
         if self.display_config.enable_elo_ratings:
             self.elo_component = True  # placeholder flag
 
-        self.progress_bar, self.training_task, self.layout, self.log_panel = (
-            self._setup_rich_progress_display()
+        (
+            self.progress_bar,
+            self.training_task,
+            self.layout,
+            self.log_panel,
+        ) = self._setup_rich_progress_display()
+
+    def _create_compact_layout(self, log_panel: Panel, progress_bar: Progress) -> Layout:
+        layout = Layout(name="root")
+        layout.split_column(
+            Layout(name="main_log", ratio=1),
+            Layout(name="progress_display", size=2),
         )
+        layout["main_log"].update(log_panel)
+        layout["progress_display"].update(progress_bar)
+        return layout
+
+    def _create_enhanced_layout(self, log_panel: Panel, progress_bar: Progress) -> Layout:
+        layout = Layout(name="root")
+        layout.split_column(
+            Layout(name="main_log", ratio=1),
+            Layout(name="dashboard", ratio=self.display_config.dashboard_height_ratio),
+            Layout(name="progress_display", size=self.display_config.progress_bar_height),
+        )
+        layout["dashboard"].split_row(
+            Layout(name="board_panel"),
+            Layout(name="trends_panel"),
+            Layout(name="elo_panel"),
+        )
+        layout["board_panel"].update(Panel(Text("..."), title="Shogi Board"))
+        layout["trends_panel"].update(Panel(Text("Collecting data..."), title="Trends"))
+        layout["elo_panel"].update(Panel(Text("Elo pending"), title="Elo Ratings"))
+        layout["main_log"].update(log_panel)
+        layout["progress_display"].update(progress_bar)
+        return layout
 
     def _setup_rich_progress_display(self):
         progress_columns: List[Union[str, ProgressColumn]]
@@ -117,32 +151,14 @@ class TrainingDisplay:
             border_style="bright_green",
             expand=True,
         )
-        layout = Layout(name="root")
-        if self.display_config.enable_enhanced_layout:
-            layout.split_column(
-                Layout(name="main_log", ratio=1),
-                Layout(name="dashboard", ratio=self.display_config.dashboard_height_ratio),
-                Layout(name="progress_display", size=self.display_config.progress_bar_height),
-            )
-            layout["dashboard"].split_row(
-                Layout(name="board_panel"),
-                Layout(name="trends_panel"),
-                Layout(name="elo_panel"),
-            )
-            layout["board_panel"].update(Panel(Text("..."), title="Shogi Board"))
-            layout["trends_panel"].update(
-                Panel(Text("Collecting data..."), title="Trends")
-            )
-            layout["elo_panel"].update(
-                Panel(Text("Elo pending"), title="Elo Ratings")
-            )
+        adaptive = AdaptiveDisplayManager(self.display_config)
+        layout_type = adaptive.choose_layout(self.rich_console)
+        if layout_type == "enhanced":
+            layout = self._create_enhanced_layout(log_panel, progress_bar)
+            self.using_enhanced_layout = True
         else:
-            layout.split_column(
-                Layout(name="main_log", ratio=1),
-                Layout(name="progress_display", size=2),
-            )
-        layout["main_log"].update(log_panel)
-        layout["progress_display"].update(progress_bar)
+            layout = self._create_compact_layout(log_panel, progress_bar)
+            self.using_enhanced_layout = False
         return progress_bar, training_task, layout, log_panel
 
     def update_progress(self, trainer, speed, pending_updates):
@@ -158,7 +174,7 @@ class TrainingDisplay:
             self.log_panel.renderable = updated_panel_content
         else:
             self.log_panel.renderable = Text("")
-        if self.display_config.enable_enhanced_layout:
+        if self.using_enhanced_layout:
             if self.board_component:
                 try:
                     self.layout["board_panel"].update(
