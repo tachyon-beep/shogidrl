@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Tuple
 
 from rich.console import Console
-from rich.layout import Layout
 
 from keisei.config_schema import DisplayConfig
 

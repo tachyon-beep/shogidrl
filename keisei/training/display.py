@@ -2,7 +2,7 @@
 training/display.py: Rich UI management for the Shogi RL trainer.
 """
 
-from typing import Any, Dict, List, Union, Optional
+from typing import List, Union, Optional
 
 from rich.console import Console, Group
 from rich.layout import Layout
@@ -39,7 +39,9 @@ class TrainingDisplay:
         self.using_enhanced_layout: bool = False
 
         if self.display_config.enable_board_display:
-            self.board_component = ShogiBoard()
+            self.board_component = ShogiBoard(
+                use_unicode=self.display_config.board_unicode_pieces
+            )
         if self.display_config.enable_trend_visualization:
             self.trend_component = Sparkline(width=self.display_config.sparkline_width)
         if self.display_config.enable_elo_ratings:
