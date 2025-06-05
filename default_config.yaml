@@ -278,11 +278,6 @@ parallel:
   # Worker i gets seed = base_seed + (i * worker_seed_offset)
   worker_seed_offset: 1000
 
-# =============================================================================
-# DEMO MODE CONFIGURATION (DemoConfig)
-# =============================================================================
-# Settings for demo mode with visual move-by-move display.
-# Used by: StepManager for interactive demonstrations and debugging
 
 # =============================================================================
 # DISPLAY CONFIGURATION (DisplayConfig)
@@ -301,8 +296,8 @@ display:
   elo_k_factor: 32.0                # K-factor for Elo updates
   dashboard_height_ratio: 2         # Relative height for dashboard section
   progress_bar_height: 4            # Height of progress bar section
-  display_moves: false             # Show expanded move log with delays
-  turn_tick: 0.5                   # Delay in seconds between turns
+  display_moves:  true              # Show expanded move log with delays
+  turn_tick: 0.5                    # Delay in seconds between turns
   show_text_moves: true             # Display recent moves under board
   move_list_length: 10              # Number of moves to show
   show_moves_trend: true            # Display moves per game trend
