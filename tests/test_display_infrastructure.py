@@ -39,3 +39,14 @@ def test_sparkline_generation():
     spark = Sparkline(width=5)
     s = spark.generate([1, 2, 3, 4, 5])
     assert len(s) == 5
+from keisei.training.adaptive_display import AdaptiveDisplayManager, TerminalInfo
+from rich.console import Console
+
+
+def test_adaptive_layout_choice():
+    cfg = DisplayConfig()
+    manager = AdaptiveDisplayManager(cfg)
+    console = Console(width=200, height=50, color_system=None)
+    assert manager.choose_layout(console) == "enhanced"
+    console_small = Console(width=80, height=20, color_system=None)
+    assert manager.choose_layout(console_small) == "compact"
