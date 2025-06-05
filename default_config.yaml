@@ -288,3 +288,21 @@ demo:
   # Delay in seconds between moves in demo mode
   # Allows human observation of the game progression
   demo_mode_delay: 0.5
+
+# =============================================================================
+# DISPLAY CONFIGURATION (DisplayConfig)
+# =============================================================================
+# Settings controlling optional TUI enhancements.
+display:
+  enable_board_display: true        # Show ASCII board panel
+  enable_trend_visualization: true  # Show sparkline metric trends
+  enable_elo_ratings: true          # Display Elo rating information
+  enable_enhanced_layout: true      # Use multi-panel dashboard layout
+  board_unicode_pieces: true        # Use Unicode pieces for board rendering
+  board_highlight_last_move: true   # Highlight the last move made
+  sparkline_width: 15               # Width of sparkline graphs
+  trend_history_length: 100         # Number of data points to keep
+  elo_initial_rating: 1500.0        # Starting Elo rating
+  elo_k_factor: 32.0                # K-factor for Elo updates
+  dashboard_height_ratio: 2         # Relative height for dashboard section
+  progress_bar_height: 4            # Height of progress bar section

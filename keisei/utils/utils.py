@@ -122,7 +122,16 @@ def load_config(
         base_config_path
     ):
         override_data = _load_yaml_or_json(config_path)
-        top_keys = {"env", "training", "evaluation", "logging", "wandb", "demo"}
+        top_keys = {
+            "env",
+            "training",
+            "evaluation",
+            "logging",
+            "wandb",
+            "demo",
+            "parallel",
+            "display",
+        }
         if not (
             isinstance(override_data, dict) and top_keys & set(override_data.keys())
         ):
