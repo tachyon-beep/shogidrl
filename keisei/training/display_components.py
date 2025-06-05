@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Protocol, Optional, List, Sequence
+from typing import Protocol, Optional, List, Sequence, Dict
+from collections import deque
 from wcwidth import wcswidth
 
 from keisei.utils.unified_logger import log_error_to_stderr
@@ -197,3 +198,46 @@ class Sparkline:
             else "".join(["─" for _ in range(self.width)])
         )
         return Panel(Text(f"{title}: {spark}", style="cyan"), border_style="cyan")
+
+
+class RollingAverageCalculator:
+    """Compute a rolling average and simple trend direction."""
+
+    def __init__(self, window_size: int) -> None:
+        self.window_size = window_size
+        self.values: deque[float] = deque(maxlen=window_size)
+
+    def add_value(self, value: float) -> float:
+        self.values.append(value)
+        return sum(self.values) / len(self.values)
+
+    def get_trend_direction(self) -> str:
+        if len(self.values) < 2:
+            return "→"
+        if self.values[-1] > self.values[0]:
+            return "↑"
+        if self.values[-1] < self.values[0]:
+            return "↓"
+        return "→"
+
+
+class MultiMetricSparkline:
+    """Render multiple metric sparklines in one panel."""
+
+    def __init__(self, width: int, metrics: List[str]) -> None:
+        self.width = width
+        self.metrics = metrics
+        self.data: Dict[str, List[float]] = {m: [] for m in metrics}
+        self.spark = Sparkline(width=width)
+
+    def add_data_point(self, metric_name: str, value: float) -> None:
+        if metric_name in self.data:
+            self.data[metric_name].append(value)
+
+    def render_with_trendlines(self) -> RenderableType:
+        lines: List[str] = []
+        for name in self.metrics:
+            values = self.data.get(name, [])
+            spark = self.spark.generate(values[-self.width :])
+            lines.append(f"{name}: {spark}")
+        return Panel(Text("\n".join(lines), style="cyan"), border_style="cyan")

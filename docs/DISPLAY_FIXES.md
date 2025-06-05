@@ -275,7 +275,7 @@ class DisplayConfig:
 - Uses existing Rich, NumPy, and dataclasses infrastructure
 
 ### Development Environment:
-- Python 3.8+ (current project requirement)
+- Python 3.12+ (current project requirement)
 - Rich terminal library (already in requirements.txt)
 - Pytest for testing (already in requirements-dev.txt)
 
