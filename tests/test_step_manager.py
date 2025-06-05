@@ -427,16 +427,14 @@ class TestExecuteStep:
                 mock_format.assert_called_once()
                 mock_sleep.assert_called_once_with(0.1)
 
-                # Check that demo move was logged
-                demo_log_found = False
-                for call in mock_logger.call_args_list:
-                    if (
-                        "Move" in call[0][0]
-                        and "TestPlayer played formatted_move" in call[0][0]
-                    ):
-                        demo_log_found = True
-                        break
-                assert demo_log_found
+                # Demo moves should not be logged to logger
+                mock_logger.assert_not_called()
+
+                # Move should be recorded internally for display
+                expected_prefix = (
+                    f"Move {sample_episode_state.episode_length + 1}: TestPlayer played"
+                )
+                assert step_manager.move_log[-1].startswith(expected_prefix)
 
 
 class TestHandleEpisodeEnd:
