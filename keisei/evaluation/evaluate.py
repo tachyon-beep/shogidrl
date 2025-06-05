@@ -5,6 +5,7 @@ evaluate.py: Main script for evaluating PPO Shogi agents.
 import argparse
 import os
 import random
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 import numpy as np
@@ -15,6 +16,7 @@ import wandb  # Ensure wandb is imported for W&B logging
 from keisei.core.ppo_agent import PPOAgent
 from keisei.evaluation.loop import ResultsDict, run_evaluation_loop
 from keisei.utils import BaseOpponent, EvaluationLogger, PolicyOutputMapper
+from keisei.evaluation.elo_registry import EloRegistry
 from keisei.utils.agent_loading import initialize_opponent, load_evaluation_agent
 from keisei.utils.utils import load_config
 
@@ -49,6 +51,9 @@ class Evaluator:
         wandb_extra_config: Optional[dict] = None,
         wandb_reinit: Optional[bool] = None,
         wandb_group: Optional[str] = None,
+        elo_registry_path: Optional[str] = None,
+        agent_id: Optional[str] = None,
+        opponent_id: Optional[str] = None,
     ):
         """
         Initialize the Evaluator with all configuration and dependencies.
@@ -70,11 +75,15 @@ class Evaluator:
         self.wandb_extra_config = wandb_extra_config
         self.wandb_reinit = wandb_reinit
         self.wandb_group = wandb_group
+        self.elo_registry_path = elo_registry_path
+        self.agent_id = agent_id
+        self.opponent_id = opponent_id
         self._wandb_active: bool = False
         self._wandb_run: Optional[Any] = None
         self._logger: Optional[EvaluationLogger] = None
         self._agent: Optional[PPOAgent] = None
         self._opponent: Optional[Union[PPOAgent, BaseOpponent]] = None
+        self._elo_registry: Optional[EloRegistry] = None
 
     def _setup(self) -> None:
         """
@@ -154,6 +163,12 @@ class Evaluator:
             )
         except (OSError, ValueError, TypeError) as e:
             raise RuntimeError(f"Failed to initialize EvaluationLogger: {e}") from e
+
+        if self.elo_registry_path:
+            try:
+                self._elo_registry = EloRegistry(Path(self.elo_registry_path))
+            except Exception as e:  # noqa: BLE001
+                print(f"[Evaluator] Error loading Elo registry: {e}")
         # Agent and opponent
         # Load input_channels from config
         try:
@@ -235,6 +250,16 @@ class Evaluator:
                 print(
                     f"[Evaluator] Error logging final W&B metrics: {e}"
                 )  # Added print
+
+        if self._elo_registry and results_summary is not None:
+            if self.agent_id and self.opponent_id:
+                try:
+                    self._elo_registry.update_ratings(
+                        self.agent_id, self.opponent_id, results_summary["game_results"]
+                    )
+                    self._elo_registry.save()
+                except Exception as e:  # noqa: BLE001
+                    print(f"[Evaluator] Error updating Elo registry: {e}")
         if self._wandb_active and self._wandb_run:
             try:
                 self._wandb_run.finish()  # type: ignore
@@ -263,6 +288,9 @@ def execute_full_evaluation_run(
     wandb_extra_config: Optional[dict] = None,
     wandb_reinit: Optional[bool] = None,
     wandb_group: Optional[str] = None,
+    elo_registry_path: Optional[str] = None,
+    agent_id: Optional[str] = None,
+    opponent_id: Optional[str] = None,
 ) -> Optional[ResultsDict]:
     """
     Legacy-compatible wrapper for Evaluator class. Runs a full evaluation and returns the results dict.
@@ -285,6 +313,9 @@ def execute_full_evaluation_run(
         wandb_extra_config=wandb_extra_config,
         wandb_reinit=wandb_reinit,
         wandb_group=wandb_group,
+        elo_registry_path=elo_registry_path,
+        agent_id=agent_id,
+        opponent_id=opponent_id,
     )
     return evaluator.evaluate()
 
@@ -311,6 +342,9 @@ def main_cli():
     parser.add_argument("--logger_also_stdout", action="store_true")
     parser.add_argument("--wandb_reinit", action="store_true")
     parser.add_argument("--wandb_group", default=None)
+    parser.add_argument("--elo_registry_path", default=None)
+    parser.add_argument("--agent_id", default=None)
+    parser.add_argument("--opponent_id", default=None)
     args = parser.parse_args()
 
     # Minimal PolicyOutputMapper for CLI use
@@ -333,5 +367,8 @@ def main_cli():
         logger_also_stdout=args.logger_also_stdout,
         wandb_reinit=args.wandb_reinit,
         wandb_group=args.wandb_group,
+        elo_registry_path=args.elo_registry_path,
+        agent_id=args.agent_id,
+        opponent_id=args.opponent_id,
     )
     print("Evaluation results:", results)

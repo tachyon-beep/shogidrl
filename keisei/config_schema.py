@@ -139,6 +139,15 @@ class EvaluationConfig(BaseModel):
     wandb_log_eval: bool = Field(
         False, description="Enable Weights & Biases logging for evaluation."
     )
+    elo_registry_path: Optional[str] = Field(
+        None, description="Path to Elo registry JSON file"
+    )
+    agent_id: Optional[str] = Field(
+        None, description="Identifier for the evaluated model"
+    )
+    opponent_id: Optional[str] = Field(
+        None, description="Identifier for the opponent model"
+    )
 
     @field_validator("evaluation_interval_timesteps")
     # pylint: disable=no-self-argument
@@ -258,6 +267,12 @@ class DisplayConfig(BaseModel):
     elo_k_factor: float = Field(32.0, description="Elo K-factor")
     dashboard_height_ratio: int = Field(2, description="Layout ratio for dashboard")
     progress_bar_height: int = Field(4, description="Progress bar height")
+    show_text_moves: bool = Field(
+        True, description="Display recent moves under the board when demo mode is active"
+    )
+    move_list_length: int = Field(
+        10, description="Number of recent moves to display"
+    )
 
 
 class AppConfig(BaseModel):
