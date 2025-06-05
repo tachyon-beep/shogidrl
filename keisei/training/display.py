@@ -21,7 +21,7 @@ from rich.progress import (
 from rich.text import Text
 
 from keisei.config_schema import DisplayConfig
-from .display_components import DisplayComponent, ShogiBoard, Sparkline
+from .display_components import ShogiBoard, Sparkline
 from .adaptive_display import AdaptiveDisplayManager
 
 
@@ -33,9 +33,9 @@ class TrainingDisplay:
         self.rich_console = rich_console
         self.rich_log_messages = trainer.rich_log_messages
 
-        self.board_component: Optional[DisplayComponent] = None
-        self.trend_component: Optional[DisplayComponent] = None
-        self.elo_component: Optional[DisplayComponent] = None
+        self.board_component: Optional[ShogiBoard] = None
+        self.trend_component: Optional[Sparkline] = None
+        self.elo_component_enabled: bool = False
         self.using_enhanced_layout: bool = False
 
         if self.display_config.enable_board_display:
@@ -45,7 +45,7 @@ class TrainingDisplay:
         if self.display_config.enable_trend_visualization:
             self.trend_component = Sparkline(width=self.display_config.sparkline_width)
         if self.display_config.enable_elo_ratings:
-            self.elo_component = True  # placeholder flag
+            self.elo_component_enabled = True
 
         (
             self.progress_bar,
@@ -195,7 +195,7 @@ class TrainingDisplay:
                 self.layout["trends_panel"].update(
                     Panel(Text(trend_text, style="cyan"), border_style="cyan", title="Metric Trends")
                 )
-            if self.elo_component:
+            if self.elo_component_enabled:
                 elo = trainer.metrics_manager.elo_system
                 lines = [
                     f"Black: {elo.black_rating:.0f}",
