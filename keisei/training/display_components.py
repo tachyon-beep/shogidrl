@@ -74,6 +74,7 @@ class ShogiBoard:
                 "竜",
                 "・",
             ]
+            cell_width = max(wcswidth(sym) for sym in reference_symbols)
         else:
             reference_symbols = [
                 "P",
@@ -149,8 +150,10 @@ class Sparkline:
         self.chars = "▁▂▃▄▅▆▇█"
 
     def generate(self, values: Sequence[float]) -> str:
+        if not values:
+            return " " * self.width
         if len(values) < 2:
-            return "".join(["─" for _ in range(self.width)])
+            return "─" * self.width
 
         min_v = min(values)
         max_v = max(values)
