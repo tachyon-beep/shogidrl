@@ -108,6 +108,9 @@ class PPOAgent:
             schedule_kwargs=config.training.lr_schedule_kwargs,
         )
 
+        # Metrics exposed for UI instrumentation
+        self.last_gradient_norm: float = 0.0
+
     def _calculate_total_scheduler_steps(self, config: AppConfig) -> int:
         """Calculate total number of scheduler steps based on configuration."""
         if config.training.lr_schedule_step_on == "epoch":
@@ -303,10 +306,7 @@ class PPOAgent:
                 legal_masks_minibatch = legal_masks_batch[minibatch_indices]
 
                 # Apply observation normalization if scaler provided
-                if (
-                    self.scaler is not None
-                    and not isinstance(self.scaler, GradScaler)
-                ):
+                if self.scaler is not None and not isinstance(self.scaler, GradScaler):
                     if hasattr(self.scaler, "transform"):
                         obs_minibatch = self.scaler.transform(obs_minibatch)
                     else:
@@ -388,6 +388,13 @@ class PPOAgent:
                         self.model.parameters(),
                         max_norm=self.gradient_clip_max_norm,
                     )
+                    # Compute gradient norm after unscaling and clipping
+                    total = 0.0
+                    for param in self.model.parameters():
+                        if param.grad is not None:
+                            norm_val = param.grad.detach().data.norm(2).item()
+                            total += norm_val * norm_val
+                    self.last_gradient_norm = total**0.5
                     # Update with scaler
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
@@ -398,6 +405,12 @@ class PPOAgent:
                         self.model.parameters(),
                         max_norm=self.gradient_clip_max_norm,
                     )
+                    total = 0.0
+                    for param in self.model.parameters():
+                        if param.grad is not None:
+                            norm_val = param.grad.detach().data.norm(2).item()
+                            total += norm_val * norm_val
+                    self.last_gradient_norm = total**0.5
                     self.optimizer.step()
 
                 # Step scheduler on minibatch update if configured
