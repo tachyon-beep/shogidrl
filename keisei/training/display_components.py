@@ -129,7 +129,7 @@ class ShogiBoard:
                 colored = self._colorize(symbol, piece) if piece else symbol
                 padded = pad(colored)
                 line_parts.append(padded + " ")
-        lines.append("".join(line_parts).rstrip())
+            lines.append("".join(line_parts).rstrip())
         return "\n".join(lines)
 
     def _move_to_usi(self, move_tuple, policy_mapper) -> str:
