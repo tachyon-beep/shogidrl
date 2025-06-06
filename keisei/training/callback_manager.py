@@ -34,8 +34,16 @@ class CallbackManager:
         """
         callback_list: List[callbacks.Callback] = []
 
-        # Checkpoint callback
+        # Align checkpoint interval with steps_per_epoch to ensure callbacks fire
         checkpoint_interval = self.config.training.checkpoint_interval_timesteps
+        steps_per_epoch = self.config.training.steps_per_epoch
+        if checkpoint_interval % steps_per_epoch != 0:
+            aligned = ((checkpoint_interval // steps_per_epoch) + 1) * steps_per_epoch
+            print(
+                f"[INFO] Adjusting checkpoint_interval_timesteps from {checkpoint_interval} to {aligned} to align with steps_per_epoch {steps_per_epoch}."
+            )
+            checkpoint_interval = aligned
+
         callback_list.append(
             callbacks.CheckpointCallback(checkpoint_interval, self.model_dir)
         )
@@ -47,6 +55,14 @@ class CallbackManager:
             if eval_cfg and hasattr(eval_cfg, "evaluation_interval_timesteps")
             else getattr(self.config.training, "evaluation_interval_timesteps", 1000)
         )
+
+        if eval_interval % steps_per_epoch != 0:
+            aligned = ((eval_interval // steps_per_epoch) + 1) * steps_per_epoch
+            print(
+                f"[INFO] Adjusting evaluation_interval_timesteps from {eval_interval} to {aligned} to align with steps_per_epoch {steps_per_epoch}."
+            )
+            eval_interval = aligned
+
         callback_list.append(callbacks.EvaluationCallback(eval_cfg, eval_interval))
 
         self.callbacks = callback_list
