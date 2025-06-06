@@ -47,11 +47,11 @@ class ShogiBoard:
                 "飛",
                 "王",
                 "と",
-                "成香",
-                "成桂",
-                "成銀",
+                "杏",
+                "圭",
+                "全",
                 "馬",
-                "竜",
+                "龍",
                 "・",
             ]
         else:
@@ -91,11 +91,11 @@ class ShogiBoard:
                 "ROOK": "飛",
                 "KING": "王",
                 "PROMOTED_PAWN": "と",
-                "PROMOTED_LANCE": "成香",
-                "PROMOTED_KNIGHT": "成桂",
-                "PROMOTED_SILVER": "成銀",
+                "PROMOTED_LANCE": "杏",
+                "PROMOTED_KNIGHT": "圭",
+                "PROMOTED_SILVER": "全",
                 "PROMOTED_BISHOP": "馬",
-                "PROMOTED_ROOK": "竜",
+                "PROMOTED_ROOK": "龍",
             }
             return symbols.get(piece.type.name, "?")
         return piece.symbol()
@@ -119,10 +119,21 @@ class ShogiBoard:
         light_bg = Style(bgcolor="#EEC28A")
         dark_bg = Style(bgcolor="#C19A55")
 
-        table = Table(show_header=False, box=None, pad_edge=False, expand=False)
-        table.add_column("", width=self.cell_width, no_wrap=True)
+        table = Table(
+            show_header=False,
+            box=None,
+            pad_edge=False,
+            padding=(0, 0),
+            expand=False,
+        )
+        table.add_column("", width=self.cell_width, no_wrap=True, justify="center")
         for file_num in range(9, 0, -1):
-            table.add_column(str(file_num), width=self.cell_width, justify="center", no_wrap=True)
+            table.add_column(
+                str(file_num),
+                width=self.cell_width,
+                justify="center",
+                no_wrap=True,
+            )
 
         file_labels = [""] + [str(n) for n in range(9, 0, -1)]
         table.add_row(*[Text(lbl, style="bold") for lbl in file_labels])
