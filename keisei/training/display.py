@@ -97,26 +97,35 @@ class TrainingDisplay:
             Layout(name="progress_display", size=self.display_config.progress_bar_height),
         )
 
+        # --- Correct three-column layout with fixed board height ---
         layout["dashboard"].split_row(
-            Layout(name="left_panel", ratio=2),
-            Layout(name="right_panel", ratio=3)
+            Layout(name="left_column", ratio=1),
+            Layout(name="middle_column", ratio=1),
+            Layout(name="right_column", ratio=1),
         )
-        layout["left_panel"].split_column(
-            Layout(name="board_panel", ratio=1),
-            Layout(name="moves_panel", ratio=1)
+
+        layout["left_column"].split_column(
+            Layout(name="board_panel", size=13),
+            Layout(name="moves_panel"),
         )
-        layout["right_panel"].split_column(
-            Layout(name="trends_panel", ratio=2),
+
+        layout["middle_column"].split_column(
+            Layout(name="trends_panel", ratio=1),
             Layout(name="stats_panel", ratio=1),
-            Layout(name="evolution_panel", ratio=2),
-            Layout(name="elo_panel", size=5)
         )
+
+        layout["right_column"].split_column(
+            Layout(name="evolution_panel", ratio=1),
+            Layout(name="elo_panel", ratio=1),
+        )
+
         layout["board_panel"].update(Panel("...", title="Main Board"))
         layout["moves_panel"].update(Panel("...", title="Recent Moves"))
         layout["trends_panel"].update(Panel("...", title="Metric Trends"))
         layout["stats_panel"].update(Panel("...", title="Game Statistics"))
         layout["evolution_panel"].update(Panel("...", title="Model Evolution"))
         layout["elo_panel"].update(Panel("...", title="Elo Ratings"))
+
         layout["main_log"].update(log_panel)
         layout["progress_display"].update(progress_bar)
         return layout
