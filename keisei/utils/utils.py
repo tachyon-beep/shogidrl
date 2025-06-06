@@ -521,12 +521,12 @@ class TrainingLogger:
             # The Live display will handle the update. We don't print directly here.
         elif (
             self.also_stdout_if_no_rich
-        ):  # Changed condition to use also_stdout_if_no_rich
-            # Fallback to stdout if rich components are not provided and also_stdout_if_no_rich is True
+        ):
+            # Fallback to stdout if rich components are not provided
             try:
-                log_error_to_stderr("TrainingLogger", full_message)
+                log_info_to_stderr("TrainingLogger", full_message)
             except ImportError:
-                log_error_to_stderr("TrainingLogger", full_message)
+                log_info_to_stderr("TrainingLogger", full_message)
 
 
 class EvaluationLogger:

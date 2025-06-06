@@ -80,7 +80,12 @@ class Trainer(CompatibilityMixin):
         self.display_manager = DisplayManager(config, self.log_file_path)
         self.rich_console = self.display_manager.get_console()
         self.rich_log_messages = self.display_manager.get_log_messages()
-        self.logger = TrainingLogger(self.log_file_path, self.rich_console)
+        self.logger = TrainingLogger(
+            self.log_file_path,
+            self.rich_console,
+            self.rich_log_messages,
+            also_stdout=False,
+        )
         self.model_manager = ModelManager(config, args, self.device, self.logger.log)
         self.env_manager = EnvManager(config, self.logger.log)
         self.metrics_manager = MetricsManager(
@@ -300,6 +305,7 @@ class Trainer(CompatibilityMixin):
             self.log_file_path,
             rich_console=self.rich_console,
             rich_log_panel=self.rich_log_messages,
+            also_stdout=False,
         ) as logger:
 
             def log_both_impl(
