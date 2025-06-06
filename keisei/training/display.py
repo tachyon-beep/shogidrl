@@ -219,6 +219,7 @@ class TrainingDisplay:
         ]
         lines = []
         width = self.display_config.sparkline_width
+        LABEL_WIDTH = 16
 
         def vals(lst):
             last = f"{lst[-1]:.4f}" if len(lst) >= 1 else "-"
@@ -227,8 +228,10 @@ class TrainingDisplay:
 
         for name, lst in metrics:
             last, prev = vals(lst)
-            spark = self.trend_component.generate(lst[-width:]) if lst else "-" * width
-            lines.append(f"{name} [{last}] [{prev}] {spark}")
+            spark = (
+                self.trend_component.generate(lst[-width:]) if lst else "-" * width
+            )
+            lines.append(f"{name:<{LABEL_WIDTH}} [{last}] [{prev}] {spark}")
 
         moves = history.win_rates_history
         if moves:
@@ -236,7 +239,7 @@ class TrainingDisplay:
             spark = self.trend_component.generate(recent[-width:])
             last = f"{recent[-1]:.2f}"
             prev = f"{recent[-2]:.2f}" if len(recent) > 1 else "-"
-            lines.append(f"Win Rate B [{last}] [{prev}] {spark}")
+            lines.append(f"{'Win Rate B':<{LABEL_WIDTH}} [{last}] [{prev}] {spark}")
 
         return lines
 
@@ -305,6 +308,7 @@ class TrainingDisplay:
 
                 group_stats: List[RenderableType] = []
                 if multi_panel is not None:
+                    # multi_panel is already Text, no extra wrapping needed
                     group_stats.append(multi_panel)
                 if completion_line:
                     group_stats.append(Text(completion_line, style="green"))
