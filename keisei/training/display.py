@@ -107,7 +107,7 @@ class TrainingDisplay:
         )
 
         layout["left_column"].split_column(
-            Layout(name="board_panel", size=13),
+            Layout(name="board_panel", size=12),  # Set size to 12 for the new Table-based board
             Layout(name="moves_panel"),
         )
 
