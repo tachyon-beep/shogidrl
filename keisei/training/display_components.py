@@ -11,6 +11,7 @@ from keisei.utils.unified_logger import log_error_to_stderr
 from rich.console import RenderableType, Group
 from rich.panel import Panel
 from rich.text import Text
+from rich.layout import Layout
 
 
 class DisplayComponent(Protocol):
@@ -31,12 +32,14 @@ class ShogiBoard:
         max_moves: int = 10,
         indent_spaces: int = 0,
         vertical_offset: int = 0,
+        bottom_padding: int = 0,
     ) -> None:
         self.use_unicode = use_unicode
         self.show_moves = show_moves
         self.max_moves = max_moves
         self.indent_spaces = indent_spaces
         self.vertical_offset = vertical_offset
+        self.bottom_padding = bottom_padding
 
     def _piece_to_symbol(self, piece) -> str:
         if not piece:
@@ -62,6 +65,13 @@ class ShogiBoard:
             base = symbols.get(piece.type.name, "?")
             return base
         return piece.symbol()
+
+    def _colorize(self, symbol: str, piece) -> str:
+        from keisei.shogi.shogi_core_definitions import Color
+
+        if piece.color == Color.BLACK:
+            return f"[bright_red]{symbol}[/bright_red]"
+        return f"[bright_blue]{symbol}[/bright_blue]"
 
     def _generate_ascii_board(self, board_state) -> str:
         if self.use_unicode:
@@ -125,10 +135,12 @@ class ShogiBoard:
             line_parts: List[str] = [indent + row_header]
             for piece in reversed(row):
                 symbol = self._piece_to_symbol(piece)
-
-                line_parts.append(pad(symbol) + " ")
-            lines.append("".join(line_parts).rstrip())
+                colored = self._colorize(symbol, piece) if piece else symbol
+                padded = pad(colored)
+                line_parts.append(padded + " ")
+        lines.append("".join(line_parts).rstrip())
         lines = ["" for _ in range(self.vertical_offset)] + lines
+        lines += ["" for _ in range(self.bottom_padding)]
         return "\n".join(lines)
 
     def _move_to_usi(self, move_tuple, policy_mapper) -> str:
@@ -152,25 +164,32 @@ class ShogiBoard:
 
         ascii_board = self._generate_ascii_board(board_state)
         board_panel = Panel(
-            Text(ascii_board), title="Current Position", border_style="blue"
+            Text.from_markup(ascii_board),
+            title="Main Board",
+            border_style="blue",
         )
 
         if not self.show_moves:
             return board_panel
 
         if move_strings:
-            indent = " " * self.indent_spaces
+            indent = " "
             last_msgs = move_strings[-self.max_moves :]
             formatted = [f"{indent}{msg}" for msg in last_msgs]
             moves_panel = Panel(
                 Text("\n".join(formatted)), border_style="yellow", title="Recent Moves"
             )
-            return Group(board_panel, moves_panel)
+            container = Layout()
+            container.split_column(
+                Layout(board_panel, size=len(ascii_board.splitlines()) + 2),
+                Layout(moves_panel, ratio=1),
+            )
+            return container
 
         if not move_history or policy_mapper is None:
             return board_panel
 
-        indent = " " * self.indent_spaces
+        indent = " "
         last_moves = move_history[-self.max_moves :]
         lines = [self._move_to_usi(mv, policy_mapper) for mv in last_moves]
         start_idx = len(move_history) - len(last_moves) + 1
@@ -178,7 +197,12 @@ class ShogiBoard:
         moves_panel = Panel(
             Text("\n".join(formatted)), border_style="yellow", title="Recent Moves"
         )
-        return Group(board_panel, moves_panel)
+        container = Layout()
+        container.split_column(
+            Layout(board_panel, size=len(ascii_board.splitlines()) + 2),
+            Layout(moves_panel, ratio=1),
+        )
+        return container
 
 
 class Sparkline:
