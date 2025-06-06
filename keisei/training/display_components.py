@@ -238,4 +238,4 @@ class MultiMetricSparkline:
             values = self.data.get(name, [])
             spark = self.spark.generate(values[-self.width :])
             lines.append(f"{name}: {spark}")
-        return Panel(Text("\n".join(lines), style="cyan"), border_style="cyan")
+        return Text("\n".join(lines), style="cyan")
