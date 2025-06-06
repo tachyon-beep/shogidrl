@@ -23,7 +23,10 @@ from rich.text import Text
 from keisei.config_schema import DisplayConfig
 from .display_components import (
     ShogiBoard,
+    RecentMovesPanel,
     Sparkline,
+    MultiMetricSparkline,
+    RollingAverageCalculator,
 )
 from .adaptive_display import AdaptiveDisplayManager
 
@@ -37,7 +40,10 @@ class TrainingDisplay:
         self.rich_log_messages = trainer.rich_log_messages
 
         self.board_component: Optional[ShogiBoard] = None
+        self.moves_component: Optional[RecentMovesPanel] = None
         self.trend_component: Optional[Sparkline] = None
+        self.multi_trend_component: Optional[MultiMetricSparkline] = None
+        self.completion_rate_calc: Optional[RollingAverageCalculator] = None
         self.elo_component_enabled: bool = False
         self.using_enhanced_layout: bool = False
 
@@ -46,12 +52,19 @@ class TrainingDisplay:
                 use_unicode=self.display_config.board_unicode_pieces,
                 show_moves=True,
                 max_moves=self.display_config.move_list_length,
-                indent_spaces=0,
-                vertical_offset=2,
-                bottom_padding=2,
+            )
+            self.moves_component = RecentMovesPanel(
+                max_moves=self.display_config.move_list_length
             )
         if self.display_config.enable_trend_visualization:
             self.trend_component = Sparkline(width=self.display_config.sparkline_width)
+            self.multi_trend_component = MultiMetricSparkline(
+                width=self.display_config.sparkline_width,
+                metrics=["Moves", "Turns"],
+            )
+            self.completion_rate_calc = RollingAverageCalculator(
+                window_size=self.display_config.metrics_window_size
+            )
         if self.display_config.enable_elo_ratings:
             self.elo_component_enabled = True
 
@@ -81,23 +94,29 @@ class TrainingDisplay:
         layout.split_column(
             Layout(name="main_log", ratio=1),
             Layout(name="dashboard", ratio=self.display_config.dashboard_height_ratio),
-            Layout(
-                name="progress_display", size=self.display_config.progress_bar_height
-            ),
+            Layout(name="progress_display", size=self.display_config.progress_bar_height),
         )
+
         layout["dashboard"].split_row(
-            Layout(name="board_panel"),
-            Layout(name="right_panel"),
-            Layout(name="elo_panel"),
+            Layout(name="left_panel", ratio=2),
+            Layout(name="right_panel", ratio=3)
+        )
+        layout["left_panel"].split_column(
+            Layout(name="board_panel", ratio=1),
+            Layout(name="moves_panel", ratio=1)
         )
         layout["right_panel"].split_column(
-            Layout(name="trends_panel"),
-            Layout(name="evolution_panel"),
+            Layout(name="trends_panel", ratio=2),
+            Layout(name="stats_panel", ratio=1),
+            Layout(name="evolution_panel", ratio=2),
+            Layout(name="elo_panel", size=5)
         )
-        layout["board_panel"].update(Panel(Text("..."), title="Main Board"))
-        layout["trends_panel"].update(Panel(Text("Collecting data..."), title="Metric Trends"))
-        layout["evolution_panel"].update(Panel(Text("..."), title="Model Evolution"))
-        layout["elo_panel"].update(Panel(Text("Elo pending"), title="Elo Ratings"))
+        layout["board_panel"].update(Panel("...", title="Main Board"))
+        layout["moves_panel"].update(Panel("...", title="Recent Moves"))
+        layout["trends_panel"].update(Panel("...", title="Metric Trends"))
+        layout["stats_panel"].update(Panel("...", title="Game Statistics"))
+        layout["evolution_panel"].update(Panel("...", title="Model Evolution"))
+        layout["elo_panel"].update(Panel("...", title="Elo Ratings"))
         layout["main_log"].update(log_panel)
         layout["progress_display"].update(progress_bar)
         return layout
@@ -217,7 +236,7 @@ class TrainingDisplay:
         update_data.update(pending_updates)
         self.progress_bar.update(self.training_task, **update_data)
 
-    def update_log_panel(self, trainer):
+    def refresh_dashboard_panels(self, trainer):
         visible_rows = max(0, self.rich_console.size.height - 6)
         if trainer.rich_log_messages:
             display_messages = trainer.rich_log_messages[-visible_rows:]
@@ -229,55 +248,31 @@ class TrainingDisplay:
             if self.board_component:
                 try:
                     self.layout["board_panel"].update(
-                        self.board_component.render(
-                            trainer.game,
-                            (
-                                trainer.step_manager.move_history
-                                if trainer.step_manager
-                                else None
-                            ),
-                            trainer.policy_output_mapper,
-                            (
-                                trainer.step_manager.move_log
-                                if trainer.step_manager
-                                else None
-                            ),
-                        )
+                        self.board_component.render(trainer.game)
                     )
                 except Exception as e:
                     self.rich_console.log(
                         f"Error rendering board: {e}", style="bold red"
                     )
                     self.layout["board_panel"].update(Panel(Text("No board")))
+
+            if self.moves_component:
+                move_strings = (
+                    trainer.step_manager.move_log if trainer.step_manager else None
+                )
+                self.layout["moves_panel"].update(
+                    self.moves_component.render(move_strings)
+                )
+
             if self.trend_component:
                 hist = trainer.metrics_manager.history
-                w = self.display_config.sparkline_width
-                trends = []
-                if hist.learning_rates:
-                    trends.append(
-                        "LR: " + self.trend_component.generate(hist.learning_rates[-w:])
-                    )
-                if hist.policy_losses:
-                    trends.append(
-                        "PL: " + self.trend_component.generate(hist.policy_losses[-w:])
-                    )
-                if hist.value_losses:
-                    trends.append(
-                        "VL: " + self.trend_component.generate(hist.value_losses[-w:])
-                    )
-                if hist.kl_divergences:
-                    trends.append(
-                        "KL: " + self.trend_component.generate(hist.kl_divergences[-w:])
-                    )
-                if hist.win_rates_history:
-                    wr_values = [
-                        d.get("win_rate_black", 0.0) for d in hist.win_rates_history
-                    ]
-                    trends.append(
-                        "Win%: " + self.trend_component.generate(wr_values[-w:])
-                    )
-                trend_text = "\n".join(trends) if trends else "Collecting data..."
+                metric_lines = self._build_metric_lines(hist)
+                group_items = [Text(line) for line in metric_lines]
+                self.layout["trends_panel"].update(
+                    Panel(Group(*group_items), border_style="cyan", title="Metric Trends")
+                )
 
+                stats_lines = []
                 multi_panel = None
                 if self.multi_trend_component:
                     moves_tr = trainer.metrics_manager.get_moves_per_game_trend(
@@ -287,13 +282,9 @@ class TrainingDisplay:
                         self.display_config.metrics_window_size
                     )
                     if moves_tr:
-                        self.multi_trend_component.add_data_point(
-                            "Moves", moves_tr[-1]
-                        )
+                        self.multi_trend_component.add_data_point("Moves", moves_tr[-1])
                     if turns_tr:
-                        self.multi_trend_component.add_data_point(
-                            "Turns", turns_tr[-1]
-                        )
+                        self.multi_trend_component.add_data_point("Turns", turns_tr[-1])
                     multi_panel = self.multi_trend_component.render_with_trendlines()
 
                 completion_line = ""
@@ -303,45 +294,36 @@ class TrainingDisplay:
                     direction = self.completion_rate_calc.get_trend_direction()
                     completion_line = f"Games/hr: {avg_rate:.2f} {direction}"
 
-                metric_lines = self._build_metric_lines(hist)
-                group_items = [Text(line) for line in metric_lines]
-                group_items.append(Text(trend_text, style="cyan"))
+                group_stats: List[RenderableType] = []
                 if multi_panel is not None:
-                    group_items.append(multi_panel)
+                    group_stats.append(multi_panel)
                 if completion_line:
-                    group_items.append(Text(completion_line, style="green"))
-                self.layout["trends_panel"].update(
-                    Panel(
-                        Group(*group_items),
-                        border_style="cyan",
-                        title="Metric Trends",
+                    group_stats.append(Text(completion_line, style="green"))
+                if group_stats:
+                    self.layout["stats_panel"].update(
+                        Panel(Group(*group_stats), border_style="green", title="Game Statistics")
                     )
-                )
-                model = getattr(trainer.agent, "model", None)
-                if model is not None:
-                    param_names = [
-                        "stem.weight",
-                        "policy_head.4.weight",
-                        "value_head.4.weight",
-                    ]
-                    stats_lines = []
-                    named = dict(model.named_parameters())
-                    for n in param_names:
-                        p = named.get(n)
-                        if p is None:
-                            continue
+
+            model = getattr(trainer.agent, "model", None)
+            if model is not None:
+                stats_lines = []
+                named_params = dict(model.named_parameters())
+                for name, p in named_params.items():
+                    if ".weight" in name and (
+                        "policy_head" in name or "value_head" in name or "stem" in name
+                    ):
                         data = p.data.float().cpu().numpy()
                         stats_lines.append(
-                            f"Layer: {n}\n  Mean: {data.mean():.4f} | Std Dev: {data.std():.4f} | Min: {data.min():.2f} | Max: {data.max():.2f}"
+                            f"Layer: {name}\n  Mean: {data.mean():.4f} | Std Dev: {data.std():.4f} | Min: {data.min():.2f} | Max: {data.max():.2f}"
                         )
-                    arch = (
-                        "[Input: 9x9xN] -> [ResNet Core] -> [Policy Head]\n"
-                        "                       -> [Value Head]"
-                    )
-                    evo_text = arch + "\n\n" + "\n\n".join(stats_lines)
-                    self.layout["evolution_panel"].update(
-                        Panel(Text(evo_text), border_style="magenta", title="Model Evolution")
-                    )
+                arch = (
+                    "[Input: 9x9xN] -> [ResNet Core] -> [Policy Head]\n"
+                    "                       -> [Value Head]"
+                )
+                evo_text = arch + "\n\n" + "\n\n".join(stats_lines)
+                self.layout["evolution_panel"].update(
+                    Panel(Text(evo_text), border_style="magenta", title="Model Evolution")
+                )
             if self.elo_component_enabled:
                 snap = getattr(trainer, "evaluation_elo_snapshot", None)
                 if snap and snap.get("top_ratings") and len(snap["top_ratings"]) >= 2:

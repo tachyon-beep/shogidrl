@@ -462,10 +462,10 @@ class TrainingLoopManager:
     def _handle_display_updates(self):
         """Handles periodic display updates based on time and step intervals."""
         if self.trainer.global_timestep % self.config.training.render_every_steps == 0:
-            if hasattr(self.display, "update_log_panel") and callable(
-                self.display.update_log_panel
+            if hasattr(self.display, "refresh_dashboard_panels") and callable(
+                self.display.refresh_dashboard_panels
             ):
-                self.display.update_log_panel(self.trainer)
+                self.display.refresh_dashboard_panels(self.trainer)
 
         self._update_display_if_needed()
 
