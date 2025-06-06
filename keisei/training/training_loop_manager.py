@@ -102,7 +102,9 @@ class TrainingLoopManager:
                 log_both(
                     f"Starting {self.config.parallel.num_workers} parallel workers..."
                 )
-                if self.parallel_manager.start_workers(cast(nn.Module, self.trainer.agent.model)):
+                if self.parallel_manager.start_workers(
+                    cast(nn.Module, self.trainer.agent.model)
+                ):
                     log_both("Parallel workers started successfully")
                 else:
                     log_both(
@@ -317,15 +319,11 @@ class TrainingLoopManager:
             winner_color_enum = (
                 Color.BLACK
                 if episode_winner_color == "black"
-                else Color.WHITE
-                if episode_winner_color == "white"
-                else None
+                else Color.WHITE if episode_winner_color == "white" else None
             )
             self.trainer.metrics_manager.update_episode_stats(winner_color_enum)
 
-            result_str = (
-                "win" if episode_winner_color in ("black", "white") else "draw"
-            )
+            result_str = "win" if episode_winner_color in ("black", "white") else "draw"
             self._log_episode_metrics(updated_episode_state, result_str)
             return new_episode_state_after_end
         else:
@@ -380,7 +378,9 @@ class TrainingLoopManager:
         ep_rew = episode_state.episode_reward
         ep_metrics_str = f"L:{ep_len} R:{ep_rew:.2f}"
         turns_count = ep_len // 2
-        self.trainer.metrics_manager.log_episode_metrics(ep_len, turns_count, result)
+        self.trainer.metrics_manager.log_episode_metrics(
+            ep_len, turns_count, result, ep_rew
+        )
 
         total_games = (
             self.trainer.metrics_manager.black_wins

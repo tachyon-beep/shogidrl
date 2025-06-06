@@ -1,4 +1,8 @@
-from keisei.training.display_components import MultiMetricSparkline, RollingAverageCalculator
+from keisei.training.display_components import (
+    MultiMetricSparkline,
+    RollingAverageCalculator,
+    Sparkline,
+)
 
 
 def test_multi_metric_sparkline_render():
@@ -18,3 +22,10 @@ def test_rolling_average_calculator():
     avg = calc.add_value(3)
     assert avg == 2
     assert calc.get_trend_direction() == "↑"
+
+
+def test_sparkline_bounded_generation():
+    spark = Sparkline(width=5)
+    values = [10, 20, 30, 40, 50]
+    bounded = spark.generate(values, range_min=0, range_max=100)
+    assert len(bounded) == 5

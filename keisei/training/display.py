@@ -94,7 +94,9 @@ class TrainingDisplay:
         layout.split_column(
             Layout(name="main_log", ratio=1),
             Layout(name="dashboard", ratio=self.display_config.dashboard_height_ratio),
-            Layout(name="progress_display", size=self.display_config.progress_bar_height),
+            Layout(
+                name="progress_display", size=self.display_config.progress_bar_height
+            ),
         )
 
         # --- Correct three-column layout with fixed board height ---
@@ -215,7 +217,10 @@ class TrainingDisplay:
             ("Learning Rate", history.learning_rates),
             ("Policy Loss", history.policy_losses),
             ("Value Loss", history.value_losses),
+            ("Entropy", history.entropies),
             ("KL Divergence", history.kl_divergences),
+            ("Episode Length", history.episode_lengths),
+            ("Episode Reward", history.episode_rewards),
         ]
         lines = []
         width = self.display_config.sparkline_width
@@ -228,18 +233,32 @@ class TrainingDisplay:
 
         for name, lst in metrics:
             last, prev = vals(lst)
-            spark = (
-                self.trend_component.generate(lst[-width:]) if lst else "-" * width
-            )
+            spark = self.trend_component.generate(lst[-width:]) if lst else "-" * width
             lines.append(f"{name:<{LABEL_WIDTH}} [{last}] [{prev}] {spark}")
 
         moves = history.win_rates_history
         if moves:
-            recent = [d.get("win_rate_black", 0.0) for d in moves]
-            spark = self.trend_component.generate(recent[-width:])
-            last = f"{recent[-1]:.2f}"
-            prev = f"{recent[-2]:.2f}" if len(recent) > 1 else "-"
-            lines.append(f"{'Win Rate B':<{LABEL_WIDTH}} [{last}] [{prev}] {spark}")
+            recent_b = [d.get("win_rate_black", 0.0) for d in moves]
+            recent_w = [d.get("win_rate_white", 0.0) for d in moves]
+            recent_d = [d.get("win_rate_draw", 0.0) for d in moves]
+            spark_b = self.trend_component.generate(recent_b[-width:])
+            spark_w = self.trend_component.generate(recent_w[-width:])
+            spark_d = self.trend_component.generate(recent_d[-width:])
+            last_b = f"{recent_b[-1]:.2f}"
+            last_w = f"{recent_w[-1]:.2f}"
+            last_d = f"{recent_d[-1]:.2f}"
+            prev_b = f"{recent_b[-2]:.2f}" if len(recent_b) > 1 else "-"
+            prev_w = f"{recent_w[-2]:.2f}" if len(recent_w) > 1 else "-"
+            prev_d = f"{recent_d[-2]:.2f}" if len(recent_d) > 1 else "-"
+            lines.append(
+                f"{'Win Rate B':<{LABEL_WIDTH}} [{last_b}] [{prev_b}] {spark_b}"
+            )
+            lines.append(
+                f"{'Win Rate W':<{LABEL_WIDTH}} [{last_w}] [{prev_w}] {spark_w}"
+            )
+            lines.append(
+                f"{'Draw Rate':<{LABEL_WIDTH}} [{last_d}] [{prev_d}] {spark_d}"
+            )
 
         return lines
 
@@ -281,41 +300,54 @@ class TrainingDisplay:
                 metric_lines = self._build_metric_lines(hist)
                 group_items = [Text(line) for line in metric_lines]
                 self.layout["trends_panel"].update(
-                    Panel(Group(*group_items), border_style="cyan", title="Metric Trends")
+                    Panel(
+                        Group(*group_items), border_style="cyan", title="Metric Trends"
+                    )
                 )
 
-                stats_lines = []
-                multi_panel = None
-                if self.multi_trend_component:
-                    moves_tr = trainer.metrics_manager.get_moves_per_game_trend(
-                        self.display_config.metrics_window_size
+                stats_lines: List[str] = []
+                mm = trainer.metrics_manager
+                width = self.display_config.sparkline_width
+                stats_lines.append(f"Turns: {mm.global_timestep}")
+                stats_lines.append(f"Games: {mm.total_episodes_completed}")
+                if mm.turns_per_game:
+                    avg_len = sum(mm.turns_per_game) / len(mm.turns_per_game)
+                    len_spark = self.trend_component.generate(
+                        list(mm.turns_per_game)[-width:], range_min=1, range_max=500
                     )
-                    turns_tr = trainer.metrics_manager.get_average_turns_trend(
-                        self.display_config.metrics_window_size
+                    stats_lines.append(f"Avg Length: {avg_len:.1f} {len_spark}")
+                if mm.history.win_rates_history:
+                    recent_b = [
+                        d.get("win_rate_black", 0.0)
+                        for d in mm.history.win_rates_history
+                    ]
+                    recent_w = [
+                        d.get("win_rate_white", 0.0)
+                        for d in mm.history.win_rates_history
+                    ]
+                    recent_d = [
+                        d.get("win_rate_draw", 0.0)
+                        for d in mm.history.win_rates_history
+                    ]
+                    spark_b = self.trend_component.generate(
+                        recent_b[-width:], range_min=0, range_max=100
                     )
-                    if moves_tr:
-                        self.multi_trend_component.add_data_point("Moves", moves_tr[-1])
-                    if turns_tr:
-                        self.multi_trend_component.add_data_point("Turns", turns_tr[-1])
-                    multi_panel = self.multi_trend_component.render_with_trendlines()
-
-                completion_line = ""
-                if self.completion_rate_calc:
-                    rate = trainer.metrics_manager.get_games_completion_rate()
-                    avg_rate = self.completion_rate_calc.add_value(rate)
-                    direction = self.completion_rate_calc.get_trend_direction()
-                    completion_line = f"Games/hr: {avg_rate:.2f} {direction}"
-
-                group_stats: List[RenderableType] = []
-                if multi_panel is not None:
-                    # multi_panel is already Text, no extra wrapping needed
-                    group_stats.append(multi_panel)
-                if completion_line:
-                    group_stats.append(Text(completion_line, style="green"))
-                if group_stats:
-                    self.layout["stats_panel"].update(
-                        Panel(Group(*group_stats), border_style="green", title="Game Statistics")
+                    spark_w = self.trend_component.generate(
+                        recent_w[-width:], range_min=0, range_max=100
                     )
+                    spark_d = self.trend_component.generate(
+                        recent_d[-width:], range_min=0, range_max=100
+                    )
+                    stats_lines.append(f"B Win%: {recent_b[-1]:.1f} {spark_b}")
+                    stats_lines.append(f"W Win%: {recent_w[-1]:.1f} {spark_w}")
+                    stats_lines.append(f"Draw%: {recent_d[-1]:.1f} {spark_d}")
+                self.layout["stats_panel"].update(
+                    Panel(
+                        Group(*[Text(l) for l in stats_lines]),
+                        border_style="green",
+                        title="Game Statistics",
+                    )
+                )
 
             model = getattr(trainer.agent, "model", None)
             if model is not None:
@@ -335,12 +367,16 @@ class TrainingDisplay:
                 )
                 evo_text = arch + "\n\n" + "\n\n".join(stats_lines)
                 self.layout["evolution_panel"].update(
-                    Panel(Text(evo_text), border_style="magenta", title="Model Evolution")
+                    Panel(
+                        Text(evo_text), border_style="magenta", title="Model Evolution"
+                    )
                 )
             if self.elo_component_enabled:
                 snap = getattr(trainer, "evaluation_elo_snapshot", None)
                 if snap and snap.get("top_ratings") and len(snap["top_ratings"]) >= 2:
-                    lines = [f"{mid}: {rating:.0f}" for mid, rating in snap["top_ratings"]]
+                    lines = [
+                        f"{mid}: {rating:.0f}" for mid, rating in snap["top_ratings"]
+                    ]
                     content = Text("\n".join(lines), style="yellow")
                 else:
                     content = Text(

@@ -162,11 +162,15 @@ class RecentMovesPanel:
 
     def render(self, move_strings: Optional[List[str]] = None) -> RenderableType:
         if not move_strings:
-            return Panel(Text("No moves yet."), title="Recent Moves", border_style="yellow")
+            return Panel(
+                Text("No moves yet."), title="Recent Moves", border_style="yellow"
+            )
         indent = " "
         last_msgs = move_strings[-self.max_moves :]
         formatted = [f"{indent}{msg}" for msg in last_msgs]
-        return Panel(Text("\n".join(formatted)), title="Recent Moves", border_style="yellow")
+        return Panel(
+            Text("\n".join(formatted)), title="Recent Moves", border_style="yellow"
+        )
 
 
 class Sparkline:
@@ -176,26 +180,31 @@ class Sparkline:
         self.width = width
         self.chars = "▁▂▃▄▅▆▇█"
 
-    def generate(self, values: Sequence[float]) -> str:
+    def generate(
+        self,
+        values: Sequence[float],
+        range_min: Optional[float] = None,
+        range_max: Optional[float] = None,
+    ) -> str:
         if not values:
             return " " * self.width
         if len(values) < 2:
             return "─" * self.width
 
-        min_v = min(values)
-        max_v = max(values)
+        min_v = range_min if range_min is not None else min(values)
+        max_v = range_max if range_max is not None else max(values)
+        clipped = [min(max(v, min_v), max_v) for v in values]
         if max_v == min_v:
-            normalized = [4] * len(values)
+            normalized = [4] * len(clipped)
         else:
             rng = max_v - min_v
-            normalized = [int((v - min_v) / rng * 7) for v in values]
+            normalized = [int((v - min_v) / rng * 7) for v in clipped]
 
         recent = normalized[-self.width :]
         spark = "".join(self.chars[n] for n in recent)
         if len(spark) < self.width:
             spark = "▁" * (self.width - len(spark)) + spark
         return spark
-
 
 
 class RollingAverageCalculator:
