@@ -13,6 +13,8 @@ from rich.console import RenderableType, Group
 from rich.panel import Panel
 from rich.text import Text
 from rich.layout import Layout
+from rich.table import Table
+from rich.style import Style
 
 
 class DisplayComponent(Protocol):
@@ -24,18 +26,16 @@ class DisplayComponent(Protocol):
 
 
 class ShogiBoard:
-    """ASCII representation of the current Shogi board state."""
+    """Rich-ified representation of the current Shogi board state using a Table."""
 
     def __init__(
         self,
         use_unicode: bool = True,
-        show_moves: bool = False,
-        max_moves: int = 10,
+        show_moves: bool = False,  # This parameter is kept for compatibility but not used in this version
+        max_moves: int = 10,  # This parameter is kept for compatibility but not used in this version
     ) -> None:
         self.use_unicode = use_unicode
-        self.show_moves = show_moves
-        self.max_moves = max_moves
-
+        # Define reference symbols for width calculation
         if self.use_unicode:
             reference_symbols = [
                 "歩",
@@ -72,13 +72,14 @@ class ShogiBoard:
                 "+R",
                 ".",
             ]
+
         widths = [wcswidth(sym) or len(sym) for sym in reference_symbols]
         self.cell_width = max(widths)
 
     def _piece_to_symbol(self, piece) -> str:
+        """Turn your internal piece-object into a single-string symbol."""
         if not piece:
             return "・" if self.use_unicode else "."
-
         if self.use_unicode:
             symbols = {
                 "PAWN": "歩",
@@ -96,62 +97,60 @@ class ShogiBoard:
                 "PROMOTED_BISHOP": "馬",
                 "PROMOTED_ROOK": "竜",
             }
-            base = symbols.get(piece.type.name, "?")
-            return base
+            return symbols.get(piece.type.name, "?")
         return piece.symbol()
 
-    def _colorize(self, symbol: str, piece) -> str:
+    def _colorize(self, symbol: str, piece) -> Text:
+        """Apply per-piece colouring."""
+        if not piece:
+            return Text(symbol)
         if piece.color == Color.BLACK:
-            return f"[bright_red]{symbol}[/bright_red]"
-        return f"[bright_blue]{symbol}[/bright_blue]"
+            return Text(symbol, style="bright_red")
+        return Text(symbol, style="bright_blue")
 
-    def _generate_ascii_board(self, board_state) -> str:
-        cell_width = self.cell_width
-        indent = ""
-        start_padding = cell_width - 1 if self.use_unicode else cell_width
-        header = (
-            indent
-            + " " * start_padding
-            + " ".join(str(n).rjust(cell_width) for n in range(9, 0, -1))
-        )
-        lines: List[str] = [header]
+    def _pad_symbol(self, symbol: str) -> str:
+        """Pad a raw symbol to exactly self.cell_width characters."""
+        width = wcswidth(symbol) or len(symbol)
+        padding = self.cell_width - width
+        return symbol + (" " * padding)
 
-        def pad(sym: str) -> str:
-            width = wcswidth(sym) or len(sym)
-            padding = cell_width - width
-            return sym + (" " * padding)
+    def _generate_rich_table(self, board_state) -> Table:
+        """Create a 10×10 Table for the board."""
+        light_bg = Style(bgcolor="#EEC28A")
+        dark_bg = Style(bgcolor="#C19A55")
+
+        table = Table(show_header=False, box=None, pad_edge=False, expand=False)
+        table.add_column("", width=self.cell_width, no_wrap=True)
+        for file_num in range(9, 0, -1):
+            table.add_column(str(file_num), width=self.cell_width, justify="center", no_wrap=True)
+
+        file_labels = [""] + [str(n) for n in range(9, 0, -1)]
+        table.add_row(*[Text(lbl, style="bold") for lbl in file_labels])
 
         for r_idx, row in enumerate(board_state.board):
-            row_header = str(9 - r_idx).rjust(cell_width) + " "
-            line_parts: List[str] = [indent + row_header]
-            for piece in reversed(row):
-                symbol = self._piece_to_symbol(piece)
-                colored = self._colorize(symbol, piece) if piece else symbol
-                padded = pad(colored)
-                line_parts.append(padded + " ")
-            lines.append("".join(line_parts).rstrip())
-        return "\n".join(lines)
+            rank_label = str(9 - r_idx)
+            row_cells: List[Text] = [Text(rank_label, style="bold")]
 
-    def _move_to_usi(self, move_tuple, policy_mapper) -> str:
-        try:
-            return policy_mapper.shogi_move_to_usi(move_tuple)
-        except (ValueError, KeyError):
-            return str(move_tuple)
-        except Exception as e:  # noqa: BLE001
-            log_error_to_stderr("ShogiBoard", f"Unexpected error in _move_to_usi: {e}")
-            raise
+            for c_idx, piece in enumerate(reversed(row)):
+                bg_style = light_bg if (r_idx + c_idx) % 2 == 0 else dark_bg
 
-    def render(self, board_state=None, **_kwargs) -> RenderableType:  # type: ignore[override]
+                raw_symbol = self._piece_to_symbol(piece)
+                padded = self._pad_symbol(raw_symbol)
+
+                text_with_colour = self._colorize(padded, piece)
+                text_with_colour.stylize(bg_style)
+                row_cells.append(text_with_colour)
+
+            table.add_row(*row_cells)
+        return table
+
+    def render(self, board_state=None, **_kwargs) -> RenderableType:
+        """Returns a Panel containing a Rich Table of the current board."""
         if not board_state:
-            return Panel(Text("No active game"), title="Main Board")
+            return Panel(Text("No active game"), title="Main Board", border_style="blue")
 
-        ascii_board = self._generate_ascii_board(board_state)
-        board_panel = Panel(
-            Text.from_markup(ascii_board),
-            title="Main Board",
-            border_style="blue",
-        )
-        return board_panel
+        board_table = self._generate_rich_table(board_state)
+        return Panel(board_table, title="Main Board", border_style="blue")
 
 
 class RecentMovesPanel:
