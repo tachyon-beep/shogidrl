@@ -87,7 +87,7 @@ class DisplayManager:
         if self.display:
             self.display.update_progress(trainer, speed, pending_updates)
 
-    def update_log_panel(self, trainer) -> None:
+    def refresh_dashboard_panels(self, trainer) -> None:
         """
         Update the log panel display.
 
@@ -95,7 +95,7 @@ class DisplayManager:
             trainer: The trainer instance
         """
         if self.display:
-            self.display.update_log_panel(trainer)
+            self.display.refresh_dashboard_panels(trainer)
 
     def start_live_display(self) -> Optional[Live]:
         """
