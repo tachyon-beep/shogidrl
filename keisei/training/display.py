@@ -24,8 +24,6 @@ from keisei.config_schema import DisplayConfig
 from .display_components import (
     ShogiBoard,
     Sparkline,
-    MultiMetricSparkline,
-    RollingAverageCalculator,
 )
 from .adaptive_display import AdaptiveDisplayManager
 
@@ -40,8 +38,6 @@ class TrainingDisplay:
 
         self.board_component: Optional[ShogiBoard] = None
         self.trend_component: Optional[Sparkline] = None
-        self.multi_trend_component: Optional[MultiMetricSparkline] = None
-        self.completion_rate_calc: Optional[RollingAverageCalculator] = None
         self.elo_component_enabled: bool = False
         self.using_enhanced_layout: bool = False
 
@@ -50,19 +46,12 @@ class TrainingDisplay:
                 use_unicode=self.display_config.board_unicode_pieces,
                 show_moves=True,
                 max_moves=self.display_config.move_list_length,
-                indent_spaces=20,
+                indent_spaces=0,
                 vertical_offset=2,
                 bottom_padding=2,
             )
         if self.display_config.enable_trend_visualization:
             self.trend_component = Sparkline(width=self.display_config.sparkline_width)
-            self.multi_trend_component = MultiMetricSparkline(
-                width=self.display_config.sparkline_width,
-                metrics=["Moves", "Turns"],
-            )
-            self.completion_rate_calc = RollingAverageCalculator(
-                self.display_config.metrics_window_size
-            )
         if self.display_config.enable_elo_ratings:
             self.elo_component_enabled = True
 
