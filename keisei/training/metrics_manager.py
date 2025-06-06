@@ -33,6 +33,9 @@ class MetricsHistory:
         self.policy_losses: List[float] = []
         self.value_losses: List[float] = []
         self.kl_divergences: List[float] = []
+        self.entropies: List[float] = []
+        self.episode_lengths: List[int] = []
+        self.episode_rewards: List[float] = []
 
     def _trim(self, values: List[Any]) -> None:
         while len(values) > self.max_history:
@@ -55,6 +58,9 @@ class MetricsHistory:
         if "ppo/kl_divergence_approx" in metrics:
             self.kl_divergences.append(metrics["ppo/kl_divergence_approx"])
             self._trim(self.kl_divergences)
+        if "ppo/entropy" in metrics:
+            self.entropies.append(metrics["ppo/entropy"])
+            self._trim(self.entropies)
 
 
 class MetricsManager:
@@ -85,7 +91,9 @@ class MetricsManager:
         self.moves_per_game: Deque[int] = deque(maxlen=history_size)
         self.turns_per_game: Deque[int] = deque(maxlen=history_size)
         self.games_completed_timestamps: Deque[float] = deque(maxlen=history_size)
-        self.win_loss_draw_history: Deque[Tuple[str, float]] = deque(maxlen=history_size)
+        self.win_loss_draw_history: Deque[Tuple[str, float]] = deque(
+            maxlen=history_size
+        )
 
     # === Statistics Management ===
 
@@ -140,10 +148,18 @@ class MetricsManager:
 
     # === Enhanced Metrics ===
 
-    def log_episode_metrics(self, moves_made: int, turns_count: int, result: str) -> None:
+    def log_episode_metrics(
+        self,
+        moves_made: int,
+        turns_count: int,
+        result: str,
+        episode_reward: float,
+    ) -> None:
         """Record metrics for a completed episode."""
         self.moves_per_game.append(moves_made)
         self.turns_per_game.append(turns_count)
+        self.history.episode_lengths.append(moves_made)
+        self.history.episode_rewards.append(episode_reward)
         now = time.time()
         self.games_completed_timestamps.append(now)
         self.win_loss_draw_history.append((result, now))
