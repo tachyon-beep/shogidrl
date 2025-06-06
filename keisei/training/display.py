@@ -5,7 +5,6 @@ training/display.py: Rich UI management for the Shogi RL trainer.
 from typing import List, Union, Optional
 
 from rich.console import Console, Group
-from rich.table import Table
 from rich.layout import Layout
 from rich.live import Live
 from rich.panel import Panel
@@ -53,6 +52,7 @@ class TrainingDisplay:
                 max_moves=self.display_config.move_list_length,
                 indent_spaces=20,
                 vertical_offset=2,
+                bottom_padding=2,
             )
         if self.display_config.enable_trend_visualization:
             self.trend_component = Sparkline(width=self.display_config.sparkline_width)
@@ -98,11 +98,16 @@ class TrainingDisplay:
         )
         layout["dashboard"].split_row(
             Layout(name="board_panel"),
-            Layout(name="trends_panel"),
+            Layout(name="right_panel"),
             Layout(name="elo_panel"),
         )
-        layout["board_panel"].update(Panel(Text("..."), title="Shogi Board"))
-        layout["trends_panel"].update(Panel(Text("Collecting data..."), title="Trends"))
+        layout["right_panel"].split_column(
+            Layout(name="trends_panel"),
+            Layout(name="evolution_panel"),
+        )
+        layout["board_panel"].update(Panel(Text("..."), title="Main Board"))
+        layout["trends_panel"].update(Panel(Text("Collecting data..."), title="Metric Trends"))
+        layout["evolution_panel"].update(Panel(Text("..."), title="Model Evolution"))
         layout["elo_panel"].update(Panel(Text("Elo pending"), title="Elo Ratings"))
         layout["main_log"].update(log_panel)
         layout["progress_display"].update(progress_bar)
@@ -188,30 +193,35 @@ class TrainingDisplay:
             self.using_enhanced_layout = False
         return progress_bar, training_task, layout, log_panel
 
-    def _build_metrics_table(self, history) -> Table:
-        table = Table(box=None, show_edge=False, expand=False)
-        table.add_column("Metric")
-        table.add_column("Last", justify="right")
-        table.add_column("Prev", justify="right")
-        table.add_column("Prev2", justify="right")
+    def _build_metric_lines(self, history) -> List[str]:
+        metrics = [
+            ("Learning Rate", history.learning_rates),
+            ("Policy Loss", history.policy_losses),
+            ("Value Loss", history.value_losses),
+            ("KL Divergence", history.kl_divergences),
+        ]
+        lines = []
+        width = self.display_config.sparkline_width
 
         def vals(lst):
-            v1 = f"{lst[-1]:.4f}" if len(lst) >= 1 else "-"
-            v2 = f"{lst[-2]:.4f}" if len(lst) >= 2 else "-"
-            v3 = f"{lst[-3]:.4f}" if len(lst) >= 3 else "-"
-            return v1, v2, v3
+            last = f"{lst[-1]:.4f}" if len(lst) >= 1 else "-"
+            prev = f"{lst[-2]:.4f}" if len(lst) >= 2 else "-"
+            return last, prev
 
-        for name, lst in [
-            ("LR", history.learning_rates),
-            ("KL", history.kl_divergences),
-            ("PolL", history.policy_losses),
-            ("ValL", history.value_losses),
-        ]:
-            v1, v2, v3 = vals(lst)
-            table.add_row(name, v1, v2, v3)
+        for name, lst in metrics:
+            last, prev = vals(lst)
+            spark = self.trend_component.generate(lst[-width:]) if lst else "-" * width
+            lines.append(f"{name} [{last}] [{prev}] {spark}")
 
-        table.caption = "LR=Learning rate, KL=approx KL divergence"
-        return table
+        moves = history.win_rates_history
+        if moves:
+            recent = [d.get("win_rate_black", 0.0) for d in moves]
+            spark = self.trend_component.generate(recent[-width:])
+            last = f"{recent[-1]:.2f}"
+            prev = f"{recent[-2]:.2f}" if len(recent) > 1 else "-"
+            lines.append(f"Win Rate B [{last}] [{prev}] {spark}")
+
+        return lines
 
     def update_progress(self, trainer, speed, pending_updates):
         update_data = {"completed": trainer.global_timestep, "speed": speed}
@@ -304,13 +314,9 @@ class TrainingDisplay:
                     direction = self.completion_rate_calc.get_trend_direction()
                     completion_line = f"Games/hr: {avg_rate:.2f} {direction}"
 
-                metrics_table = self._build_metrics_table(hist)
-                model_graphic = Text(
-                    "Model evolution: "
-                    + "=" * len(trainer.previous_model_selector.get_all()),
-                    style="magenta",
-                )
-                group_items = [metrics_table, Text(trend_text, style="cyan"), model_graphic]
+                metric_lines = self._build_metric_lines(hist)
+                group_items = [Text(line) for line in metric_lines]
+                group_items.append(Text(trend_text, style="cyan"))
                 if multi_panel is not None:
                     group_items.append(multi_panel)
                 if completion_line:
@@ -322,38 +328,43 @@ class TrainingDisplay:
                         title="Metric Trends",
                     )
                 )
+                model = getattr(trainer.agent, "model", None)
+                if model is not None:
+                    param_names = [
+                        "stem.weight",
+                        "policy_head.4.weight",
+                        "value_head.4.weight",
+                    ]
+                    stats_lines = []
+                    named = dict(model.named_parameters())
+                    for n in param_names:
+                        p = named.get(n)
+                        if p is None:
+                            continue
+                        data = p.data.float().cpu().numpy()
+                        stats_lines.append(
+                            f"Layer: {n}\n  Mean: {data.mean():.4f} | Std Dev: {data.std():.4f} | Min: {data.min():.2f} | Max: {data.max():.2f}"
+                        )
+                    arch = (
+                        "[Input: 9x9xN] -> [ResNet Core] -> [Policy Head]\n"
+                        "                       -> [Value Head]"
+                    )
+                    evo_text = arch + "\n\n" + "\n\n".join(stats_lines)
+                    self.layout["evolution_panel"].update(
+                        Panel(Text(evo_text), border_style="magenta", title="Model Evolution")
+                    )
             if self.elo_component_enabled:
-                elo = trainer.metrics_manager.elo_system
-                lines = [
-                    f"Black: {elo.black_rating:.0f}",
-                    f"White: {elo.white_rating:.0f}",
-                    f"Diff: {elo.black_rating - elo.white_rating:+.0f}",
-                    "",
-                    f"Assessment: {elo.get_strength_assessment()}",
-                ]
                 snap = getattr(trainer, "evaluation_elo_snapshot", None)
-                if snap:
-                    lines.extend(
-                        [
-                            "",
-                            f"Current {snap['current_id']}: {snap['current_rating']:.0f}",
-                            f"Opp {snap['opponent_id']}: {snap['opponent_rating']:.0f}",
-                            f"Last result: {snap['last_outcome']}",
-                        ]
-                    )
-                    if snap.get("top_ratings"):
-                        lines.append("")
-                        for mid, rating in snap["top_ratings"]:
-                            lines.append(f"{mid}: {rating:.0f}")
+                if snap and snap.get("top_ratings") and len(snap["top_ratings"]) >= 2:
+                    lines = [f"{mid}: {rating:.0f}" for mid, rating in snap["top_ratings"]]
+                    content = Text("\n".join(lines), style="yellow")
                 else:
-                    lines.append("")
-                    lines.append("No evaluation data yet")
-                self.layout["elo_panel"].update(
-                    Panel(
-                        Text("\n".join(lines), style="yellow"),
-                        border_style="yellow",
-                        title="Elo Ratings",
+                    content = Text(
+                        "Waiting for initial model evaluations...",
+                        style="yellow",
                     )
+                self.layout["elo_panel"].update(
+                    Panel(content, border_style="yellow", title="Elo Ratings")
                 )
 
     def start(self):
