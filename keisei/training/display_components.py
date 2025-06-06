@@ -12,6 +12,7 @@ from rich.console import RenderableType, Group
 from rich.panel import Panel
 from rich.text import Text
 from rich.layout import Layout
+from rich.layout import Layout
 
 
 class DisplayComponent(Protocol):
@@ -40,6 +41,7 @@ class ShogiBoard:
         self.indent_spaces = indent_spaces
         self.vertical_offset = vertical_offset
         self.bottom_padding = bottom_padding
+        self.bottom_padding = bottom_padding
 
     def _piece_to_symbol(self, piece) -> str:
         if not piece:
@@ -65,6 +67,13 @@ class ShogiBoard:
             base = symbols.get(piece.type.name, "?")
             return base
         return piece.symbol()
+
+    def _colorize(self, symbol: str, piece) -> str:
+        from keisei.shogi.shogi_core_definitions import Color
+
+        if piece.color == Color.BLACK:
+            return f"[bright_red]{symbol}[/bright_red]"
+        return f"[bright_blue]{symbol}[/bright_blue]"
 
     def _colorize(self, symbol: str, piece) -> str:
         from keisei.shogi.shogi_core_definitions import Color
@@ -138,7 +147,7 @@ class ShogiBoard:
                 colored = self._colorize(symbol, piece) if piece else symbol
                 padded = pad(colored)
                 line_parts.append(padded + " ")
-            lines.append("".join(line_parts).rstrip())
+        lines.append("".join(line_parts).rstrip())
         lines = ["" for _ in range(self.vertical_offset)] + lines
         lines += ["" for _ in range(self.bottom_padding)]
         return "\n".join(lines)

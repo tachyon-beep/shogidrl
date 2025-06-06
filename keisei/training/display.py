@@ -199,9 +199,7 @@ class TrainingDisplay:
 
         for name, lst in metrics:
             last, prev = vals(lst)
-            spark = (
-                self.trend_component.generate(lst[-width:]) if lst else "─" * width
-            )
+            spark = self.trend_component.generate(lst[-width:]) if lst else "-" * width
             lines.append(f"{name} [{last}] [{prev}] {spark}")
 
         moves = history.win_rates_history
@@ -280,9 +278,38 @@ class TrainingDisplay:
                     )
                 trend_text = "\n".join(trends) if trends else "Collecting data..."
 
+                multi_panel = None
+                if self.multi_trend_component:
+                    moves_tr = trainer.metrics_manager.get_moves_per_game_trend(
+                        self.display_config.metrics_window_size
+                    )
+                    turns_tr = trainer.metrics_manager.get_average_turns_trend(
+                        self.display_config.metrics_window_size
+                    )
+                    if moves_tr:
+                        self.multi_trend_component.add_data_point(
+                            "Moves", moves_tr[-1]
+                        )
+                    if turns_tr:
+                        self.multi_trend_component.add_data_point(
+                            "Turns", turns_tr[-1]
+                        )
+                    multi_panel = self.multi_trend_component.render_with_trendlines()
+
+                completion_line = ""
+                if self.completion_rate_calc:
+                    rate = trainer.metrics_manager.get_games_completion_rate()
+                    avg_rate = self.completion_rate_calc.add_value(rate)
+                    direction = self.completion_rate_calc.get_trend_direction()
+                    completion_line = f"Games/hr: {avg_rate:.2f} {direction}"
+
                 metric_lines = self._build_metric_lines(hist)
                 group_items = [Text(line) for line in metric_lines]
                 group_items.append(Text(trend_text, style="cyan"))
+                if multi_panel is not None:
+                    group_items.append(multi_panel)
+                if completion_line:
+                    group_items.append(Text(completion_line, style="green"))
                 self.layout["trends_panel"].update(
                     Panel(
                         Group(*group_items),
