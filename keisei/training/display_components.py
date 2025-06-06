@@ -12,6 +12,7 @@ from rich.console import RenderableType, Group
 from rich.panel import Panel
 from rich.text import Text
 from rich.layout import Layout
+from rich.layout import Layout
 
 
 class DisplayComponent(Protocol):
@@ -40,6 +41,7 @@ class ShogiBoard:
         self.indent_spaces = indent_spaces
         self.vertical_offset = vertical_offset
         self.bottom_padding = bottom_padding
+        self.bottom_padding = bottom_padding
 
     def _piece_to_symbol(self, piece) -> str:
         if not piece:
@@ -65,6 +67,13 @@ class ShogiBoard:
             base = symbols.get(piece.type.name, "?")
             return base
         return piece.symbol()
+
+    def _colorize(self, symbol: str, piece) -> str:
+        from keisei.shogi.shogi_core_definitions import Color
+
+        if piece.color == Color.BLACK:
+            return f"[bright_red]{symbol}[/bright_red]"
+        return f"[bright_blue]{symbol}[/bright_blue]"
 
     def _colorize(self, symbol: str, piece) -> str:
         from keisei.shogi.shogi_core_definitions import Color
@@ -193,7 +202,7 @@ class ShogiBoard:
         last_moves = move_history[-self.max_moves :]
         lines = [self._move_to_usi(mv, policy_mapper) for mv in last_moves]
         start_idx = len(move_history) - len(last_moves) + 1
-        formatted = [f"{indent}{start_idx + i:3d}: {mv}" for i, mv in enumerate(lines)]
+        formatted = [f"{indent}{start_idx + i:3d}. {mv}" for i, mv in enumerate(lines)]
         moves_panel = Panel(
             Text("\n".join(formatted)), border_style="yellow", title="Recent Moves"
         )
