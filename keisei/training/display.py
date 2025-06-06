@@ -2,7 +2,7 @@
 training/display.py: Rich UI management for the Shogi RL trainer.
 """
 
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Dict
 
 from rich.console import Console, Group
 from rich.layout import Layout
@@ -75,6 +75,9 @@ class TrainingDisplay:
             self.log_panel,
         ) = self._setup_rich_progress_display()
 
+        # Store previous stats for trend arrows in evolution panel
+        self.previous_model_stats: Optional[Dict[str, Dict[str, float]]] = None
+
     def _create_compact_layout(
         self, log_panel: Panel, progress_bar: Progress
     ) -> Layout:
@@ -107,13 +110,16 @@ class TrainingDisplay:
         )
 
         layout["left_column"].split_column(
-            Layout(name="board_panel", size=12),  # Set size to 12 for the new Table-based board
+            Layout(
+                name="board_panel", size=12
+            ),  # Set size to 12 for the new Table-based board
             Layout(name="moves_panel"),
         )
 
         layout["middle_column"].split_column(
-            Layout(name="trends_panel", ratio=1),
-            Layout(name="stats_panel", ratio=1),
+            Layout(name="trends_panel", ratio=2),
+            Layout(name="stats_panel", ratio=2),
+            Layout(name="config_panel", ratio=1),
         )
 
         layout["right_column"].split_column(
@@ -125,6 +131,7 @@ class TrainingDisplay:
         layout["moves_panel"].update(Panel("...", title="Recent Moves"))
         layout["trends_panel"].update(Panel("...", title="Metric Trends"))
         layout["stats_panel"].update(Panel("...", title="Game Statistics"))
+        layout["config_panel"].update(Panel("...", title="Configuration"))
         layout["evolution_panel"].update(Panel("...", title="Model Evolution"))
         layout["elo_panel"].update(Panel("...", title="Elo Ratings"))
 
@@ -299,6 +306,17 @@ class TrainingDisplay:
                 hist = trainer.metrics_manager.history
                 metric_lines = self._build_metric_lines(hist)
                 group_items = [Text(line) for line in metric_lines]
+
+                grad_norm = getattr(trainer, "last_gradient_norm", 0.0)
+                grad_norm_scaled = min(grad_norm, 50.0)
+                grad_bar = Progress(
+                    TextColumn("Gradient Norm  "),
+                    BarColumn(bar_width=None),
+                    TaskProgressColumn(),
+                )
+                grad_bar.add_task("", total=50.0, completed=grad_norm_scaled)
+                group_items.append(grad_bar)
+
                 self.layout["trends_panel"].update(
                     Panel(
                         Group(*group_items), border_style="cyan", title="Metric Trends"
@@ -341,34 +359,108 @@ class TrainingDisplay:
                     stats_lines.append(f"B Win%: {recent_b[-1]:.1f} {spark_b}")
                     stats_lines.append(f"W Win%: {recent_w[-1]:.1f} {spark_w}")
                     stats_lines.append(f"Draw%: {recent_d[-1]:.1f} {spark_d}")
+
+                group_stats = [Text(l) for l in stats_lines]
+                try:
+                    buffer_bar = Progress(
+                        TextColumn("Replay Buffer"),
+                        BarColumn(bar_width=None),
+                        TextColumn("{task.percentage:>3.0f}%"),
+                    )
+                    buffer_bar.add_task(
+                        "",
+                        total=trainer.replay_buffer.capacity(),
+                        completed=trainer.replay_buffer.size(),
+                    )
+                    group_stats.append(buffer_bar)
+                except AttributeError:
+                    pass
                 self.layout["stats_panel"].update(
                     Panel(
-                        Group(*[Text(l) for l in stats_lines]),
+                        Group(*group_stats),
                         border_style="green",
                         title="Game Statistics",
                     )
                 )
 
+            if self.layout["config_panel"].renderable.title == "...":
+                try:
+                    cfg = self.config
+                    config_text = (
+                        f"[b]Learning Rate[/]: {cfg.training.learning_rate}\n"
+                        f"[b]Batch Size[/]:    {cfg.training.batch_size}\n"
+                        f"[b]Tower Depth[/]:   {cfg.model.tower_depth}\n"
+                        f"[b]SE Ratio[/]:      {cfg.model.se_ratio}"
+                    )
+                    self.layout["config_panel"].update(
+                        Panel(
+                            Text.from_markup(config_text),
+                            title="Configuration",
+                            border_style="green",
+                        )
+                    )
+                except Exception as e:
+                    self.layout["config_panel"].update(
+                        Panel(f"Error loading config:\n{e}", title="Configuration")
+                    )
+
             model = getattr(trainer.agent, "model", None)
             if model is not None:
                 stats_lines = []
+                current_stats: Dict[str, Dict[str, float]] = {}
                 named_params = dict(model.named_parameters())
+
                 for name, p in named_params.items():
                     if ".weight" in name and (
                         "policy_head" in name or "value_head" in name or "stem" in name
                     ):
                         data = p.data.float().cpu().numpy()
-                        stats_lines.append(
-                            f"Layer: {name}\n  Mean: {data.mean():.4f} | Std Dev: {data.std():.4f} | Min: {data.min():.2f} | Max: {data.max():.2f}"
-                        )
+                        current_stats[name] = {
+                            "mean": float(data.mean()),
+                            "std": float(data.std()),
+                            "min": float(data.min()),
+                            "max": float(data.max()),
+                        }
+
+                for name, stats in current_stats.items():
+                    trend_chars = {"mean": "→", "std": "→", "min": "→", "max": "→"}
+                    if self.previous_model_stats and name in self.previous_model_stats:
+                        for key in trend_chars:
+                            prev_val = self.previous_model_stats[name][key]
+                            curr_val = stats[key]
+                            if curr_val > prev_val:
+                                trend_chars[key] = "↑"
+                            elif curr_val < prev_val:
+                                trend_chars[key] = "↓"
+
+                    update_mag = trainer.last_weight_updates.get(name, 0.0)
+                    color = "white"
+                    if update_mag > 1.0:
+                        color = "red"
+                    elif update_mag > 0.1:
+                        color = "yellow"
+
+                    line = (
+                        f"[bold {color}]Layer: {name}[/bold {color}]\n"
+                        f"  Mean: {stats['mean']:.4f} {trend_chars['mean']} | "
+                        f"Std Dev: {stats['std']:.4f} {trend_chars['std']} | "
+                        f"Min: {stats['min']:.2f} {trend_chars['min']} | "
+                        f"Max: {stats['max']:.2f} {trend_chars['max']}"
+                    )
+                    stats_lines.append(line)
+
+                self.previous_model_stats = current_stats
+
                 arch = (
                     "[Input: 9x9xN] -> [ResNet Core] -> [Policy Head]\n"
-                    "                       -> [Value Head]"
+                    "                         -> [Value Head]"
                 )
                 evo_text = arch + "\n\n" + "\n\n".join(stats_lines)
                 self.layout["evolution_panel"].update(
                     Panel(
-                        Text(evo_text), border_style="magenta", title="Model Evolution"
+                        Text.from_markup(evo_text),
+                        border_style="magenta",
+                        title="Model Evolution",
                     )
                 )
             if self.elo_component_enabled:
