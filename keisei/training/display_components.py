@@ -6,12 +6,14 @@ from typing import Protocol, Optional, List, Sequence, Dict
 from collections import deque, Counter
 import ast
 from wcwidth import wcswidth
+from keisei.utils import _coords_to_square_name
 
 from keisei.utils.unified_logger import log_error_to_stderr
 from keisei.shogi.shogi_core_definitions import Color
 
 from rich.console import RenderableType, Group
 from rich.panel import Panel
+from rich import box
 from rich.text import Text
 from rich.layout import Layout
 from rich.table import Table
@@ -116,7 +118,10 @@ class ShogiBoard:
         padding = self.cell_width - width
         return symbol + (" " * padding)
 
-    def _generate_rich_table(self, board_state) -> Table:
+    def _get_shogi_notation(self, row: int, col: int) -> str:
+        return _coords_to_square_name(row, col)
+
+    def _generate_rich_table(self, board_state, hot_squares=None) -> Table:
         """Create a 10×10 Table for the board."""
         light_bg_color = "#EEC28A"
         dark_bg_color = "#C19A55"
@@ -161,17 +166,35 @@ class ShogiBoard:
                     cell_renderable = Text(padded, style=dot_color)
 
                 cell_renderable.stylize(bg_style)
+
+                board_col = 8 - c_idx
+                sq_name = self._get_shogi_notation(r_idx, board_col)
+                if hot_squares and sq_name in hot_squares:
+                    cell_renderable = Panel(
+                        Align.center(cell_renderable),
+                        box=box.SQUARE,
+                        padding=(0, 0),
+                        border_style="red",
+                        width=self.cell_width + 2,
+                    )
+
                 row_cells.append(cell_renderable)
 
             table.add_row(*row_cells)
         return table
 
-    def render(self, board_state=None, **_kwargs) -> RenderableType:
+    def render(
+        self, board_state=None, highlight_squares=None, **_kwargs
+    ) -> RenderableType:
         """Returns a Panel containing a Rich Table of the current board."""
         if not board_state:
-            return Panel(Text("No active game"), title="Main Board", border_style="blue")
+            return Panel(
+                Text("No active game"), title="Main Board", border_style="blue"
+            )
 
-        board_table = self._generate_rich_table(board_state)
+        board_table = self._generate_rich_table(
+            board_state, hot_squares=highlight_squares
+        )
         return Panel(Align.center(board_table), title="Main Board", border_style="blue")
 
 
@@ -213,15 +236,23 @@ class PieceStandPanel:
             "BISHOP": "角",
             "ROOK": "飛",
         }
-        parts = [f"{symbols.get(getattr(k, 'name', k), '?')}x{v}" for k, v in hand.items() if v > 0]
+        parts = [
+            f"{symbols.get(getattr(k, 'name', k), '?')}x{v}"
+            for k, v in hand.items()
+            if v > 0
+        ]
         return " ".join(parts) or ""
 
     def render(self, game) -> RenderableType:
         if not game:
             return Panel("...", title="Captured Pieces")
 
-        sente_hand = self._format_hand(getattr(game, "hands", {}).get(Color.BLACK.value, {}))
-        gote_hand = self._format_hand(getattr(game, "hands", {}).get(Color.WHITE.value, {}))
+        sente_hand = self._format_hand(
+            getattr(game, "hands", {}).get(Color.BLACK.value, {})
+        )
+        gote_hand = self._format_hand(
+            getattr(game, "hands", {}).get(Color.WHITE.value, {})
+        )
 
         return Panel(
             Group(
@@ -336,71 +367,56 @@ class GameStatisticsPanel:
         game,
         move_history: Optional[List[str]] = None,
         metrics_manager=None,
-        policy_mapper=None,
     ) -> RenderableType:
-        if (
-            not game
-            or move_history is None
-            or metrics_manager is None
-            or policy_mapper is None
-        ):
+        if not game or not move_history or not metrics_manager:
             return Panel(
                 "Waiting for game to start...",
                 title="Game Statistics",
                 border_style="green",
             )
 
-        sente_material = self._calculate_material(game, Color.BLACK)
-        gote_material = self._calculate_material(game, Color.WHITE)
+        # --- Calculate In-Game Stats ---
+        sente_material = self._calculate_material(game.board, Color.BLACK)
+        gote_material = self._calculate_material(game.board, Color.WHITE)
         material_adv = sente_material - gote_material
+        is_in_check = getattr(game, "is_in_check", lambda: False)()
+        hot_squares = metrics_manager.get_hot_squares(top_n=3)
 
-        square_usage = Counter()
-        for move in move_history:
-            try:
-                parts = move.split(" from ")[1].split(" to ")
-                square_usage.update([parts[0], parts[1].strip(".")])
-            except IndexError:
-                continue
-        hot_squares = ", ".join([sq[0] for sq in square_usage.most_common(3)]) or "N/A"
-
+        # --- Get Session Stats (now pre-formatted) ---
         sente_openings = metrics_manager.sente_opening_history
         gote_openings = metrics_manager.gote_opening_history
-        fav_sente_tuple = (
-            Counter(sente_openings).most_common(1)[0][0] if sente_openings else None
+        fav_sente_opening = (
+            Counter(sente_openings).most_common(1)[0][0] if sente_openings else "N/A"
         )
-        fav_gote_tuple = (
-            Counter(gote_openings).most_common(1)[0][0] if gote_openings else None
+        fav_gote_opening = (
+            Counter(gote_openings).most_common(1)[0][0] if gote_openings else "N/A"
         )
 
-        try:
-            fav_sente_opening = (
-                policy_mapper.shogi_move_to_usi(ast.literal_eval(fav_sente_tuple))
-                if fav_sente_tuple
-                else "N/A"
-            )
-        except Exception:
-            fav_sente_opening = "N/A"
-
-        try:
-            fav_gote_opening = (
-                policy_mapper.shogi_move_to_usi(ast.literal_eval(fav_gote_tuple))
-                if fav_gote_tuple
-                else "N/A"
-            )
-        except Exception:
-            fav_gote_opening = "N/A"
-
+        # --- Create Table ---
         table = Table.grid(expand=True, padding=(0, 2))
         table.add_column(style="bold cyan", no_wrap=True)
-        table.add_column(justify="right")
+        table.add_column()
 
-        check_status = (
-            "[red]CHECK[/]" if game.is_in_check(game.current_player) else "Clear"
-        )
-        table.add_row("Check Status:", check_status)
+        table.add_row("Check Status:", "[red]CHECK[/]" if is_in_check else "Clear")
         table.add_row("Material Adv:", f"{material_adv:+.1f} (Sente)")
-        table.add_row("Hot Squares:", hot_squares)
+        table.add_row("Hot Squares:", ", ".join(hot_squares) or "N/A")
         table.add_row("Fav. Sente Opening:", fav_sente_opening)
         table.add_row("Fav. Gote Opening:", fav_gote_opening)
 
-        return Panel(table, title="Game Statistics", border_style="green")
+        # This part for hand display remains separate to preserve alignment
+        sente_hand_str = self._format_hand(
+            getattr(game, "hands", {}).get(Color.BLACK, {})
+        )
+        gote_hand_str = self._format_hand(
+            getattr(game, "hands", {}).get(Color.WHITE, {})
+        )
+        hand_info = Group(
+            Text.from_markup("\n[bold]Sente's Hand:[/bold]"),
+            Text(sente_hand_str or "None"),
+            Text.from_markup("\n[bold]Gote's Hand:[/bold]"),
+            Text(gote_hand_str or "None"),
+        )
+
+        return Panel(
+            Group(table, hand_info), title="Game Statistics", border_style="green"
+        )
