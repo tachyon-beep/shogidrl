@@ -34,6 +34,7 @@ class MetricsHistory:
         self.value_losses: List[float] = []
         self.kl_divergences: List[float] = []
         self.entropies: List[float] = []
+        self.clip_fractions: List[float] = []
         self.episode_lengths: List[int] = []
         self.episode_rewards: List[float] = []
 
@@ -61,6 +62,9 @@ class MetricsHistory:
         if "ppo/entropy" in metrics:
             self.entropies.append(metrics["ppo/entropy"])
             self._trim(self.entropies)
+        if "ppo/clip_fraction" in metrics:
+            self.clip_fractions.append(metrics["ppo/clip_fraction"])
+            self._trim(self.clip_fractions)
 
 
 class MetricsManager:
@@ -94,6 +98,8 @@ class MetricsManager:
         self.win_loss_draw_history: Deque[Tuple[str, float]] = deque(
             maxlen=history_size
         )
+        self.sente_opening_history: Deque[str] = deque(maxlen=10)
+        self.gote_opening_history: Deque[str] = deque(maxlen=10)
 
     # === Statistics Management ===
 
@@ -154,6 +160,7 @@ class MetricsManager:
         turns_count: int,
         result: str,
         episode_reward: float,
+        move_history: Optional[List] = None,
     ) -> None:
         """Record metrics for a completed episode."""
         self.moves_per_game.append(moves_made)
@@ -163,6 +170,14 @@ class MetricsManager:
         now = time.time()
         self.games_completed_timestamps.append(now)
         self.win_loss_draw_history.append((result, now))
+        if move_history:
+            try:
+                if len(move_history) >= 1:
+                    self.sente_opening_history.append(str(move_history[0]))
+                if len(move_history) >= 2:
+                    self.gote_opening_history.append(str(move_history[1]))
+            except Exception:
+                pass
 
     def get_moves_per_game_trend(self, window_size: int = 100) -> List[float]:
         data = list(self.moves_per_game)[-window_size:]
@@ -232,6 +247,8 @@ class MetricsManager:
             ppo_metrics_parts.append(f"ValL:{learn_metrics['ppo/value_loss']:.4f}")
         if "ppo/entropy" in learn_metrics:
             ppo_metrics_parts.append(f"Ent:{learn_metrics['ppo/entropy']:.4f}")
+        if "ppo/clip_fraction" in learn_metrics:
+            ppo_metrics_parts.append(f"CF:{learn_metrics['ppo/clip_fraction']:.2f}")
         self.history.add_ppo_data(learn_metrics)
         return " ".join(ppo_metrics_parts)
 
