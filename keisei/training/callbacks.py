@@ -3,11 +3,11 @@ training/callbacks.py: Periodic task callbacks for the Shogi RL trainer.
 """
 
 import os
+from abc import ABC
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from keisei.evaluation.elo_registry import EloRegistry
-from abc import ABC
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .trainer import Trainer

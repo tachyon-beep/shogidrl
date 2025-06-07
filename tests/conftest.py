@@ -10,24 +10,23 @@ import pytest
 
 from keisei.config_schema import (
     AppConfig,
+    DisplayConfig,
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
     ParallelConfig,
     TrainingConfig,
     WandBConfig,
-    DisplayConfig,
 )
 from keisei.constants import (
     CORE_OBSERVATION_CHANNELS,
     SHOGI_BOARD_SIZE,
     TEST_BUFFER_SIZE,
 )
-from keisei.config_schema import EnvConfig, TrainingConfig
-
-TRAIN_DEFAULTS = TrainingConfig()
-ENV_DEFAULTS = EnvConfig()
 from keisei.utils import PolicyOutputMapper
+
+# Get defaults from the minimal_training_config fixture instead of bare instantiation
+# This avoids requiring all the mandatory parameters
 
 # Try to set the start method as early as possible for pytest runs
 try:
@@ -159,9 +158,9 @@ def minimal_env_config():
     return EnvConfig(
         device="cpu",
         input_channels=CORE_OBSERVATION_CHANNELS,
-        num_actions_total=ENV_DEFAULTS.num_actions_total,
+        num_actions_total=13527,  # Default from schema
         seed=42,
-        max_moves_per_game=ENV_DEFAULTS.max_moves_per_game,  # Standard limit for games
+        max_moves_per_game=500,  # Default from schema
     )
 
 
@@ -174,7 +173,7 @@ def minimal_training_config():
         ppo_epochs=1,
         minibatch_size=2,
         learning_rate=1e-3,
-        gamma=TRAIN_DEFAULTS.gamma,
+        gamma=0.99,  # Default from schema
         clip_epsilon=0.2,
         value_loss_coeff=0.5,
         entropy_coef=0.01,
@@ -189,11 +188,12 @@ def minimal_training_config():
         mixed_precision=False,
         ddp=False,
         gradient_clip_max_norm=0.5,
-        lambda_gae=TRAIN_DEFAULTS.lambda_gae,
+        lambda_gae=0.95,  # Default from schema
         checkpoint_interval_timesteps=1000,
         evaluation_interval_timesteps=1000,
         weight_decay=0.0,
         normalize_advantages=True,
+        enable_value_clipping=False,  # Required parameter
         lr_schedule_type=None,
         lr_schedule_kwargs=None,
         lr_schedule_step_on="epoch",
@@ -243,8 +243,32 @@ def disabled_wandb_config():
 def test_display_config():
     """Display configuration for testing."""
     return DisplayConfig(
+        enable_board_display=False,
+        enable_trend_visualization=False,
+        enable_elo_ratings=False,
+        enable_enhanced_layout=False,
         display_moves=False,
         turn_tick=0.0,  # No delays in tests
+        board_unicode_pieces=False,
+        board_highlight_last_move=False,
+        sparkline_width=15,
+        trend_history_length=100,
+        elo_initial_rating=1500.0,
+        elo_k_factor=32.0,
+        dashboard_height_ratio=2,
+        progress_bar_height=4,
+        show_text_moves=False,
+        move_list_length=10,
+        moves_latest_top=True,
+        moves_flash_ms=0,  # No flashing in tests
+        show_moves_trend=False,
+        show_completion_rate=False,
+        show_enhanced_win_rates=False,
+        show_turns_trend=False,
+        metrics_window_size=100,
+        trend_smoothing_factor=0.1,
+        metrics_panel_height=6,
+        enable_trendlines=False,
     )
 
 
@@ -331,7 +355,7 @@ def integration_test_config(policy_mapper, tmp_path):
             input_channels=CORE_OBSERVATION_CHANNELS,
             num_actions_total=policy_mapper.get_total_actions(),
             seed=42,
-            max_moves_per_game=ENV_DEFAULTS.max_moves_per_game,  # Standard limit for games
+            max_moves_per_game=500,  # Default from schema
         ),
         training=TrainingConfig(
             total_timesteps=200,  # Small for integration tests
@@ -339,7 +363,7 @@ def integration_test_config(policy_mapper, tmp_path):
             ppo_epochs=2,
             minibatch_size=4,
             learning_rate=1e-3,
-            gamma=TRAIN_DEFAULTS.gamma,
+            gamma=0.99,  # Default from schema
             clip_epsilon=0.2,
             value_loss_coeff=0.5,
             entropy_coef=0.01,
@@ -354,11 +378,12 @@ def integration_test_config(policy_mapper, tmp_path):
             mixed_precision=False,
             ddp=False,
             gradient_clip_max_norm=0.5,
-            lambda_gae=TRAIN_DEFAULTS.lambda_gae,
+            lambda_gae=0.95,  # Default from schema
             checkpoint_interval_timesteps=200,
             evaluation_interval_timesteps=200,
             weight_decay=0.0,
             normalize_advantages=True,
+            enable_value_clipping=False,  # Required parameter
             lr_schedule_type=None,
             lr_schedule_kwargs=None,
             lr_schedule_step_on="epoch",
@@ -390,8 +415,32 @@ def integration_test_config(policy_mapper, tmp_path):
             log_model_artifact=False,
         ),
         display=DisplayConfig(
+            enable_board_display=False,
+            enable_trend_visualization=False,
+            enable_elo_ratings=False,
+            enable_enhanced_layout=False,
             display_moves=False,
             turn_tick=0.0,
+            board_unicode_pieces=False,
+            board_highlight_last_move=False,
+            sparkline_width=15,
+            trend_history_length=100,
+            elo_initial_rating=1500.0,
+            elo_k_factor=32.0,
+            dashboard_height_ratio=2,
+            progress_bar_height=4,
+            show_text_moves=False,
+            move_list_length=10,
+            moves_latest_top=True,
+            moves_flash_ms=0,
+            show_moves_trend=False,
+            show_completion_rate=False,
+            show_enhanced_win_rates=False,
+            show_turns_trend=False,
+            metrics_window_size=100,
+            trend_smoothing_factor=0.1,
+            metrics_panel_height=6,
+            enable_trendlines=False,
         ),
         parallel=ParallelConfig(
             enabled=False,
@@ -415,7 +464,6 @@ def integration_test_config(policy_mapper, tmp_path):
 def ppo_test_model():
     """Create a test ActorCritic model for PPOAgent testing."""
     from keisei.core.neural_network import ActorCritic
-    from keisei.utils import PolicyOutputMapper
 
     mapper = PolicyOutputMapper()
     return ActorCritic(
@@ -457,15 +505,14 @@ def ppo_agent_fast(fast_app_config, ppo_test_model):
 @pytest.fixture
 def populated_experience_buffer():
     """Pre-populated experience buffer for PPO learning tests."""
-    import numpy as np
     import torch
 
     from keisei.core.experience_buffer import ExperienceBuffer
 
     buffer = ExperienceBuffer(
         buffer_size=TEST_BUFFER_SIZE,
-        gamma=TRAIN_DEFAULTS.gamma,
-        lambda_gae=TRAIN_DEFAULTS.lambda_gae,
+        gamma=0.99,  # Default from schema
+        lambda_gae=0.95,  # Default from schema
         device="cpu",
     )
 
@@ -474,7 +521,7 @@ def populated_experience_buffer():
         CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cpu"
     )
     dummy_legal_mask = torch.ones(
-        ENV_DEFAULTS.num_actions_total, dtype=torch.bool, device="cpu"
+        13527, dtype=torch.bool, device="cpu"  # Default from schema
     )
 
     # Add varied experiences
@@ -514,7 +561,7 @@ def dummy_legal_mask():
     """Standard dummy legal mask for PPO tests."""
     import torch
 
-    mask = torch.ones(ENV_DEFAULTS.num_actions_total, dtype=torch.bool, device="cpu")
+    mask = torch.ones(13527, dtype=torch.bool, device="cpu")  # Default from schema
     mask[0] = False  # Make first action illegal for testing
     return mask
 
@@ -526,7 +573,9 @@ def create_test_experience_data(buffer_size: int, device: str = "cpu"):
     dummy_obs = torch.randn(
         CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device=device
     )
-    dummy_mask = torch.ones(ENV_DEFAULTS.num_actions_total, dtype=torch.bool, device=device)
+    dummy_mask = torch.ones(
+        13527, dtype=torch.bool, device=device  # Default from schema
+    )
 
     # Generate varied but consistent data
     experiences = []

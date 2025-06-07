@@ -14,13 +14,13 @@ import pytest
 
 from keisei.config_schema import (
     AppConfig,
+    DisplayConfig,
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
     ParallelConfig,
     TrainingConfig,
     WandBConfig,
-    DisplayConfig,
 )
 from keisei.training.session_manager import SessionManager
 from keisei.training.trainer import Trainer
