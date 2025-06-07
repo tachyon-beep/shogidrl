@@ -383,7 +383,12 @@ class TrainingLoopManager:
             turns_count,
             result,
             ep_rew,
-            self.trainer.step_manager.move_history if self.trainer.step_manager else None,
+            (
+                self.trainer.step_manager.move_history
+                if self.trainer.step_manager
+                else None
+            ),
+            self.trainer.policy_output_mapper,
         )
 
         total_games = (
