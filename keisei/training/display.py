@@ -59,7 +59,9 @@ class TrainingDisplay:
                 max_moves=self.display_config.move_list_length,
             )
             self.moves_component = RecentMovesPanel(
-                max_moves=self.display_config.move_list_length
+                max_moves=self.display_config.move_list_length,
+                newest_on_top=self.display_config.moves_latest_top,
+                flash_ms=self.display_config.moves_flash_ms,
             )
             self.piece_stand_component = PieceStandPanel()
         if self.display_config.enable_trend_visualization:
@@ -331,8 +333,14 @@ class TrainingDisplay:
                 move_strings = (
                     trainer.step_manager.move_log if trainer.step_manager else None
                 )
+                panel_height = self.layout["moves_panel"].size.height
+                pps = getattr(trainer, "last_ply_per_sec", 0.0)
                 self.layout["moves_panel"].update(
-                    self.moves_component.render(move_strings)
+                    self.moves_component.render(
+                        move_strings,
+                        available_height=panel_height,
+                        ply_per_sec=pps,
+                    )
                 )
 
             if self.trend_component:
@@ -361,7 +369,11 @@ class TrainingDisplay:
                         Panel,
                         self.game_stats_component.render(
                             trainer.game,
-                            trainer.step_manager.move_log if trainer.step_manager else None,
+                            (
+                                trainer.step_manager.move_log
+                                if trainer.step_manager
+                                else None
+                            ),
                             trainer.metrics_manager,
                         ),
                     )

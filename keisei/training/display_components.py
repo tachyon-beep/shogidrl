@@ -170,17 +170,8 @@ class ShogiBoard:
                 board_col = 8 - c_idx
                 sq_name = self._get_shogi_notation(r_idx, board_col)
                 if hot_squares and sq_name in hot_squares:
-                    row_cells.append(
-                        Panel(
-                            Align.center(cell_renderable),
-                            box=box.SQUARE,
-                            padding=(0, 0),
-                            border_style="red",
-                            width=self.cell_width + 2,
-                        )
-                    )
-                else:
-                    row_cells.append(cell_renderable)
+                    cell_renderable.stylize(Style(bgcolor="dark_red"))
+                row_cells.append(cell_renderable)
 
             table.add_row(*row_cells)
         return table
@@ -201,28 +192,51 @@ class ShogiBoard:
 
 
 class RecentMovesPanel:
-    """Renders the list of recent moves."""
+    BORDER_FUDGE = 2  # 1 title + 1 bottom border
 
-    def __init__(self, max_moves: int = 20):
+    def __init__(
+        self, max_moves: int = 20, newest_on_top: bool = True, flash_ms: int = 0
+    ):
         self.max_moves = max_moves
+        self.newest_on_top = newest_on_top
+        self.flash_ms = flash_ms
+        self._last_move: str | None = None
+        self._flash_deadline: float = 0.0
 
-    def render(self, move_strings: Optional[List[str]] = None) -> RenderableType:
-        if not move_strings:
-            return Panel(
-                Text("No moves yet."),
-                title="Recent Moves",
-                border_style="yellow",
-                expand=True,
-            )
-        indent = " "
-        last_msgs = move_strings[-self.max_moves :]
-        formatted = [f"{indent}{msg}" for msg in last_msgs]
-        return Panel(
-            Text("\n".join(formatted)),
-            title="Recent Moves",
-            border_style="yellow",
-            expand=True,
+    def _stylise(self, move: str) -> Text:
+        from time import monotonic
+
+        now = monotonic()
+        style = "bold green" if now < self._flash_deadline else ""
+        return Text(f" {move}", style=style)
+
+    def render(
+        self,
+        move_strings: Optional[List[str]] = None,
+        available_height: Optional[int] = None,
+        ply_per_sec: float = 0.0,
+    ) -> RenderableType:
+        moves = move_strings or []
+        if moves and moves[-1] != self._last_move:
+            self._last_move = moves[-1]
+            self._flash_deadline = __import__("time").monotonic() + self.flash_ms / 1000
+
+        capacity = max(1, (available_height or self.max_moves) - self.BORDER_FUDGE)
+
+        if self.newest_on_top:
+            slice_ = moves[-capacity:][::-1]
+            padded = slice_ + [""] * max(0, capacity - len(slice_))
+        else:
+            slice_ = moves[-capacity:]
+            padded = [""] * max(0, capacity - len(slice_)) + slice_
+
+        body = Text("\n").join([self._stylise(m) for m in padded])
+        title = (
+            f"Recent Moves ({len(moves)} | {ply_per_sec:.1f} ply/s)"
+            if ply_per_sec
+            else f"Recent Moves ({len(moves)})"
         )
+        return Panel(body, title=title, border_style="yellow")
 
 
 class PieceStandPanel:
