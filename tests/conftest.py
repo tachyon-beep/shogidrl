@@ -25,8 +25,31 @@ from keisei.constants import (
 )
 from keisei.utils import PolicyOutputMapper
 
-# Get defaults from the minimal_training_config fixture instead of bare instantiation
-# This avoids requiring all the mandatory parameters
+# =============================================================================
+# Default Constants for Tests - Used by PPO Agent Tests
+# =============================================================================
+
+class _EnvDefaults:
+    """Default environment configuration values for tests."""
+    seed = 42
+    num_actions_total = 13527  # Default from schema
+
+class _TrainDefaults:
+    """Default training configuration values for tests."""
+    learning_rate = 1e-3
+    gamma = 0.99
+    clip_epsilon = 0.2
+    value_loss_coeff = 0.5
+    entropy_coef = 0.01
+    render_every_steps = 1
+    refresh_per_second = 4
+    se_ratio = 0.25
+    gradient_clip_max_norm = 0.5
+    lambda_gae = 0.95
+
+# Create instances to be imported by test files
+ENV_DEFAULTS = _EnvDefaults()
+TRAIN_DEFAULTS = _TrainDefaults()
 
 # Try to set the start method as early as possible for pytest runs
 try:

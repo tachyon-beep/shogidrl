@@ -3,7 +3,7 @@ Pydantic configuration schema for Keisei DRL Shogi Client.
 Defines all configuration sections and their defaults.
 """
 
-from typing import Literal, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -314,6 +314,10 @@ class DisplayConfig(BaseModel):
     )
     metrics_panel_height: int = Field(6, description="Height of metrics panel")
     enable_trendlines: bool = Field(True, description="Show trendlines in sparklines")
+    log_layer_keyword_filters: List[str] = Field(
+        ["stem", "policy_head", "value_head"],
+        description="Keywords to filter layers in Model Evolution panel (layers containing any of these keywords will be displayed)"
+    )
 
 
 class AppConfig(BaseModel):
@@ -324,6 +328,6 @@ class AppConfig(BaseModel):
     wandb: WandBConfig
     parallel: ParallelConfig
     demo: Optional[DemoConfig] = None
-    display: DisplayConfig = Field(default_factory=DisplayConfig)
+    display: DisplayConfig = Field(default_factory=lambda: DisplayConfig())
 
     model_config = {"extra": "forbid"}  # Disallow unknown fields for strict validation

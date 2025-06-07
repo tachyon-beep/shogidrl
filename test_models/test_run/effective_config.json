@@ -93,6 +93,8 @@
         "progress_bar_height": 4,
         "show_text_moves": true,
         "move_list_length": 10,
+        "moves_latest_top": true,
+        "moves_flash_ms": 500,
         "show_moves_trend": true,
         "show_completion_rate": true,
         "show_enhanced_win_rates": true,

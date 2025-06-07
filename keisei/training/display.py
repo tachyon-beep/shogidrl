@@ -2,6 +2,7 @@
 training/display.py: Rich UI management for the Shogi RL trainer.
 """
 
+import copy
 from typing import Dict, List, Optional, Union, cast
 
 from rich.console import Console, Group, RenderableType
@@ -22,7 +23,6 @@ from rich.table import Table
 from rich.text import Text
 
 from keisei.config_schema import DisplayConfig
-from keisei.shogi import ShogiGame
 
 from .adaptive_display import AdaptiveDisplayManager
 from .display_components import (
@@ -249,7 +249,7 @@ class TrainingDisplay:
 
         table = Table(box=None, expand=True, show_header=True, header_style="bold")
         table.add_column("Metric", style="cyan", no_wrap=True, ratio=3)
-        table.add_column("Current", justify="right", ratio=2)
+        table.add_column("Last", justify="right", ratio=2)
         table.add_column("Previous", justify="right", ratio=2)
         table.add_column("Average (5)", justify="right", ratio=2)
         table.add_column("Trend", no_wrap=True, ratio=4)
@@ -368,10 +368,7 @@ class TrainingDisplay:
                 )
             )
 
-            try: # TODO - we shouldn't need to be asserting that this panel exists, this seems like an old integration issue we made permanent.
-                assert isinstance(trainer.game, ShogiGame), \
-                f"FATAL: trainer.game has been corrupted! Expected ShogiGame, but got {type(trainer.game).__name__}."
-
+            try: # TODO - we shouldn't need to be trying/checking that this panel exists, the assert and throwing of an error should be enough
                 assert self.game_stats_component is not None
     
                 panel = cast(
@@ -450,14 +447,12 @@ class TrainingDisplay:
 
         model = getattr(trainer.agent, "model", None)
         if model is not None:
-            stats_lines: List[RenderableType] = []
             current_stats: Dict[str, Dict[str, float]] = {}
             named_params = dict(model.named_parameters())
 
+            # --- 1. Calculate current statistics ---
             for name, p in named_params.items():
-                if ".weight" in name and (
-                    "policy_head" in name or "value_head" in name or "stem" in name
-                ):
+                if ".weight" in name and any(keyword in name for keyword in self.display_config.log_layer_keyword_filters):
                     data = p.data.float().cpu().numpy()
                     current_stats[name] = {
                         "mean": float(data.mean()),
@@ -465,6 +460,14 @@ class TrainingDisplay:
                         "min": float(data.min()),
                         "max": float(data.max()),
                     }
+
+            # --- 2. Create and populate a Rich Table ---
+            stats_table = Table(title="Weight Statistics", expand=True)
+            stats_table.add_column("Layer", style="cyan", no_wrap=True, ratio=2)
+            stats_table.add_column("Mean", justify="right", ratio=1)
+            stats_table.add_column("Std Dev", justify="right", ratio=1)
+            stats_table.add_column("Min", justify="right", ratio=1)
+            stats_table.add_column("Max", justify="right", ratio=1)
 
             for name, stats in current_stats.items():
                 trend_chars = {"mean": "→", "std": "→", "min": "→", "max": "→"}
@@ -476,45 +479,66 @@ class TrainingDisplay:
                             trend_chars[key] = "↑"
                         elif curr_val < prev_val:
                             trend_chars[key] = "↓"
-
-                update_mag = trainer.last_weight_updates.get(name, 0.0)
-                color = "white"
-                if update_mag > 1.0:
-                    color = "red"
-                elif update_mag > 0.1:
-                    color = "yellow"
-
-                header = Text(f"Layer: {name}", style=f"bold {color}")
-                stats_table = Table.grid(padding=(0, 2))
+                
+                # Add a row to the table with formatted stats and trend arrows
                 stats_table.add_row(
-                    Text("Mean", style="bold"),
-                    Text("Std Dev", style="bold"),
-                    Text("Min", style="bold"),
-                    Text("Max", style="bold"),
-                )
-                stats_table.add_row(
+                    name,
                     f"{stats['mean']:.4f} {trend_chars['mean']}",
                     f"{stats['std']:.4f} {trend_chars['std']}",
                     f"{stats['min']:.2f} {trend_chars['min']}",
                     f"{stats['max']:.2f} {trend_chars['max']}",
                 )
-                stats_lines.append(header)
-                stats_lines.append(stats_table)
 
-            self.previous_model_stats = current_stats
+            # --- 3. Update the panel with the new table ---
+            # Create a borderless table for perfect alignment
+            diagram_table = Table.grid(expand=True, padding=(0, 1))
+            diagram_table.add_column(justify="center")
+            diagram_table.add_column(justify="center", style="dim")  # For the arrow
+            diagram_table.add_column(justify="center")
+            diagram_table.add_column(justify="center", style="dim")  # For the arrow
+            diagram_table.add_column(justify="left")
 
-            arch = Text(
-                "[Input: 9x9xN] -> [ResNet Core] -> [Policy Head]\n"
-                "                         -> [Value Head]",
-                style="bold",
-            )
-            self.layout["evolution_panel"].update(
-                Panel(
-                    Group(arch, *stats_lines),
-                    border_style="magenta",
-                    title="Model Evolution",
+            try:
+                # Dynamically get component names from config
+                obs_shape = getattr(self.config.env, 'obs_shape', (46, 9, 9))
+                if hasattr(self.config.env, 'input_channels'):
+                    input_channels = self.config.env.input_channels
+                    obs_shape = (input_channels, 9, 9)
+                
+                input_shape_str = f"{obs_shape[1]}x{obs_shape[2]}x{obs_shape[0]}"
+                core_name_str = f"{self.config.training.model_type.capitalize()} Core"
+
+                # Group the two output heads to stack them vertically
+                heads = Group(
+                    Text("[Policy Head]", style="bold"),
+                    Text("[Value Head]", style="bold")
                 )
+
+                # Add the components as a single row in the table
+                diagram_table.add_row(
+                    Text(f"[Input: {input_shape_str}]", style="bold"),
+                    "->",
+                    Text(f"[{core_name_str}]", style="bold"),
+                    "->",
+                    heads
+                )
+                arch_diagram = diagram_table
+            except (AttributeError, IndexError):
+                # Fallback to a simple table version if config is unavailable
+                fallback_table = Table.grid(expand=True, padding=(0, 1))
+                fallback_table.add_column(justify="center")
+                fallback_table.add_row(Text("[Input] -> [Core] -> [Policy/Value Heads]", style="bold"))
+                arch_diagram = fallback_table
+            
+            # Group the architecture diagram and the new stats table
+            panel_content = Group(arch_diagram, stats_table)
+            self.layout["evolution_panel"].update(
+                Panel(panel_content, border_style="magenta", title="Model Evolution")
             )
+
+            # --- 4. Store a deep copy for the next update (The Bug Fix) ---
+            self.previous_model_stats = copy.deepcopy(current_stats)
+
         if self.elo_component_enabled:
             snap = getattr(trainer, "evaluation_elo_snapshot", None)
             if snap and snap.get("top_ratings") and len(snap["top_ratings"]) >= 2:

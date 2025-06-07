@@ -6,9 +6,7 @@ from __future__ import annotations
 
 import datetime
 import json
-import logging
 import os
-import sys
 from abc import ABC, abstractmethod
 from typing import (
     TYPE_CHECKING,
@@ -355,11 +353,11 @@ class PolicyOutputMapper:
 
     def action_idx_to_shogi_move(self, action_idx: int) -> "MoveTuple":
         """Converts an action index from the policy output back to a Shogi MoveTuple."""
-        if not (0 <= action_idx < len(self.idx_to_move)):
-            # Log distinct unrecognized moves only a few times to avoid flooding logs
-            log_message = f"Action index {action_idx} is out of bounds for idx_to_move (size {len(self.idx_to_move)})."
-            raise IndexError(log_message)
-        return self.idx_to_move[action_idx]
+        if 0 <= action_idx < len(self.idx_to_move):
+            return self.idx_to_move[action_idx]
+        # Log distinct unrecognized moves only a few times to avoid flooding logs
+        log_message = f"Action index {action_idx} is out of bounds for idx_to_move (size {len(self.idx_to_move)})."
+        raise IndexError(log_message)
 
     def shogi_move_to_usi(self, move_tuple: "MoveTuple") -> str:
         """Converts a Shogi MoveTuple to its USI string representation."""
@@ -375,7 +373,7 @@ class PolicyOutputMapper:
             usi_to_sq = self._usi_sq(to_r, to_c)
             promo_char = "+" if promote else ""
             return f"{usi_from_sq}{usi_to_sq}{promo_char}"
-        elif len(move_tuple) == 5 and isinstance(
+        if len(move_tuple) == 5 and isinstance(
             move_tuple[4], PieceType
         ):  # DropMoveTuple
             _none1, _none2, to_r, to_c, piece_type_enum = cast(
@@ -397,11 +395,11 @@ class PolicyOutputMapper:
                 ) from e
             usi_to_sq = self._usi_sq(to_r, to_c)
             return f"{piece_usi_char}*{usi_to_sq}"
-        else:
-            raise ValueError(
-                f"Unrecognized move_tuple format for USI conversion: "
-                f"length {len(move_tuple)}, last element type {type(move_tuple[-1]) if move_tuple else 'N/A'}"
-            )
+
+        raise ValueError(
+            f"Unrecognized move_tuple format for USI conversion: "
+            f"length {len(move_tuple)}, last element type {type(move_tuple[-1]) if move_tuple else 'N/A'}"
+        )
 
     def usi_to_shogi_move(self, usi_move_str: str) -> "MoveTuple":
         """Converts a USI string to its Shogi MoveTuple representation."""
@@ -442,27 +440,28 @@ class PolicyOutputMapper:
             return (None, None, to_r, to_c, dropped_piece_type)
 
         # Board move (e.g., 7g7f, 2b3a+, 8h2b+)
+        if 4 <= len(usi_move_str) <= 5:
+            pass  # Valid length, continue processing
         else:
-            if not (4 <= len(usi_move_str) <= 5):
+            raise ValueError(
+                f"Invalid USI board move string length: {usi_move_str}"
+            )
+
+        from_sq_str = usi_move_str[0:2]
+        to_sq_str = usi_move_str[2:4]
+        promote = False
+        if len(usi_move_str) == 5:
+            if usi_move_str[4] == "+":
+                promote = True
+            else:
                 raise ValueError(
-                    f"Invalid USI board move string length: {usi_move_str}"
+                    f"Invalid promotion character in USI move: {usi_move_str}"
                 )
 
-            from_sq_str = usi_move_str[0:2]
-            to_sq_str = usi_move_str[2:4]
-            promote = False
-            if len(usi_move_str) == 5:
-                if usi_move_str[4] == "+":
-                    promote = True
-                else:
-                    raise ValueError(
-                        f"Invalid promotion character in USI move: {usi_move_str}"
-                    )
-
-            from_r, from_c = _parse_usi_sq(from_sq_str)
-            to_r, to_c = _parse_usi_sq(to_sq_str)
-            # MODIFIED: Correctly instantiate BoardMoveTuple
-            return (from_r, from_c, to_r, to_c, promote)
+        from_r, from_c = _parse_usi_sq(from_sq_str)
+        to_r, to_c = _parse_usi_sq(to_sq_str)
+        # MODIFIED: Correctly instantiate BoardMoveTuple
+        return (from_r, from_c, to_r, to_c, promote)
 
     def action_idx_to_usi_move(self, action_idx: int, _board=None) -> str:
         """Converts an action index to its USI move string representation."""

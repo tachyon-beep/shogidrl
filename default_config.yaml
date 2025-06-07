@@ -23,6 +23,18 @@
 # - Manager integration: Each config section integrates with specific manager classes
 # - Validation flow: Schema validation → field validators → cross-field consistency checks
 #
+# NEW FEATURES (v2024):
+# - MODEL EVOLUTION DISPLAY: Configurable layer filtering in training display
+#   * Set display.log_layer_keyword_filters to control which layers are shown
+#   * Default: ["stem", "policy_head", "value_head"] for ResNet models
+#   * Custom examples: ["attention", "feedforward"] for Transformers
+#   * Performance tip: Use 3-10 specific keywords for optimal display speed
+#
+# - DYNAMIC ARCHITECTURE DIAGRAM: Auto-generated based on actual config
+#   * Shows real input channels (from env.input_channels)
+#   * Displays actual model type (from training.model_type)
+#   * Updates automatically when configuration changes
+#
 # =============================================================================
 
 # =============================================================================
@@ -310,3 +322,117 @@ display:
   trend_smoothing_factor: 0.1       # Smoothing factor for trends
   metrics_panel_height: 6           # Height of metrics panel
   enable_trendlines: true           # Enable trendline rendering
+  
+  # =============================================================================
+  # MODEL EVOLUTION LAYER DISPLAY CONFIGURATION
+  # =============================================================================
+  # Controls which neural network layers are displayed in the Model Evolution panel
+  # during training. The panel shows weight statistics (mean, std, min, max) and
+  # trends for layers matching the specified keywords.
+  #
+  # USAGE EXAMPLES:
+  # Default (ResNet): ["stem", "policy_head", "value_head"]
+  # Transformer: ["attention", "feedforward", "embedding", "position"]
+  # Custom CNN: ["conv", "fc", "output"]
+  # All layers: ["weight"]  # Shows all weight parameters
+  # Specific layers: ["layer1", "layer2", "final"]
+  #
+  # HOW IT WORKS:
+  # - Filters model parameters containing ".weight" in the name
+  # - Shows layers where ANY keyword appears in the parameter name
+  # - Case-sensitive matching (use lowercase for standard PyTorch naming)
+  # - Updates in real-time during training with trend indicators
+  #
+  # PERFORMANCE IMPACT:
+  # - More layers = more computation per update
+  # - Recommended: 3-10 keywords for optimal performance
+  # - Use specific keywords to avoid showing too many layers
+  log_layer_keyword_filters:
+  #  - "stem"          # First convolutional layers (ResNet stem)
+  #  - "policy_head"   # Policy network output layers
+  #  - "value_head"    # Value network output layers
+    - "stem"           # Initial convolution
+    - "layer1"         # ResNet stage 1
+    - "layer2"         # ResNet stage 2
+    - "layer3"         # ResNet stage 3
+    - "layer4"         # ResNet stage 4
+    - "policy_head"    # Policy output
+    - "value_head"     # Value output
+
+# =============================================================================
+# CONFIGURATION EXAMPLES FOR MODEL EVOLUTION DISPLAY
+# =============================================================================
+# The following examples show how to customize the log_layer_keyword_filters
+# for different model architectures and debugging scenarios.
+#
+# TO USE THESE EXAMPLES:
+# 1. Copy the desired filter list
+# 2. Replace the log_layer_keyword_filters section above
+# 3. Restart training to see the new layer selection
+#
+# EXAMPLE 1: Transformer/Attention Models
+# ----------------------------------------
+# display:
+#   log_layer_keyword_filters:
+#     - "attention"      # Multi-head attention layers
+#     - "feedforward"    # Feed-forward network layers
+#     - "embedding"      # Token/position embedding layers
+#     - "norm"           # Layer normalization
+#     - "output"         # Final output layers
+#
+# EXAMPLE 2: Custom CNN Architecture
+# -----------------------------------
+# display:
+#   log_layer_keyword_filters:
+#     - "conv1"          # First convolutional block
+#     - "conv2"          # Second convolutional block
+#     - "fc"             # Fully connected layers
+#     - "classifier"     # Classification head
+#     - "regressor"      # Regression head
+#
+# EXAMPLE 3: ResNet with More Detail
+# -----------------------------------
+# display:
+#   log_layer_keyword_filters:
+#     - "stem"           # Initial convolution
+#     - "layer1"         # ResNet stage 1
+#     - "layer2"         # ResNet stage 2
+#     - "layer3"         # ResNet stage 3
+#     - "layer4"         # ResNet stage 4
+#     - "policy_head"    # Policy output
+#     - "value_head"     # Value output
+#
+# EXAMPLE 4: Debugging Mode (Show All Layers)
+# ---------------------------------------------
+# display:
+#   log_layer_keyword_filters:
+#     - "weight"         # Shows ALL weight parameters
+#
+# EXAMPLE 5: Minimal Mode (Performance Focused)
+# -----------------------------------------------
+# display:
+#   log_layer_keyword_filters:
+#     - "policy_head"    # Only policy output
+#     - "value_head"     # Only value output
+#
+# EXAMPLE 6: EfficientNet/MobileNet Style
+# ----------------------------------------
+# display:
+#   log_layer_keyword_filters:
+#     - "features"       # Feature extraction layers
+#     - "se"             # Squeeze-and-excitation blocks
+#     - "classifier"     # Classification head
+#     - "head"           # Various head layers
+#
+# PERFORMANCE GUIDELINES:
+# - Fewer keywords = faster updates, less memory usage
+# - More keywords = detailed monitoring, slower updates
+# - Optimal range: 3-10 keywords
+# - Use specific names to avoid catching too many layers
+# - Test different configurations to find the right balance
+#
+# TROUBLESHOOTING:
+# - No layers shown? Check that your keywords match actual layer names
+# - Too many layers? Use more specific keywords
+# - Slow performance? Reduce the number of keywords
+# - Missing important layers? Add broader keywords like "head" or "output"

@@ -5,7 +5,7 @@ checkpoint.py: Model checkpoint migration and compatibility utilities for Keisei
 from typing import Any, Dict
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 
 def load_checkpoint_with_padding(

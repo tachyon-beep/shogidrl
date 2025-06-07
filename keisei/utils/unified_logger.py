@@ -7,10 +7,9 @@ and provide a unified approach to logging throughout the Keisei training system.
 
 import sys
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 
 from rich.console import Console
-from rich.text import Text
 
 
 class UnifiedLogger:

@@ -114,7 +114,7 @@ class PerformanceMonitor:
 
         # Group by operation type
         timing_ops = set()
-        for key in stats.keys():
+        for key in stats:
             if any(
                 key.endswith(suffix)
                 for suffix in ["_avg", "_min", "_max", "_total", "_count"]
