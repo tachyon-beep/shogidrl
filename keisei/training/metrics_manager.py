@@ -6,7 +6,7 @@ import json
 import time
 from collections import deque, Counter
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple, List, Deque
+from typing import Any, Dict, Optional, Tuple, List, Deque, Sequence
 
 from keisei.utils import (
     _coords_to_square_name,
@@ -206,8 +206,8 @@ class MetricsManager:
             except Exception:
                 pass
 
-    def get_moves_per_game_trend(self, window_size: int = 100) -> List[float]:
-        data = list(self.moves_per_game)[-window_size:]
+    def get_moves_per_game_trend(self, window_size: int = 100) -> Sequence[int]:
+        data: List[int] = list(self.moves_per_game)[-window_size:]
         return data
 
     def get_hot_squares(self, top_n: int = 3) -> List[str]:
@@ -229,8 +229,8 @@ class MetricsManager:
         draws = sum(1 for r, _ in recent if r == "draw")
         return {"win": wins / total, "loss": losses / total, "draw": draws / total}
 
-    def get_average_turns_trend(self, window_size: int = 100) -> List[float]:
-        data = list(self.turns_per_game)[-window_size:]
+    def get_average_turns_trend(self, window_size: int = 100) -> Sequence[int]:
+        data: List[int] = list(self.turns_per_game)[-window_size:]
         return data
 
     def format_episode_metrics(self, episode_length: int, episode_reward: float) -> str:
