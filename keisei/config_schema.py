@@ -140,7 +140,7 @@ class EvaluationConfig(BaseModel):
         False, description="Enable Weights & Biases logging for evaluation."
     )
     elo_registry_path: Optional[str] = Field(
-        None, description="Path to Elo registry JSON file"
+        "elo_ratings.json", description="Path to Elo registry JSON file"
     )
     agent_id: Optional[str] = Field(
         None, description="Identifier for the evaluated model"

@@ -15,6 +15,7 @@ from rich.text import Text
 from rich.layout import Layout
 from rich.table import Table
 from rich.style import Style
+from rich.align import Align
 
 
 class DisplayComponent(Protocol):
@@ -161,7 +162,7 @@ class ShogiBoard:
             return Panel(Text("No active game"), title="Main Board", border_style="blue")
 
         board_table = self._generate_rich_table(board_state)
-        return Panel(board_table, title="Main Board", border_style="blue")
+        return Panel(Align.center(board_table), title="Main Board", border_style="blue")
 
 
 class RecentMovesPanel:

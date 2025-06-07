@@ -193,7 +193,7 @@ evaluation:
 
   # Enable Weights & Biases logging for evaluation metrics
   wandb_log_eval: false
-  elo_registry_path: null
+  elo_registry_path: "elo_ratings.json"
   agent_id: null
   opponent_id: null
 # =============================================================================
