@@ -294,12 +294,24 @@ class DisplayConfig(BaseModel):
         description="Display recent moves under the board when demo mode is active",
     )
     move_list_length: int = Field(10, description="Number of recent moves to display")
+    moves_latest_top: bool = Field(
+        True,
+        description="Display newest move at top of recent moves panel",
+    )
+    moves_flash_ms: int = Field(
+        500,
+        description="Highlight newest move for N milliseconds (0 disables)",
+    )
     show_moves_trend: bool = Field(True, description="Display moves per game trend")
     show_completion_rate: bool = Field(True, description="Display game completion rate")
-    show_enhanced_win_rates: bool = Field(True, description="Display win/loss/draw breakdown")
+    show_enhanced_win_rates: bool = Field(
+        True, description="Display win/loss/draw breakdown"
+    )
     show_turns_trend: bool = Field(True, description="Display average turns trend")
     metrics_window_size: int = Field(100, description="Rolling window size for metrics")
-    trend_smoothing_factor: float = Field(0.1, description="Smoothing factor for trend arrows")
+    trend_smoothing_factor: float = Field(
+        0.1, description="Smoothing factor for trend arrows"
+    )
     metrics_panel_height: int = Field(6, description="Height of metrics panel")
     enable_trendlines: bool = Field(True, description="Show trendlines in sparklines")
 

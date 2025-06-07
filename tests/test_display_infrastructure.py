@@ -27,13 +27,14 @@ def test_metrics_history_trimming():
     assert len(history.win_rates_history) == 3
 
     for i in range(5):
-        history.add_ppo_data({
-            "ppo/learning_rate": float(i),
-            "ppo/policy_loss": float(i),
-        })
+        history.add_ppo_data(
+            {
+                "ppo/learning_rate": float(i),
+                "ppo/policy_loss": float(i),
+            }
+        )
     assert len(history.learning_rates) == 3
     assert len(history.policy_losses) == 3
-
 
 
 def test_elo_rating_updates():
@@ -47,7 +48,6 @@ def test_sparkline_generation():
     spark = Sparkline(width=5)
     s = spark.generate([1, 2, 3, 4, 5])
     assert len(s) == 5
-
 
 
 def test_adaptive_layout_choice():
@@ -71,7 +71,7 @@ def test_shogi_board_basic_render():
 
 
 def test_recent_moves_panel_render():
-    panel = RecentMovesPanel(max_moves=2)
+    panel = RecentMovesPanel(max_moves=2, newest_on_top=True, flash_ms=0)
     moves = ["7g7f", "8c8d", "2g2f"]
-    rendered = panel.render(moves)
+    rendered = panel.render(moves, available_height=5)
     assert "8c8d" in rendered.renderable.plain
