@@ -509,11 +509,12 @@ class StepManager:
             piece_info_for_demo,
         )
 
-        player_display = (
-            current_player_name.title()
-            if current_player_name.upper() in {"BLACK", "WHITE"}
-            else current_player_name
-        )
+        if current_player_name.upper() == "BLACK":
+            player_display = "Sente"
+        elif current_player_name.upper() == "WHITE":
+            player_display = "Gote"
+        else:
+            player_display = current_player_name
         log_msg = f"Move {episode_length + 1} ({player_display}): {move_str}"
         self.move_log.append(log_msg)
         self.move_history.append(selected_move)
@@ -549,9 +550,9 @@ class StepManager:
     def _format_game_outcome_message(self, winner: Optional[str], reason: str) -> str:
         """Helper to format the game outcome message."""
         if winner == "black":
-            return f"Black wins by {reason}."
+            return f"Sente wins by {reason}."
         if winner == "white":
-            return f"White wins by {reason}."
+            return f"Gote wins by {reason}."
         if winner is None:
             return f"Draw by {reason}."
         return f"Game ended: {winner} by {reason}."  # Should ideally not be reached with current logic
