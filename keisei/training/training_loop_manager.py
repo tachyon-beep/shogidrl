@@ -377,7 +377,7 @@ class TrainingLoopManager:
         ep_len = episode_state.episode_length
         ep_rew = episode_state.episode_reward
         ep_metrics_str = f"L:{ep_len} R:{ep_rew:.2f}"
-        turns_count = ep_len // 2
+        turns_count = ep_len
         self.trainer.metrics_manager.log_episode_metrics(
             ep_len, turns_count, result, ep_rew
         )

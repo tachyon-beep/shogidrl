@@ -110,6 +110,10 @@ class Trainer(CompatibilityMixin):
         # Initialize TrainingLoopManager
         self.training_loop_manager = TrainingLoopManager(trainer=self)
 
+        # Variables for UI instrumentation
+        self.last_gradient_norm: float = 0.0
+        self.last_weight_updates: Dict[str, float] = {}
+
     def _initialize_components(self):
         """Initialize all training components using SetupManager."""
         # Setup game components
@@ -182,7 +186,19 @@ class Trainer(CompatibilityMixin):
             last_value_pred_for_gae = self.agent.get_value(current_obs_np)
 
         self.experience_buffer.compute_advantages_and_returns(last_value_pred_for_gae)
+        # Track weight updates by comparing state before and after learn()
+        old_state = {
+            name: p.detach().clone() for name, p in self.agent.model.named_parameters()
+        }
         learn_metrics = self.agent.learn(self.experience_buffer)
+        new_state = {
+            name: p.detach() for name, p in self.agent.model.named_parameters()
+        }
+        self.last_weight_updates = {
+            name: (new_state[name] - old_state[name]).norm().item()
+            for name in old_state.keys()
+        }
+        self.last_gradient_norm = getattr(self.agent, "last_gradient_norm", 0.0)
         self.experience_buffer.clear()
 
         # Format PPO metrics for display using MetricsManager

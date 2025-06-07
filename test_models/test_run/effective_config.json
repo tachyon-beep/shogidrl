@@ -45,7 +45,7 @@
         "max_moves_per_game": 500,
         "log_file_path_eval": "eval_log.txt",
         "wandb_log_eval": false,
-        "elo_registry_path": null,
+        "elo_registry_path": "elo_ratings.json",
         "agent_id": null,
         "opponent_id": null,
         "previous_model_pool_size": 5
@@ -75,15 +75,14 @@
         "max_queue_size": 1000,
         "worker_seed_offset": 1000
     },
-    "demo": {
-        "enable_demo_mode": false,
-        "demo_mode_delay": 0.0
-    },
+    "demo": null,
     "display": {
         "enable_board_display": true,
         "enable_trend_visualization": true,
         "enable_elo_ratings": true,
         "enable_enhanced_layout": true,
+        "display_moves": false,
+        "turn_tick": 0.0,
         "board_unicode_pieces": true,
         "board_highlight_last_move": true,
         "sparkline_width": 15,
@@ -93,6 +92,14 @@
         "dashboard_height_ratio": 2,
         "progress_bar_height": 4,
         "show_text_moves": true,
-        "move_list_length": 10
+        "move_list_length": 10,
+        "show_moves_trend": true,
+        "show_completion_rate": true,
+        "show_enhanced_win_rates": true,
+        "show_turns_trend": true,
+        "metrics_window_size": 100,
+        "trend_smoothing_factor": 0.1,
+        "metrics_panel_height": 6,
+        "enable_trendlines": true
     }
 }

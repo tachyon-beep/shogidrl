@@ -200,6 +200,14 @@ class ExperienceBuffer:
         """Return the number of transitions currently in the buffer."""
         return self.ptr
 
+    def size(self) -> int:
+        """Current number of stored transitions."""
+        return self.ptr
+
+    def capacity(self) -> int:
+        """Maximum capacity of the buffer."""
+        return self.buffer_size
+
     def add_batch(self, experiences: List[Experience]) -> None:
         """
         Add a batch of experiences to the buffer for parallel collection.
