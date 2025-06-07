@@ -66,11 +66,9 @@ from keisei.constants import (
     TEST_ZERO_CLIP_EPSILON,
     TEST_ZERO_LEARNING_RATE,
 )
-
-from tests.conftest import TRAIN_DEFAULTS, ENV_DEFAULTS
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.ppo_agent import PPOAgent
-from tests.conftest import assert_valid_ppo_metrics
+from tests.conftest import ENV_DEFAULTS, TRAIN_DEFAULTS, assert_valid_ppo_metrics
 
 
 class TestPPOAgentErrorHandling:
@@ -360,12 +358,12 @@ class TestPPOAgentConfigurationValidation:
             # Create minimal app config with invalid training config
             from keisei.config_schema import (
                 AppConfig,
+                DisplayConfig,
                 EnvConfig,
                 EvaluationConfig,
                 LoggingConfig,
                 ParallelConfig,
                 WandBConfig,
-                DisplayConfig,
             )
 
             app_config = AppConfig(

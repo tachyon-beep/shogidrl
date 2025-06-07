@@ -40,13 +40,11 @@ from keisei.constants import (
     TEST_UNEVEN_MINIBATCH_SIZE,
     TEST_VALUE_DEFAULT,
 )
-
-from tests.conftest import TRAIN_DEFAULTS, ENV_DEFAULTS
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.neural_network import ActorCritic
 from keisei.core.ppo_agent import PPOAgent
 from keisei.utils import PolicyOutputMapper
-from tests.conftest import assert_valid_ppo_metrics
+from tests.conftest import ENV_DEFAULTS, TRAIN_DEFAULTS, assert_valid_ppo_metrics
 
 
 class TestPPOAgentLossComponents:

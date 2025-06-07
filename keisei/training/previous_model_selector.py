@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import random
 from collections import deque
 from pathlib import Path
-import random
 from typing import Deque, Iterable, Optional
 
 

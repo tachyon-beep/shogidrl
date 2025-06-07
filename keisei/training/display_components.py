@@ -2,23 +2,26 @@
 
 from __future__ import annotations
 
-from typing import Protocol, Optional, List, Sequence, Dict
-from collections import deque, Counter
 import ast
-from wcwidth import wcswidth  # type: ignore
-from keisei.utils import _coords_to_square_name
+from collections import Counter, deque
+from typing import Dict, List, Optional, Protocol, Sequence
 
-from keisei.utils.unified_logger import log_error_to_stderr
-from keisei.shogi.shogi_core_definitions import Color
+from time import monotonic
 
-from rich.console import RenderableType, Group
-from rich.panel import Panel
 from rich import box
-from rich.text import Text
-from rich.layout import Layout
-from rich.table import Table
-from rich.style import Style
 from rich.align import Align
+from rich.console import Group, RenderableType
+from rich.layout import Layout
+from rich.panel import Panel
+from rich.style import Style
+from rich.table import Table
+from rich.text import Text
+from wcwidth import wcswidth  # type: ignore
+
+from keisei.shogi.shogi_core_definitions import Color
+from keisei.utils import _coords_to_square_name
+from keisei.utils.unified_logger import log_error_to_stderr
+
 
 
 class DisplayComponent(Protocol):
@@ -35,8 +38,6 @@ class ShogiBoard:
     def __init__(
         self,
         use_unicode: bool = True,
-        show_moves: bool = False,  # This parameter is kept for compatibility but not used in this version
-        max_moves: int = 10,  # This parameter is kept for compatibility but not used in this version
     ) -> None:
         self.use_unicode = use_unicode
         # Define reference symbols for width calculation
@@ -190,10 +191,7 @@ class ShogiBoard:
         )
         return Panel(Align.center(board_table), title="Main Board", border_style="blue")
 
-
 class RecentMovesPanel:
-    BORDER_FUDGE = 2  # 1 title + 1 bottom border
-
     def __init__(
         self, max_moves: int = 20, newest_on_top: bool = True, flash_ms: int = 0
     ):
@@ -204,40 +202,48 @@ class RecentMovesPanel:
         self._flash_deadline: float = 0.0
 
     def _stylise(self, move: str) -> Text:
-        from time import monotonic
 
-        now = monotonic()
-        style = "bold green" if now < self._flash_deadline else ""
+        # The flashing logic for the newest move
+        is_newest = self.newest_on_top and move == self._last_move
+        is_flashing = is_newest and monotonic() < self._flash_deadline
+
+        style = "bold green" if is_flashing else ""
         return Text(f" {move}", style=style)
 
     def render(
         self,
         move_strings: Optional[List[str]] = None,
-        available_height: Optional[int] = None,
         ply_per_sec: float = 0.0,
+        **_kwargs,  # Absorb unused kwargs like available_height
     ) -> RenderableType:
         moves = move_strings or []
+
+        # Update the flash timer if a new move has arrived
         if moves and moves[-1] != self._last_move:
             self._last_move = moves[-1]
-            self._flash_deadline = __import__("time").monotonic() + self.flash_ms / 1000
+            if self.flash_ms > 0:
+                self._flash_deadline = (
+                    __import__("time").monotonic() + self.flash_ms / 1000
+                )
 
-        capacity = max(1, (available_height or self.max_moves) - self.BORDER_FUDGE)
+        # 1. Slice the list to the configured max_moves. No more capacity logic.
+        print("SLICE IS ", self.max_moves, "MOVES")
+        slice_ = moves[-self.max_moves :]
 
+        # 2. Reverse the list if needed.
         if self.newest_on_top:
-            slice_ = moves[-capacity:][::-1]
-            padded = slice_ + [""] * max(0, capacity - len(slice_))
-        else:
-            slice_ = moves[-capacity:]
-            padded = [""] * max(0, capacity - len(slice_)) + slice_
+            slice_.reverse()
 
-        body = Text("\n").join([self._stylise(m) for m in padded])
+        # 3. Create the text object from the sliced moves. No more manual padding.
+        body = Text("\n").join(self._stylise(m) for m in slice_)
+
+        # 4. Create the panel and let the Layout manager handle sizing.
         title = (
             f"Recent Moves ({len(moves)} | {ply_per_sec:.1f} ply/s)"
             if ply_per_sec
             else f"Recent Moves ({len(moves)})"
         )
         return Panel(body, title=title, border_style="yellow", expand=True)
-
 
 class PieceStandPanel:
     """Renders the captured pieces (komadai) for each player."""
@@ -360,7 +366,7 @@ class MultiMetricSparkline:
 class GameStatisticsPanel:
     """Renders detailed statistics about the current game and session."""
 
-    def _calculate_material(self, board, color):
+    def _calculate_material(self, game_object, color):
         piece_values = {
             "PAWN": 1,
             "LANCE": 3,
@@ -371,7 +377,7 @@ class GameStatisticsPanel:
             "ROOK": 10,
         }
         total_value = 0
-        for row in board.board:
+        for row in game_object.board:
             for piece in row:
                 if piece and piece.color == color:
                     key = piece.type.name.replace("PROMOTED_", "")
@@ -395,6 +401,38 @@ class GameStatisticsPanel:
         ]
         return " ".join(parts) or ""
 
+    def _format_opening_name(self, move_str: str) -> str:
+        """Translates a raw shogi move string into a more readable format."""
+        if not move_str or len(move_str) < 2:
+            return move_str  # Return as-is if invalid or empty
+
+        piece_map = {
+            "P": "Pawn", "L": "Lance", "N": "Knight", "S": "Silver",
+            "G": "Gold", "B": "Bishop", "R": "Rook", "K": "King",
+        }
+
+        # Case 1: It's a drop move (e.g., 'P*2c')
+        if "*" in move_str:
+            piece_char = move_str[0].upper()
+            piece_name = piece_map.get(piece_char, "Piece")
+            destination = move_str[2:]
+            return f"{piece_name} drop to {destination}"
+
+        # Case 2: It's a regular board move (e.g., '7g7f' or '2c3d+')
+        promotion_text = ""
+        if move_str.endswith('+'):
+            promotion_text = " with promotion"
+            move_str = move_str[:-1]  # Remove the '+' for parsing
+
+        if len(move_str) == 4:
+            start_sq = move_str[0:2]
+            end_sq = move_str[2:4]
+            # We can't know the piece name from '7g7f', so we describe the action.
+            return f"Move from {start_sq} to {end_sq}{promotion_text}"
+
+        # Fallback for any other format
+        return move_str
+
     def render(
         self,
         game,
@@ -409,21 +447,32 @@ class GameStatisticsPanel:
             )
 
         # --- Calculate In-Game Stats ---
-        sente_material = self._calculate_material(game.board, Color.BLACK)
-        gote_material = self._calculate_material(game.board, Color.WHITE)
+        sente_material = self._calculate_material(game, Color.BLACK)
+        gote_material = self._calculate_material(game, Color.WHITE)
         material_adv = sente_material - gote_material
-        is_in_check = getattr(game, "is_in_check", lambda: False)()
+
+        is_in_check = False  # Default to False
+        # Check if the game object has the necessary attributes before calling them
+        if hasattr(game, "current_player") and hasattr(game, "is_in_check"):
+            # Call the method with the required 'color' argument
+            is_in_check = game.is_in_check(game.current_player)
+
+
         hot_squares = metrics_manager.get_hot_squares(top_n=3)
 
         # --- Get Session Stats (now pre-formatted) ---
         sente_openings = metrics_manager.sente_opening_history
         gote_openings = metrics_manager.gote_opening_history
-        fav_sente_opening = (
+        fav_sente_opening_raw = (
             Counter(sente_openings).most_common(1)[0][0] if sente_openings else "N/A"
         )
-        fav_gote_opening = (
+        fav_gote_opening_raw = (
             Counter(gote_openings).most_common(1)[0][0] if gote_openings else "N/A"
         )
+
+        # Use the new helper to format the names before displaying them
+        fav_sente_opening_formatted = self._format_opening_name(fav_sente_opening_raw)
+        fav_gote_opening_formatted = self._format_opening_name(fav_gote_opening_raw)
 
         # --- Create Table ---
         table = Table.grid(expand=True, padding=(0, 2))
@@ -433,8 +482,8 @@ class GameStatisticsPanel:
         table.add_row("Check Status:", "[red]CHECK[/]" if is_in_check else "Clear")
         table.add_row("Material Adv:", f"{material_adv:+.1f} (Sente)")
         table.add_row("Hot Squares:", ", ".join(hot_squares) or "N/A")
-        table.add_row("Fav. Sente Opening:", fav_sente_opening)
-        table.add_row("Fav. Gote Opening:", fav_gote_opening)
+        table.add_row("Sente's Favourite Opening:", fav_sente_opening_formatted)
+        table.add_row("Gote's Favourite Opening:", fav_gote_opening_formatted)
 
         # This part for hand display remains separate to preserve alignment
         sente_hand_str = self._format_hand(
@@ -444,9 +493,9 @@ class GameStatisticsPanel:
             getattr(game, "hands", {}).get(Color.WHITE, {})
         )
         hand_info = Group(
-            Text.from_markup("\n[bold]Sente's Hand:[/bold]"),
+            Text.from_markup("\n[bold]Sente's Hand:",style="bold cyan"),
             Text(sente_hand_str or "None"),
-            Text.from_markup("\n[bold]Gote's Hand:[/bold]"),
+            Text.from_markup("Gote's Hand: ", style="bold cyan"),
             Text(gote_hand_str or "None"),
         )
 

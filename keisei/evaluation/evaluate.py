@@ -14,15 +14,15 @@ from dotenv import load_dotenv  # type: ignore
 
 import wandb  # Ensure wandb is imported for W&B logging
 from keisei.core.ppo_agent import PPOAgent
+from keisei.evaluation.elo_registry import EloRegistry
 from keisei.evaluation.loop import ResultsDict, run_evaluation_loop
 from keisei.utils import BaseOpponent, EvaluationLogger, PolicyOutputMapper
-from keisei.evaluation.elo_registry import EloRegistry
 from keisei.utils.agent_loading import initialize_opponent, load_evaluation_agent
-from keisei.utils.utils import load_config
 from keisei.utils.unified_logger import (
     log_error_to_stderr,
     log_info_to_stderr,
 )
+from keisei.utils.utils import load_config
 
 if TYPE_CHECKING:
     pass  # torch already imported above
@@ -149,7 +149,9 @@ class Evaluator:
                 ImportError,
                 AttributeError,
             ) as e:
-                log_error_to_stderr("Evaluator", f"Error during W&B initialization: {e}")
+                log_error_to_stderr(
+                    "Evaluator", f"Error during W&B initialization: {e}"
+                )
                 self._wandb_active = False
 
         # Ensure log directory exists
@@ -265,7 +267,9 @@ class Evaluator:
                     )
                     self._elo_registry.save()
                 except Exception as e:  # noqa: BLE001
-                    log_error_to_stderr("Evaluator", f"Error updating Elo registry: {e}")
+                    log_error_to_stderr(
+                        "Evaluator", f"Error updating Elo registry: {e}"
+                    )
         if self._wandb_active and self._wandb_run:
             try:
                 self._wandb_run.finish()  # type: ignore

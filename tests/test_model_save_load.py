@@ -8,13 +8,13 @@ import torch
 
 from keisei.config_schema import (
     AppConfig,
+    DisplayConfig,
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
     ParallelConfig,
     TrainingConfig,
     WandBConfig,
-    DisplayConfig,
 )
 from keisei.core.neural_network import ActorCritic
 from keisei.core.ppo_agent import PPOAgent
