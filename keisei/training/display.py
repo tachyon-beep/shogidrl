@@ -4,7 +4,8 @@ training/display.py: Rich UI management for the Shogi RL trainer.
 
 from typing import List, Union, Optional, Dict
 
-from rich.console import Console, Group
+from rich.console import Console, Group, RenderableType
+from rich.table import Table
 from rich.layout import Layout
 from rich.live import Live
 from rich.panel import Panel
@@ -28,6 +29,7 @@ from .display_components import (
     MultiMetricSparkline,
     RollingAverageCalculator,
     GameStatisticsPanel,
+    PieceStandPanel,
 )
 from .adaptive_display import AdaptiveDisplayManager
 
@@ -42,6 +44,7 @@ class TrainingDisplay:
 
         self.board_component: Optional[ShogiBoard] = None
         self.moves_component: Optional[RecentMovesPanel] = None
+        self.piece_stand_component: Optional[PieceStandPanel] = None
         self.trend_component: Optional[Sparkline] = None
         self.multi_trend_component: Optional[MultiMetricSparkline] = None
         self.completion_rate_calc: Optional[RollingAverageCalculator] = None
@@ -58,6 +61,7 @@ class TrainingDisplay:
             self.moves_component = RecentMovesPanel(
                 max_moves=self.display_config.move_list_length
             )
+            self.piece_stand_component = PieceStandPanel()
         if self.display_config.enable_trend_visualization:
             self.trend_component = Sparkline(width=self.display_config.sparkline_width)
             self.multi_trend_component = MultiMetricSparkline(
@@ -113,10 +117,9 @@ class TrainingDisplay:
         )
 
         layout["left_column"].split_column(
-            Layout(
-                name="board_panel", size=12
-            ),  # Set size to 12 for the new Table-based board
-            Layout(name="moves_panel"),
+            Layout(name="board_panel", size=12),
+            Layout(name="komadai_panel", size=5),
+            Layout(name="moves_panel", ratio=1),
         )
 
         layout["middle_column"].split_column(
@@ -131,6 +134,7 @@ class TrainingDisplay:
         )
 
         layout["board_panel"].update(Panel("...", title="Main Board"))
+        layout["komadai_panel"].update(Panel("...", title="Captured Pieces"))
         layout["moves_panel"].update(Panel("...", title="Recent Moves"))
         layout["trends_panel"].update(Panel("...", title="Metric Trends"))
         layout["stats_panel"].update(Panel("...", title="Game Statistics"))
@@ -162,7 +166,9 @@ class TrainingDisplay:
                 style="bright_green",
             ),
             TextColumn(
-                "• Rates B:{task.fields[black_win_rate]:.1%} W:{task.fields[white_win_rate]:.1%} D:{task.fields[draw_rate]:.1%}",
+                "• Rates B:{task.fields[black_win_rate]:.1%} "
+                "W:{task.fields[white_win_rate]:.1%} "
+                "D:{task.fields[draw_rate]:.1%}",
                 style="bright_blue",
             ),
         ]
@@ -222,7 +228,8 @@ class TrainingDisplay:
             self.using_enhanced_layout = False
         return progress_bar, training_task, layout, log_panel
 
-    def _build_metric_lines(self, history) -> List[str]:
+    def _build_metric_lines(self, history) -> List[RenderableType]:
+
         metrics_to_display = [
             ("Episode Length", "episode_lengths"),
             ("Episode Reward", "episode_rewards"),
@@ -230,18 +237,22 @@ class TrainingDisplay:
             ("Value Loss", "value_losses"),
             ("Entropy", "entropies"),
             ("KL Divergence", "kl_divergences"),
+            ("PPO Clip Frac", "clip_fractions"),
             ("Win Rate B", "win_rates_black"),
             ("Draw Rate", "draw_rates"),
         ]
 
-        def format_decimal_aligned(val: Optional[float], width: int = 7) -> str:
-            if val is None:
-                return "-" * width
-            return f"{val:>{width}.4f}"
+        def fmt(val: Optional[float]) -> str:
+            return "-" if val is None else f"{val:.4f}"
 
-        renderables: List[str] = []
+        table = Table(box=None, expand=True, show_header=True, header_style="bold")
+        table.add_column("Metric", style="cyan", no_wrap=True, ratio=3)
+        table.add_column("Current", justify="right", ratio=2)
+        table.add_column("Previous", justify="right", ratio=2)
+        table.add_column("Average (5)", justify="right", ratio=2)
+        table.add_column("Trend", no_wrap=True, ratio=4)
+
         SPARKLINE_WIDTH = self.display_config.sparkline_width
-        LABEL_WIDTH = 16
 
         for name, history_key in metrics_to_display:
             if history_key == "win_rates_black":
@@ -256,20 +267,21 @@ class TrainingDisplay:
             avg_slice = data_list[-5:]
             avg_val = sum(avg_slice) / len(avg_slice) if avg_slice else None
 
-            last_str = format_decimal_aligned(last_val)
-            prev_str = format_decimal_aligned(prev_val)
-            avg_str = format_decimal_aligned(avg_val)
-
             spark = (
                 self.trend_component.generate(data_list[-SPARKLINE_WIDTH:])
                 if data_list
                 else " " * SPARKLINE_WIDTH
             )
-            renderables.append(
-                f"{name:<{LABEL_WIDTH}} {last_str} {prev_str} {avg_str} {spark}"
+
+            table.add_row(
+                name,
+                fmt(last_val),
+                fmt(prev_val),
+                fmt(avg_val),
+                spark,
             )
 
-        return renderables
+        return [table]
 
     def update_progress(self, trainer, speed, pending_updates):
         update_data = {"completed": trainer.global_timestep, "speed": speed}
@@ -296,6 +308,17 @@ class TrainingDisplay:
                     )
                     self.layout["board_panel"].update(Panel(Text("No board")))
 
+            if self.piece_stand_component:
+                try:
+                    self.layout["komadai_panel"].update(
+                        self.piece_stand_component.render(trainer.game)
+                    )
+                except Exception as e:
+                    self.rich_console.log(
+                        f"Error rendering piece stand: {e}", style="bold red"
+                    )
+                    self.layout["komadai_panel"].update(Panel("..."))
+
             if self.moves_component:
                 move_strings = (
                     trainer.step_manager.move_log if trainer.step_manager else None
@@ -306,8 +329,8 @@ class TrainingDisplay:
 
             if self.trend_component:
                 hist = trainer.metrics_manager.history
-                metric_lines = self._build_metric_lines(hist)
-                group_items = [Text(line) for line in metric_lines]
+                renderables = self._build_metric_lines(hist)
+                group_items = list(renderables)
 
                 grad_norm = getattr(trainer, "last_gradient_norm", 0.0)
                 grad_norm_scaled = min(grad_norm, 50.0)
@@ -329,6 +352,8 @@ class TrainingDisplay:
                     panel = self.game_stats_component.render(
                         trainer.game,
                         trainer.step_manager.move_log if trainer.step_manager else None,
+                        trainer.metrics_manager,
+                        trainer.policy_output_mapper,
                     )
                     group_stats = [panel.renderable]
                     try:
@@ -353,15 +378,21 @@ class TrainingDisplay:
             if not self.config_panel_rendered:
                 try:
                     cfg = self.config
-                    config_text = (
-                        f"[b]Learning Rate[/]: {cfg.training.learning_rate}\n"
-                        f"[b]Batch Size[/]:    {cfg.training.batch_size}\n"
-                        f"[b]Tower Depth[/]:   {cfg.model.tower_depth}\n"
-                        f"[b]SE Ratio[/]:      {cfg.model.se_ratio}"
-                    )
+                    batch_size = getattr(cfg.training, "minibatch_size", None)
+                    if batch_size is None:
+                        batch_size = getattr(cfg.parallel, "batch_size", "?")
+
+                    config_table = Table.grid(padding=(0, 2))
+                    config_table.add_column(style="bold")
+                    config_table.add_column()
+                    config_table.add_row("Learning Rate:", str(cfg.training.learning_rate))
+                    config_table.add_row("Batch Size:", str(batch_size))
+                    config_table.add_row("Tower Depth:", str(cfg.training.tower_depth))
+                    config_table.add_row("SE Ratio:", str(cfg.training.se_ratio))
+
                     self.layout["config_panel"].update(
                         Panel(
-                            Text.from_markup(config_text),
+                            config_table,
                             title="Configuration",
                             border_style="green",
                         )
@@ -408,25 +439,32 @@ class TrainingDisplay:
                     elif update_mag > 0.1:
                         color = "yellow"
 
-                    line = (
-                        f"[bold {color}]Layer: {name}[/bold {color}]\n"
-                        f"  Mean: {stats['mean']:.4f} {trend_chars['mean']} | "
-                        f"Std Dev: {stats['std']:.4f} {trend_chars['std']} | "
-                        f"Min: {stats['min']:.2f} {trend_chars['min']} | "
-                        f"Max: {stats['max']:.2f} {trend_chars['max']}"
+                    header = Text(f"Layer: {name}", style=f"bold {color}")
+                    stats_table = Table.grid(padding=(0, 2))
+                    stats_table.add_row(
+                        Text("Mean", style="bold"),
+                        Text("Std Dev", style="bold"),
+                        Text("Min", style="bold"),
+                        Text("Max", style="bold"),
                     )
-                    stats_lines.append(line)
+                    stats_table.add_row(
+                        f"{stats['mean']:.4f} {trend_chars['mean']}",
+                        f"{stats['std']:.4f} {trend_chars['std']}",
+                        f"{stats['min']:.2f} {trend_chars['min']}",
+                        f"{stats['max']:.2f} {trend_chars['max']}",
+                    )
+                    stats_lines.append(header)
+                    stats_lines.append(stats_table)
 
                 self.previous_model_stats = current_stats
 
-                arch = (
-                    "[Input: 9x9xN] -> [ResNet Core] -> [Policy Head]\n"
-                    "                         -> [Value Head]"
+                arch = Text(
+                    "[Input: 9x9xN] -> [ResNet Core] -> [Policy Head]\n" "                         -> [Value Head]",
+                    style="bold",
                 )
-                evo_text = arch + "\n\n" + "\n\n".join(stats_lines)
                 self.layout["evolution_panel"].update(
                     Panel(
-                        Text.from_markup(evo_text),
+                        Group(arch, *stats_lines),
                         border_style="magenta",
                         title="Model Evolution",
                     )
