@@ -35,6 +35,8 @@ evaluation:
   num_games: 5
   opponent_type: random
   evaluation_interval_timesteps: 50000
+  elo_registry_path: elo_ratings.json
+  previous_model_pool_size: 2
 
 logging:
   log_file: logs/test_training_log.txt

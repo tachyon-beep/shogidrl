@@ -196,6 +196,8 @@ evaluation:
   elo_registry_path: "elo_ratings.json"
   agent_id: null
   opponent_id: null
+  # Number of previous checkpoints to keep for Elo evaluation
+  previous_model_pool_size: 5
 # =============================================================================
 # LOGGING CONFIGURATION (LoggingConfig)
 # =============================================================================
