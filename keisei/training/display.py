@@ -2,7 +2,7 @@
 training/display.py: Rich UI management for the Shogi RL trainer.
 """
 
-from typing import List, Union, Optional, Dict
+from typing import List, Union, Optional, Dict, cast
 
 from rich.console import Console, Group, RenderableType
 from rich.table import Table
@@ -59,7 +59,9 @@ class TrainingDisplay:
                 max_moves=self.display_config.move_list_length,
             )
             self.moves_component = RecentMovesPanel(
-                max_moves=self.display_config.move_list_length
+                max_moves=self.display_config.move_list_length,
+                newest_on_top=self.display_config.moves_latest_top,
+                flash_ms=self.display_config.moves_flash_ms,
             )
             self.piece_stand_component = PieceStandPanel()
         if self.display_config.enable_trend_visualization:
@@ -162,12 +164,12 @@ class TrainingDisplay:
             TextColumn("• {task.fields[ep_metrics]}", style="bright_cyan"),
             TextColumn("• {task.fields[ppo_metrics]}", style="bright_yellow"),
             TextColumn(
-                "• Wins B:{task.fields[black_wins_cum]} W:{task.fields[white_wins_cum]} D:{task.fields[draws_cum]}",
+                "• Wins S:{task.fields[black_wins_cum]} G:{task.fields[white_wins_cum]} D:{task.fields[draws_cum]}",
                 style="bright_green",
             ),
             TextColumn(
-                "• Rates B:{task.fields[black_win_rate]:.1%} "
-                "W:{task.fields[white_win_rate]:.1%} "
+                "• Rates S:{task.fields[black_win_rate]:.1%} "
+                "G:{task.fields[white_win_rate]:.1%} "
                 "D:{task.fields[draw_rate]:.1%}",
                 style="bright_blue",
             ),
@@ -253,12 +255,18 @@ class TrainingDisplay:
         table.add_column("Trend", no_wrap=True, ratio=4)
 
         SPARKLINE_WIDTH = self.display_config.sparkline_width
+        assert self.trend_component is not None
+        trend = self.trend_component
 
         for name, history_key in metrics_to_display:
             if history_key == "win_rates_black":
-                data_list = [d.get("win_rate_black", 0.0) for d in history.win_rates_history]
+                data_list = [
+                    d.get("win_rate_black", 0.0) for d in history.win_rates_history
+                ]
             elif history_key == "draw_rates":
-                data_list = [d.get("win_rate_draw", 0.0) for d in history.win_rates_history]
+                data_list = [
+                    d.get("win_rate_draw", 0.0) for d in history.win_rates_history
+                ]
             else:
                 data_list = getattr(history, history_key, [])
 
@@ -268,7 +276,7 @@ class TrainingDisplay:
             avg_val = sum(avg_slice) / len(avg_slice) if avg_slice else None
 
             spark = (
-                self.trend_component.generate(data_list[-SPARKLINE_WIDTH:])
+                trend.generate(data_list[-SPARKLINE_WIDTH:])
                 if data_list
                 else " " * SPARKLINE_WIDTH
             )
@@ -299,8 +307,11 @@ class TrainingDisplay:
         if self.using_enhanced_layout:
             if self.board_component:
                 try:
+                    hot_sq = trainer.metrics_manager.get_hot_squares(top_n=3)
                     self.layout["board_panel"].update(
-                        self.board_component.render(trainer.game)
+                        self.board_component.render(
+                            trainer.game, highlight_squares=hot_sq
+                        )
                     )
                 except Exception as e:
                     self.rich_console.log(
@@ -323,8 +334,16 @@ class TrainingDisplay:
                 move_strings = (
                     trainer.step_manager.move_log if trainer.step_manager else None
                 )
+                panel_height = int(
+                    getattr(self.layout["moves_panel"].size, "height", 0)
+                )
+                pps = getattr(trainer, "last_ply_per_sec", 0.0)
                 self.layout["moves_panel"].update(
-                    self.moves_component.render(move_strings)
+                    self.moves_component.render(
+                        move_strings,
+                        available_height=panel_height,
+                        ply_per_sec=pps,
+                    )
                 )
 
             if self.trend_component:
@@ -339,7 +358,7 @@ class TrainingDisplay:
                     BarColumn(bar_width=None),
                     TaskProgressColumn(),
                 )
-                grad_bar.add_task("", total=50.0, completed=grad_norm_scaled)
+                grad_bar.add_task("", total=50.0, completed=int(grad_norm_scaled))
                 group_items.append(grad_bar)
 
                 self.layout["trends_panel"].update(
@@ -349,13 +368,20 @@ class TrainingDisplay:
                 )
 
                 try:
-                    panel = self.game_stats_component.render(
-                        trainer.game,
-                        trainer.step_manager.move_log if trainer.step_manager else None,
-                        trainer.metrics_manager,
-                        trainer.policy_output_mapper,
+                    assert self.game_stats_component is not None
+                    panel = cast(
+                        Panel,
+                        self.game_stats_component.render(
+                            trainer.game,
+                            (
+                                trainer.step_manager.move_log
+                                if trainer.step_manager
+                                else None
+                            ),
+                            trainer.metrics_manager,
+                        ),
                     )
-                    group_stats = [panel.renderable]
+                    group_stats: List[RenderableType] = [panel.renderable]
                     try:
                         buffer_bar = Progress(
                             TextColumn("Replay Buffer"),
@@ -363,12 +389,18 @@ class TrainingDisplay:
                             TextColumn("{task.percentage:>3.0f}%"),
                         )
                         buf = trainer.experience_buffer
-                        buffer_bar.add_task("", total=buf.capacity(), completed=buf.size())
+                        buffer_bar.add_task(
+                            "", total=buf.capacity(), completed=buf.size()
+                        )
                         group_stats.append(buffer_bar)
                     except Exception:
                         pass
                     self.layout["stats_panel"].update(
-                        Panel(Group(*group_stats), title="Game Statistics", border_style="green")
+                        Panel(
+                            Group(*group_stats),
+                            title="Game Statistics",
+                            border_style="green",
+                        )
                     )
                 except Exception as e:
                     self.layout["stats_panel"].update(
@@ -385,7 +417,9 @@ class TrainingDisplay:
                     config_table = Table.grid(padding=(0, 2))
                     config_table.add_column(style="bold")
                     config_table.add_column()
-                    config_table.add_row("Learning Rate:", str(cfg.training.learning_rate))
+                    config_table.add_row(
+                        "Learning Rate:", str(cfg.training.learning_rate)
+                    )
                     config_table.add_row("Batch Size:", str(batch_size))
                     config_table.add_row("Tower Depth:", str(cfg.training.tower_depth))
                     config_table.add_row("SE Ratio:", str(cfg.training.se_ratio))
@@ -405,7 +439,7 @@ class TrainingDisplay:
 
             model = getattr(trainer.agent, "model", None)
             if model is not None:
-                stats_lines = []
+                stats_lines: List[RenderableType] = []
                 current_stats: Dict[str, Dict[str, float]] = {}
                 named_params = dict(model.named_parameters())
 
@@ -459,7 +493,8 @@ class TrainingDisplay:
                 self.previous_model_stats = current_stats
 
                 arch = Text(
-                    "[Input: 9x9xN] -> [ResNet Core] -> [Policy Head]\n" "                         -> [Value Head]",
+                    "[Input: 9x9xN] -> [ResNet Core] -> [Policy Head]\n"
+                    "                         -> [Value Head]",
                     style="bold",
                 )
                 self.layout["evolution_panel"].update(

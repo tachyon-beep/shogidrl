@@ -22,7 +22,7 @@ from typing import (
 )
 
 import torch
-import yaml
+import yaml  # type: ignore[import]
 from pydantic import ValidationError
 from rich.console import Console
 from rich.text import Text
@@ -34,7 +34,10 @@ from keisei.shogi.shogi_core_definitions import (
     PieceType,
     get_unpromoted_types,
 )
-from keisei.utils.unified_logger import log_error_to_stderr
+from keisei.utils.unified_logger import (
+    log_error_to_stderr,
+    log_info_to_stderr,
+)
 
 # --- Config Loader Utility ---
 
@@ -519,9 +522,7 @@ class TrainingLogger:
             rich_message = Text(full_message)
             self.rich_log_panel.append(rich_message)
             # The Live display will handle the update. We don't print directly here.
-        elif (
-            self.also_stdout_if_no_rich
-        ):
+        elif self.also_stdout_if_no_rich:
             # Fallback to stdout if rich components are not provided
             try:
                 log_info_to_stderr("TrainingLogger", full_message)

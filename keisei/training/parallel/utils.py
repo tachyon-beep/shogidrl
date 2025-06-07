@@ -12,7 +12,9 @@ def compress_array(array: np.ndarray) -> Dict[str, Any]:
         original_size = len(array_bytes)
         compressed_bytes = gzip.compress(array_bytes, compresslevel=6)
         compressed_size = len(compressed_bytes)
-        compression_ratio = original_size / compressed_size if compressed_size > 0 else 1.0
+        compression_ratio = (
+            original_size / compressed_size if compressed_size > 0 else 1.0
+        )
         return {
             "data": compressed_bytes,
             "shape": array.shape,
@@ -48,4 +50,5 @@ def decompress_array(data: Dict[str, Any]) -> np.ndarray:
     except Exception as e:
         # Log the exception for debugging purposes
         logging.error("Decompression failed. Returning raw data.", exc_info=True)
-        return data.get("data")
+        # Fall back to returning the raw data as a numpy array
+        return np.asarray(data["data"])

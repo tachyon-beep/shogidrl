@@ -258,7 +258,7 @@ def memory_usage_mb() -> float:
     try:
         import os
 
-        import psutil
+        import psutil  # type: ignore[import]
 
         process = psutil.Process(os.getpid())
         return process.memory_info().rss / 1024 / 1024  # Convert to MB
