@@ -379,7 +379,11 @@ class TrainingLoopManager:
         ep_metrics_str = f"L:{ep_len} R:{ep_rew:.2f}"
         turns_count = ep_len
         self.trainer.metrics_manager.log_episode_metrics(
-            ep_len, turns_count, result, ep_rew
+            ep_len,
+            turns_count,
+            result,
+            ep_rew,
+            self.trainer.step_manager.move_history if self.trainer.step_manager else None,
         )
 
         total_games = (
