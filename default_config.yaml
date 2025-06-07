@@ -348,16 +348,14 @@ display:
   # - Recommended: 3-10 keywords for optimal performance
   # - Use specific keywords to avoid showing too many layers
   log_layer_keyword_filters:
-  #  - "stem"          # First convolutional layers (ResNet stem)
-  #  - "policy_head"   # Policy network output layers
-  #  - "value_head"    # Value network output layers
-    - "stem"           # Initial convolution
-    - "layer1"         # ResNet stage 1
-    - "layer2"         # ResNet stage 2
-    - "layer3"         # ResNet stage 3
-    - "layer4"         # ResNet stage 4
-    - "policy_head"    # Policy output
-    - "value_head"     # Value output
+    - "stem"             # First convolutional layers (ResNet stem)
+    - "res_blocks.0"     # ResNet block 0
+    - "res_blocks.1"     # ResNet block 1  
+    - "res_blocks.2"     # ResNet block 2
+    - "res_blocks.3"     # ResNet block 3
+    - "policy_head"      # Policy network output layers
+    - "value_head"       # Value network output layers
+
 
 # =============================================================================
 # CONFIGURATION EXAMPLES FOR MODEL EVOLUTION DISPLAY
@@ -390,7 +388,7 @@ display:
 #     - "classifier"     # Classification head
 #     - "regressor"      # Regression head
 #
-# EXAMPLE 3: ResNet with More Detail
+# EXAMPLE 3: Standard ResNet with More Detail
 # -----------------------------------
 # display:
 #   log_layer_keyword_filters:
