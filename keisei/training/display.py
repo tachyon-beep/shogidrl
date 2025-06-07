@@ -162,12 +162,12 @@ class TrainingDisplay:
             TextColumn("• {task.fields[ep_metrics]}", style="bright_cyan"),
             TextColumn("• {task.fields[ppo_metrics]}", style="bright_yellow"),
             TextColumn(
-                "• Wins B:{task.fields[black_wins_cum]} W:{task.fields[white_wins_cum]} D:{task.fields[draws_cum]}",
+                "• Wins S:{task.fields[black_wins_cum]} G:{task.fields[white_wins_cum]} D:{task.fields[draws_cum]}",
                 style="bright_green",
             ),
             TextColumn(
-                "• Rates B:{task.fields[black_win_rate]:.1%} "
-                "W:{task.fields[white_win_rate]:.1%} "
+                "• Rates S:{task.fields[black_win_rate]:.1%} "
+                "G:{task.fields[white_win_rate]:.1%} "
                 "D:{task.fields[draw_rate]:.1%}",
                 style="bright_blue",
             ),
@@ -238,7 +238,7 @@ class TrainingDisplay:
             ("Entropy", "entropies"),
             ("KL Divergence", "kl_divergences"),
             ("PPO Clip Frac", "clip_fractions"),
-            ("Win Rate B", "win_rates_black"),
+            ("Win Rate S", "win_rates_black"),
             ("Draw Rate", "draw_rates"),
         ]
 
@@ -299,8 +299,9 @@ class TrainingDisplay:
         if self.using_enhanced_layout:
             if self.board_component:
                 try:
+                    hot = trainer.metrics_manager.get_hot_squares(top_n=3)
                     self.layout["board_panel"].update(
-                        self.board_component.render(trainer.game)
+                        self.board_component.render(trainer.game, hot_squares=hot)
                     )
                 except Exception as e:
                     self.rich_console.log(

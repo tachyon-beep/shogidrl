@@ -476,7 +476,7 @@ class TestHandleEpisodeEnd:
         mock_logger.assert_called()
         log_message = mock_logger.call_args[0][0]
         assert "Episode 18 finished" in log_message
-        assert "Black wins by checkmate" in log_message
+        assert "Sente wins by checkmate" in log_message
 
         # Verify wandb data was logged
         wandb_data = mock_logger.call_args[1]["wandb_data"]
@@ -513,7 +513,7 @@ class TestHandleEpisodeEnd:
 
         # Verify white win message
         log_message = mock_logger.call_args[0][0]
-        assert "White wins by timeout" in log_message
+        assert "Gote wins by timeout" in log_message
 
     def test_episode_end_draw(
         self, step_manager, sample_episode_state, mock_logger, mock_components

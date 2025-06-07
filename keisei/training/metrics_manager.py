@@ -4,11 +4,12 @@ metrics_manager.py: Manages training statistics, metrics tracking, and formattin
 
 import json
 import time
-from collections import deque
+from collections import deque, Counter
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple, List, Deque
 
 from keisei.shogi.shogi_core_definitions import Color
+from keisei.utils import _coords_to_square_name, format_move_with_description
 from .elo_rating import EloRatingSystem
 
 
@@ -100,6 +101,7 @@ class MetricsManager:
         )
         self.sente_opening_history: Deque[str] = deque(maxlen=10)
         self.gote_opening_history: Deque[str] = deque(maxlen=10)
+        self.square_usage: Counter = Counter()
 
     # === Statistics Management ===
 
@@ -161,6 +163,7 @@ class MetricsManager:
         result: str,
         episode_reward: float,
         move_history: Optional[List] = None,
+        policy_mapper=None,
     ) -> None:
         """Record metrics for a completed episode."""
         self.moves_per_game.append(moves_made)
@@ -172,12 +175,42 @@ class MetricsManager:
         self.win_loss_draw_history.append((result, now))
         if move_history:
             try:
-                if len(move_history) >= 1:
+                if len(move_history) >= 1 and policy_mapper:
+                    opening_str = format_move_with_description(
+                        move_history[0], policy_mapper
+                    )
+                    self.sente_opening_history.append(opening_str)
+                elif len(move_history) >= 1:
                     self.sente_opening_history.append(str(move_history[0]))
-                if len(move_history) >= 2:
+                if len(move_history) >= 2 and policy_mapper:
+                    opening_str = format_move_with_description(
+                        move_history[1], policy_mapper
+                    )
+                    self.gote_opening_history.append(opening_str)
+                elif len(move_history) >= 2:
                     self.gote_opening_history.append(str(move_history[1]))
+
+                for mv in move_history:
+                    if mv is None:
+                        continue
+                    if len(mv) == 5 and mv[0] is None:
+                        _, _, to_r, to_c, _ = mv
+                        sq = _coords_to_square_name(to_r, to_c)
+                        self.square_usage.update([sq])
+                    else:
+                        from_r, from_c, to_r, to_c, _ = mv
+                        self.square_usage.update(
+                            [
+                                _coords_to_square_name(from_r, from_c),
+                                _coords_to_square_name(to_r, to_c),
+                            ]
+                        )
             except Exception:
                 pass
+
+    def get_hot_squares(self, top_n: int = 3) -> List[str]:
+        """Return the top N most frequently used squares."""
+        return [sq for sq, _ in self.square_usage.most_common(top_n)]
 
     def get_moves_per_game_trend(self, window_size: int = 100) -> List[float]:
         data = list(self.moves_per_game)[-window_size:]
