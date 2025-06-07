@@ -13,12 +13,13 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 import torch
-from .utils import decompress_array
 
 from keisei.core.actor_critic_protocol import ActorCriticProtocol
 from keisei.core.experience_buffer import Experience
 from keisei.shogi.shogi_game import ShogiGame
 from keisei.utils.utils import PolicyOutputMapper
+
+from .utils import decompress_array
 
 logger = logging.getLogger(__name__)
 

@@ -8,13 +8,13 @@ import pytest
 
 from keisei.config_schema import (
     AppConfig,
+    DisplayConfig,
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
     ParallelConfig,
     TrainingConfig,
     WandBConfig,
-    DisplayConfig,
 )
 from keisei.training.models.resnet_tower import ActorCriticResTower, ResidualBlock
 from keisei.training.trainer import Trainer

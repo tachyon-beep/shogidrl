@@ -2,10 +2,9 @@
 training/display.py: Rich UI management for the Shogi RL trainer.
 """
 
-from typing import List, Union, Optional, Dict, cast
+from typing import Dict, List, Optional, Union, cast
 
 from rich.console import Console, Group, RenderableType
-from rich.table import Table
 from rich.layout import Layout
 from rich.live import Live
 from rich.panel import Panel
@@ -19,19 +18,22 @@ from rich.progress import (
     TimeElapsedColumn,
     TimeRemainingColumn,
 )
+from rich.table import Table
 from rich.text import Text
 
 from keisei.config_schema import DisplayConfig
-from .display_components import (
-    ShogiBoard,
-    RecentMovesPanel,
-    Sparkline,
-    MultiMetricSparkline,
-    RollingAverageCalculator,
-    GameStatisticsPanel,
-    PieceStandPanel,
-)
+from keisei.shogi import ShogiGame
+
 from .adaptive_display import AdaptiveDisplayManager
+from .display_components import (
+    GameStatisticsPanel,
+    MultiMetricSparkline,
+    PieceStandPanel,
+    RecentMovesPanel,
+    RollingAverageCalculator,
+    ShogiBoard,
+    Sparkline,
+)
 
 
 class TrainingDisplay:
@@ -55,8 +57,6 @@ class TrainingDisplay:
         if self.display_config.enable_board_display:
             self.board_component = ShogiBoard(
                 use_unicode=self.display_config.board_unicode_pieces,
-                show_moves=True,
-                max_moves=self.display_config.move_list_length,
             )
             self.moves_component = RecentMovesPanel(
                 max_moves=self.display_config.move_list_length,
@@ -121,7 +121,7 @@ class TrainingDisplay:
         layout["left_column"].split_column(
             Layout(name="board_panel", size=12),
             Layout(name="komadai_panel", size=5),
-            Layout(name="moves_panel", ratio=1),
+            Layout(name="moves_panel", ratio=1, minimum_size=self.display_config.move_list_length),
         )
 
         layout["middle_column"].split_column(
@@ -297,6 +297,7 @@ class TrainingDisplay:
         self.progress_bar.update(self.training_task, **update_data)
 
     def refresh_dashboard_panels(self, trainer):
+        # Update the main log panel at the top
         visible_rows = max(0, self.rich_console.size.height - 6)
         if trainer.rich_log_messages:
             display_messages = trainer.rich_log_messages[-visible_rows:]
@@ -304,221 +305,231 @@ class TrainingDisplay:
             self.log_panel.renderable = updated_panel_content
         else:
             self.log_panel.renderable = Text("")
-        if self.using_enhanced_layout:
-            if self.board_component:
-                try:
-                    hot_sq = trainer.metrics_manager.get_hot_squares(top_n=3)
-                    self.layout["board_panel"].update(
-                        self.board_component.render(
-                            trainer.game, highlight_squares=hot_sq
-                        )
-                    )
-                except Exception as e:
-                    self.rich_console.log(
-                        f"Error rendering board: {e}", style="bold red"
-                    )
-                    self.layout["board_panel"].update(Panel(Text("No board")))
 
-            if self.piece_stand_component:
-                try:
-                    self.layout["komadai_panel"].update(
-                        self.piece_stand_component.render(trainer.game)
-                    )
-                except Exception as e:
-                    self.rich_console.log(
-                        f"Error rendering piece stand: {e}", style="bold red"
-                    )
-                    self.layout["komadai_panel"].update(Panel("..."))
+        # Only update the dashboard if we are using the enhanced layout
+        if not self.using_enhanced_layout:
+            return
 
-            if self.moves_component:
-                move_strings = (
-                    trainer.step_manager.move_log if trainer.step_manager else None
-                )
-                panel_height = int(
-                    getattr(self.layout["moves_panel"].size, "height", 0)
-                )
+        # --- Panel Update Logic with Debug Borders ---
+
+        # 1. Board Panel (Red Border)
+        if self.board_component:
+            try:
+                hot_sq = trainer.metrics_manager.get_hot_squares(top_n=3)
+                board_panel = self.board_component.render(trainer.game, highlight_squares=hot_sq)
+                if isinstance(board_panel, Panel):
+                    board_panel.border_style = "red"  # Override border style for debugging
+                self.layout["board_panel"].update(board_panel)
+            except (AttributeError, KeyError, TypeError, ValueError) as e:
+                self.rich_console.log(f"[bold red]Error rendering board: {e}[/]")
+                self.layout["board_panel"].update(Panel("Error", border_style="red"))
+
+        # 2. Komadai (Piece Stand) Panel (Green Border)
+        if self.piece_stand_component:
+            try:
+                komadai_panel = self.piece_stand_component.render(trainer.game)
+                if isinstance(komadai_panel, Panel):
+                    komadai_panel.border_style = "green" # Override border style
+                self.layout["komadai_panel"].update(komadai_panel)
+            except (AttributeError, KeyError, TypeError) as e:
+                self.rich_console.log(f"[bold red]Error rendering piece stand: {e}[/]")
+                self.layout["komadai_panel"].update(Panel("Error", border_style="green"))
+
+        # 3. Moves Panel (Blue Border)
+        # In refresh_dashboard_panels()
+        if self.moves_component:
+            try:
+                move_strings = trainer.step_manager.move_log if trainer.step_manager else None
                 pps = getattr(trainer, "last_ply_per_sec", 0.0)
-                self.layout["moves_panel"].update(
-                    self.moves_component.render(
-                        move_strings,
-                        available_height=panel_height,
-                        ply_per_sec=pps,
-                    )
+                # The render method no longer needs available_height
+                moves_panel = self.moves_component.render(move_strings, ply_per_sec=pps)
+                self.layout["moves_panel"].update(moves_panel)
+            except (AttributeError, TypeError) as e:
+                self.rich_console.log(f"[bold red]Error rendering moves: {e}[/]")
+
+        if self.trend_component:
+            hist = trainer.metrics_manager.history
+            renderables = self._build_metric_lines(hist)
+            group_items = list(renderables)
+
+            grad_norm = getattr(trainer, "last_gradient_norm", 0.0)
+            grad_norm_scaled = min(grad_norm, 50.0)
+            grad_bar = Progress(
+                TextColumn("Gradient Norm  "),
+                BarColumn(bar_width=None),
+                TaskProgressColumn(),
+            )
+            grad_bar.add_task("", total=50.0, completed=int(grad_norm_scaled))
+            group_items.append(grad_bar)
+
+            self.layout["trends_panel"].update(
+                Panel(
+                    Group(*group_items), border_style="cyan", title="Metric Trends"
                 )
+            )
 
-            if self.trend_component:
-                hist = trainer.metrics_manager.history
-                renderables = self._build_metric_lines(hist)
-                group_items = list(renderables)
+            try: # TODO - we shouldn't need to be asserting that this panel exists, this seems like an old integration issue we made permanent.
+                assert isinstance(trainer.game, ShogiGame), \
+                f"FATAL: trainer.game has been corrupted! Expected ShogiGame, but got {type(trainer.game).__name__}."
 
-                grad_norm = getattr(trainer, "last_gradient_norm", 0.0)
-                grad_norm_scaled = min(grad_norm, 50.0)
-                grad_bar = Progress(
-                    TextColumn("Gradient Norm  "),
-                    BarColumn(bar_width=None),
-                    TaskProgressColumn(),
-                )
-                grad_bar.add_task("", total=50.0, completed=int(grad_norm_scaled))
-                group_items.append(grad_bar)
-
-                self.layout["trends_panel"].update(
-                    Panel(
-                        Group(*group_items), border_style="cyan", title="Metric Trends"
-                    )
-                )
-
-                try:
-                    assert self.game_stats_component is not None
-                    panel = cast(
-                        Panel,
-                        self.game_stats_component.render(
-                            trainer.game,
-                            (
-                                trainer.step_manager.move_log
-                                if trainer.step_manager
-                                else None
-                            ),
-                            trainer.metrics_manager,
+                assert self.game_stats_component is not None
+    
+                panel = cast(
+                    Panel,
+                    self.game_stats_component.render(
+                        trainer.game,
+                        (
+                            trainer.step_manager.move_log
+                            if trainer.step_manager
+                            else None
                         ),
-                    )
-                    group_stats: List[RenderableType] = [panel.renderable]
-                    try:
-                        buffer_bar = Progress(
-                            TextColumn("Replay Buffer"),
-                            BarColumn(bar_width=None),
-                            TextColumn("{task.percentage:>3.0f}%"),
-                        )
-                        buf = trainer.experience_buffer
-                        buffer_bar.add_task(
-                            "", total=buf.capacity(), completed=buf.size()
-                        )
-                        group_stats.append(buffer_bar)
-                    except Exception:
-                        pass
-                    self.layout["stats_panel"].update(
-                        Panel(
-                            Group(*group_stats),
-                            title="Game Statistics",
-                            border_style="green",
-                        )
-                    )
-                except Exception as e:
-                    self.layout["stats_panel"].update(
-                        Panel(f"Error: {e}", title="Game Statistics")
-                    )
-
-            if not self.config_panel_rendered:
+                        trainer.metrics_manager,
+                    ),
+                )
+                group_stats: List[RenderableType] = [panel.renderable]
                 try:
-                    cfg = self.config
-                    batch_size = getattr(cfg.training, "minibatch_size", None)
-                    if batch_size is None:
-                        batch_size = getattr(cfg.parallel, "batch_size", "?")
-
-                    config_table = Table.grid(padding=(0, 2))
-                    config_table.add_column(style="bold")
-                    config_table.add_column()
-                    config_table.add_row(
-                        "Learning Rate:", str(cfg.training.learning_rate)
+                    buffer_bar = Progress(
+                        TextColumn("Replay Buffer"),
+                        BarColumn(bar_width=None),
+                        TextColumn("{task.percentage:>3.0f}%"),
                     )
-                    config_table.add_row("Batch Size:", str(batch_size))
-                    config_table.add_row("Tower Depth:", str(cfg.training.tower_depth))
-                    config_table.add_row("SE Ratio:", str(cfg.training.se_ratio))
-
-                    self.layout["config_panel"].update(
-                        Panel(
-                            config_table,
-                            title="Configuration",
-                            border_style="green",
-                        )
+                    buf = trainer.experience_buffer
+                    buffer_bar.add_task(
+                        "", total=buf.capacity(), completed=buf.size()
                     )
-                    self.config_panel_rendered = True
-                except Exception as e:
-                    self.layout["config_panel"].update(
-                        Panel(f"Error loading config:\n{e}", title="Configuration")
-                    )
-
-            model = getattr(trainer.agent, "model", None)
-            if model is not None:
-                stats_lines: List[RenderableType] = []
-                current_stats: Dict[str, Dict[str, float]] = {}
-                named_params = dict(model.named_parameters())
-
-                for name, p in named_params.items():
-                    if ".weight" in name and (
-                        "policy_head" in name or "value_head" in name or "stem" in name
-                    ):
-                        data = p.data.float().cpu().numpy()
-                        current_stats[name] = {
-                            "mean": float(data.mean()),
-                            "std": float(data.std()),
-                            "min": float(data.min()),
-                            "max": float(data.max()),
-                        }
-
-                for name, stats in current_stats.items():
-                    trend_chars = {"mean": "→", "std": "→", "min": "→", "max": "→"}
-                    if self.previous_model_stats and name in self.previous_model_stats:
-                        for key in trend_chars:
-                            prev_val = self.previous_model_stats[name][key]
-                            curr_val = stats[key]
-                            if curr_val > prev_val:
-                                trend_chars[key] = "↑"
-                            elif curr_val < prev_val:
-                                trend_chars[key] = "↓"
-
-                    update_mag = trainer.last_weight_updates.get(name, 0.0)
-                    color = "white"
-                    if update_mag > 1.0:
-                        color = "red"
-                    elif update_mag > 0.1:
-                        color = "yellow"
-
-                    header = Text(f"Layer: {name}", style=f"bold {color}")
-                    stats_table = Table.grid(padding=(0, 2))
-                    stats_table.add_row(
-                        Text("Mean", style="bold"),
-                        Text("Std Dev", style="bold"),
-                        Text("Min", style="bold"),
-                        Text("Max", style="bold"),
-                    )
-                    stats_table.add_row(
-                        f"{stats['mean']:.4f} {trend_chars['mean']}",
-                        f"{stats['std']:.4f} {trend_chars['std']}",
-                        f"{stats['min']:.2f} {trend_chars['min']}",
-                        f"{stats['max']:.2f} {trend_chars['max']}",
-                    )
-                    stats_lines.append(header)
-                    stats_lines.append(stats_table)
-
-                self.previous_model_stats = current_stats
-
-                arch = Text(
-                    "[Input: 9x9xN] -> [ResNet Core] -> [Policy Head]\n"
-                    "                         -> [Value Head]",
-                    style="bold",
-                )
-                self.layout["evolution_panel"].update(
+                    group_stats.append(buffer_bar)
+                except (AttributeError, TypeError):
+                    pass
+                self.layout["stats_panel"].update(
                     Panel(
-                        Group(arch, *stats_lines),
-                        border_style="magenta",
-                        title="Model Evolution",
+                        Group(*group_stats),
+                        title="Game Statistics",
+                        border_style="green",
                     )
                 )
-            if self.elo_component_enabled:
-                snap = getattr(trainer, "evaluation_elo_snapshot", None)
-                if snap and snap.get("top_ratings") and len(snap["top_ratings"]) >= 2:
-                    lines = [
-                        f"{mid}: {rating:.0f}" for mid, rating in snap["top_ratings"]
-                    ]
-                    content = Text("\n".join(lines), style="yellow")
-                else:
-                    content = Text(
-                        "Waiting for initial model evaluations...",
-                        style="yellow",
-                    )
-                self.layout["elo_panel"].update(
-                    Panel(content, border_style="yellow", title="Elo Ratings")
+            except (
+                AttributeError,
+                KeyError,
+                TypeError,
+                ValueError,
+                AssertionError,
+            ) as e:
+                self.layout["stats_panel"].update(
+                    Panel(f"Error: {e}", title="Game Statistics")
                 )
+
+        if not self.config_panel_rendered:
+            try:
+                cfg = self.config
+                batch_size = getattr(cfg.training, "minibatch_size", None)
+                if batch_size is None:
+                    batch_size = getattr(cfg.parallel, "batch_size", "?")
+
+                config_table = Table.grid(padding=(0, 2))
+                config_table.add_column(style="bold")
+                config_table.add_column()
+                config_table.add_row(
+                    "Learning Rate:", str(cfg.training.learning_rate)
+                )
+                config_table.add_row("Batch Size:", str(batch_size))
+                config_table.add_row("Tower Depth:", str(cfg.training.tower_depth))
+                config_table.add_row("SE Ratio:", str(cfg.training.se_ratio))
+
+                self.layout["config_panel"].update(
+                    Panel(
+                        config_table,
+                        title="Configuration",
+                        border_style="green",
+                    )
+                )
+                self.config_panel_rendered = True
+            except (AttributeError, KeyError, TypeError) as e:
+                self.layout["config_panel"].update(
+                    Panel(f"Error loading config:\n{e}", title="Configuration")
+                )
+
+        model = getattr(trainer.agent, "model", None)
+        if model is not None:
+            stats_lines: List[RenderableType] = []
+            current_stats: Dict[str, Dict[str, float]] = {}
+            named_params = dict(model.named_parameters())
+
+            for name, p in named_params.items():
+                if ".weight" in name and (
+                    "policy_head" in name or "value_head" in name or "stem" in name
+                ):
+                    data = p.data.float().cpu().numpy()
+                    current_stats[name] = {
+                        "mean": float(data.mean()),
+                        "std": float(data.std()),
+                        "min": float(data.min()),
+                        "max": float(data.max()),
+                    }
+
+            for name, stats in current_stats.items():
+                trend_chars = {"mean": "→", "std": "→", "min": "→", "max": "→"}
+                if self.previous_model_stats and name in self.previous_model_stats:
+                    for key in trend_chars:
+                        prev_val = self.previous_model_stats[name][key]
+                        curr_val = stats[key]
+                        if curr_val > prev_val:
+                            trend_chars[key] = "↑"
+                        elif curr_val < prev_val:
+                            trend_chars[key] = "↓"
+
+                update_mag = trainer.last_weight_updates.get(name, 0.0)
+                color = "white"
+                if update_mag > 1.0:
+                    color = "red"
+                elif update_mag > 0.1:
+                    color = "yellow"
+
+                header = Text(f"Layer: {name}", style=f"bold {color}")
+                stats_table = Table.grid(padding=(0, 2))
+                stats_table.add_row(
+                    Text("Mean", style="bold"),
+                    Text("Std Dev", style="bold"),
+                    Text("Min", style="bold"),
+                    Text("Max", style="bold"),
+                )
+                stats_table.add_row(
+                    f"{stats['mean']:.4f} {trend_chars['mean']}",
+                    f"{stats['std']:.4f} {trend_chars['std']}",
+                    f"{stats['min']:.2f} {trend_chars['min']}",
+                    f"{stats['max']:.2f} {trend_chars['max']}",
+                )
+                stats_lines.append(header)
+                stats_lines.append(stats_table)
+
+            self.previous_model_stats = current_stats
+
+            arch = Text(
+                "[Input: 9x9xN] -> [ResNet Core] -> [Policy Head]\n"
+                "                         -> [Value Head]",
+                style="bold",
+            )
+            self.layout["evolution_panel"].update(
+                Panel(
+                    Group(arch, *stats_lines),
+                    border_style="magenta",
+                    title="Model Evolution",
+                )
+            )
+        if self.elo_component_enabled:
+            snap = getattr(trainer, "evaluation_elo_snapshot", None)
+            if snap and snap.get("top_ratings") and len(snap["top_ratings"]) >= 2:
+                lines = [
+                    f"{mid}: {rating:.0f}" for mid, rating in snap["top_ratings"]
+                ]
+                content = Text("\n".join(lines), style="yellow")
+            else:
+                content = Text(
+                    "Waiting for initial model evaluations...",
+                    style="yellow",
+                )
+            self.layout["elo_panel"].update(
+                Panel(content, border_style="yellow", title="Elo Ratings")
+            )
 
     def start(self):
         return Live(

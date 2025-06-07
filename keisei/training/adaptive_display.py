@@ -1,4 +1,5 @@
 """Helpers for choosing training display layouts based on terminal size."""
+
 from __future__ import annotations
 
 import os

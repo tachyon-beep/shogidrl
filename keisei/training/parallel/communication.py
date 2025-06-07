@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
+
 from .utils import compress_array
 
 logger = logging.getLogger(__name__)
