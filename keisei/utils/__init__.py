@@ -1,7 +1,6 @@
 # keisei/utils/__init__.py
 
-# Import new modules for side effects (so __all__ is respected), but do not import symbols directly here.
-from . import agent_loading, opponents
+# Import modules that don't cause cyclic imports
 from .move_formatting import (
     _coords_to_square_name,
     _get_piece_name,

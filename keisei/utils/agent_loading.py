@@ -5,12 +5,7 @@ agent_loading.py: Utilities for loading PPO agents and initializing opponents.
 import os
 from typing import Any, Optional
 
-from keisei.config_schema import AppConfig, EnvConfig, ParallelConfig, TrainingConfig
-from keisei.utils.opponents import (
-    BaseOpponent,
-    SimpleHeuristicOpponent,
-    SimpleRandomOpponent,
-)
+from keisei.config_schema import ParallelConfig
 from keisei.utils.unified_logger import log_error_to_stderr, log_info_to_stderr
 
 
@@ -141,24 +136,22 @@ def initialize_opponent(
     policy_mapper,
     input_channels: int,
 ) -> Any:
-    from keisei.core.ppo_agent import PPOAgent
-
     if opponent_type == "random":
         from keisei.utils.opponents import SimpleRandomOpponent
 
         return SimpleRandomOpponent()
-    elif opponent_type == "heuristic":
+    if opponent_type == "heuristic":
         from keisei.utils.opponents import SimpleHeuristicOpponent
 
         return SimpleHeuristicOpponent()
-    elif opponent_type == "ppo":
+    if opponent_type == "ppo":
         if not opponent_path:
             raise ValueError("Opponent path must be provided for PPO opponent type.")
         return load_evaluation_agent(
             opponent_path, device_str, policy_mapper, input_channels
         )
-    else:
-        raise ValueError(f"Unknown opponent type: {opponent_type}")
+
+    raise ValueError(f"Unknown opponent type: {opponent_type}")
 
 
 __all__ = [

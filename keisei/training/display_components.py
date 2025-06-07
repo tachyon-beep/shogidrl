@@ -227,7 +227,6 @@ class RecentMovesPanel:
                 )
 
         # 1. Slice the list to the configured max_moves. No more capacity logic.
-        print("SLICE IS ", self.max_moves, "MOVES")
         slice_ = moves[-self.max_moves :]
 
         # 2. Reverse the list if needed.
@@ -485,20 +484,6 @@ class GameStatisticsPanel:
         table.add_row("Sente's Favourite Opening:", fav_sente_opening_formatted)
         table.add_row("Gote's Favourite Opening:", fav_gote_opening_formatted)
 
-        # This part for hand display remains separate to preserve alignment
-        sente_hand_str = self._format_hand(
-            getattr(game, "hands", {}).get(Color.BLACK, {})
-        )
-        gote_hand_str = self._format_hand(
-            getattr(game, "hands", {}).get(Color.WHITE, {})
-        )
-        hand_info = Group(
-            Text.from_markup("\n[bold]Sente's Hand:",style="bold cyan"),
-            Text(sente_hand_str or "None"),
-            Text.from_markup("Gote's Hand: ", style="bold cyan"),
-            Text(gote_hand_str or "None"),
-        )
-
         return Panel(
-            Group(table, hand_info), title="Game Statistics", border_style="green"
+            Group(table), title="Game Statistics", border_style="green"
         )
