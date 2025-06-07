@@ -256,6 +256,7 @@ class TrainingDisplay:
 
         SPARKLINE_WIDTH = self.display_config.sparkline_width
         assert self.trend_component is not None
+        trend = self.trend_component
 
         for name, history_key in metrics_to_display:
             if history_key == "win_rates_black":
@@ -275,7 +276,7 @@ class TrainingDisplay:
             avg_val = sum(avg_slice) / len(avg_slice) if avg_slice else None
 
             spark = (
-                self.trend_component.generate(data_list[-SPARKLINE_WIDTH:])
+                trend.generate(data_list[-SPARKLINE_WIDTH:])
                 if data_list
                 else " " * SPARKLINE_WIDTH
             )
@@ -333,7 +334,9 @@ class TrainingDisplay:
                 move_strings = (
                     trainer.step_manager.move_log if trainer.step_manager else None
                 )
-                panel_height = self.layout["moves_panel"].size.height
+                panel_height = int(
+                    getattr(self.layout["moves_panel"].size, "height", 0)
+                )
                 pps = getattr(trainer, "last_ply_per_sec", 0.0)
                 self.layout["moves_panel"].update(
                     self.moves_component.render(
@@ -355,7 +358,7 @@ class TrainingDisplay:
                     BarColumn(bar_width=None),
                     TaskProgressColumn(),
                 )
-                grad_bar.add_task("", total=50.0, completed=grad_norm_scaled)
+                grad_bar.add_task("", total=50.0, completed=int(grad_norm_scaled))
                 group_items.append(grad_bar)
 
                 self.layout["trends_panel"].update(
@@ -365,6 +368,7 @@ class TrainingDisplay:
                 )
 
                 try:
+                    assert self.game_stats_component is not None
                     panel = cast(
                         Panel,
                         self.game_stats_component.render(
@@ -377,7 +381,7 @@ class TrainingDisplay:
                             trainer.metrics_manager,
                         ),
                     )
-                    group_stats = [panel.renderable]
+                    group_stats: List[RenderableType] = [panel.renderable]
                     try:
                         buffer_bar = Progress(
                             TextColumn("Replay Buffer"),

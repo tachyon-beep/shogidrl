@@ -3,7 +3,7 @@ trainer.py: Contains the Trainer class for managing the Shogi RL training loop (
 """
 
 from datetime import datetime
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, cast
 
 import torch
 
@@ -96,7 +96,7 @@ class Trainer(CompatibilityMixin):
         self.previous_model_selector = PreviousModelSelector(
             pool_size=config.evaluation.previous_model_pool_size
         )
-        self.evaluation_elo_snapshot = None
+        self.evaluation_elo_snapshot: Optional[Dict[str, Any]] = None
         self.callback_manager = CallbackManager(config, self.model_dir)
         self.setup_manager = SetupManager(config, self.device)
 
@@ -187,13 +187,21 @@ class Trainer(CompatibilityMixin):
 
         self.experience_buffer.compute_advantages_and_returns(last_value_pred_for_gae)
         # Track weight updates by comparing state before and after learn()
-        old_state = {
-            name: p.detach().clone() for name, p in self.agent.model.named_parameters()
-        }
+        model_any: Any = getattr(self.agent, "model", None)
+        old_state = (
+            {
+                name: p.detach().clone()
+                for name, p in cast(Any, model_any).named_parameters()
+            }
+            if model_any is not None
+            else {}
+        )
         learn_metrics = self.agent.learn(self.experience_buffer)
-        new_state = {
-            name: p.detach() for name, p in self.agent.model.named_parameters()
-        }
+        new_state = (
+            {name: p.detach() for name, p in cast(Any, model_any).named_parameters()}
+            if model_any is not None
+            else {}
+        )
         self.last_weight_updates = {
             name: (new_state[name] - old_state[name]).norm().item()
             for name in old_state.keys()
