@@ -1,14 +1,15 @@
+from rich.console import Console
+
 from keisei.config_schema import DisplayConfig
+from keisei.shogi.shogi_core_definitions import Color
 from keisei.training.adaptive_display import AdaptiveDisplayManager
 from keisei.training.display_components import (
-    Sparkline,
-    ShogiBoard,
     RecentMovesPanel,
+    ShogiBoard,
+    Sparkline,
 )
 from keisei.training.elo_rating import EloRatingSystem
 from keisei.training.metrics_manager import MetricsHistory
-from keisei.shogi.shogi_core_definitions import Color
-from rich.console import Console
 
 
 def test_display_config_defaults():

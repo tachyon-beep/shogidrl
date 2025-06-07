@@ -1,12 +1,12 @@
-from unittest.mock import MagicMock
 from pathlib import Path
+from unittest.mock import MagicMock
 
-from keisei.training.callbacks import EvaluationCallback
-from keisei.training.previous_model_selector import PreviousModelSelector
-from keisei.training.metrics_manager import MetricsManager
-from keisei.training.trainer import Trainer
 from keisei.config_schema import AppConfig
 from keisei.evaluation.elo_registry import EloRegistry
+from keisei.training.callbacks import EvaluationCallback
+from keisei.training.metrics_manager import MetricsManager
+from keisei.training.previous_model_selector import PreviousModelSelector
+from keisei.training.trainer import Trainer
 from keisei.utils import PolicyOutputMapper
 from tests.evaluation.conftest import make_test_config
 

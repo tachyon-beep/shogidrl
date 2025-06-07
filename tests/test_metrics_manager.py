@@ -1,5 +1,6 @@
-from keisei.training.metrics_manager import MetricsManager
 from unittest.mock import patch
+
+from keisei.training.metrics_manager import MetricsManager
 
 
 def test_log_episode_metrics_and_rates():

@@ -11,13 +11,13 @@ import pytest
 
 from keisei.config_schema import (
     AppConfig,
+    DisplayConfig,
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
     ParallelConfig,
     TrainingConfig,
     WandBConfig,
-    DisplayConfig,
 )
 from keisei.training.env_manager import EnvManager
 

@@ -11,13 +11,13 @@ import torch  # Added torch import
 
 from keisei.config_schema import (
     AppConfig,
+    DisplayConfig,
     EnvConfig,
     EvaluationConfig,
     LoggingConfig,
     ParallelConfig,
     TrainingConfig,
     WandBConfig,
-    DisplayConfig,
 )
 from keisei.training.model_manager import ModelManager  # Updated import path
 
