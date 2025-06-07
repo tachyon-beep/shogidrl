@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Protocol, Optional, List, Sequence, Dict
 from collections import deque, Counter
 import ast
-from wcwidth import wcswidth
+from wcwidth import wcswidth  # type: ignore
 from keisei.utils import _coords_to_square_name
 
 from keisei.utils.unified_logger import log_error_to_stderr
@@ -149,7 +149,7 @@ class ShogiBoard:
 
         for r_idx, row in enumerate(board_state.board):
             rank_label = str(9 - r_idx)
-            row_cells: List[Text] = [Text(rank_label, style="bold")]
+            row_cells: List[RenderableType] = [Text(rank_label, style="bold")]
 
             for c_idx, piece in enumerate(reversed(row)):
                 is_light = (r_idx + c_idx) % 2 == 0
@@ -170,15 +170,17 @@ class ShogiBoard:
                 board_col = 8 - c_idx
                 sq_name = self._get_shogi_notation(r_idx, board_col)
                 if hot_squares and sq_name in hot_squares:
-                    cell_renderable = Panel(
-                        Align.center(cell_renderable),
-                        box=box.SQUARE,
-                        padding=(0, 0),
-                        border_style="red",
-                        width=self.cell_width + 2,
+                    row_cells.append(
+                        Panel(
+                            Align.center(cell_renderable),
+                            box=box.SQUARE,
+                            padding=(0, 0),
+                            border_style="red",
+                            width=self.cell_width + 2,
+                        )
                     )
-
-                row_cells.append(cell_renderable)
+                else:
+                    row_cells.append(cell_renderable)
 
             table.add_row(*row_cells)
         return table
@@ -361,6 +363,23 @@ class GameStatisticsPanel:
                     key = piece.type.name.replace("PROMOTED_", "")
                     total_value += piece_values.get(key, 0)
         return total_value
+
+    def _format_hand(self, hand: Dict[str, int]) -> str:
+        symbols = {
+            "PAWN": "歩",
+            "LANCE": "香",
+            "KNIGHT": "桂",
+            "SILVER": "銀",
+            "GOLD": "金",
+            "BISHOP": "角",
+            "ROOK": "飛",
+        }
+        parts = [
+            f"{symbols.get(getattr(k, 'name', k), '?')}x{v}"
+            for k, v in hand.items()
+            if v > 0
+        ]
+        return " ".join(parts) or ""
 
     def render(
         self,

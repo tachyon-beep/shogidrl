@@ -2,7 +2,7 @@
 training/display.py: Rich UI management for the Shogi RL trainer.
 """
 
-from typing import List, Union, Optional, Dict
+from typing import List, Union, Optional, Dict, cast
 
 from rich.console import Console, Group, RenderableType
 from rich.table import Table
@@ -253,6 +253,7 @@ class TrainingDisplay:
         table.add_column("Trend", no_wrap=True, ratio=4)
 
         SPARKLINE_WIDTH = self.display_config.sparkline_width
+        assert self.trend_component is not None
 
         for name, history_key in metrics_to_display:
             if history_key == "win_rates_black":
@@ -356,11 +357,13 @@ class TrainingDisplay:
                 )
 
                 try:
-                    panel = self.game_stats_component.render(
-                        trainer.game,
-                        trainer.step_manager.move_log if trainer.step_manager else None,
-                        trainer.metrics_manager,
-                        trainer.policy_output_mapper,
+                    panel = cast(
+                        Panel,
+                        self.game_stats_component.render(
+                            trainer.game,
+                            trainer.step_manager.move_log if trainer.step_manager else None,
+                            trainer.metrics_manager,
+                        ),
                     )
                     group_stats = [panel.renderable]
                     try:
@@ -420,7 +423,7 @@ class TrainingDisplay:
 
             model = getattr(trainer.agent, "model", None)
             if model is not None:
-                stats_lines = []
+                stats_lines: List[RenderableType] = []
                 current_stats: Dict[str, Dict[str, float]] = {}
                 named_params = dict(model.named_parameters())
 
