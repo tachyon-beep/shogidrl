@@ -240,7 +240,7 @@ class TrainingDisplay:
             ("Entropy", "entropies"),
             ("KL Divergence", "kl_divergences"),
             ("PPO Clip Frac", "clip_fractions"),
-            ("Win Rate B", "win_rates_black"),
+            ("Win Rate", "win_rates_black"),
             ("Draw Rate", "draw_rates"),
         ]
 
