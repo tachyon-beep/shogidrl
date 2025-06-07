@@ -329,7 +329,21 @@ class TrainingDisplay:
                         trainer.game,
                         trainer.step_manager.move_log if trainer.step_manager else None,
                     )
-                    self.layout["stats_panel"].update(panel)
+                    group_stats = [panel.renderable]
+                    try:
+                        buffer_bar = Progress(
+                            TextColumn("Replay Buffer"),
+                            BarColumn(bar_width=None),
+                            TextColumn("{task.percentage:>3.0f}%"),
+                        )
+                        buf = trainer.experience_buffer
+                        buffer_bar.add_task("", total=buf.capacity(), completed=buf.size())
+                        group_stats.append(buffer_bar)
+                    except Exception:
+                        pass
+                    self.layout["stats_panel"].update(
+                        Panel(Group(*group_stats), title="Game Statistics", border_style="green")
+                    )
                 except Exception as e:
                     self.layout["stats_panel"].update(
                         Panel(f"Error: {e}", title="Game Statistics")
