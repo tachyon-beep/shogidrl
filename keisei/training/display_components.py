@@ -80,7 +80,7 @@ class ShogiBoard:
     def _piece_to_symbol(self, piece) -> str:
         """Turn your internal piece-object into a single-string symbol."""
         if not piece:
-            return " "
+            return "・"
         if self.use_unicode:
             symbols = {
                 "PAWN": "歩",
@@ -117,8 +117,10 @@ class ShogiBoard:
 
     def _generate_rich_table(self, board_state) -> Table:
         """Create a 10×10 Table for the board."""
-        light_bg = Style(bgcolor="#EEC28A")
-        dark_bg = Style(bgcolor="#C19A55")
+        light_bg_color = "#EEC28A"
+        dark_bg_color = "#C19A55"
+        light_bg = Style(bgcolor=light_bg_color)
+        dark_bg = Style(bgcolor=dark_bg_color)
 
         table = Table(
             show_header=False,
@@ -144,14 +146,21 @@ class ShogiBoard:
             row_cells: List[Text] = [Text(rank_label, style="bold")]
 
             for c_idx, piece in enumerate(reversed(row)):
-                bg_style = light_bg if (r_idx + c_idx) % 2 == 0 else dark_bg
+                is_light = (r_idx + c_idx) % 2 == 0
+                bg_style = light_bg if is_light else dark_bg
 
-                raw_symbol = self._piece_to_symbol(piece)
-                padded = self._pad_symbol(raw_symbol)
+                if piece:
+                    raw_symbol = self._piece_to_symbol(piece)
+                    padded = self._pad_symbol(raw_symbol)
+                    cell_renderable = self._colorize(padded, piece)
+                else:
+                    raw_symbol = self._piece_to_symbol(piece)
+                    padded = self._pad_symbol(raw_symbol)
+                    dot_color = dark_bg_color if is_light else light_bg_color
+                    cell_renderable = Text(padded, style=dot_color)
 
-                text_with_colour = self._colorize(padded, piece)
-                text_with_colour.stylize(bg_style)
-                row_cells.append(text_with_colour)
+                cell_renderable.stylize(bg_style)
+                row_cells.append(cell_renderable)
 
             table.add_row(*row_cells)
         return table
