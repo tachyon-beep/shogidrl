@@ -162,12 +162,12 @@ class TrainingDisplay:
             TextColumn("• {task.fields[ep_metrics]}", style="bright_cyan"),
             TextColumn("• {task.fields[ppo_metrics]}", style="bright_yellow"),
             TextColumn(
-                "• Wins B:{task.fields[black_wins_cum]} W:{task.fields[white_wins_cum]} D:{task.fields[draws_cum]}",
+                "• Wins S:{task.fields[black_wins_cum]} G:{task.fields[white_wins_cum]} D:{task.fields[draws_cum]}",
                 style="bright_green",
             ),
             TextColumn(
-                "• Rates B:{task.fields[black_win_rate]:.1%} "
-                "W:{task.fields[white_win_rate]:.1%} "
+                "• Rates S:{task.fields[black_win_rate]:.1%} "
+                "G:{task.fields[white_win_rate]:.1%} "
                 "D:{task.fields[draw_rate]:.1%}",
                 style="bright_blue",
             ),
@@ -256,9 +256,13 @@ class TrainingDisplay:
 
         for name, history_key in metrics_to_display:
             if history_key == "win_rates_black":
-                data_list = [d.get("win_rate_black", 0.0) for d in history.win_rates_history]
+                data_list = [
+                    d.get("win_rate_black", 0.0) for d in history.win_rates_history
+                ]
             elif history_key == "draw_rates":
-                data_list = [d.get("win_rate_draw", 0.0) for d in history.win_rates_history]
+                data_list = [
+                    d.get("win_rate_draw", 0.0) for d in history.win_rates_history
+                ]
             else:
                 data_list = getattr(history, history_key, [])
 
@@ -299,8 +303,11 @@ class TrainingDisplay:
         if self.using_enhanced_layout:
             if self.board_component:
                 try:
+                    hot_sq = trainer.metrics_manager.get_hot_squares(top_n=3)
                     self.layout["board_panel"].update(
-                        self.board_component.render(trainer.game)
+                        self.board_component.render(
+                            trainer.game, highlight_squares=hot_sq
+                        )
                     )
                 except Exception as e:
                     self.rich_console.log(
@@ -363,12 +370,18 @@ class TrainingDisplay:
                             TextColumn("{task.percentage:>3.0f}%"),
                         )
                         buf = trainer.experience_buffer
-                        buffer_bar.add_task("", total=buf.capacity(), completed=buf.size())
+                        buffer_bar.add_task(
+                            "", total=buf.capacity(), completed=buf.size()
+                        )
                         group_stats.append(buffer_bar)
                     except Exception:
                         pass
                     self.layout["stats_panel"].update(
-                        Panel(Group(*group_stats), title="Game Statistics", border_style="green")
+                        Panel(
+                            Group(*group_stats),
+                            title="Game Statistics",
+                            border_style="green",
+                        )
                     )
                 except Exception as e:
                     self.layout["stats_panel"].update(
@@ -385,7 +398,9 @@ class TrainingDisplay:
                     config_table = Table.grid(padding=(0, 2))
                     config_table.add_column(style="bold")
                     config_table.add_column()
-                    config_table.add_row("Learning Rate:", str(cfg.training.learning_rate))
+                    config_table.add_row(
+                        "Learning Rate:", str(cfg.training.learning_rate)
+                    )
                     config_table.add_row("Batch Size:", str(batch_size))
                     config_table.add_row("Tower Depth:", str(cfg.training.tower_depth))
                     config_table.add_row("SE Ratio:", str(cfg.training.se_ratio))
@@ -459,7 +474,8 @@ class TrainingDisplay:
                 self.previous_model_stats = current_stats
 
                 arch = Text(
-                    "[Input: 9x9xN] -> [ResNet Core] -> [Policy Head]\n" "                         -> [Value Head]",
+                    "[Input: 9x9xN] -> [ResNet Core] -> [Policy Head]\n"
+                    "                         -> [Value Head]",
                     style="bold",
                 )
                 self.layout["evolution_panel"].update(
