@@ -236,7 +236,7 @@ class RecentMovesPanel:
             if ply_per_sec
             else f"Recent Moves ({len(moves)})"
         )
-        return Panel(body, title=title, border_style="yellow")
+        return Panel(body, title=title, border_style="yellow", expand=True)
 
 
 class PieceStandPanel:
