@@ -163,7 +163,9 @@ class TrainingDisplay:
                 style="bright_green",
             ),
             TextColumn(
-                "• Rates B:{task.fields[black_win_rate]:.1%} W:{task.fields[white_win_rate]:.1%} D:{task.fields[draw_rate]:.1%}",
+                "• Rates B:{task.fields[black_win_rate]:.1%} "
+                "W:{task.fields[white_win_rate]:.1%} "
+                "D:{task.fields[draw_rate]:.1%}",
                 style="bright_blue",
             ),
         ]
