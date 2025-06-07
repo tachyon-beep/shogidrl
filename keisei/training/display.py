@@ -353,6 +353,7 @@ class TrainingDisplay:
                         trainer.game,
                         trainer.step_manager.move_log if trainer.step_manager else None,
                         trainer.metrics_manager,
+                        trainer.policy_output_mapper,
                     )
                     group_stats = [panel.renderable]
                     try:
