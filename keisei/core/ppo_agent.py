@@ -289,6 +289,7 @@ class PPOAgent:
             0.0,
         )
         total_kl_div = 0.0
+        total_clip_frac = 0.0
         num_updates = 0
 
         for _ in range(self.ppo_epochs):
@@ -335,6 +336,9 @@ class PPOAgent:
 
                 # PPO Loss Calculation
                 ratio = torch.exp(new_log_probs - old_log_probs_minibatch)
+
+                clip_mask = (ratio - 1.0).abs() > self.clip_epsilon
+                total_clip_frac += clip_mask.float().mean().item()
 
                 # Calculate KL divergence approximation
                 kl_div = (old_log_probs_minibatch - new_log_probs).mean()
@@ -438,6 +442,7 @@ class PPOAgent:
         )
         avg_entropy = total_entropy_epoch / num_updates if num_updates > 0 else 0.0
         avg_kl_div = total_kl_div / num_updates if num_updates > 0 else 0.0
+        avg_clip_frac = total_clip_frac / num_updates if num_updates > 0 else 0.0
 
         # Update tracked KL divergence
         self.last_kl_div = avg_kl_div
@@ -448,6 +453,7 @@ class PPOAgent:
             "ppo/value_loss": avg_value_loss,
             "ppo/entropy": avg_entropy,
             "ppo/kl_divergence_approx": avg_kl_div,
+            "ppo/clip_fraction": avg_clip_frac,
             "ppo/learning_rate": current_lr,
         }
 

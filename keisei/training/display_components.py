@@ -184,6 +184,39 @@ class RecentMovesPanel:
         )
 
 
+class PieceStandPanel:
+    """Renders the captured pieces (komadai) for each player."""
+
+    def _format_hand(self, hand: Dict[str, int]) -> str:
+        symbols = {
+            "PAWN": "歩",
+            "LANCE": "香",
+            "KNIGHT": "桂",
+            "SILVER": "銀",
+            "GOLD": "金",
+            "BISHOP": "角",
+            "ROOK": "飛",
+        }
+        parts = [f"{symbols.get(getattr(k, 'name', k), '?')}x{v}" for k, v in hand.items() if v > 0]
+        return " ".join(parts) or ""
+
+    def render(self, game) -> RenderableType:
+        if not game:
+            return Panel("...", title="Captured Pieces")
+
+        sente_hand = self._format_hand(getattr(game, "hands", {}).get(Color.BLACK.value, {}))
+        gote_hand = self._format_hand(getattr(game, "hands", {}).get(Color.WHITE.value, {}))
+
+        return Panel(
+            Group(
+                Text.from_markup(f"[bold]Sente:[/b] {sente_hand}"),
+                Text.from_markup(f"[bold]Gote: [/b] {gote_hand}"),
+            ),
+            title="Captured Pieces",
+            border_style="yellow",
+        )
+
+
 class Sparkline:
     """Simple Unicode sparkline generator for metric trends."""
 
@@ -262,64 +295,70 @@ class MultiMetricSparkline:
 
 
 class GameStatisticsPanel:
-    """Renders detailed statistics about the current game."""
+    """Renders detailed statistics about the current game and session."""
 
-    def _format_hand(self, hand: Dict[str, int]) -> str:
-        return (
-            " ".join(
-                [
-                    f"{self._piece_to_symbol(k.name if hasattr(k, 'name') else k)}x{v}"
-                    for k, v in hand.items()
-                    if v > 0
-                ]
-            )
-            or "None"
-        )
-
-    def _piece_to_symbol(self, piece_type_name: str) -> str:
-        symbols = {
-            "PAWN": "歩",
-            "LANCE": "香",
-            "KNIGHT": "桂",
-            "SILVER": "銀",
-            "GOLD": "金",
-            "BISHOP": "角",
-            "ROOK": "飛",
+    def _calculate_material(self, board, color):
+        piece_values = {
+            "PAWN": 1,
+            "LANCE": 3,
+            "KNIGHT": 3,
+            "SILVER": 5,
+            "GOLD": 6,
+            "BISHOP": 8,
+            "ROOK": 10,
         }
-        return symbols.get(piece_type_name, "?")
+        total_value = 0
+        for row in board.board:
+            for piece in row:
+                if piece and piece.color == color:
+                    key = piece.type.name.replace("PROMOTED_", "")
+                    total_value += piece_values.get(key, 0)
+        return total_value
 
-    def render(self, game, move_history: Optional[List[str]] = None) -> RenderableType:
-        if not game or not move_history:
-            return Panel("No active game.", title="Game Statistics", border_style="green")
+    def render(
+        self,
+        game,
+        move_history: Optional[List[str]] = None,
+        metrics_manager=None,
+    ) -> RenderableType:
+        if not game or not move_history or metrics_manager is None:
+            return Panel(
+                "Waiting for game to start...",
+                title="Game Statistics",
+                border_style="green",
+            )
 
-        num_drops = sum(1 for m in move_history if "drop" in m)
-        piece_usage = Counter(
-            m.split(" - ")[1].split(" ")[1].strip("()")
-            for m in move_history
-            if " - " in m and "drop" not in m
-        )
-        most_used_piece = piece_usage.most_common(1)[0][0] if piece_usage else "N/A"
-        last_black_move = next(
-            (m.split(" - ")[1] for m in reversed(move_history) if m.startswith("BLACK")),
-            "N/A",
-        )
-        last_white_move = next(
-            (m.split(" - ")[1] for m in reversed(move_history) if m.startswith("WHITE")),
-            "N/A",
-        )
+        sente_material = self._calculate_material(game, Color.BLACK)
+        gote_material = self._calculate_material(game, Color.WHITE)
+        material_adv = sente_material - gote_material
 
-        table = Table.grid(expand=True, padding=(0, 1))
-        table.add_column(style="bold")
-        table.add_column()
-        table.add_row("Drops this Game:", str(num_drops))
-        table.add_row("Most Used Piece:", most_used_piece)
-        table.add_row("Black's Last Play:", last_black_move)
-        table.add_row("White's Last Play:", last_white_move)
-        table.add_row(
-            "Black's Hand:", self._format_hand(game.hands[Color.BLACK.value])
+        square_usage = Counter()
+        for move in move_history:
+            try:
+                parts = move.split(" from ")[1].split(" to ")
+                square_usage.update([parts[0], parts[1].strip(".")])
+            except IndexError:
+                continue
+        hot_squares = ", ".join([sq[0] for sq in square_usage.most_common(3)]) or "N/A"
+
+        sente_openings = metrics_manager.sente_opening_history
+        gote_openings = metrics_manager.gote_opening_history
+        fav_sente_open = Counter(sente_openings).most_common(1)
+        fav_gote_open = Counter(gote_openings).most_common(1)
+        fav_sente_opening = fav_sente_open[0][0] if fav_sente_open else "N/A"
+        fav_gote_opening = fav_gote_open[0][0] if fav_gote_open else "N/A"
+
+        table = Table.grid(expand=True, padding=(0, 2))
+        table.add_column(style="bold cyan", no_wrap=True)
+        table.add_column(justify="right")
+
+        check_status = (
+            "[red]CHECK[/]" if game.is_in_check(game.current_player) else "Clear"
         )
-        table.add_row(
-            "White's Hand:", self._format_hand(game.hands[Color.WHITE.value])
-        )
+        table.add_row("Check Status:", check_status)
+        table.add_row("Material Adv:", f"{material_adv:+.1f} (Sente)")
+        table.add_row("Hot Squares:", hot_squares)
+        table.add_row("Fav. Sente Opening:", fav_sente_opening)
+        table.add_row("Fav. Gote Opening:", fav_gote_opening)
 
         return Panel(table, title="Game Statistics", border_style="green")

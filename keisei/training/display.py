@@ -29,6 +29,7 @@ from .display_components import (
     MultiMetricSparkline,
     RollingAverageCalculator,
     GameStatisticsPanel,
+    PieceStandPanel,
 )
 from .adaptive_display import AdaptiveDisplayManager
 
@@ -43,6 +44,7 @@ class TrainingDisplay:
 
         self.board_component: Optional[ShogiBoard] = None
         self.moves_component: Optional[RecentMovesPanel] = None
+        self.piece_stand_component: Optional[PieceStandPanel] = None
         self.trend_component: Optional[Sparkline] = None
         self.multi_trend_component: Optional[MultiMetricSparkline] = None
         self.completion_rate_calc: Optional[RollingAverageCalculator] = None
@@ -59,6 +61,7 @@ class TrainingDisplay:
             self.moves_component = RecentMovesPanel(
                 max_moves=self.display_config.move_list_length
             )
+            self.piece_stand_component = PieceStandPanel()
         if self.display_config.enable_trend_visualization:
             self.trend_component = Sparkline(width=self.display_config.sparkline_width)
             self.multi_trend_component = MultiMetricSparkline(
@@ -114,10 +117,9 @@ class TrainingDisplay:
         )
 
         layout["left_column"].split_column(
-            Layout(
-                name="board_panel", size=12
-            ),  # Set size to 12 for the new Table-based board
-            Layout(name="moves_panel"),
+            Layout(name="board_panel", size=12),
+            Layout(name="komadai_panel", size=5),
+            Layout(name="moves_panel", ratio=1),
         )
 
         layout["middle_column"].split_column(
@@ -132,6 +134,7 @@ class TrainingDisplay:
         )
 
         layout["board_panel"].update(Panel("...", title="Main Board"))
+        layout["komadai_panel"].update(Panel("...", title="Captured Pieces"))
         layout["moves_panel"].update(Panel("...", title="Recent Moves"))
         layout["trends_panel"].update(Panel("...", title="Metric Trends"))
         layout["stats_panel"].update(Panel("...", title="Game Statistics"))
@@ -234,6 +237,7 @@ class TrainingDisplay:
             ("Value Loss", "value_losses"),
             ("Entropy", "entropies"),
             ("KL Divergence", "kl_divergences"),
+            ("PPO Clip Frac", "clip_fractions"),
             ("Win Rate B", "win_rates_black"),
             ("Draw Rate", "draw_rates"),
         ]
@@ -304,6 +308,17 @@ class TrainingDisplay:
                     )
                     self.layout["board_panel"].update(Panel(Text("No board")))
 
+            if self.piece_stand_component:
+                try:
+                    self.layout["komadai_panel"].update(
+                        self.piece_stand_component.render(trainer.game)
+                    )
+                except Exception as e:
+                    self.rich_console.log(
+                        f"Error rendering piece stand: {e}", style="bold red"
+                    )
+                    self.layout["komadai_panel"].update(Panel("..."))
+
             if self.moves_component:
                 move_strings = (
                     trainer.step_manager.move_log if trainer.step_manager else None
@@ -337,6 +352,7 @@ class TrainingDisplay:
                     panel = self.game_stats_component.render(
                         trainer.game,
                         trainer.step_manager.move_log if trainer.step_manager else None,
+                        trainer.metrics_manager,
                     )
                     group_stats = [panel.renderable]
                     try:
