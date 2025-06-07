@@ -80,7 +80,7 @@ class ShogiBoard:
     def _piece_to_symbol(self, piece) -> str:
         """Turn your internal piece-object into a single-string symbol."""
         if not piece:
-            return "・" if self.use_unicode else "."
+            return " "
         if self.use_unicode:
             symbols = {
                 "PAWN": "歩",
@@ -265,9 +265,16 @@ class GameStatisticsPanel:
     """Renders detailed statistics about the current game."""
 
     def _format_hand(self, hand: Dict[str, int]) -> str:
-        return " ".join(
-            [f"{self._piece_to_symbol(k)}x{v}" for k, v in hand.items()]
-        ) or "None"
+        return (
+            " ".join(
+                [
+                    f"{self._piece_to_symbol(k.name if hasattr(k, 'name') else k)}x{v}"
+                    for k, v in hand.items()
+                    if v > 0
+                ]
+            )
+            or "None"
+        )
 
     def _piece_to_symbol(self, piece_type_name: str) -> str:
         symbols = {
@@ -308,7 +315,11 @@ class GameStatisticsPanel:
         table.add_row("Most Used Piece:", most_used_piece)
         table.add_row("Black's Last Play:", last_black_move)
         table.add_row("White's Last Play:", last_white_move)
-        table.add_row("Black's Hand:", self._format_hand(game.hand[Color.BLACK]))
-        table.add_row("White's Hand:", self._format_hand(game.hand[Color.WHITE]))
+        table.add_row(
+            "Black's Hand:", self._format_hand(game.hands[Color.BLACK.value])
+        )
+        table.add_row(
+            "White's Hand:", self._format_hand(game.hands[Color.WHITE.value])
+        )
 
         return Panel(table, title="Game Statistics", border_style="green")

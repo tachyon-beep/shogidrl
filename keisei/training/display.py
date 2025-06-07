@@ -79,6 +79,7 @@ class TrainingDisplay:
 
         # Store previous stats for trend arrows in evolution panel
         self.previous_model_stats: Optional[Dict[str, Dict[str, float]]] = None
+        self.config_panel_rendered: bool = False
 
     def _create_compact_layout(
         self, log_panel: Panel, progress_bar: Progress
@@ -349,7 +350,7 @@ class TrainingDisplay:
                         Panel(f"Error: {e}", title="Game Statistics")
                     )
 
-            if self.layout["config_panel"].renderable.title == "...":
+            if not self.config_panel_rendered:
                 try:
                     cfg = self.config
                     config_text = (
@@ -365,6 +366,7 @@ class TrainingDisplay:
                             border_style="green",
                         )
                     )
+                    self.config_panel_rendered = True
                 except Exception as e:
                     self.layout["config_panel"].update(
                         Panel(f"Error loading config:\n{e}", title="Configuration")
