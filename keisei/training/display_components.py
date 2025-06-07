@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Protocol, Optional, List, Sequence, Dict
-from collections import deque
+from collections import deque, Counter
 from wcwidth import wcswidth
 
 from keisei.utils.unified_logger import log_error_to_stderr
@@ -258,3 +258,56 @@ class MultiMetricSparkline:
             spark = self.spark.generate(values[-self.width :])
             lines.append(f"{name}: {spark}")
         return Text("\n".join(lines), style="cyan")
+
+
+class GameStatisticsPanel:
+    """Renders detailed statistics about the current game."""
+
+    def _format_hand(self, hand: Dict[str, int]) -> str:
+        return " ".join(
+            [f"{self._piece_to_symbol(k)}x{v}" for k, v in hand.items()]
+        ) or "None"
+
+    def _piece_to_symbol(self, piece_type_name: str) -> str:
+        symbols = {
+            "PAWN": "歩",
+            "LANCE": "香",
+            "KNIGHT": "桂",
+            "SILVER": "銀",
+            "GOLD": "金",
+            "BISHOP": "角",
+            "ROOK": "飛",
+        }
+        return symbols.get(piece_type_name, "?")
+
+    def render(self, game, move_history: Optional[List[str]] = None) -> RenderableType:
+        if not game or not move_history:
+            return Panel("No active game.", title="Game Statistics", border_style="green")
+
+        num_drops = sum(1 for m in move_history if "drop" in m)
+        piece_usage = Counter(
+            m.split(" - ")[1].split(" ")[1].strip("()")
+            for m in move_history
+            if " - " in m and "drop" not in m
+        )
+        most_used_piece = piece_usage.most_common(1)[0][0] if piece_usage else "N/A"
+        last_black_move = next(
+            (m.split(" - ")[1] for m in reversed(move_history) if m.startswith("BLACK")),
+            "N/A",
+        )
+        last_white_move = next(
+            (m.split(" - ")[1] for m in reversed(move_history) if m.startswith("WHITE")),
+            "N/A",
+        )
+
+        table = Table.grid(expand=True, padding=(0, 1), leading=1)
+        table.add_column(style="bold")
+        table.add_column()
+        table.add_row("Drops this Game:", str(num_drops))
+        table.add_row("Most Used Piece:", most_used_piece)
+        table.add_row("Black's Last Play:", last_black_move)
+        table.add_row("White's Last Play:", last_white_move)
+        table.add_row("Black's Hand:", self._format_hand(game.hand[Color.BLACK]))
+        table.add_row("White's Hand:", self._format_hand(game.hand[Color.WHITE]))
+
+        return Panel(table, title="Game Statistics", border_style="green")

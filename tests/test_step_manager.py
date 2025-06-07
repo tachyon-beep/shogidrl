@@ -432,7 +432,7 @@ class TestExecuteStep:
 
                 # Move should be recorded internally for display
                 expected_prefix = (
-                    f"Move {sample_episode_state.episode_length + 1}: TestPlayer played"
+                    f"Move {sample_episode_state.episode_length + 1} (TestPlayer):"
                 )
                 assert step_manager.move_log[-1].startswith(expected_prefix)
 
@@ -787,7 +787,7 @@ class TestPrepareAndHandleDemoMode:
 
                 mock_logger.assert_not_called()
                 assert step_manager.move_history[-1] == selected_move
-                assert step_manager.move_log[-1].startswith("Move 11: TestPlayer")
+                assert step_manager.move_log[-1].startswith("Move 11 (TestPlayer):")
 
     def test_handle_demo_mode_no_current_player(
         self, step_manager, mock_logger, mock_components

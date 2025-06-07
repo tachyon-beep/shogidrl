@@ -27,6 +27,7 @@ from .display_components import (
     Sparkline,
     MultiMetricSparkline,
     RollingAverageCalculator,
+    GameStatisticsPanel,
 )
 from .adaptive_display import AdaptiveDisplayManager
 
@@ -44,6 +45,7 @@ class TrainingDisplay:
         self.trend_component: Optional[Sparkline] = None
         self.multi_trend_component: Optional[MultiMetricSparkline] = None
         self.completion_rate_calc: Optional[RollingAverageCalculator] = None
+        self.game_stats_component: Optional[GameStatisticsPanel] = GameStatisticsPanel()
         self.elo_component_enabled: bool = False
         self.using_enhanced_layout: bool = False
 
@@ -220,54 +222,53 @@ class TrainingDisplay:
         return progress_bar, training_task, layout, log_panel
 
     def _build_metric_lines(self, history) -> List[str]:
-        metrics = [
-            ("Learning Rate", history.learning_rates),
-            ("Policy Loss", history.policy_losses),
-            ("Value Loss", history.value_losses),
-            ("Entropy", history.entropies),
-            ("KL Divergence", history.kl_divergences),
-            ("Episode Length", history.episode_lengths),
-            ("Episode Reward", history.episode_rewards),
+        metrics_to_display = [
+            ("Episode Length", "episode_lengths"),
+            ("Episode Reward", "episode_rewards"),
+            ("Policy Loss", "policy_losses"),
+            ("Value Loss", "value_losses"),
+            ("Entropy", "entropies"),
+            ("KL Divergence", "kl_divergences"),
+            ("Win Rate B", "win_rates_black"),
+            ("Draw Rate", "draw_rates"),
         ]
-        lines = []
-        width = self.display_config.sparkline_width
+
+        def format_decimal_aligned(val: Optional[float], width: int = 7) -> str:
+            if val is None:
+                return "-" * width
+            return f"{val:>{width}.4f}"
+
+        renderables: List[str] = []
+        SPARKLINE_WIDTH = self.display_config.sparkline_width
         LABEL_WIDTH = 16
 
-        def vals(lst):
-            last = f"{lst[-1]:.4f}" if len(lst) >= 1 else "-"
-            prev = f"{lst[-2]:.4f}" if len(lst) >= 2 else "-"
-            return last, prev
+        for name, history_key in metrics_to_display:
+            if history_key == "win_rates_black":
+                data_list = [d.get("win_rate_black", 0.0) for d in history.win_rates_history]
+            elif history_key == "draw_rates":
+                data_list = [d.get("win_rate_draw", 0.0) for d in history.win_rates_history]
+            else:
+                data_list = getattr(history, history_key, [])
 
-        for name, lst in metrics:
-            last, prev = vals(lst)
-            spark = self.trend_component.generate(lst[-width:]) if lst else "-" * width
-            lines.append(f"{name:<{LABEL_WIDTH}} [{last}] [{prev}] {spark}")
+            last_val = data_list[-1] if len(data_list) >= 1 else None
+            prev_val = data_list[-2] if len(data_list) >= 2 else None
+            avg_slice = data_list[-5:]
+            avg_val = sum(avg_slice) / len(avg_slice) if avg_slice else None
 
-        moves = history.win_rates_history
-        if moves:
-            recent_b = [d.get("win_rate_black", 0.0) for d in moves]
-            recent_w = [d.get("win_rate_white", 0.0) for d in moves]
-            recent_d = [d.get("win_rate_draw", 0.0) for d in moves]
-            spark_b = self.trend_component.generate(recent_b[-width:])
-            spark_w = self.trend_component.generate(recent_w[-width:])
-            spark_d = self.trend_component.generate(recent_d[-width:])
-            last_b = f"{recent_b[-1]:.2f}"
-            last_w = f"{recent_w[-1]:.2f}"
-            last_d = f"{recent_d[-1]:.2f}"
-            prev_b = f"{recent_b[-2]:.2f}" if len(recent_b) > 1 else "-"
-            prev_w = f"{recent_w[-2]:.2f}" if len(recent_w) > 1 else "-"
-            prev_d = f"{recent_d[-2]:.2f}" if len(recent_d) > 1 else "-"
-            lines.append(
-                f"{'Win Rate B':<{LABEL_WIDTH}} [{last_b}] [{prev_b}] {spark_b}"
+            last_str = format_decimal_aligned(last_val)
+            prev_str = format_decimal_aligned(prev_val)
+            avg_str = format_decimal_aligned(avg_val)
+
+            spark = (
+                self.trend_component.generate(data_list[-SPARKLINE_WIDTH:])
+                if data_list
+                else " " * SPARKLINE_WIDTH
             )
-            lines.append(
-                f"{'Win Rate W':<{LABEL_WIDTH}} [{last_w}] [{prev_w}] {spark_w}"
-            )
-            lines.append(
-                f"{'Draw Rate':<{LABEL_WIDTH}} [{last_d}] [{prev_d}] {spark_d}"
+            renderables.append(
+                f"{name:<{LABEL_WIDTH}} {last_str} {prev_str} {avg_str} {spark}"
             )
 
-        return lines
+        return renderables
 
     def update_progress(self, trainer, speed, pending_updates):
         update_data = {"completed": trainer.global_timestep, "speed": speed}
@@ -323,65 +324,16 @@ class TrainingDisplay:
                     )
                 )
 
-                stats_lines: List[str] = []
-                mm = trainer.metrics_manager
-                width = self.display_config.sparkline_width
-                stats_lines.append(f"Turns: {mm.global_timestep}")
-                stats_lines.append(f"Games: {mm.total_episodes_completed}")
-                if mm.turns_per_game:
-                    avg_len = sum(mm.turns_per_game) / len(mm.turns_per_game)
-                    len_spark = self.trend_component.generate(
-                        list(mm.turns_per_game)[-width:], range_min=1, range_max=500
-                    )
-                    stats_lines.append(f"Avg Length: {avg_len:.1f} {len_spark}")
-                if mm.history.win_rates_history:
-                    recent_b = [
-                        d.get("win_rate_black", 0.0)
-                        for d in mm.history.win_rates_history
-                    ]
-                    recent_w = [
-                        d.get("win_rate_white", 0.0)
-                        for d in mm.history.win_rates_history
-                    ]
-                    recent_d = [
-                        d.get("win_rate_draw", 0.0)
-                        for d in mm.history.win_rates_history
-                    ]
-                    spark_b = self.trend_component.generate(
-                        recent_b[-width:], range_min=0, range_max=100
-                    )
-                    spark_w = self.trend_component.generate(
-                        recent_w[-width:], range_min=0, range_max=100
-                    )
-                    spark_d = self.trend_component.generate(
-                        recent_d[-width:], range_min=0, range_max=100
-                    )
-                    stats_lines.append(f"B Win%: {recent_b[-1]:.1f} {spark_b}")
-                    stats_lines.append(f"W Win%: {recent_w[-1]:.1f} {spark_w}")
-                    stats_lines.append(f"Draw%: {recent_d[-1]:.1f} {spark_d}")
-
-                group_stats = [Text(l) for l in stats_lines]
                 try:
-                    buffer_bar = Progress(
-                        TextColumn("Replay Buffer"),
-                        BarColumn(bar_width=None),
-                        TextColumn("{task.percentage:>3.0f}%"),
+                    panel = self.game_stats_component.render(
+                        trainer.game,
+                        trainer.step_manager.move_log if trainer.step_manager else None,
                     )
-                    buffer_bar.add_task(
-                        "",
-                        total=trainer.replay_buffer.capacity(),
-                        completed=trainer.replay_buffer.size(),
+                    self.layout["stats_panel"].update(panel)
+                except Exception as e:
+                    self.layout["stats_panel"].update(
+                        Panel(f"Error: {e}", title="Game Statistics")
                     )
-                    group_stats.append(buffer_bar)
-                except AttributeError:
-                    pass
-                self.layout["stats_panel"].update(
-                    Panel(
-                        Group(*group_stats),
-                        border_style="green",
-                        title="Game Statistics",
-                    )
-                )
 
             if self.layout["config_panel"].renderable.title == "...":
                 try:
