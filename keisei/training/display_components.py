@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol, Optional, List, Sequence, Dict
 from collections import deque, Counter
+import ast
 from wcwidth import wcswidth
 
 from keisei.utils.unified_logger import log_error_to_stderr
@@ -183,13 +184,19 @@ class RecentMovesPanel:
     def render(self, move_strings: Optional[List[str]] = None) -> RenderableType:
         if not move_strings:
             return Panel(
-                Text("No moves yet."), title="Recent Moves", border_style="yellow"
+                Text("No moves yet."),
+                title="Recent Moves",
+                border_style="yellow",
+                expand=True,
             )
         indent = " "
         last_msgs = move_strings[-self.max_moves :]
         formatted = [f"{indent}{msg}" for msg in last_msgs]
         return Panel(
-            Text("\n".join(formatted)), title="Recent Moves", border_style="yellow"
+            Text("\n".join(formatted)),
+            title="Recent Moves",
+            border_style="yellow",
+            expand=True,
         )
 
 
@@ -329,8 +336,14 @@ class GameStatisticsPanel:
         game,
         move_history: Optional[List[str]] = None,
         metrics_manager=None,
+        policy_mapper=None,
     ) -> RenderableType:
-        if not game or not move_history or metrics_manager is None:
+        if (
+            not game
+            or move_history is None
+            or metrics_manager is None
+            or policy_mapper is None
+        ):
             return Panel(
                 "Waiting for game to start...",
                 title="Game Statistics",
@@ -352,10 +365,30 @@ class GameStatisticsPanel:
 
         sente_openings = metrics_manager.sente_opening_history
         gote_openings = metrics_manager.gote_opening_history
-        fav_sente_open = Counter(sente_openings).most_common(1)
-        fav_gote_open = Counter(gote_openings).most_common(1)
-        fav_sente_opening = fav_sente_open[0][0] if fav_sente_open else "N/A"
-        fav_gote_opening = fav_gote_open[0][0] if fav_gote_open else "N/A"
+        fav_sente_tuple = (
+            Counter(sente_openings).most_common(1)[0][0] if sente_openings else None
+        )
+        fav_gote_tuple = (
+            Counter(gote_openings).most_common(1)[0][0] if gote_openings else None
+        )
+
+        try:
+            fav_sente_opening = (
+                policy_mapper.shogi_move_to_usi(ast.literal_eval(fav_sente_tuple))
+                if fav_sente_tuple
+                else "N/A"
+            )
+        except Exception:
+            fav_sente_opening = "N/A"
+
+        try:
+            fav_gote_opening = (
+                policy_mapper.shogi_move_to_usi(ast.literal_eval(fav_gote_tuple))
+                if fav_gote_tuple
+                else "N/A"
+            )
+        except Exception:
+            fav_gote_opening = "N/A"
 
         table = Table.grid(expand=True, padding=(0, 2))
         table.add_column(style="bold cyan", no_wrap=True)
