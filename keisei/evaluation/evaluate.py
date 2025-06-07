@@ -55,7 +55,7 @@ class Evaluator:
         wandb_extra_config: Optional[dict] = None,
         wandb_reinit: Optional[bool] = None,
         wandb_group: Optional[str] = None,
-        elo_registry_path: Optional[str] = None,
+        elo_registry_path: Optional[str] = "elo_ratings.json",
         agent_id: Optional[str] = None,
         opponent_id: Optional[str] = None,
     ):
@@ -294,7 +294,7 @@ def execute_full_evaluation_run(
     wandb_extra_config: Optional[dict] = None,
     wandb_reinit: Optional[bool] = None,
     wandb_group: Optional[str] = None,
-    elo_registry_path: Optional[str] = None,
+    elo_registry_path: Optional[str] = "elo_ratings.json",
     agent_id: Optional[str] = None,
     opponent_id: Optional[str] = None,
 ) -> Optional[ResultsDict]:
@@ -348,7 +348,7 @@ def main_cli():
     parser.add_argument("--logger_also_stdout", action="store_true")
     parser.add_argument("--wandb_reinit", action="store_true")
     parser.add_argument("--wandb_group", default=None)
-    parser.add_argument("--elo_registry_path", default=None)
+    parser.add_argument("--elo_registry_path", default="elo_ratings.json")
     parser.add_argument("--agent_id", default=None)
     parser.add_argument("--opponent_id", default=None)
     args = parser.parse_args()

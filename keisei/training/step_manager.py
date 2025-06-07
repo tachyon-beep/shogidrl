@@ -509,7 +509,12 @@ class StepManager:
             piece_info_for_demo,
         )
 
-        log_msg = f"Move {episode_length + 1}: {current_player_name} played {move_str}"
+        player_display = (
+            current_player_name.title()
+            if current_player_name.upper() in {"BLACK", "WHITE"}
+            else current_player_name
+        )
+        log_msg = f"Move {episode_length + 1} ({player_display}): {move_str}"
         self.move_log.append(log_msg)
         self.move_history.append(selected_move)
 
