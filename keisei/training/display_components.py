@@ -301,7 +301,7 @@ class GameStatisticsPanel:
             "N/A",
         )
 
-        table = Table.grid(expand=True, padding=(0, 1), leading=1)
+        table = Table.grid(expand=True, padding=(0, 1))
         table.add_column(style="bold")
         table.add_column()
         table.add_row("Drops this Game:", str(num_drops))
