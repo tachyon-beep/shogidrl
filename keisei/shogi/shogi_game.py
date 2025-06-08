@@ -830,8 +830,8 @@ class ShogiGame:
                     f"({r_from},{c_from}) cannot move to ({r_to},{c_to}). "
                     f"Potential squares: {potential_squares}"
                 )
-            # --- END ADDED ---
 
+            # Set these fields for all board moves (simulation or not) since undo needs them
             move_details_for_history["original_type_before_promotion"] = (
                 piece_to_move.type
             )
@@ -839,6 +839,7 @@ class ShogiGame:
                 piece_to_move.color
             )
 
+            # Capture detection (needed for undo even in simulation)
             if r_to is not None and c_to is not None:  # Should always be true
                 target_piece_on_board = self.get_piece(r_to, c_to)
             else:
@@ -854,6 +855,7 @@ class ShogiGame:
                     target_piece_on_board
                 )
 
+            # Promotion logic (needed for undo even in simulation)
             promote_flag = move_tuple[4]
             if (
                 isinstance(promote_flag, bool) and promote_flag
@@ -867,6 +869,17 @@ class ShogiGame:
                 raise ValueError(
                     f"Invalid promotion flag type for board move: {type(promote_flag)}"
                 )
+                
+        # --- STEP 1 FIX: Strict legal move validation ---
+        # Only allow moves that are in the legal moves list (unless simulation)
+        if not is_simulation:
+            legal_moves = self.get_legal_moves()
+            if move_tuple not in legal_moves:
+                raise ValueError(
+                    f"Illegal move: {move_tuple} is not in the list of legal moves. "
+                    f"Legal moves: {legal_moves}"
+                )
+            # --- END ADDED ---
 
         # --- Part 2: Execute the move on the board ---
         if move_details_for_history["is_drop"]:
