@@ -84,6 +84,8 @@ class StepManager:
         self.device = torch.device(config.env.device)
         self.move_history: List[Tuple] = []
         self.move_log: List[str] = []
+        self.sente_best_capture: Optional[str] = None
+        self.gote_best_capture: Optional[str] = None
 
     def execute_step(
         self,
@@ -201,11 +203,39 @@ class StepManager:
                 )
 
             # Execute the move in the environment
+            moving_player = self.game.current_player
             move_result = self.game.make_move(selected_shogi_move)
             if not (isinstance(move_result, tuple) and len(move_result) == 4):
                 raise ValueError(f"Invalid move result: {type(move_result)}")
 
             next_obs_np, reward, done, info = move_result
+            captured_name = info.get("captured_piece_type")
+            if captured_name:
+                value_map = {
+                    "PAWN": 1,
+                    "LANCE": 3,
+                    "KNIGHT": 3,
+                    "SILVER": 5,
+                    "GOLD": 6,
+                    "BISHOP": 8,
+                    "ROOK": 10,
+                }
+                base_name = captured_name.replace("PROMOTED_", "")
+                captured_value = value_map.get(base_name, 0)
+                if moving_player == Color.BLACK:
+                    current = self.sente_best_capture
+                    current_val = value_map.get(
+                        current.replace("PROMOTED_", "") if current else "", 0
+                    )
+                    if current is None or captured_value > current_val:
+                        self.sente_best_capture = base_name.title()
+                else:
+                    current = self.gote_best_capture
+                    current_val = value_map.get(
+                        current.replace("PROMOTED_", "") if current else "", 0
+                    )
+                    if current is None or captured_value > current_val:
+                        self.gote_best_capture = base_name.title()
 
             # Add experience to buffer
             self.experience_buffer.add(
@@ -420,6 +450,8 @@ class StepManager:
         ).unsqueeze(0)
         self.move_history.clear()
         self.move_log.clear()
+        self.sente_best_capture = None
+        self.gote_best_capture = None
 
         return EpisodeState(
             current_obs=reset_obs,

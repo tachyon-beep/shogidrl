@@ -121,7 +121,11 @@ class TrainingDisplay:
         layout["left_column"].split_column(
             Layout(name="board_panel", size=12),
             Layout(name="komadai_panel", size=5),
-            Layout(name="moves_panel", ratio=1, minimum_size=self.display_config.move_list_length),
+            Layout(
+                name="moves_panel",
+                ratio=1,
+                minimum_size=self.display_config.move_list_length,
+            ),
         )
 
         layout["middle_column"].split_column(
@@ -316,9 +320,13 @@ class TrainingDisplay:
         if self.board_component:
             try:
                 hot_sq = trainer.metrics_manager.get_hot_squares(top_n=3)
-                board_panel = self.board_component.render(trainer.game, highlight_squares=hot_sq)
+                board_panel = self.board_component.render(
+                    trainer.game, highlight_squares=hot_sq
+                )
                 if isinstance(board_panel, Panel):
-                    board_panel.border_style = "red"  # Override border style for debugging
+                    board_panel.border_style = (
+                        "red"  # Override border style for debugging
+                    )
                 self.layout["board_panel"].update(board_panel)
             except (AttributeError, KeyError, TypeError, ValueError) as e:
                 self.rich_console.log(f"[bold red]Error rendering board: {e}[/]")
@@ -329,17 +337,21 @@ class TrainingDisplay:
             try:
                 komadai_panel = self.piece_stand_component.render(trainer.game)
                 if isinstance(komadai_panel, Panel):
-                    komadai_panel.border_style = "green" # Override border style
+                    komadai_panel.border_style = "green"  # Override border style
                 self.layout["komadai_panel"].update(komadai_panel)
             except (AttributeError, KeyError, TypeError) as e:
                 self.rich_console.log(f"[bold red]Error rendering piece stand: {e}[/]")
-                self.layout["komadai_panel"].update(Panel("Error", border_style="green"))
+                self.layout["komadai_panel"].update(
+                    Panel("Error", border_style="green")
+                )
 
         # 3. Moves Panel (Blue Border)
         # In refresh_dashboard_panels()
         if self.moves_component:
             try:
-                move_strings = trainer.step_manager.move_log if trainer.step_manager else None
+                move_strings = (
+                    trainer.step_manager.move_log if trainer.step_manager else None
+                )
                 pps = getattr(trainer, "last_ply_per_sec", 0.0)
                 # The render method no longer needs available_height
                 moves_panel = self.moves_component.render(move_strings, ply_per_sec=pps)
@@ -363,14 +375,12 @@ class TrainingDisplay:
             group_items.append(grad_bar)
 
             self.layout["trends_panel"].update(
-                Panel(
-                    Group(*group_items), border_style="cyan", title="Metric Trends"
-                )
+                Panel(Group(*group_items), border_style="cyan", title="Metric Trends")
             )
 
-            try: # TODO - we shouldn't need to be trying/checking that this panel exists, the assert and throwing of an error should be enough
+            try:  # TODO - we shouldn't need to be trying/checking that this panel exists, the assert and throwing of an error should be enough
                 assert self.game_stats_component is not None
-    
+
                 panel = cast(
                     Panel,
                     self.game_stats_component.render(
@@ -381,6 +391,8 @@ class TrainingDisplay:
                             else None
                         ),
                         trainer.metrics_manager,
+                        getattr(trainer.step_manager, "sente_best_capture", None),
+                        getattr(trainer.step_manager, "gote_best_capture", None),
                     ),
                 )
                 group_stats: List[RenderableType] = [panel.renderable]
@@ -391,9 +403,7 @@ class TrainingDisplay:
                         TextColumn("{task.percentage:>3.0f}%"),
                     )
                     buf = trainer.experience_buffer
-                    buffer_bar.add_task(
-                        "", total=buf.capacity(), completed=buf.size()
-                    )
+                    buffer_bar.add_task("", total=buf.capacity(), completed=buf.size())
                     group_stats.append(buffer_bar)
                 except (AttributeError, TypeError):
                     pass
@@ -425,9 +435,7 @@ class TrainingDisplay:
                 config_table = Table.grid(padding=(0, 2))
                 config_table.add_column(style="bold")
                 config_table.add_column()
-                config_table.add_row(
-                    "Learning Rate:", str(cfg.training.learning_rate)
-                )
+                config_table.add_row("Learning Rate:", str(cfg.training.learning_rate))
                 config_table.add_row("Batch Size:", str(batch_size))
                 config_table.add_row("Tower Depth:", str(cfg.training.tower_depth))
                 config_table.add_row("SE Ratio:", str(cfg.training.se_ratio))
@@ -452,7 +460,10 @@ class TrainingDisplay:
 
             # --- 1. Calculate current statistics ---
             for name, p in named_params.items():
-                if ".weight" in name and any(keyword in name for keyword in self.display_config.log_layer_keyword_filters):
+                if ".weight" in name and any(
+                    keyword in name
+                    for keyword in self.display_config.log_layer_keyword_filters
+                ):
                     data = p.data.float().cpu().numpy()
                     current_stats[name] = {
                         "mean": float(data.mean()),
@@ -479,7 +490,7 @@ class TrainingDisplay:
                             trend_chars[key] = "↑"
                         elif curr_val < prev_val:
                             trend_chars[key] = "↓"
-                
+
                 # Add a row to the table with formatted stats and trend arrows
                 stats_table.add_row(
                     name,
@@ -500,18 +511,18 @@ class TrainingDisplay:
 
             try:
                 # Dynamically get component names from config
-                obs_shape = getattr(self.config.env, 'obs_shape', (46, 9, 9))
-                if hasattr(self.config.env, 'input_channels'):
+                obs_shape = getattr(self.config.env, "obs_shape", (46, 9, 9))
+                if hasattr(self.config.env, "input_channels"):
                     input_channels = self.config.env.input_channels
                     obs_shape = (input_channels, 9, 9)
-                
+
                 input_shape_str = f"{obs_shape[1]}x{obs_shape[2]}x{obs_shape[0]}"
                 core_name_str = f"{self.config.training.model_type.capitalize()} Core"
 
                 # Group the two output heads to stack them vertically
                 heads = Group(
                     Text("[Policy Head]", style="bold"),
-                    Text("[Value Head]", style="bold")
+                    Text("[Value Head]", style="bold"),
                 )
 
                 # Add the components as a single row in the table
@@ -520,16 +531,18 @@ class TrainingDisplay:
                     "->",
                     Text(f"[{core_name_str}]", style="bold"),
                     "->",
-                    heads
+                    heads,
                 )
                 arch_diagram = diagram_table
             except (AttributeError, IndexError):
                 # Fallback to a simple table version if config is unavailable
                 fallback_table = Table.grid(expand=True, padding=(0, 1))
                 fallback_table.add_column(justify="center")
-                fallback_table.add_row(Text("[Input] -> [Core] -> [Policy/Value Heads]", style="bold"))
+                fallback_table.add_row(
+                    Text("[Input] -> [Core] -> [Policy/Value Heads]", style="bold")
+                )
                 arch_diagram = fallback_table
-            
+
             # Group the architecture diagram and the new stats table
             panel_content = Group(arch_diagram, stats_table)
             self.layout["evolution_panel"].update(
@@ -542,9 +555,7 @@ class TrainingDisplay:
         if self.elo_component_enabled:
             snap = getattr(trainer, "evaluation_elo_snapshot", None)
             if snap and snap.get("top_ratings") and len(snap["top_ratings"]) >= 2:
-                lines = [
-                    f"{mid}: {rating:.0f}" for mid, rating in snap["top_ratings"]
-                ]
+                lines = [f"{mid}: {rating:.0f}" for mid, rating in snap["top_ratings"]]
                 content = Text("\n".join(lines), style="yellow")
             else:
                 content = Text(
