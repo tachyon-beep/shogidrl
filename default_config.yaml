@@ -313,7 +313,7 @@ display:
   dashboard_height_ratio: 2         # Relative height for dashboard section
   progress_bar_height: 4            # Height of progress bar section
   display_moves:  true              # Show expanded move log with delays
-  turn_tick: 2.0                    # Delay in seconds between turns
+  turn_tick: 20.0                    # Delay in seconds between turns
   show_text_moves: true             # Display recent moves under board
   move_list_length: 6               # Number of moves to show
   show_moves_trend: true            # Display moves per game trend
