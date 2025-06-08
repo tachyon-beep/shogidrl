@@ -226,6 +226,26 @@ class ShogiGame:
         # Delegate to the rules logic function
         return shogi_rules_logic.find_king(self, color)
 
+    def get_king_legal_moves(self, color: Color) -> int:
+        """Return the number of legal moves available to the king of ``color``."""
+        original_player = self.current_player
+        self.current_player = color
+        try:
+            king_pos = self.find_king(color)
+            if not king_pos:
+                return 0
+            legal_moves = self.get_legal_moves()
+            count = 0
+            for move in legal_moves:
+                if move[0] is None or move[1] is None:
+                    continue
+                piece = self.get_piece(move[0], move[1])
+                if piece and piece.type == PieceType.KING:
+                    count += 1
+            return count
+        finally:
+            self.current_player = original_player
+
     def is_in_check(
         self, color: Color, debug_recursion: bool = False
     ) -> bool:  # Added debug_recursion
@@ -936,6 +956,12 @@ class ShogiGame:
         )  # Get reward from perspective of the player who moved
         done = self.game_over
         info = {"reason": self.termination_reason} if self.termination_reason else {}
+        if move_details_for_history.get("captured"):
+            captured_piece = move_details_for_history["captured"]
+            try:
+                info["captured_piece_type"] = captured_piece.type.name
+            except AttributeError:
+                info["captured_piece_type"] = str(captured_piece)
 
         return next_obs, reward, done, info
 

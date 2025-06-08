@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import ast
 from collections import Counter, deque
-from typing import Dict, List, Optional, Protocol, Sequence
-
 from time import monotonic
+from typing import Dict, List, Optional, Protocol, Sequence
 
 from rich import box
 from rich.align import Align
@@ -21,7 +20,6 @@ from wcwidth import wcswidth  # type: ignore
 from keisei.shogi.shogi_core_definitions import Color
 from keisei.utils import _coords_to_square_name
 from keisei.utils.unified_logger import log_error_to_stderr
-
 
 
 class DisplayComponent(Protocol):
@@ -191,6 +189,7 @@ class ShogiBoard:
         )
         return Panel(Align.center(board_table), title="Main Board", border_style="blue")
 
+
 class RecentMovesPanel:
     def __init__(
         self, max_moves: int = 20, newest_on_top: bool = True, flash_ms: int = 0
@@ -243,6 +242,7 @@ class RecentMovesPanel:
             else f"Recent Moves ({len(moves)})"
         )
         return Panel(body, title=title, border_style="yellow", expand=True)
+
 
 class PieceStandPanel:
     """Renders the captured pieces (komadai) for each player."""
@@ -406,8 +406,14 @@ class GameStatisticsPanel:
             return move_str  # Return as-is if invalid or empty
 
         piece_map = {
-            "P": "Pawn", "L": "Lance", "N": "Knight", "S": "Silver",
-            "G": "Gold", "B": "Bishop", "R": "Rook", "K": "King",
+            "P": "Pawn",
+            "L": "Lance",
+            "N": "Knight",
+            "S": "Silver",
+            "G": "Gold",
+            "B": "Bishop",
+            "R": "Rook",
+            "K": "King",
         }
 
         # Case 1: It's a drop move (e.g., 'P*2c')
@@ -419,7 +425,7 @@ class GameStatisticsPanel:
 
         # Case 2: It's a regular board move (e.g., '7g7f' or '2c3d+')
         promotion_text = ""
-        if move_str.endswith('+'):
+        if move_str.endswith("+"):
             promotion_text = " with promotion"
             move_str = move_str[:-1]  # Remove the '+' for parsing
 
@@ -437,6 +443,8 @@ class GameStatisticsPanel:
         game,
         move_history: Optional[List[str]] = None,
         metrics_manager=None,
+        sente_best_capture: Optional[str] = None,
+        gote_best_capture: Optional[str] = None,
     ) -> RenderableType:
         if not game or not move_history or not metrics_manager:
             return Panel(
@@ -456,7 +464,6 @@ class GameStatisticsPanel:
             # Call the method with the required 'color' argument
             is_in_check = game.is_in_check(game.current_player)
 
-
         hot_squares = metrics_manager.get_hot_squares(top_n=3)
 
         # --- Get Session Stats (now pre-formatted) ---
@@ -473,6 +480,44 @@ class GameStatisticsPanel:
         fav_sente_opening_formatted = self._format_opening_name(fav_sente_opening_raw)
         fav_gote_opening_formatted = self._format_opening_name(fav_gote_opening_raw)
 
+        # --- Activity Counters ---
+        sente_captures = sum(game.hands.get(Color.BLACK.value, {}).values())
+        gote_captures = sum(game.hands.get(Color.WHITE.value, {}).values())
+
+        def _extract_notation(log_line: str) -> str:
+            try:
+                return log_line.split(":", 1)[1].strip().split(" ")[0]
+            except IndexError:
+                return ""
+
+        sente_drops = 0
+        gote_drops = 0
+        sente_promos = 0
+        gote_promos = 0
+        for line in move_history:
+            notation = _extract_notation(line)
+            if "(Sente)" in line:
+                if "*" in notation:
+                    sente_drops += 1
+                if notation.endswith("+"):
+                    sente_promos += 1
+            elif "(Gote)" in line:
+                if "*" in notation:
+                    gote_drops += 1
+                if notation.endswith("+"):
+                    gote_promos += 1
+
+        # --- Moves Since Last Capture ---
+        moves_since_capture = len(move_history)
+        for idx in range(len(move_history) - 1, -1, -1):
+            if "captur" in move_history[idx].lower():
+                moves_since_capture = len(move_history) - idx - 1
+                break
+
+        # --- King Safety ---
+        sente_king_moves = game.get_king_legal_moves(Color.BLACK)
+        gote_king_moves = game.get_king_legal_moves(Color.WHITE)
+
         # --- Create Table ---
         table = Table.grid(expand=True, padding=(0, 2))
         table.add_column(style="bold cyan", no_wrap=True)
@@ -480,10 +525,31 @@ class GameStatisticsPanel:
 
         table.add_row("Check Status:", "[red]CHECK[/]" if is_in_check else "Clear")
         table.add_row("Material Adv:", f"{material_adv:+.1f} (Sente)")
+        table.add_row(
+            "King Safety:",
+            f"Sente: {sente_king_moves} moves | Gote: {gote_king_moves} moves",
+        )
+        table.add_row(
+            "Sente Activity:",
+            f"{sente_captures} Captures, {sente_drops} Drops, {sente_promos} Promotions",
+        )
+        table.add_row(
+            "Gote Activity:",
+            f"{gote_captures} Captures, {gote_drops} Drops, {gote_promos} Promotions",
+        )
+        table.add_row("Sente Best Capture:", sente_best_capture or "-")
+        table.add_row("Gote Best Capture:", gote_best_capture or "-")
+        table.add_row("Moves Since Capture:", str(moves_since_capture))
         table.add_row("Hot Squares:", ", ".join(hot_squares) or "N/A")
         table.add_row("Sente's Favourite Opening:", fav_sente_opening_formatted)
         table.add_row("Gote's Favourite Opening:", fav_gote_opening_formatted)
-
-        return Panel(
-            Group(table), title="Game Statistics", border_style="green"
+        table.add_row(
+            "",
+            "",
         )
+        sente_hand_str = self._format_hand(game.hands.get(Color.BLACK.value, {}))
+        gote_hand_str = self._format_hand(game.hands.get(Color.WHITE.value, {}))
+        table.add_row("Sente's Hand:", sente_hand_str)
+        table.add_row("Gote's Hand:", gote_hand_str)
+
+        return Panel(Group(table), title="Game Statistics", border_style="green")
