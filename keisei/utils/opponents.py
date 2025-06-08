@@ -19,10 +19,8 @@ class SimpleRandomOpponent(BaseOpponent):
     def select_move(self, game_instance: ShogiGame) -> MoveTuple:
         legal_moves = game_instance.get_legal_moves()
         if not legal_moves:
-            raise ValueError(
-                "No legal moves available for SimpleRandomOpponent, game should be over."
-            )
-        return random.choice(legal_moves)
+            raise ValueError("No legal moves available for SimpleRandomOpponent, game should be over.")
+        return random.choice(legal_moves)  # nosec B311
 
 
 class SimpleHeuristicOpponent(BaseOpponent):
@@ -34,9 +32,7 @@ class SimpleHeuristicOpponent(BaseOpponent):
     def select_move(self, game_instance: ShogiGame) -> MoveTuple:
         legal_moves = game_instance.get_legal_moves()
         if not legal_moves:
-            raise ValueError(
-                "No legal moves available for SimpleHeuristicOpponent, game should be over."
-            )
+            raise ValueError("No legal moves available for SimpleHeuristicOpponent, game should be over.")
         capturing_moves: List[MoveTuple] = []
         non_promoting_pawn_moves: List[MoveTuple] = []
         other_moves: List[MoveTuple] = []
@@ -56,18 +52,11 @@ class SimpleHeuristicOpponent(BaseOpponent):
                 to_c = move_tuple[3]
                 promote = move_tuple[4]
                 destination_piece = game_instance.board[to_r][to_c]
-                if (
-                    destination_piece is not None
-                    and destination_piece.color != game_instance.current_player
-                ):
+                if destination_piece is not None and destination_piece.color != game_instance.current_player:
                     is_capture = True
                 if not is_capture:
                     source_piece = game_instance.board[from_r][from_c]
-                    if (
-                        source_piece
-                        and source_piece.type == PieceType.PAWN
-                        and not promote
-                    ):
+                    if source_piece and source_piece.type == PieceType.PAWN and not promote:
                         is_pawn_move_no_promo = True
             if is_capture:
                 capturing_moves.append(move_tuple)
@@ -76,12 +65,12 @@ class SimpleHeuristicOpponent(BaseOpponent):
             else:
                 other_moves.append(move_tuple)
         if capturing_moves:
-            return random.choice(capturing_moves)
+            return random.choice(capturing_moves)  # nosec B311
         if non_promoting_pawn_moves:
-            return random.choice(non_promoting_pawn_moves)
+            return random.choice(non_promoting_pawn_moves)  # nosec B311
         if other_moves:
-            return random.choice(other_moves)
-        return random.choice(legal_moves)
+            return random.choice(other_moves)  # nosec B311
+        return random.choice(legal_moves)  # nosec B311
 
 
 __all__ = [

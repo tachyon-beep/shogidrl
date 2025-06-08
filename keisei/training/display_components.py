@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import ast
 from collections import Counter, deque
 from time import monotonic
 from typing import Dict, List, Optional, Protocol, Sequence
@@ -10,16 +9,13 @@ from typing import Dict, List, Optional, Protocol, Sequence
 from rich import box
 from rich.align import Align
 from rich.console import Group, RenderableType
-from rich.layout import Layout
 from rich.panel import Panel
 from rich.style import Style
 from rich.table import Table
 from rich.text import Text
-from wcwidth import wcswidth  # type: ignore
 
 from keisei.shogi.shogi_core_definitions import Color
 from keisei.utils import _coords_to_square_name
-from keisei.utils.unified_logger import log_error_to_stderr
 
 
 class DisplayComponent(Protocol):
@@ -31,53 +27,17 @@ class DisplayComponent(Protocol):
 
 
 class ShogiBoard:
-    """Rich-ified representation of the current Shogi board state using a Table."""
+    """Rich-ified representation of the current Shogi board state."""
 
     def __init__(
         self,
         use_unicode: bool = True,
+        cell_width: int = 5,
+        cell_height: int = 3,
     ) -> None:
         self.use_unicode = use_unicode
-        # Define reference symbols for width calculation
-        if self.use_unicode:
-            reference_symbols = [
-                "歩",
-                "香",
-                "桂",
-                "銀",
-                "金",
-                "角",
-                "飛",
-                "王",
-                "と",
-                "杏",
-                "圭",
-                "全",
-                "馬",
-                "龍",
-                "・",
-            ]
-        else:
-            reference_symbols = [
-                "P",
-                "L",
-                "N",
-                "S",
-                "G",
-                "B",
-                "R",
-                "K",
-                "+P",
-                "+L",
-                "+N",
-                "+S",
-                "+B",
-                "+R",
-                ".",
-            ]
-
-        widths = [wcswidth(sym) or len(sym) for sym in reference_symbols]
-        self.cell_width = max(widths)
+        self.cell_width = cell_width
+        self.cell_height = cell_height
 
     def _piece_to_symbol(self, piece) -> str:
         """Turn your internal piece-object into a single-string symbol."""
@@ -112,76 +72,96 @@ class ShogiBoard:
         return Text(symbol, style="bright_blue")
 
     def _pad_symbol(self, symbol: str) -> str:
-        """Pad a raw symbol to exactly self.cell_width characters."""
-        width = wcswidth(symbol) or len(symbol)
-        padding = self.cell_width - width
-        return symbol + (" " * padding)
+        """Legacy helper kept for compatibility."""
+        return symbol
 
     def _get_shogi_notation(self, row: int, col: int) -> str:
         return _coords_to_square_name(row, col)
 
-    def _generate_rich_table(self, board_state, hot_squares=None) -> Table:
-        """Create a 10×10 Table for the board."""
+    def _generate_rich_table(self, board_state, hot_squares: Optional[set] = None) -> Table:
+        """Create a grid of Panels for the board."""
+        from rich.align import Align
+        from rich.panel import Panel
+
         light_bg_color = "#EEC28A"
         dark_bg_color = "#C19A55"
         light_bg = Style(bgcolor=light_bg_color)
         dark_bg = Style(bgcolor=dark_bg_color)
 
-        table = Table(
-            show_header=False,
-            box=None,
-            pad_edge=False,
-            padding=(0, 0),
-            expand=False,
-        )
-        table.add_column("", width=self.cell_width, no_wrap=True, justify="center")
-        for file_num in range(9, 0, -1):
-            table.add_column(
-                str(file_num),
-                width=self.cell_width,
-                justify="center",
-                no_wrap=True,
-            )
-
-        file_labels = [""] + [str(n) for n in range(9, 0, -1)]
-        table.add_row(*[Text(lbl, style="bold") for lbl in file_labels])
+        board_grid = Table.grid(expand=False)
+        for _ in range(9):
+            board_grid.add_column()
 
         for r_idx, row in enumerate(board_state.board):
-            rank_label = str(9 - r_idx)
-            row_cells: List[RenderableType] = [Text(rank_label, style="bold")]
-
+            row_renderables: List[RenderableType] = []
             for c_idx, piece in enumerate(reversed(row)):
                 is_light = (r_idx + c_idx) % 2 == 0
                 bg_style = light_bg if is_light else dark_bg
 
+                symbol = self._piece_to_symbol(piece)
                 if piece:
-                    raw_symbol = self._piece_to_symbol(piece)
-                    padded = self._pad_symbol(raw_symbol)
-                    cell_renderable = self._colorize(padded, piece)
+                    styled_text = self._colorize(symbol, piece)
                 else:
-                    raw_symbol = self._piece_to_symbol(piece)
-                    padded = self._pad_symbol(raw_symbol)
                     dot_color = dark_bg_color if is_light else light_bg_color
-                    cell_renderable = Text(padded, style=dot_color)
+                    styled_text = Text(symbol, style=Style(color=dot_color))
 
-                cell_renderable.stylize(bg_style)
+                centered = Align.center(styled_text, vertical="middle")
+                cell_panel = Panel(
+                    centered,
+                    box=box.SQUARE,
+                    width=self.cell_width,
+                    height=self.cell_height,
+                    style=bg_style,
+                    border_style="grey37",
+                )
 
                 board_col = 8 - c_idx
                 sq_name = self._get_shogi_notation(r_idx, board_col)
                 if hot_squares and sq_name in hot_squares:
-                    cell_renderable.stylize(Style(bgcolor="dark_red"))
-                row_cells.append(cell_renderable)
+                    cell_panel.border_style = "bold dark_red"
 
-            table.add_row(*row_cells)
-        return table
+                row_renderables.append(cell_panel)
+            board_grid.add_row(*row_renderables)
+        return board_grid
 
-    def render(self, board_state=None, highlight_squares=None, **_kwargs) -> RenderableType:
-        """Returns a Panel containing a Rich Table of the current board."""
+    def render(
+        self,
+        board_state=None,
+        highlight_squares: Optional[set] = None,
+        **_kwargs,
+    ) -> RenderableType:
+        """Return a panel with the current board and coordinate labels."""
         if not board_state:
-            return Panel(Text("No active game"), title="Main Board", border_style="blue")
+            return Panel(
+                Text("No active game", justify="center"),
+                title="Main Board",
+                border_style="blue",
+            )
 
-        board_table = self._generate_rich_table(board_state, hot_squares=highlight_squares)
-        return Panel(Align.center(board_table), title="Main Board", border_style="blue")
+        board_panel_grid = self._generate_rich_table(board_state, hot_squares=highlight_squares)
+
+        layout_grid = Table.grid(expand=False)
+        layout_grid.add_column(width=2, justify="center")
+        layout_grid.add_column()
+
+        file_labels = [Text(str(n), justify="center") for n in range(9, 0, -1)]
+        top_label_grid = Table.grid(expand=False)
+        for _ in range(9):
+            top_label_grid.add_column(width=self.cell_width)
+        top_label_grid.add_row(*file_labels)
+        layout_grid.add_row(Text(""), top_label_grid)
+
+        cols = [list(col.cells) for col in board_panel_grid.columns]
+        for i in range(len(cols[0])):
+            rank_label = Text(str(9 - i), justify="center", style="bold")
+            row_cells = [c[i] for c in cols]
+            row_table = Table.grid(expand=False)
+            for _ in range(9):
+                row_table.add_column()
+            row_table.add_row(*row_cells)
+            layout_grid.add_row(rank_label, row_table)
+
+        return Panel(Align.center(layout_grid), title="Main Board", border_style="blue")
 
 
 class RecentMovesPanel:

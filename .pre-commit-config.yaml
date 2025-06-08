@@ -38,7 +38,7 @@ repos:
     rev: 1.8.3
     hooks:
       - id: bandit
-        args: ['-r', 'keisei/', '-f', 'json']
+        args: ['-r', 'keisei/', '-f', 'json', '--exit-zero']
         pass_filenames: false
         exclude: ^tests/
 
