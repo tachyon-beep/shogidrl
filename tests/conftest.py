@@ -234,6 +234,10 @@ def test_evaluation_config():
         max_moves_per_game=200,
         log_file_path_eval="eval_log.txt",
         wandb_log_eval=False,
+        elo_registry_path="test_elo_ratings.json",
+        agent_id="test_agent",
+        opponent_id="test_opponent",
+        previous_model_pool_size=2,  # Small for tests
     )
 
 
@@ -292,6 +296,7 @@ def test_display_config():
         trend_smoothing_factor=0.1,
         metrics_panel_height=6,
         enable_trendlines=False,
+        log_layer_keyword_filters=["test_layer"],  # Minimal for tests
     )
 
 
@@ -421,6 +426,10 @@ def integration_test_config(policy_mapper, tmp_path):
                 tmp_path / "integration_eval.log"
             ),  # Added missing parameter
             wandb_log_eval=False,  # Added missing parameter
+            elo_registry_path=str(tmp_path / "integration_elo.json"),
+            agent_id="integration_agent",
+            opponent_id="integration_opponent",
+            previous_model_pool_size=3,
         ),
         logging=LoggingConfig(
             log_file=str(tmp_path / "integration_test.log"),
@@ -464,6 +473,7 @@ def integration_test_config(policy_mapper, tmp_path):
             trend_smoothing_factor=0.1,
             metrics_panel_height=6,
             enable_trendlines=False,
+            log_layer_keyword_filters=["integration_test_layer"],
         ),
         parallel=ParallelConfig(
             enabled=False,

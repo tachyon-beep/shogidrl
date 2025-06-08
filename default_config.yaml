@@ -303,8 +303,8 @@ display:
   enable_elo_ratings: true          # Display Elo rating information
   enable_enhanced_layout: true      # Use multi-panel dashboard layout
   board_unicode_pieces: true        # Use Unicode pieces for board rendering
-  board_cell_width: 5               # Width of each board cell
-  board_cell_height: 3              # Height of each board cell
+  board_cell_width: 6               # Width of each board cell (increased for Unicode)
+  board_cell_height: 3              # Height of each board cell (increased to match width for square cells)
   board_highlight_last_move: true   # Highlight the last move made
   sparkline_width: 15               # Width of sparkline graphs
   trend_history_length: 100         # Number of data points to keep
