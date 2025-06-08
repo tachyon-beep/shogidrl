@@ -16,3 +16,12 @@ def test_log_episode_metrics_and_rates():
     assert mm.get_moves_per_game_trend()[-1] == 30
     assert mm.history.episode_lengths[-1] == 30
     assert mm.history.episode_rewards[-1] == 0.2
+
+
+def test_processing_flag_toggle():
+    mm = MetricsManager()
+    assert mm.processing is False
+    mm.set_processing(True)
+    assert mm.processing is True
+    mm.set_processing(False)
+    assert mm.processing is False

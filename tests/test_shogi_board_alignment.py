@@ -1,12 +1,11 @@
 import pytest
-from wcwidth import wcswidth
 
 from keisei.training.display_components import ShogiBoard
 
 
 @pytest.mark.parametrize("use_unicode", [True, False])
 def test_shogi_board_padding_width(use_unicode):
-    shogi_board = ShogiBoard(use_unicode=use_unicode)
+    shogi_board = ShogiBoard(use_unicode=use_unicode, cell_width=5, cell_height=3)
     if use_unicode:
         symbols = [
             "歩",
@@ -46,4 +45,4 @@ def test_shogi_board_padding_width(use_unicode):
 
     for sym in symbols:
         padded = shogi_board._pad_symbol(sym)
-        assert wcswidth(padded) == shogi_board.cell_width
+        assert padded == sym

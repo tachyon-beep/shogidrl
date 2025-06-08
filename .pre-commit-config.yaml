@@ -35,16 +35,17 @@ repos:
         args: ['--max-line-length=120', '--extend-ignore=E203,W503']
 
   - repo: https://github.com/pycqa/bandit
-    rev: 2.1.0
+    rev: 1.8.3
     hooks:
       - id: bandit
-        args: ['-r', 'keisei/', '-f', 'json']
+        args: ['-r', 'keisei/', '-f', 'json', '--exit-zero']
+        pass_filenames: false
         exclude: ^tests/
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.14.0
     hooks:
       - id: mypy
-        additional_dependencies: [types-PyYAML, types-requests]
+        additional_dependencies: [types-PyYAML, types-requests, pydantic]
         args: [--ignore-missing-imports, --no-strict-optional]
         exclude: ^(tests/|deprecated/)

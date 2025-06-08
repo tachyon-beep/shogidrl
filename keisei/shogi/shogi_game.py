@@ -226,6 +226,26 @@ class ShogiGame:
         # Delegate to the rules logic function
         return shogi_rules_logic.find_king(self, color)
 
+    def get_king_legal_moves(self, color: Color) -> int:
+        """Return the number of legal moves available to the king of ``color``."""
+        original_player = self.current_player
+        self.current_player = color
+        try:
+            king_pos = self.find_king(color)
+            if not king_pos:
+                return 0
+            legal_moves = self.get_legal_moves()
+            count = 0
+            for move in legal_moves:
+                if move[0] is None or move[1] is None:
+                    continue
+                piece = self.get_piece(move[0], move[1])
+                if piece and piece.type == PieceType.KING:
+                    count += 1
+            return count
+        finally:
+            self.current_player = original_player
+
     def is_in_check(
         self, color: Color, debug_recursion: bool = False
     ) -> bool:  # Added debug_recursion
@@ -810,8 +830,8 @@ class ShogiGame:
                     f"({r_from},{c_from}) cannot move to ({r_to},{c_to}). "
                     f"Potential squares: {potential_squares}"
                 )
-            # --- END ADDED ---
 
+            # Set these fields for all board moves (simulation or not) since undo needs them
             move_details_for_history["original_type_before_promotion"] = (
                 piece_to_move.type
             )
@@ -819,6 +839,7 @@ class ShogiGame:
                 piece_to_move.color
             )
 
+            # Capture detection (needed for undo even in simulation)
             if r_to is not None and c_to is not None:  # Should always be true
                 target_piece_on_board = self.get_piece(r_to, c_to)
             else:
@@ -834,6 +855,7 @@ class ShogiGame:
                     target_piece_on_board
                 )
 
+            # Promotion logic (needed for undo even in simulation)
             promote_flag = move_tuple[4]
             if (
                 isinstance(promote_flag, bool) and promote_flag
@@ -847,6 +869,17 @@ class ShogiGame:
                 raise ValueError(
                     f"Invalid promotion flag type for board move: {type(promote_flag)}"
                 )
+                
+        # --- STEP 1 FIX: Strict legal move validation ---
+        # Only allow moves that are in the legal moves list (unless simulation)
+        if not is_simulation:
+            legal_moves = self.get_legal_moves()
+            if move_tuple not in legal_moves:
+                raise ValueError(
+                    f"Illegal move: {move_tuple} is not in the list of legal moves. "
+                    f"Legal moves: {legal_moves}"
+                )
+            # --- END ADDED ---
 
         # --- Part 2: Execute the move on the board ---
         if move_details_for_history["is_drop"]:
@@ -936,6 +969,12 @@ class ShogiGame:
         )  # Get reward from perspective of the player who moved
         done = self.game_over
         info = {"reason": self.termination_reason} if self.termination_reason else {}
+        if move_details_for_history.get("captured"):
+            captured_piece = move_details_for_history["captured"]
+            try:
+                info["captured_piece_type"] = captured_piece.type.name
+            except AttributeError:
+                info["captured_piece_type"] = str(captured_piece)
 
         return next_obs, reward, done, info
 
