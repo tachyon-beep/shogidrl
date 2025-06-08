@@ -303,7 +303,7 @@ display:
   enable_elo_ratings: true          # Display Elo rating information
   enable_enhanced_layout: true      # Use multi-panel dashboard layout
   board_unicode_pieces: true        # Use Unicode pieces for board rendering
-  board_cell_width: 6               # Width of each board cell (increased for Unicode)
+  board_cell_width: 7               # Width of each board cell (increased for Unicode)
   board_cell_height: 3              # Height of each board cell (increased to match width for square cells)
   board_highlight_last_move: true   # Highlight the last move made
   sparkline_width: 15               # Width of sparkline graphs
@@ -313,9 +313,9 @@ display:
   dashboard_height_ratio: 2         # Relative height for dashboard section
   progress_bar_height: 4            # Height of progress bar section
   display_moves:  true              # Show expanded move log with delays
-  turn_tick: 0.5                    # Delay in seconds between turns
+  turn_tick: 2.0                    # Delay in seconds between turns
   show_text_moves: true             # Display recent moves under board
-  move_list_length: 20              # Number of moves to show
+  move_list_length: 6               # Number of moves to show
   show_moves_trend: true            # Display moves per game trend
   show_completion_rate: true        # Display games per hour
   show_enhanced_win_rates: true     # Show win/loss/draw breakdown

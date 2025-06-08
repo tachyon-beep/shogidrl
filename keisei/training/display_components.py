@@ -108,12 +108,12 @@ class ShogiBoard:
 
 
     def _colorize(self, symbol: str, piece) -> Text:
-        """Apply per-piece colouring."""
+        """Apply per-piece colouring and bold styling for heavier appearance."""
         if not piece:
             return Text(symbol)
         if piece.color == Color.BLACK:
-            return Text(symbol, style="bright_red")
-        return Text(symbol, style="bright_blue")
+            return Text(symbol, style="bold bright_white")
+        return Text(symbol, style="bold bright_blue")
 
     def _get_shogi_notation(self, row: int, col: int) -> str:
         return _coords_to_square_name(row, col)
@@ -283,12 +283,12 @@ class PieceStandPanel:
         hand_table.add_column(style="bold", justify="right", width=7) # e.g., "Sente: "
         hand_table.add_column()
 
-        # Add rows for each player, applying color to the pieces.
+        # Add rows for each player, applying color and bold styling to the pieces.
         hand_table.add_row(
-            "Sente:", Text(sente_hand_str or "None", style="bright_red")
+            "Sente:", Text(sente_hand_str or "None", style="bold bright_red")
         )
         hand_table.add_row(
-            "Gote:", Text(gote_hand_str or "None", style="bright_blue")
+            "Gote:", Text(gote_hand_str or "None", style="bold bright_blue")
         )
 
         return Panel(hand_table, title="Captured Pieces", border_style="yellow")
@@ -319,7 +319,7 @@ class Sparkline:
             normalized = [4] * len(clipped)
         else:
             rng = max_v - min_v
-            normalized = [int((v - min_v) / rng * 7) for v in clipped]
+            normalized = [int((v - min_v) / rng * 6) for v in clipped]
 
         recent = normalized[-self.width :]
         spark = "".join(self.chars[n] for n in recent)
