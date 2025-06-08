@@ -410,6 +410,13 @@ class StepManager:
                 device=self.device,
             ).unsqueeze(0)
 
+            self.move_history.clear()
+            self.move_log.clear()
+            self.sente_best_capture = None
+            self.sente_best_capture_value = 0
+            self.gote_best_capture = None
+            self.gote_best_capture_value = 0
+
             new_episode_state = EpisodeState(
                 current_obs=reset_result,
                 current_obs_tensor=reset_obs_tensor,
