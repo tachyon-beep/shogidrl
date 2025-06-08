@@ -182,9 +182,7 @@ class TestStepManagerInitialization:
 class TestExecuteStep:
     """Test the execute_step method."""
 
-    def test_successful_step_execution(
-        self, step_manager, sample_episode_state, mock_logger, mock_components
-    ):
+    def test_successful_step_execution(self, step_manager, sample_episode_state, mock_logger, mock_components):
         """Test successful execution of a training step."""
         # Setup mocks
         legal_moves = [(1, 2, 3, 4, 5), (2, 3, 4, 5, 6)]
@@ -211,9 +209,7 @@ class TestExecuteStep:
         mock_components["game"].make_move.return_value = (next_obs, reward, done, info)
 
         # Execute step
-        result = step_manager.execute_step(
-            sample_episode_state, global_timestep=100, logger_func=mock_logger
-        )
+        result = step_manager.execute_step(sample_episode_state, global_timestep=100, logger_func=mock_logger)
 
         # Verify results
         assert result.success is True
@@ -229,18 +225,14 @@ class TestExecuteStep:
 
         # Verify method calls
         mock_components["game"].get_legal_moves.assert_called_once()
-        mock_components["policy_mapper"].get_legal_mask.assert_called_once_with(
-            legal_moves, device=torch.device("cpu")
-        )
+        mock_components["policy_mapper"].get_legal_mask.assert_called_once_with(legal_moves, device=torch.device("cpu"))
         mock_components["agent"].select_action.assert_called_once_with(
             sample_episode_state.current_obs, legal_mask, is_training=True
         )
         mock_components["game"].make_move.assert_called_once_with(selected_move)
         mock_components["experience_buffer"].add.assert_called_once()
 
-    def test_agent_select_action_fails(
-        self, step_manager, sample_episode_state, mock_logger, mock_components
-    ):
+    def test_agent_select_action_fails(self, step_manager, sample_episode_state, mock_logger, mock_components):
         """Test handling when agent fails to select an action."""
         # Setup mocks
         legal_moves = [(1, 2, 3, 4, 5)]
@@ -256,9 +248,7 @@ class TestExecuteStep:
         mock_components["game"].reset.return_value = reset_obs
 
         # Execute step
-        result = step_manager.execute_step(
-            sample_episode_state, global_timestep=100, logger_func=mock_logger
-        )
+        result = step_manager.execute_step(sample_episode_state, global_timestep=100, logger_func=mock_logger)
 
         # Verify failure result
         assert result.success is False
@@ -275,9 +265,7 @@ class TestExecuteStep:
         # Verify game was reset
         mock_components["game"].reset.assert_called_once()
 
-    def test_make_move_raises_exception(
-        self, step_manager, sample_episode_state, mock_logger, mock_components
-    ):
+    def test_make_move_raises_exception(self, step_manager, sample_episode_state, mock_logger, mock_components):
         """Test handling when make_move raises an exception."""
         # Setup mocks
         legal_moves = [(1, 2, 3, 4, 5)]
@@ -301,9 +289,7 @@ class TestExecuteStep:
         mock_components["game"].reset.return_value = reset_obs
 
         # Execute step
-        result = step_manager.execute_step(
-            sample_episode_state, global_timestep=100, logger_func=mock_logger
-        )
+        result = step_manager.execute_step(sample_episode_state, global_timestep=100, logger_func=mock_logger)
 
         # Verify failure result
         assert result.success is False
@@ -314,9 +300,7 @@ class TestExecuteStep:
         mock_logger.assert_called()
         assert "CRITICAL: Error during training step" in mock_logger.call_args[0][0]
 
-    def test_make_move_invalid_result_format(
-        self, step_manager, sample_episode_state, mock_logger, mock_components
-    ):
+    def test_make_move_invalid_result_format(self, step_manager, sample_episode_state, mock_logger, mock_components):
         """Test handling when make_move returns invalid format."""
         # Setup mocks
         legal_moves = [(1, 2, 3, 4, 5)]
@@ -340,17 +324,13 @@ class TestExecuteStep:
         mock_components["game"].reset.return_value = reset_obs
 
         # Execute step
-        result = step_manager.execute_step(
-            sample_episode_state, global_timestep=100, logger_func=mock_logger
-        )
+        result = step_manager.execute_step(sample_episode_state, global_timestep=100, logger_func=mock_logger)
 
         # Verify failure result
         assert result.success is False
         assert "Invalid move result" in result.error_message
 
-    def test_reset_also_fails(
-        self, step_manager, sample_episode_state, mock_logger, mock_components
-    ):
+    def test_reset_also_fails(self, step_manager, sample_episode_state, mock_logger, mock_components):
         """Test handling when both move execution and reset fail."""
         # Setup mocks
         legal_moves = [(1, 2, 3, 4, 5)]
@@ -372,9 +352,7 @@ class TestExecuteStep:
         mock_components["game"].reset.side_effect = RuntimeError("Reset failed")
 
         # Execute step
-        result = step_manager.execute_step(
-            sample_episode_state, global_timestep=100, logger_func=mock_logger
-        )
+        result = step_manager.execute_step(sample_episode_state, global_timestep=100, logger_func=mock_logger)
 
         # Verify failure result with original state
         assert result.success is False
@@ -382,9 +360,7 @@ class TestExecuteStep:
         assert np.array_equal(result.next_obs, sample_episode_state.current_obs)
         assert result.done is True  # Force episode end
 
-    def test_demo_mode_enabled(
-        self, step_manager, sample_episode_state, mock_logger, mock_components
-    ):
+    def test_demo_mode_enabled(self, step_manager, sample_episode_state, mock_logger, mock_components):
         """Test step execution with demo mode enabled."""
         # Enable demo mode
         step_manager.config.display.display_moves = True
@@ -412,16 +388,12 @@ class TestExecuteStep:
         mock_components["game"].make_move.return_value = (next_obs, 1.0, False, {})
 
         # Mock the format function
-        with patch(
-            "keisei.training.step_manager.format_move_with_description_enhanced"
-        ) as mock_format:
+        with patch("keisei.training.step_manager.format_move_with_description_enhanced") as mock_format:
             mock_format.return_value = "formatted_move"
 
             with patch("time.sleep") as mock_sleep:
                 # Execute step
-                result = step_manager.execute_step(
-                    sample_episode_state, global_timestep=100, logger_func=mock_logger
-                )
+                result = step_manager.execute_step(sample_episode_state, global_timestep=100, logger_func=mock_logger)
 
                 # Verify demo mode was handled
                 assert result.success is True
@@ -432,18 +404,14 @@ class TestExecuteStep:
                 mock_logger.assert_not_called()
 
                 # Move should be recorded internally for display
-                expected_prefix = (
-                    f"Move {sample_episode_state.episode_length + 1} (TestPlayer):"
-                )
+                expected_prefix = f"Move {sample_episode_state.episode_length + 1} (TestPlayer):"
                 assert step_manager.move_log[-1].startswith(expected_prefix)
 
 
 class TestHandleEpisodeEnd:
     """Test the handle_episode_end method."""
 
-    def test_successful_episode_end(
-        self, step_manager, sample_episode_state, mock_logger, mock_components
-    ):
+    def test_successful_episode_end(self, step_manager, sample_episode_state, mock_logger, mock_components):
         """Test successful episode end handling."""
         # Create step result with game outcome
         step_result = StepResult(
@@ -464,9 +432,7 @@ class TestHandleEpisodeEnd:
         mock_components["game"].reset.return_value = reset_obs
 
         # Execute episode end handling
-        new_state, _ = step_manager.handle_episode_end(
-            sample_episode_state, step_result, game_stats, 17, mock_logger
-        )
+        new_state, _ = step_manager.handle_episode_end(sample_episode_state, step_result, game_stats, 17, mock_logger)
 
         # Verify new episode state
         assert np.array_equal(new_state.current_obs, reset_obs)
@@ -486,9 +452,7 @@ class TestHandleEpisodeEnd:
         assert wandb_data["game_outcome"] == "black"
         assert wandb_data["game_reason"] == "checkmate"
 
-    def test_episode_end_white_wins(
-        self, step_manager, sample_episode_state, mock_logger, mock_components
-    ):
+    def test_episode_end_white_wins(self, step_manager, sample_episode_state, mock_logger, mock_components):
         """Test episode end with white victory."""
         step_result = StepResult(
             next_obs=rng.random((10, 10, 20), dtype=np.float32),
@@ -503,22 +467,16 @@ class TestHandleEpisodeEnd:
         )
 
         game_stats = {"black_wins": 3, "white_wins": 7, "draws": 0}
-        mock_components["game"].reset.return_value = rng.random(
-            (10, 10, 20), dtype=np.float32
-        )
+        mock_components["game"].reset.return_value = rng.random((10, 10, 20), dtype=np.float32)
 
         # Execute episode end handling
-        step_manager.handle_episode_end(
-            sample_episode_state, step_result, game_stats, 9, mock_logger
-        )
+        step_manager.handle_episode_end(sample_episode_state, step_result, game_stats, 9, mock_logger)
 
         # Verify white win message
         log_message = mock_logger.call_args[0][0]
         assert "Gote wins by timeout" in log_message
 
-    def test_episode_end_draw(
-        self, step_manager, sample_episode_state, mock_logger, mock_components
-    ):
+    def test_episode_end_draw(self, step_manager, sample_episode_state, mock_logger, mock_components):
         """Test episode end with draw."""
         step_result = StepResult(
             next_obs=rng.random((10, 10, 20), dtype=np.float32),
@@ -533,22 +491,16 @@ class TestHandleEpisodeEnd:
         )
 
         game_stats = {"black_wins": 2, "white_wins": 2, "draws": 6}
-        mock_components["game"].reset.return_value = rng.random(
-            (10, 10, 20), dtype=np.float32
-        )
+        mock_components["game"].reset.return_value = rng.random((10, 10, 20), dtype=np.float32)
 
         # Execute episode end handling
-        step_manager.handle_episode_end(
-            sample_episode_state, step_result, game_stats, 9, mock_logger
-        )
+        step_manager.handle_episode_end(sample_episode_state, step_result, game_stats, 9, mock_logger)
 
         # Verify draw message
         log_message = mock_logger.call_args[0][0]
         assert "Draw by stalemate" in log_message
 
-    def test_episode_end_win_rate_calculation(
-        self, step_manager, sample_episode_state, mock_logger, mock_components
-    ):
+    def test_episode_end_win_rate_calculation(self, step_manager, sample_episode_state, mock_logger, mock_components):
         """Test win rate calculations in episode end."""
         step_result = StepResult(
             next_obs=rng.random((10, 10, 20), dtype=np.float32),
@@ -564,14 +516,10 @@ class TestHandleEpisodeEnd:
 
         # Initial stats: 20 black wins, 30 white wins, 50 draws = 100 total
         game_stats = {"black_wins": 20, "white_wins": 30, "draws": 50}
-        mock_components["game"].reset.return_value = rng.random(
-            (10, 10, 20), dtype=np.float32
-        )
+        mock_components["game"].reset.return_value = rng.random((10, 10, 20), dtype=np.float32)
 
         # Execute episode end handling
-        step_manager.handle_episode_end(
-            sample_episode_state, step_result, game_stats, 99, mock_logger
-        )
+        step_manager.handle_episode_end(sample_episode_state, step_result, game_stats, 99, mock_logger)
 
         # Verify win rates in wandb data (calculated AFTER current game is added)
         # Black wins, so black_wins becomes 21, total games becomes 101
@@ -583,9 +531,7 @@ class TestHandleEpisodeEnd:
         assert wandb_data["white_wins_total"] == 30
         assert wandb_data["draws_total"] == 50
 
-    def test_episode_end_zero_games(
-        self, step_manager, sample_episode_state, mock_logger, mock_components
-    ):
+    def test_episode_end_zero_games(self, step_manager, sample_episode_state, mock_logger, mock_components):
         """Test episode end with zero total games."""
         step_result = StepResult(
             next_obs=rng.random((10, 10, 20), dtype=np.float32),
@@ -600,14 +546,10 @@ class TestHandleEpisodeEnd:
         )
 
         game_stats = {"black_wins": 0, "white_wins": 0, "draws": 0}
-        mock_components["game"].reset.return_value = rng.random(
-            (10, 10, 20), dtype=np.float32
-        )
+        mock_components["game"].reset.return_value = rng.random((10, 10, 20), dtype=np.float32)
 
         # Execute episode end handling
-        step_manager.handle_episode_end(
-            sample_episode_state, step_result, game_stats, 0, mock_logger
-        )
+        step_manager.handle_episode_end(sample_episode_state, step_result, game_stats, 0, mock_logger)
 
         # Verify win rates are calculated after this game (black wins)
         # black_wins becomes 1, total games becomes 1
@@ -619,9 +561,7 @@ class TestHandleEpisodeEnd:
         assert wandb_data["white_wins_total"] == 0
         assert wandb_data["draws_total"] == 0
 
-    def test_episode_end_reset_fails(
-        self, step_manager, sample_episode_state, mock_logger, mock_components
-    ):
+    def test_episode_end_reset_fails(self, step_manager, sample_episode_state, mock_logger, mock_components):
         """Test episode end when game reset fails."""
         step_result = StepResult(
             next_obs=rng.random((10, 10, 20), dtype=np.float32),
@@ -693,15 +633,11 @@ class TestUpdateEpisodeState:
             value_pred=0.8,
         )
 
-        updated_state = step_manager.update_episode_state(
-            sample_episode_state, step_result
-        )
+        updated_state = step_manager.update_episode_state(sample_episode_state, step_result)
 
         assert np.array_equal(updated_state.current_obs, next_obs)
         assert torch.equal(updated_state.current_obs_tensor, next_obs_tensor)
-        assert updated_state.episode_reward == pytest.approx(
-            sample_episode_state.episode_reward + 2.5
-        )
+        assert updated_state.episode_reward == pytest.approx(sample_episode_state.episode_reward + 2.5)
         assert updated_state.episode_length == sample_episode_state.episode_length + 1
 
 
@@ -768,21 +704,15 @@ class TestPrepareAndHandleDemoMode:
         mock_components["game"].current_player = Mock()
         mock_components["game"].current_player.name = "TestPlayer"
 
-        with patch(
-            "keisei.training.step_manager.format_move_with_description_enhanced"
-        ) as mock_format:
+        with patch("keisei.training.step_manager.format_move_with_description_enhanced") as mock_format:
             mock_format.return_value = "formatted_move"
 
             with patch("time.sleep") as mock_sleep:
                 step_manager.config.display.turn_tick = 0.5
 
-                step_manager._handle_demo_mode(
-                    selected_move, episode_length, piece_info, mock_logger
-                )
+                step_manager._handle_demo_mode(selected_move, episode_length, piece_info, mock_logger)
 
-                mock_format.assert_called_once_with(
-                    selected_move, step_manager.policy_mapper, piece_info
-                )
+                mock_format.assert_called_once_with(selected_move, step_manager.policy_mapper, piece_info)
 
                 mock_sleep.assert_called_once_with(0.5)
 
@@ -790,9 +720,7 @@ class TestPrepareAndHandleDemoMode:
                 assert step_manager.move_history[-1] == selected_move
                 assert step_manager.move_log[-1].startswith("Move 11 (TestPlayer):")
 
-    def test_handle_demo_mode_no_current_player(
-        self, step_manager, mock_logger, mock_components
-    ):
+    def test_handle_demo_mode_no_current_player(self, step_manager, mock_logger, mock_components):
         """Test demo mode handling when current_player is not available."""
         selected_move = (1, 2, 3, 4, 5)
         episode_length = 5
@@ -801,21 +729,15 @@ class TestPrepareAndHandleDemoMode:
         # No current_player attribute
         del mock_components["game"].current_player
 
-        with patch(
-            "keisei.training.step_manager.format_move_with_description_enhanced"
-        ) as mock_format:
+        with patch("keisei.training.step_manager.format_move_with_description_enhanced") as mock_format:
             mock_format.return_value = "formatted_move"
 
-            step_manager._handle_demo_mode(
-                selected_move, episode_length, piece_info, mock_logger
-            )
+            step_manager._handle_demo_mode(selected_move, episode_length, piece_info, mock_logger)
 
             mock_logger.assert_not_called()
             assert "Unknown" in step_manager.move_log[-1]
 
-    def test_handle_demo_mode_no_delay(
-        self, step_manager, mock_logger, mock_components
-    ):
+    def test_handle_demo_mode_no_delay(self, step_manager, mock_logger, mock_components):
         """Test demo mode handling with no delay."""
         selected_move = (1, 2, 3, 4, 5)
         episode_length = 0
@@ -824,17 +746,13 @@ class TestPrepareAndHandleDemoMode:
         mock_components["game"].current_player = Mock()
         mock_components["game"].current_player.name = "Player1"
 
-        with patch(
-            "keisei.training.step_manager.format_move_with_description_enhanced"
-        ) as mock_format:
+        with patch("keisei.training.step_manager.format_move_with_description_enhanced") as mock_format:
             mock_format.return_value = "formatted_move"
 
             with patch("time.sleep") as mock_sleep:
                 step_manager.config.display.turn_tick = 0.0
 
-                step_manager._handle_demo_mode(
-                    selected_move, episode_length, piece_info, mock_logger
-                )
+                step_manager._handle_demo_mode(selected_move, episode_length, piece_info, mock_logger)
 
                 # Sleep should not be called
                 mock_sleep.assert_not_called()
@@ -859,9 +777,7 @@ class TestExecuteStepNoLegalMoves:
         """Create a mock logger for testing."""
         return Mock()
 
-    def test_execute_step_no_legal_moves_terminal_condition(
-        self, step_manager, mock_components, mock_logger
-    ):
+    def test_execute_step_no_legal_moves_terminal_condition(self, step_manager, mock_components, mock_logger):
         """Test that execute_step handles no legal moves as terminal condition."""
         # Arrange
         mock_components["game"].get_legal_moves.return_value = []  # No legal moves
@@ -902,16 +818,10 @@ class TestExecuteStepNoLegalMoves:
         # Verify appropriate logging
         mock_logger.assert_called()
         log_calls = [call[0][0] for call in mock_logger.call_args_list]
-        terminal_logs = [
-            log
-            for log in log_calls
-            if "no legal moves" in log.lower() or "terminal" in log.lower()
-        ]
+        terminal_logs = [log for log in log_calls if "no legal moves" in log.lower() or "terminal" in log.lower()]
         assert len(terminal_logs) > 0, "Expected terminal log for no legal moves"
 
-    def test_execute_step_no_legal_moves_with_episode_state(
-        self, step_manager, mock_components, mock_logger
-    ):
+    def test_execute_step_no_legal_moves_with_episode_state(self, step_manager, mock_components, mock_logger):
         """Test no legal moves handling with existing episode state."""
         # Arrange
         mock_obs = np.zeros((9, 9, 14))
@@ -944,9 +854,7 @@ class TestExecuteStepNoLegalMoves:
         # Verify game reset
         mock_components["game"].reset.assert_called_once()
 
-    def test_execute_step_normal_flow_with_legal_moves(
-        self, step_manager, mock_components, mock_logger
-    ):
+    def test_execute_step_normal_flow_with_legal_moves(self, step_manager, mock_components, mock_logger):
         """Test that normal flow continues when legal moves are available."""
         # Arrange
         legal_moves = [(1, 2, 3, 4, 5), (2, 3, 4, 5, 6)]  # Mock legal moves
@@ -1000,15 +908,11 @@ class TestExecuteStepNoLegalMoves:
 
         # Verify normal flow was followed
         mock_components["game"].get_legal_moves.assert_called_once()
-        mock_components["policy_mapper"].get_legal_mask.assert_called_once_with(
-            legal_moves, device=step_manager.device
-        )
+        mock_components["policy_mapper"].get_legal_mask.assert_called_once_with(legal_moves, device=step_manager.device)
         mock_components["agent"].select_action.assert_called_once()
         mock_components["game"].make_move.assert_called_once()
 
-    def test_execute_step_no_legal_moves_logs_appropriate_level(
-        self, step_manager, mock_components, mock_logger
-    ):
+    def test_execute_step_no_legal_moves_logs_appropriate_level(self, step_manager, mock_components, mock_logger):
         """Test that no legal moves condition logs at appropriate level."""
         # Arrange
         mock_obs = np.zeros((9, 9, 14))
@@ -1082,14 +986,37 @@ class TestBestCaptureTracking:
         assert step_manager.sente_best_capture == "Rook"
         assert step_manager.gote_best_capture is None
 
-        self._setup_step(step_manager, mock_components, Color.WHITE, "BISHOP")
+    def test_move_logs_reset_on_episode_end(self, step_manager, sample_episode_state, mock_components, mock_logger):
+        """Move history and logs should reset after episode end."""
+        step_manager.move_log = ["dummy"]
+        step_manager.move_history = [(1, 2, 3, 4, False)]
 
-        assert step_manager.sente_best_capture == "Rook"
-        assert step_manager.gote_best_capture == "Bishop"
+        step_result = StepResult(
+            next_obs=np.zeros((1,)),
+            next_obs_tensor=torch.zeros((1, 1)),
+            reward=0.0,
+            done=True,
+            info={"winner": "black", "reason": "checkmate"},
+            selected_move=(1, 2, 3, 4, False),
+            policy_index=0,
+            log_prob=0.0,
+            value_pred=0.0,
+        )
 
-    def test_best_capture_reset_on_episode_end(
-        self, step_manager, sample_episode_state, mock_components, mock_logger
-    ):
+        mock_components["game"].reset.return_value = np.zeros((1,))
+
+        step_manager.handle_episode_end(
+            sample_episode_state,
+            step_result,
+            {"black_wins": 0, "white_wins": 0, "draws": 0},
+            0,
+            mock_logger,
+        )
+
+        assert step_manager.move_log == []
+        assert step_manager.move_history == []
+
+    def test_best_capture_reset_on_episode_end(self, step_manager, sample_episode_state, mock_components, mock_logger):
         """Best capture values should reset after episode end."""
         step_manager.sente_best_capture = "Rook"
         step_manager.gote_best_capture = "Bishop"
