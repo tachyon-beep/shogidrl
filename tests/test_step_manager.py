@@ -18,6 +18,7 @@ rng = np.random.default_rng(42)  # seeded RNG
 # Use numpy.random.Generator for random numbers
 
 from keisei.config_schema import AppConfig
+from keisei.shogi.shogi_core_definitions import Color
 from keisei.training.step_manager import EpisodeState, StepManager, StepResult
 
 
@@ -1047,6 +1048,76 @@ class TestExecuteStepNoLegalMoves:
                     terminal_related_logs.append(call)
 
         assert len(terminal_related_logs) > 0, "Expected terminal-related log message"
+
+
+class TestBestCaptureTracking:
+    """Tests for best capture metrics."""
+
+    def _setup_step(self, step_manager, mock_components, color, captured_type):
+        step_manager.game.get_legal_moves.return_value = [(1, 2, 3, 4, False)]
+        step_manager.policy_mapper.get_legal_mask.return_value = torch.ones(1)
+        step_manager.agent.select_action.return_value = (
+            (1, 2, 3, 4, False),
+            0,
+            0.0,
+            0.0,
+        )
+        next_obs = np.zeros((1,))
+        info = {"captured_piece_type": captured_type}
+        step_manager.game.current_player = color
+        step_manager.game.make_move.return_value = (next_obs, 0.0, False, info)
+
+        dummy_state = EpisodeState(
+            current_obs=np.zeros((1,)),
+            current_obs_tensor=torch.zeros((1, 1)),
+            episode_reward=0.0,
+            episode_length=0,
+        )
+        step_manager.execute_step(dummy_state, 0, Mock())
+
+    def test_best_capture_per_player(self, step_manager, mock_components):
+        """Sente and Gote should track captures independently."""
+        self._setup_step(step_manager, mock_components, Color.BLACK, "ROOK")
+
+        assert step_manager.sente_best_capture == "Rook"
+        assert step_manager.gote_best_capture is None
+
+        self._setup_step(step_manager, mock_components, Color.WHITE, "BISHOP")
+
+        assert step_manager.sente_best_capture == "Rook"
+        assert step_manager.gote_best_capture == "Bishop"
+
+    def test_best_capture_reset_on_episode_end(
+        self, step_manager, sample_episode_state, mock_components, mock_logger
+    ):
+        """Best capture values should reset after episode end."""
+        step_manager.sente_best_capture = "Rook"
+        step_manager.gote_best_capture = "Bishop"
+
+        step_result = StepResult(
+            next_obs=np.zeros((1,)),
+            next_obs_tensor=torch.zeros((1, 1)),
+            reward=0.0,
+            done=True,
+            info={"winner": "black", "reason": "checkmate"},
+            selected_move=(1, 2, 3, 4, False),
+            policy_index=0,
+            log_prob=0.0,
+            value_pred=0.0,
+        )
+
+        mock_components["game"].reset.return_value = np.zeros((1,))
+
+        step_manager.handle_episode_end(
+            sample_episode_state,
+            step_result,
+            {"black_wins": 0, "white_wins": 0, "draws": 0},
+            0,
+            mock_logger,
+        )
+
+        assert step_manager.sente_best_capture is None
+        assert step_manager.gote_best_capture is None
 
 
 if __name__ == "__main__":
