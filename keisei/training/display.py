@@ -27,6 +27,7 @@ from keisei.config_schema import DisplayConfig
 from .adaptive_display import AdaptiveDisplayManager
 from .display_components import (
     GameStatisticsPanel,
+    HorizontalSeparator,
     MultiMetricSparkline,
     PieceStandPanel,
     RecentMovesPanel,
@@ -113,13 +114,9 @@ class TrainingDisplay:
         )
 
         layout["left_column"].split_column(
-            Layout(name="board_panel", size=12),
-            Layout(name="komadai_panel", size=5),
-            Layout(
-                name="moves_panel",
-                ratio=1,
-                minimum_size=self.display_config.move_list_length,
-            ),
+            Layout(name="board_panel", ratio=3),           # Give the board the most space
+            Layout(name="komadai_panel", size=4),         # The piece stand needs 4 lines total
+            Layout(name="moves_panel", ratio=2),           # The move list can have the rest
         )
 
         layout["middle_column"].split_column(
@@ -236,7 +233,8 @@ class TrainingDisplay:
             ("Entropy", "entropies"),
             ("KL Divergence", "kl_divergences"),
             ("PPO Clip Frac", "clip_fractions"),
-            ("Win Rate", "win_rates_black"),
+            ("Win Rate - Sente", "win_rates_black"),
+            ("Win Rate - Gote", "win_rates_white"),
             ("Draw Rate", "draw_rates"),
         ]
 
@@ -257,6 +255,8 @@ class TrainingDisplay:
         for name, history_key in metrics_to_display:
             if history_key == "win_rates_black":
                 data_list = [d.get("win_rate_black", 0.0) for d in history.win_rates_history]
+            elif history_key == "win_rates_white":
+                data_list = [d.get("win_rate_white", 0.0) for d in history.win_rates_history]
             elif history_key == "draw_rates":
                 data_list = [d.get("win_rate_draw", 0.0) for d in history.win_rates_history]
             else:
@@ -339,6 +339,11 @@ class TrainingDisplay:
             hist = trainer.metrics_manager.history
             renderables = self._build_metric_lines(hist)
             group_items = list(renderables)
+
+            # Add a visual separator between metrics table and progress bars
+            separator = HorizontalSeparator(width_ratio=0.95, style="dim")
+            # Use a reasonable panel width (50 chars) since we can't access the exact panel width
+            group_items.append(separator.render(available_width=50))
 
             grad_norm = getattr(trainer, "last_gradient_norm", 0.0)
             grad_norm_scaled = min(grad_norm, 50.0)

@@ -247,6 +247,11 @@ class DisplayConfig(BaseModel):
     )
 
 
+def _create_display_config() -> DisplayConfig:
+    """Factory function for DisplayConfig to avoid lambda in default_factory."""
+    return DisplayConfig()  # type: ignore[call-arg]
+
+
 class AppConfig(BaseModel):
     env: EnvConfig
     training: TrainingConfig
@@ -255,6 +260,6 @@ class AppConfig(BaseModel):
     wandb: WandBConfig
     parallel: ParallelConfig
     demo: Optional[DemoConfig] = None
-    display: DisplayConfig = Field(default_factory=lambda: DisplayConfig())
+    display: DisplayConfig = Field(default_factory=_create_display_config)
 
     model_config = {"extra": "forbid"}  # Disallow unknown fields for strict validation

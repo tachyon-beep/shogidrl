@@ -26,8 +26,35 @@ class DisplayComponent(Protocol):
         raise NotImplementedError
 
 
+class HorizontalSeparator:
+    """A reusable horizontal separator bar for visual organization."""
+
+    def __init__(self, width_ratio: float = 0.9, style: str = "dim", char: str = "─"):
+        """
+        Args:
+            width_ratio: Ratio of available width to use (0.0 to 1.0)
+            style: Rich style to apply to the separator
+            char: Character to use for the separator line
+        """
+        self.width_ratio = width_ratio
+        self.style = style
+        self.char = char
+
+    def render(self, available_width: int = 50) -> RenderableType:
+        """
+        Render a horizontal separator line.
+        
+        Args:
+            available_width: The available width for the separator
+        """
+        separator_width = max(1, int(available_width * self.width_ratio))
+        separator_line = self.char * separator_width
+        text = Text(separator_line, style=self.style)
+        return Align.center(text)
+
+
 class ShogiBoard:
-    """Rich-ified representation of the current Shogi board state."""
+    """Rich-ified representation of the current Shogi board state using a grid of Panels."""
 
     def __init__(
         self,
@@ -40,28 +67,45 @@ class ShogiBoard:
         self.cell_height = cell_height
 
     def _piece_to_symbol(self, piece) -> str:
-        """Turn your internal piece-object into a single-string symbol."""
+        """
+        Turn your internal piece-object into a single-string symbol.
+        This version is robust against case-sensitivity and unknown piece types.
+        """
         if not piece:
             return "・"
-        if self.use_unicode:
-            symbols = {
-                "PAWN": "歩",
-                "LANCE": "香",
-                "KNIGHT": "桂",
-                "SILVER": "銀",
-                "GOLD": "金",
-                "BISHOP": "角",
-                "ROOK": "飛",
-                "KING": "王",
-                "PROMOTED_PAWN": "と",
-                "PROMOTED_LANCE": "杏",
-                "PROMOTED_KNIGHT": "圭",
-                "PROMOTED_SILVER": "全",
-                "PROMOTED_BISHOP": "馬",
-                "PROMOTED_ROOK": "龍",
-            }
-            return symbols.get(piece.type.name, "?")
-        return piece.symbol()
+
+        # This handles your non-unicode fallback if you have it
+        if not self.use_unicode:
+            return getattr(piece, 'symbol', lambda: '?')()
+
+        # --- Definitive Unicode Symbol Lookup ---
+        symbols = {
+            "PAWN": "歩", "LANCE": "香", "KNIGHT": "桂", "SILVER": "銀",
+            "GOLD": "金", "BISHOP": "角", "ROOK": "飛", "KING": "王",
+            "PROMOTED_PAWN": "と", "PROMOTED_LANCE": "杏", "PROMOTED_KNIGHT": "圭",
+            "PROMOTED_SILVER": "全", "PROMOTED_BISHOP": "馬", "PROMOTED_ROOK": "龍",
+        }
+
+        try:
+            # 1. Get the piece type name safely.
+            piece_type_name_attr = getattr(piece, 'type', None)
+            if not piece_type_name_attr:
+                return "?" # The object has no 'type' attribute
+            
+            # 2. Make the lookup case-insensitive.
+            lookup_key = str(piece_type_name_attr.name).upper()
+
+            # 3. Return the symbol, or the first letter of the key as a fallback for debugging.
+            return symbols.get(lookup_key, lookup_key[0])
+
+        except (AttributeError, IndexError):
+            # This is a final catch-all if the piece object is malformed.
+            from rich.console import Console
+            console = Console(stderr=True, style="bold red")
+            console.print(f"[ShogiBoard] Error: Invalid object passed as a piece: {piece}")
+            return "!"
+
+
 
     def _colorize(self, symbol: str, piece) -> Text:
         """Apply per-piece colouring."""
@@ -71,98 +115,96 @@ class ShogiBoard:
             return Text(symbol, style="bright_red")
         return Text(symbol, style="bright_blue")
 
-    def _pad_symbol(self, symbol: str) -> str:
-        """Legacy helper kept for compatibility."""
-        return symbol
-
     def _get_shogi_notation(self, row: int, col: int) -> str:
         return _coords_to_square_name(row, col)
 
-    def _generate_rich_table(self, board_state, hot_squares: Optional[set] = None) -> Table:
-        """Create a grid of Panels for the board."""
-        from rich.align import Align
-        from rich.panel import Panel
-
+    def _create_cell_panel(self, piece, r_idx: int, c_idx: int, hot_squares: Optional[set]) -> Panel:
+        """Creates a single styled Panel for a board square."""
         light_bg_color = "#EEC28A"
         dark_bg_color = "#C19A55"
         light_bg = Style(bgcolor=light_bg_color)
         dark_bg = Style(bgcolor=dark_bg_color)
+        
+        is_light = (r_idx + c_idx) % 2 == 0
+        bg_style = light_bg if is_light else dark_bg
 
+        symbol = self._piece_to_symbol(piece)
+        if piece:
+            styled_text = self._colorize(symbol, piece)
+        else:
+            dot_color = dark_bg_color if is_light else light_bg_color
+            styled_text = Text(symbol, style=Style(color=dot_color))
+
+        centered_content = Align.center(styled_text, vertical="middle")
+
+        # Apply the background style to the Panel itself, not the text
+        cell_panel = Panel(
+            centered_content,
+            box=box.SIMPLE,
+            width=self.cell_width,
+            height=self.cell_height,
+            style=bg_style,
+        )
+
+        board_col = 8 - c_idx
+        sq_name = self._get_shogi_notation(r_idx, board_col)
+        if hot_squares and sq_name in hot_squares:
+            cell_panel.border_style = "bold dark_red"
+        
+        return cell_panel
+
+    def _generate_board_grid(self, board_state, hot_squares: Optional[set] = None) -> Table:
+        """Create a 9x9 grid of Panels representing the board."""
         board_grid = Table.grid(expand=False)
         for _ in range(9):
             board_grid.add_column()
 
         for r_idx, row in enumerate(board_state.board):
-            row_renderables: List[RenderableType] = []
-            for c_idx, piece in enumerate(reversed(row)):
-                is_light = (r_idx + c_idx) % 2 == 0
-                bg_style = light_bg if is_light else dark_bg
-
-                symbol = self._piece_to_symbol(piece)
-                if piece:
-                    styled_text = self._colorize(symbol, piece)
-                else:
-                    dot_color = dark_bg_color if is_light else light_bg_color
-                    styled_text = Text(symbol, style=Style(color=dot_color))
-
-                centered = Align.center(styled_text, vertical="middle")
-                cell_panel = Panel(
-                    centered,
-                    box=box.SQUARE,
-                    width=self.cell_width,
-                    height=self.cell_height,
-                    style=bg_style,
-                    border_style="grey37",
-                )
-
-                board_col = 8 - c_idx
-                sq_name = self._get_shogi_notation(r_idx, board_col)
-                if hot_squares and sq_name in hot_squares:
-                    cell_panel.border_style = "bold dark_red"
-
-                row_renderables.append(cell_panel)
+            row_renderables = [
+                self._create_cell_panel(piece, r_idx, c_idx, hot_squares)
+                for c_idx, piece in enumerate(reversed(row))
+            ]
             board_grid.add_row(*row_renderables)
+            
         return board_grid
 
     def render(
-        self,
-        board_state=None,
-        highlight_squares: Optional[set] = None,
-        **_kwargs,
+        self, board_state=None, highlight_squares: Optional[set] = None, **_kwargs
     ) -> RenderableType:
-        """Return a panel with the current board and coordinate labels."""
+        """Returns a final Panel containing the board grid and coordinate labels."""
         if not board_state:
             return Panel(
-                Text("No active game", justify="center"),
-                title="Main Board",
-                border_style="blue",
+                Text("No active game", justify="center"), title="Main Board", border_style="blue"
             )
 
-        board_panel_grid = self._generate_rich_table(board_state, hot_squares=highlight_squares)
+        # 1. Generate the core 9x9 board of panels.
+        board_grid = self._generate_board_grid(
+            board_state, hot_squares=highlight_squares
+        )
 
-        layout_grid = Table.grid(expand=False)
-        layout_grid.add_column(width=2, justify="center")
-        layout_grid.add_column()
+        # 2. Create the outer layout to hold the board and coordinates.
+        layout_grid = Table.grid(expand=False, padding=0)
+        layout_grid.add_column(width=2, justify="center")  # For rank labels (a-i)
+        layout_grid.add_column()                           # For the board itself
 
-        file_labels = [Text(str(n), justify="center") for n in range(9, 0, -1)]
+        # 3. Add the top file labels (9 to 1) in their own sub-grid.
+        file_labels = [Text(str(n), justify="center", style="bold") for n in range(9, 0, -1)]
         top_label_grid = Table.grid(expand=False)
         for _ in range(9):
             top_label_grid.add_column(width=self.cell_width)
         top_label_grid.add_row(*file_labels)
-        layout_grid.add_row(Text(""), top_label_grid)
+        
+        # Add an empty top-left cell, then the file labels.
+        layout_grid.add_row(Text(" "), top_label_grid)
 
-        cols = [list(col.cells) for col in board_panel_grid.columns]
-        for i in range(len(cols[0])):
-            rank_label = Text(str(9 - i), justify="center", style="bold")
-            row_cells = [c[i] for c in cols]
-            row_table = Table.grid(expand=False)
-            for _ in range(9):
-                row_table.add_column()
-            row_table.add_row(*row_cells)
-            layout_grid.add_row(rank_label, row_table)
+        # 4. Create rank labels and combine them with the board grid.
+        # This is the corrected logic that fixes the "no attribute 'renderable'" error.
+        rank_labels = Group(
+            *(Align.center(Text(chr(ord('a') + i), style="bold"), vertical="middle", height=self.cell_height) for i in range(9))
+        )
+        layout_grid.add_row(rank_labels, board_grid)
 
         return Panel(Align.center(layout_grid), title="Main Board", border_style="blue")
-
 
 class RecentMovesPanel:
     def __init__(self, max_moves: int = 20, newest_on_top: bool = True, flash_ms: int = 0):
@@ -229,20 +271,27 @@ class PieceStandPanel:
         return " ".join(parts) or ""
 
     def render(self, game) -> RenderableType:
+        """Renders the captured pieces (komadai) for each player using a Table."""
         if not game:
-            return Panel("...", title="Captured Pieces")
+            return Panel("...", title="Captured Pieces", border_style="yellow")
 
-        sente_hand = self._format_hand(getattr(game, "hands", {}).get(Color.BLACK.value, {}))
-        gote_hand = self._format_hand(getattr(game, "hands", {}).get(Color.WHITE.value, {}))
+        sente_hand_str = self._format_hand(getattr(game, "hands", {}).get(Color.BLACK.value, {}))
+        gote_hand_str = self._format_hand(getattr(game, "hands", {}).get(Color.WHITE.value, {}))
 
-        return Panel(
-            Group(
-                Text.from_markup(f"[bold]Sente:[/b] {sente_hand}"),
-                Text.from_markup(f"[bold]Gote: [/b] {gote_hand}"),
-            ),
-            title="Captured Pieces",
-            border_style="yellow",
+        # Use a simple Table for clean, two-column alignment.
+        hand_table = Table.grid(padding=(0, 1))
+        hand_table.add_column(style="bold", justify="right", width=7) # e.g., "Sente: "
+        hand_table.add_column()
+
+        # Add rows for each player, applying color to the pieces.
+        hand_table.add_row(
+            "Sente:", Text(sente_hand_str or "None", style="bright_red")
         )
+        hand_table.add_row(
+            "Gote:", Text(gote_hand_str or "None", style="bright_blue")
+        )
+
+        return Panel(hand_table, title="Captured Pieces", border_style="yellow")
 
 
 class Sparkline:
@@ -250,7 +299,7 @@ class Sparkline:
 
     def __init__(self, width: int = 20) -> None:
         self.width = width
-        self.chars = "▁▂▃▄▅▆▇█"
+        self.chars = "▁▂▃▄▅▆▇"
 
     def generate(
         self,
