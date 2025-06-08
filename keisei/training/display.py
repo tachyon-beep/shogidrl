@@ -116,7 +116,7 @@ class TrainingDisplay:
         layout["left_column"].split_column(
             Layout(name="board_panel", ratio=3),           # Give the board the most space
             Layout(name="komadai_panel", size=4),         # The piece stand needs 4 lines total
-            Layout(name="moves_panel", ratio=2),           # The move list can have the rest
+            Layout(name="moves_panel", size=8),           # Fixed size for recent moves panel
         )
 
         layout["middle_column"].split_column(
