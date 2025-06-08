@@ -57,6 +57,8 @@ class TrainingDisplay:
         if self.display_config.enable_board_display:
             self.board_component = ShogiBoard(
                 use_unicode=self.display_config.board_unicode_pieces,
+                cell_width=self.display_config.board_cell_width,
+                cell_height=self.display_config.board_cell_height,
             )
             self.moves_component = RecentMovesPanel(
                 max_moves=self.display_config.move_list_length,
@@ -365,7 +367,8 @@ class TrainingDisplay:
 
             self.layout["trends_panel"].update(Panel(Group(*group_items), border_style="cyan", title="Metric Trends"))
 
-            try:  # TODO - we shouldn't need to be trying/checking that this panel exists, the assert and throwing of an error should be enough
+            # TODO: the panel should exist; asserting inside try for safety
+            try:
                 assert self.game_stats_component is not None
 
                 panel = cast(
