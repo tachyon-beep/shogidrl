@@ -153,11 +153,6 @@ class StepManager:
 
             legal_mask_tensor = self.policy_mapper.get_legal_mask(legal_shogi_moves, device=self.device)
 
-            # Prepare display move info if needed
-            piece_info_for_demo = None
-            if self.config.display.display_moves and legal_shogi_moves:
-                piece_info_for_demo = self._prepare_demo_info(legal_shogi_moves)
-
             # Agent action selection
             selected_shogi_move, policy_index, log_prob, value_pred = self.agent.select_action(
                 episode_state.current_obs, legal_mask_tensor, is_training=True
@@ -194,6 +189,20 @@ class StepManager:
                     success=False,
                     error_message=error_msg,
                 )
+
+            # --- START: CORRECTED LOGGING LOGIC ---
+            # Get piece info for the ACTUAL selected move (not the first legal move)
+            piece_info_for_demo = None
+            if self.config.display.display_moves:
+                try:
+                    # Check if it's a board move (not a drop) to get piece from square
+                    if (selected_shogi_move[0] is not None and 
+                        selected_shogi_move[1] is not None):
+                        from_r, from_c = selected_shogi_move[0], selected_shogi_move[1]
+                        piece_info_for_demo = self.game.get_piece(from_r, from_c)
+                except (AttributeError, IndexError, ValueError):
+                    pass  # Silently ignore errors, will fall back to a generic name
+            # --- END: CORRECTED LOGGING LOGIC ---
 
             # Handle display move logging and delay
             if self.config.display.display_moves:

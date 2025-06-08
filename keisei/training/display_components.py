@@ -118,6 +118,10 @@ class ShogiBoard:
     def _get_shogi_notation(self, row: int, col: int) -> str:
         return _coords_to_square_name(row, col)
 
+    def _pad_symbol(self, symbol: str) -> str:
+        """Return the symbol unchanged. Used for consistent symbol formatting."""
+        return symbol
+
     def _create_cell_panel(self, piece, r_idx: int, c_idx: int, hot_squares: Optional[set]) -> Panel:
         """Creates a single styled Panel for a board square."""
         light_bg_color = "#EEC28A"
