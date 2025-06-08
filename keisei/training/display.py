@@ -374,6 +374,18 @@ class TrainingDisplay:
             grad_bar.add_task("", total=50.0, completed=int(grad_norm_scaled))
             group_items.append(grad_bar)
 
+            try:
+                buffer_bar = Progress(
+                    TextColumn("Replay Buffer"),
+                    BarColumn(bar_width=None),
+                    TextColumn("{task.percentage:>3.0f}%"),
+                )
+                buf = trainer.experience_buffer
+                buffer_bar.add_task("", total=buf.capacity(), completed=buf.size())
+                group_items.append(buffer_bar)
+            except (AttributeError, TypeError):
+                pass
+
             self.layout["trends_panel"].update(
                 Panel(Group(*group_items), border_style="cyan", title="Metric Trends")
             )
@@ -396,17 +408,6 @@ class TrainingDisplay:
                     ),
                 )
                 group_stats: List[RenderableType] = [panel.renderable]
-                try:
-                    buffer_bar = Progress(
-                        TextColumn("Replay Buffer"),
-                        BarColumn(bar_width=None),
-                        TextColumn("{task.percentage:>3.0f}%"),
-                    )
-                    buf = trainer.experience_buffer
-                    buffer_bar.add_task("", total=buf.capacity(), completed=buf.size())
-                    group_stats.append(buffer_bar)
-                except (AttributeError, TypeError):
-                    pass
                 self.layout["stats_panel"].update(
                     Panel(
                         Group(*group_stats),

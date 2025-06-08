@@ -85,7 +85,9 @@ class StepManager:
         self.move_history: List[Tuple] = []
         self.move_log: List[str] = []
         self.sente_best_capture: Optional[str] = None
+        self.sente_best_capture_value: int = 0
         self.gote_best_capture: Optional[str] = None
+        self.gote_best_capture_value: int = 0
 
     def execute_step(
         self,
@@ -223,19 +225,13 @@ class StepManager:
                 base_name = captured_name.replace("PROMOTED_", "")
                 captured_value = value_map.get(base_name, 0)
                 if moving_player == Color.BLACK:
-                    current = self.sente_best_capture
-                    current_val = value_map.get(
-                        current.replace("PROMOTED_", "") if current else "", 0
-                    )
-                    if current is None or captured_value > current_val:
+                    if captured_value > self.sente_best_capture_value:
                         self.sente_best_capture = base_name.title()
+                        self.sente_best_capture_value = captured_value
                 else:
-                    current = self.gote_best_capture
-                    current_val = value_map.get(
-                        current.replace("PROMOTED_", "") if current else "", 0
-                    )
-                    if current is None or captured_value > current_val:
+                    if captured_value > self.gote_best_capture_value:
                         self.gote_best_capture = base_name.title()
+                        self.gote_best_capture_value = captured_value
 
             # Add experience to buffer
             self.experience_buffer.add(
@@ -451,7 +447,9 @@ class StepManager:
         self.move_history.clear()
         self.move_log.clear()
         self.sente_best_capture = None
+        self.sente_best_capture_value = 0
         self.gote_best_capture = None
+        self.gote_best_capture_value = 0
 
         return EpisodeState(
             current_obs=reset_obs,
