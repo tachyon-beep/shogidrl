@@ -376,6 +376,12 @@ class TrainingDisplay:
                         trainer.metrics_manager,
                         getattr(trainer.step_manager, "sente_best_capture", None),
                         getattr(trainer.step_manager, "gote_best_capture", None),
+                        getattr(trainer.step_manager, "sente_capture_count", 0),
+                        getattr(trainer.step_manager, "gote_capture_count", 0),
+                        getattr(trainer.step_manager, "sente_drop_count", 0),
+                        getattr(trainer.step_manager, "gote_drop_count", 0),
+                        getattr(trainer.step_manager, "sente_promo_count", 0),
+                        getattr(trainer.step_manager, "gote_promo_count", 0),
                     ),
                 )
                 group_stats: List[RenderableType] = [panel.renderable]

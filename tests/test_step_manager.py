@@ -18,7 +18,7 @@ rng = np.random.default_rng(42)  # seeded RNG
 # Use numpy.random.Generator for random numbers
 
 from keisei.config_schema import AppConfig
-from keisei.shogi.shogi_core_definitions import Color
+from keisei.shogi.shogi_core_definitions import Color, PieceType
 from keisei.training.step_manager import EpisodeState, StepManager, StepResult
 
 
@@ -1045,6 +1045,82 @@ class TestBestCaptureTracking:
 
         assert step_manager.sente_best_capture is None
         assert step_manager.gote_best_capture is None
+
+
+class TestActivityCounters:
+    """Ensure capture, drop, and promotion counts latch and reset."""
+
+    def _exec_move(self, step_manager, mock_components, color, move, info=None):
+        mock_components["game"].get_legal_moves.return_value = [move]
+        mock_components["policy_mapper"].get_legal_mask.return_value = torch.ones(1)
+        mock_components["agent"].select_action.return_value = (move, 0, 0.0, 0.0)
+        mock_components["game"].current_player = color
+        mock_components["game"].make_move.return_value = (
+            np.zeros((1,)),
+            0.0,
+            False,
+            info or {},
+        )
+        dummy_state = EpisodeState(
+            current_obs=np.zeros((1,)),
+            current_obs_tensor=torch.zeros((1, 1)),
+            episode_reward=0.0,
+            episode_length=0,
+        )
+        step_manager.execute_step(dummy_state, 0, Mock())
+
+    def test_counts_latch_and_reset(self, step_manager, mock_components, mock_logger, sample_episode_state):
+        self._exec_move(
+            step_manager,
+            mock_components,
+            Color.BLACK,
+            (1, 2, 3, 4, False),
+            {"captured_piece_type": "PAWN"},
+        )
+        assert step_manager.sente_capture_count == 1
+
+        self._exec_move(
+            step_manager,
+            mock_components,
+            Color.BLACK,
+            (None, None, 4, 4, PieceType.PAWN),
+        )
+        assert step_manager.sente_capture_count == 1
+        assert step_manager.sente_drop_count == 1
+
+        self._exec_move(
+            step_manager,
+            mock_components,
+            Color.BLACK,
+            (1, 2, 3, 4, True),
+        )
+        assert step_manager.sente_promo_count == 1
+
+        step_result = StepResult(
+            next_obs=np.zeros((1,)),
+            next_obs_tensor=torch.zeros((1, 1)),
+            reward=0.0,
+            done=True,
+            info={"winner": "black", "reason": "checkmate"},
+            selected_move=(1, 2, 3, 4, False),
+            policy_index=0,
+            log_prob=0.0,
+            value_pred=0.0,
+        )
+
+        mock_components["game"].reset.return_value = np.zeros((1,))
+
+        step_manager.handle_episode_end(
+            sample_episode_state,
+            step_result,
+            {"black_wins": 0, "white_wins": 0, "draws": 0},
+            0,
+            mock_logger,
+        )
+
+        assert step_manager.sente_capture_count == 0
+        assert step_manager.sente_drop_count == 0
+        assert step_manager.sente_promo_count == 0
 
 
 if __name__ == "__main__":

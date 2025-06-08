@@ -175,25 +175,17 @@ class ShogiBoard:
             table.add_row(*row_cells)
         return table
 
-    def render(
-        self, board_state=None, highlight_squares=None, **_kwargs
-    ) -> RenderableType:
+    def render(self, board_state=None, highlight_squares=None, **_kwargs) -> RenderableType:
         """Returns a Panel containing a Rich Table of the current board."""
         if not board_state:
-            return Panel(
-                Text("No active game"), title="Main Board", border_style="blue"
-            )
+            return Panel(Text("No active game"), title="Main Board", border_style="blue")
 
-        board_table = self._generate_rich_table(
-            board_state, hot_squares=highlight_squares
-        )
+        board_table = self._generate_rich_table(board_state, hot_squares=highlight_squares)
         return Panel(Align.center(board_table), title="Main Board", border_style="blue")
 
 
 class RecentMovesPanel:
-    def __init__(
-        self, max_moves: int = 20, newest_on_top: bool = True, flash_ms: int = 0
-    ):
+    def __init__(self, max_moves: int = 20, newest_on_top: bool = True, flash_ms: int = 0):
         self.max_moves = max_moves
         self.newest_on_top = newest_on_top
         self.flash_ms = flash_ms
@@ -221,9 +213,7 @@ class RecentMovesPanel:
         if moves and moves[-1] != self._last_move:
             self._last_move = moves[-1]
             if self.flash_ms > 0:
-                self._flash_deadline = (
-                    __import__("time").monotonic() + self.flash_ms / 1000
-                )
+                self._flash_deadline = __import__("time").monotonic() + self.flash_ms / 1000
 
         # 1. Slice the list to the configured max_moves. No more capacity logic.
         slice_ = moves[-self.max_moves :]
@@ -237,9 +227,7 @@ class RecentMovesPanel:
 
         # 4. Create the panel and let the Layout manager handle sizing.
         title = (
-            f"Recent Moves ({len(moves)} | {ply_per_sec:.1f} ply/s)"
-            if ply_per_sec
-            else f"Recent Moves ({len(moves)})"
+            f"Recent Moves ({len(moves)} | {ply_per_sec:.1f} ply/s)" if ply_per_sec else f"Recent Moves ({len(moves)})"
         )
         return Panel(body, title=title, border_style="yellow", expand=True)
 
@@ -257,23 +245,15 @@ class PieceStandPanel:
             "BISHOP": "角",
             "ROOK": "飛",
         }
-        parts = [
-            f"{symbols.get(getattr(k, 'name', k), '?')}x{v}"
-            for k, v in hand.items()
-            if v > 0
-        ]
+        parts = [f"{symbols.get(getattr(k, 'name', k), '?')}x{v}" for k, v in hand.items() if v > 0]
         return " ".join(parts) or ""
 
     def render(self, game) -> RenderableType:
         if not game:
             return Panel("...", title="Captured Pieces")
 
-        sente_hand = self._format_hand(
-            getattr(game, "hands", {}).get(Color.BLACK.value, {})
-        )
-        gote_hand = self._format_hand(
-            getattr(game, "hands", {}).get(Color.WHITE.value, {})
-        )
+        sente_hand = self._format_hand(getattr(game, "hands", {}).get(Color.BLACK.value, {}))
+        gote_hand = self._format_hand(getattr(game, "hands", {}).get(Color.WHITE.value, {}))
 
         return Panel(
             Group(
@@ -393,11 +373,7 @@ class GameStatisticsPanel:
             "BISHOP": "角",
             "ROOK": "飛",
         }
-        parts = [
-            f"{symbols.get(getattr(k, 'name', k), '?')}x{v}"
-            for k, v in hand.items()
-            if v > 0
-        ]
+        parts = [f"{symbols.get(getattr(k, 'name', k), '?')}x{v}" for k, v in hand.items() if v > 0]
         return " ".join(parts) or ""
 
     def _format_opening_name(self, move_str: str) -> str:
@@ -445,6 +421,12 @@ class GameStatisticsPanel:
         metrics_manager=None,
         sente_best_capture: Optional[str] = None,
         gote_best_capture: Optional[str] = None,
+        sente_captures: int = 0,
+        gote_captures: int = 0,
+        sente_drops: int = 0,
+        gote_drops: int = 0,
+        sente_promos: int = 0,
+        gote_promos: int = 0,
     ) -> RenderableType:
         if not game or not move_history or not metrics_manager:
             return Panel(
@@ -469,43 +451,14 @@ class GameStatisticsPanel:
         # --- Get Session Stats (now pre-formatted) ---
         sente_openings = metrics_manager.sente_opening_history
         gote_openings = metrics_manager.gote_opening_history
-        fav_sente_opening_raw = (
-            Counter(sente_openings).most_common(1)[0][0] if sente_openings else "N/A"
-        )
-        fav_gote_opening_raw = (
-            Counter(gote_openings).most_common(1)[0][0] if gote_openings else "N/A"
-        )
+        fav_sente_opening_raw = Counter(sente_openings).most_common(1)[0][0] if sente_openings else "N/A"
+        fav_gote_opening_raw = Counter(gote_openings).most_common(1)[0][0] if gote_openings else "N/A"
 
         # Use the new helper to format the names before displaying them
         fav_sente_opening_formatted = self._format_opening_name(fav_sente_opening_raw)
         fav_gote_opening_formatted = self._format_opening_name(fav_gote_opening_raw)
 
-        # --- Activity Counters ---
-        sente_captures = sum(game.hands.get(Color.BLACK.value, {}).values())
-        gote_captures = sum(game.hands.get(Color.WHITE.value, {}).values())
-
-        def _extract_notation(log_line: str) -> str:
-            try:
-                return log_line.split(":", 1)[1].strip().split(" ")[0]
-            except IndexError:
-                return ""
-
-        sente_drops = 0
-        gote_drops = 0
-        sente_promos = 0
-        gote_promos = 0
-        for line in move_history:
-            notation = _extract_notation(line)
-            if "(Sente)" in line:
-                if "*" in notation:
-                    sente_drops += 1
-                if notation.endswith("+"):
-                    sente_promos += 1
-            elif "(Gote)" in line:
-                if "*" in notation:
-                    gote_drops += 1
-                if notation.endswith("+"):
-                    gote_promos += 1
+        # --- Activity Counters are provided by StepManager ---
 
         # --- Moves Since Last Capture ---
         moves_since_capture = len(move_history)
