@@ -869,7 +869,7 @@ class ShogiGame:
                 raise ValueError(
                     f"Invalid promotion flag type for board move: {type(promote_flag)}"
                 )
-                
+
         # --- STEP 1 FIX: Strict legal move validation ---
         # Only allow moves that are in the legal moves list (unless simulation)
         if not is_simulation:

@@ -106,7 +106,9 @@ def _map_flat_overrides(overrides: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     return mapped
 
 
-def load_config(config_path: Optional[str] = None, cli_overrides: Optional[Dict[str, Any]] = None) -> AppConfig:
+def load_config(
+    config_path: Optional[str] = None, cli_overrides: Optional[Dict[str, Any]] = None
+) -> AppConfig:
     """
     Loads configuration from a YAML or JSON file and applies CLI overrides.
     Always loads default_config.yaml as the base, then merges in overrides from config_path (if present), then CLI overrides.
@@ -117,7 +119,9 @@ def load_config(config_path: Optional[str] = None, cli_overrides: Optional[Dict[
     )
     config_data = _load_yaml_or_json(base_config_path)
     # If config_path is provided and is not the default, treat as override file (JSON or YAML)
-    if config_path and os.path.abspath(config_path) != os.path.abspath(base_config_path):
+    if config_path and os.path.abspath(config_path) != os.path.abspath(
+        base_config_path
+    ):
         override_data = _load_yaml_or_json(config_path)
         top_keys = {
             "env",
@@ -129,7 +133,9 @@ def load_config(config_path: Optional[str] = None, cli_overrides: Optional[Dict[
             "parallel",
             "display",
         }
-        if not (isinstance(override_data, dict) and top_keys & set(override_data.keys())):
+        if not (
+            isinstance(override_data, dict) and top_keys & set(override_data.keys())
+        ):
             mapped_overrides = _map_flat_overrides(override_data)
             _merge_overrides(config_data, mapped_overrides)
         else:
@@ -179,9 +185,15 @@ class PolicyOutputMapper:
         self.idx_to_move: List["MoveTuple"] = []
         self.move_to_idx: Dict["MoveTuple", int] = {}
         current_idx = 0
-        self._unrecognized_moves_log_cache: Set[str] = set()  # Cache for logging distinct unrecognized moves
-        self._unrecognized_moves_logged_count = 0  # Counter for logged distinct unrecognized moves
-        self._max_distinct_unrecognized_to_log = 5  # Max distinct unrecognized moves to log in detail
+        self._unrecognized_moves_log_cache: Set[str] = (
+            set()
+        )  # Cache for logging distinct unrecognized moves
+        self._unrecognized_moves_logged_count = (
+            0  # Counter for logged distinct unrecognized moves
+        )
+        self._max_distinct_unrecognized_to_log = (
+            5  # Max distinct unrecognized moves to log in detail
+        )
         # Piece type mapping for USI drop characters
         self._USI_DROP_PIECE_CHARS: Dict[PieceType, str] = {
             PieceType.PAWN: "P",
@@ -287,13 +299,17 @@ class PolicyOutputMapper:
 
     def policy_index_to_shogi_move(self, idx: int) -> "MoveTuple":
         """Convert a policy index back to its Shogi MoveTuple."""
-        if 0 <= idx < self.get_total_actions():  # MODIFIED: Changed self.total_actions to self.get_total_actions()
+        if (
+            0 <= idx < self.get_total_actions()
+        ):  # MODIFIED: Changed self.total_actions to self.get_total_actions()
             return self.idx_to_move[idx]
         raise IndexError(
             f"Policy index {idx} is out of bounds (0-{self.get_total_actions() - 1})."  # MODIFIED: Changed self.total_actions to self.get_total_actions()
         )
 
-    def get_legal_mask(self, legal_shogi_moves: List["MoveTuple"], device: torch.device) -> torch.Tensor:
+    def get_legal_mask(
+        self, legal_shogi_moves: List["MoveTuple"], device: torch.device
+    ) -> torch.Tensor:
         """
         Creates a boolean mask indicating which actions in the policy output are legal.
 
@@ -330,7 +346,9 @@ class PolicyOutputMapper:
     def _get_usi_char_for_drop(self, piece_type: PieceType) -> str:
         """Gets the USI character for a droppable piece."""
         if piece_type not in self._USI_DROP_PIECE_CHARS:
-            raise ValueError(f"Piece type {piece_type} cannot be dropped or is not a recognized droppable piece.")
+            raise ValueError(
+                f"Piece type {piece_type} cannot be dropped or is not a recognized droppable piece."
+            )
         return self._USI_DROP_PIECE_CHARS[piece_type]
 
     def action_idx_to_shogi_move(self, action_idx: int) -> "MoveTuple":
@@ -345,22 +363,36 @@ class PolicyOutputMapper:
         """Converts a Shogi MoveTuple to its USI string representation."""
         if len(move_tuple) == 5 and isinstance(move_tuple[4], bool):  # BoardMoveTuple
             from_r, from_c, to_r, to_c, promote = cast(BoardMoveTuple, move_tuple)
-            if not all(isinstance(coord, int) for coord in [from_r, from_c, to_r, to_c]):
-                raise ValueError("Invalid coordinates in BoardMoveTuple for USI conversion.")
+            if not all(
+                isinstance(coord, int) for coord in [from_r, from_c, to_r, to_c]
+            ):
+                raise ValueError(
+                    "Invalid coordinates in BoardMoveTuple for USI conversion."
+                )
             usi_from_sq = self._usi_sq(from_r, from_c)
             usi_to_sq = self._usi_sq(to_r, to_c)
             promo_char = "+" if promote else ""
             return f"{usi_from_sq}{usi_to_sq}{promo_char}"
-        if len(move_tuple) == 5 and isinstance(move_tuple[4], PieceType):  # DropMoveTuple
-            _none1, _none2, to_r, to_c, piece_type_enum = cast(DropMoveTuple, move_tuple)
+        if len(move_tuple) == 5 and isinstance(
+            move_tuple[4], PieceType
+        ):  # DropMoveTuple
+            _none1, _none2, to_r, to_c, piece_type_enum = cast(
+                DropMoveTuple, move_tuple
+            )
             if not all(isinstance(coord, int) for coord in [to_r, to_c]):
-                raise ValueError("Invalid coordinates in DropMoveTuple for USI conversion.")
+                raise ValueError(
+                    "Invalid coordinates in DropMoveTuple for USI conversion."
+                )
             if not isinstance(piece_type_enum, PieceType):
-                raise ValueError("Invalid piece type in DropMoveTuple for USI conversion.")
+                raise ValueError(
+                    "Invalid piece type in DropMoveTuple for USI conversion."
+                )
             try:
                 piece_usi_char = self._get_usi_char_for_drop(piece_type_enum)
             except ValueError as e:
-                raise ValueError(f"Invalid piece type for drop in USI conversion: {piece_type_enum.name}") from e
+                raise ValueError(
+                    f"Invalid piece type for drop in USI conversion: {piece_type_enum.name}"
+                ) from e
             usi_to_sq = self._usi_sq(to_r, to_c)
             return f"{piece_usi_char}*{usi_to_sq}"
 
@@ -383,7 +415,9 @@ class PolicyOutputMapper:
             c = 9 - file
             r = ord(rank_char) - ord("a")
             if not (0 <= r <= 8 and 0 <= c <= 8):
-                raise ValueError(f"Square coordinates out of bounds: {sq_str} -> ({r}, {c})")
+                raise ValueError(
+                    f"Square coordinates out of bounds: {sq_str} -> ({r}, {c})"
+                )
             return r, c
 
         # Drop move (e.g., P*5e)
@@ -418,7 +452,9 @@ class PolicyOutputMapper:
             if usi_move_str[4] == "+":
                 promote = True
             else:
-                raise ValueError(f"Invalid promotion character in USI move: {usi_move_str}")
+                raise ValueError(
+                    f"Invalid promotion character in USI move: {usi_move_str}"
+                )
 
         from_r, from_c = _parse_usi_sq(from_sq_str)
         to_r, to_c = _parse_usi_sq(to_sq_str)

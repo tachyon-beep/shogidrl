@@ -151,16 +151,22 @@ class StepManager:
                     error_message=error_msg,
                 )
 
-            legal_mask_tensor = self.policy_mapper.get_legal_mask(legal_shogi_moves, device=self.device)
+            legal_mask_tensor = self.policy_mapper.get_legal_mask(
+                legal_shogi_moves, device=self.device
+            )
 
             # Agent action selection
-            selected_shogi_move, policy_index, log_prob, value_pred = self.agent.select_action(
-                episode_state.current_obs, legal_mask_tensor, is_training=True
+            selected_shogi_move, policy_index, log_prob, value_pred = (
+                self.agent.select_action(
+                    episode_state.current_obs, legal_mask_tensor, is_training=True
+                )
             )
 
             # Check if agent failed to select a move
             if selected_shogi_move is None:
-                error_msg = f"Agent failed to select a move at timestep {global_timestep}"
+                error_msg = (
+                    f"Agent failed to select a move at timestep {global_timestep}"
+                )
                 logger_func(
                     f"CRITICAL: {error_msg}. Resetting episode.",
                     True,  # also_to_wandb
@@ -196,8 +202,10 @@ class StepManager:
             if self.config.display.display_moves:
                 try:
                     # Check if it's a board move (not a drop) to get piece from square
-                    if (selected_shogi_move[0] is not None and 
-                        selected_shogi_move[1] is not None):
+                    if (
+                        selected_shogi_move[0] is not None
+                        and selected_shogi_move[1] is not None
+                    ):
                         from_r, from_c = selected_shogi_move[0], selected_shogi_move[1]
                         piece_info_for_demo = self.game.get_piece(from_r, from_c)
                 except (AttributeError, IndexError, ValueError):
@@ -216,7 +224,9 @@ class StepManager:
             # Execute the move in the environment
             moving_player = self.game.current_player
             is_drop = selected_shogi_move[0] is None and selected_shogi_move[1] is None
-            is_promotion = isinstance(selected_shogi_move[4], bool) and selected_shogi_move[4]
+            is_promotion = (
+                isinstance(selected_shogi_move[4], bool) and selected_shogi_move[4]
+            )
             move_result = self.game.make_move(selected_shogi_move)
             if not (isinstance(move_result, tuple) and len(move_result) == 4):
                 raise ValueError(f"Invalid move result: {type(move_result)}")
@@ -359,8 +369,12 @@ class StepManager:
         Returns:
             Tuple[New EpisodeState for the next episode, final_winner_color (str or None)]
         """
-        final_winner_color, reason_from_info = self._determine_winner_and_reason(step_result.info)
-        game_outcome_message = self._format_game_outcome_message(final_winner_color, reason_from_info)
+        final_winner_color, reason_from_info = self._determine_winner_and_reason(
+            step_result.info
+        )
+        game_outcome_message = self._format_game_outcome_message(
+            final_winner_color, reason_from_info
+        )
 
         # Fix B2: Don't modify game_stats in place to avoid double counting
         # Create a temporary copy for win rate calculations only
@@ -373,11 +387,27 @@ class StepManager:
             temp_game_stats["draws"] += 1
 
         # Calculate win rates for logging using the temporary game_stats
-        updated_total_games = temp_game_stats["black_wins"] + temp_game_stats["white_wins"] + temp_game_stats["draws"]
+        updated_total_games = (
+            temp_game_stats["black_wins"]
+            + temp_game_stats["white_wins"]
+            + temp_game_stats["draws"]
+        )
 
-        updated_black_win_rate = temp_game_stats["black_wins"] / updated_total_games if updated_total_games > 0 else 0.0
-        updated_white_win_rate = temp_game_stats["white_wins"] / updated_total_games if updated_total_games > 0 else 0.0
-        updated_draw_rate = temp_game_stats["draws"] / updated_total_games if updated_total_games > 0 else 0.0
+        updated_black_win_rate = (
+            temp_game_stats["black_wins"] / updated_total_games
+            if updated_total_games > 0
+            else 0.0
+        )
+        updated_white_win_rate = (
+            temp_game_stats["white_wins"] / updated_total_games
+            if updated_total_games > 0
+            else 0.0
+        )
+        updated_draw_rate = (
+            temp_game_stats["draws"] / updated_total_games
+            if updated_total_games > 0
+            else 0.0
+        )
 
         # Log episode completion
         logger_func(
@@ -389,9 +419,15 @@ class StepManager:
                 "episode_length": episode_state.episode_length,
                 "game_outcome": final_winner_color,
                 "game_reason": reason_from_info,
-                "black_wins_total": temp_game_stats["black_wins"],  # Use updated totals for logging
-                "white_wins_total": temp_game_stats["white_wins"],  # Use updated totals for logging
-                "draws_total": temp_game_stats["draws"],  # Use updated totals for logging
+                "black_wins_total": temp_game_stats[
+                    "black_wins"
+                ],  # Use updated totals for logging
+                "white_wins_total": temp_game_stats[
+                    "white_wins"
+                ],  # Use updated totals for logging
+                "draws_total": temp_game_stats[
+                    "draws"
+                ],  # Use updated totals for logging
                 "black_win_rate": updated_black_win_rate,  # Corrected key
                 "white_win_rate": updated_white_win_rate,  # Corrected key
                 "draw_rate": updated_draw_rate,  # Corrected key
@@ -478,7 +514,9 @@ class StepManager:
             episode_length=0,
         )
 
-    def update_episode_state(self, episode_state: EpisodeState, step_result: StepResult) -> EpisodeState:
+    def update_episode_state(
+        self, episode_state: EpisodeState, step_result: StepResult
+    ) -> EpisodeState:
         """
         Update episode state with the results of a step.
 
@@ -511,7 +549,11 @@ class StepManager:
 
         try:
             sample_move = legal_shogi_moves[0]
-            if len(sample_move) == 5 and sample_move[0] is not None and sample_move[1] is not None:
+            if (
+                len(sample_move) == 5
+                and sample_move[0] is not None
+                and sample_move[1] is not None
+            ):
                 from_r, from_c = sample_move[0], sample_move[1]
                 return self.game.get_piece(from_r, from_c)
         except (AttributeError, IndexError, ValueError):
@@ -568,7 +610,9 @@ class StepManager:
         if demo_delay > 0:
             time.sleep(demo_delay)
 
-    def _determine_winner_and_reason(self, step_info: Optional[Dict[str, Any]]) -> Tuple[Optional[str], str]:
+    def _determine_winner_and_reason(
+        self, step_info: Optional[Dict[str, Any]]
+    ) -> Tuple[Optional[str], str]:
         """Helper to determine winner and reason from step_info and game state."""
         winner_from_info = None
         reason_from_info = "Unknown"

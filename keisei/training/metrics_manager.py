@@ -94,12 +94,16 @@ class MetricsManager:
         self.stats = TrainingStats()
         self.pending_progress_updates: Dict[str, Any] = {}
         self.history = MetricsHistory(max_history=history_size)
-        self.elo_system = EloRatingSystem(initial_rating=elo_initial_rating, k_factor=elo_k_factor)
+        self.elo_system = EloRatingSystem(
+            initial_rating=elo_initial_rating, k_factor=elo_k_factor
+        )
         # Enhanced metric storage
         self.moves_per_game: Deque[int] = deque(maxlen=history_size)
         self.turns_per_game: Deque[int] = deque(maxlen=history_size)
         self.games_completed_timestamps: Deque[float] = deque(maxlen=history_size)
-        self.win_loss_draw_history: Deque[Tuple[str, float]] = deque(maxlen=history_size)
+        self.win_loss_draw_history: Deque[Tuple[str, float]] = deque(
+            maxlen=history_size
+        )
         self.sente_opening_history: Deque[str] = deque(maxlen=10)
         self.gote_opening_history: Deque[str] = deque(maxlen=10)
         self.square_usage: Counter[str] = Counter()
@@ -179,10 +183,14 @@ class MetricsManager:
         if move_history:
             try:
                 if policy_mapper is not None and len(move_history) >= 1:
-                    first = format_move_with_description(move_history[0], policy_mapper, game=None)
+                    first = format_move_with_description(
+                        move_history[0], policy_mapper, game=None
+                    )
                     self.sente_opening_history.append(first)
                 if policy_mapper is not None and len(move_history) >= 2:
-                    second = format_move_with_description(move_history[1], policy_mapper, game=None)
+                    second = format_move_with_description(
+                        move_history[1], policy_mapper, game=None
+                    )
                     self.gote_opening_history.append(second)
             except Exception:
                 pass
@@ -263,7 +271,9 @@ class MetricsManager:
         if "ppo/learning_rate" in learn_metrics:
             ppo_metrics_parts.append(f"LR:{learn_metrics['ppo/learning_rate']:.2e}")
         if "ppo/kl_divergence_approx" in learn_metrics:
-            ppo_metrics_parts.append(f"KL:{learn_metrics['ppo/kl_divergence_approx']:.4f}")
+            ppo_metrics_parts.append(
+                f"KL:{learn_metrics['ppo/kl_divergence_approx']:.4f}"
+            )
         if "ppo/policy_loss" in learn_metrics:
             ppo_metrics_parts.append(f"PolL:{learn_metrics['ppo/policy_loss']:.4f}")
         if "ppo/value_loss" in learn_metrics:
@@ -339,7 +349,9 @@ class MetricsManager:
             checkpoint_data: Checkpoint dictionary with saved statistics
         """
         self.stats.global_timestep = checkpoint_data.get("global_timestep", 0)
-        self.stats.total_episodes_completed = checkpoint_data.get("total_episodes_completed", 0)
+        self.stats.total_episodes_completed = checkpoint_data.get(
+            "total_episodes_completed", 0
+        )
         self.stats.black_wins = checkpoint_data.get("black_wins", 0)
         self.stats.white_wins = checkpoint_data.get("white_wins", 0)
         self.stats.draws = checkpoint_data.get("draws", 0)

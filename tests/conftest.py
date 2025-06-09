@@ -29,13 +29,17 @@ from keisei.utils import PolicyOutputMapper
 # Default Constants for Tests - Used by PPO Agent Tests
 # =============================================================================
 
+
 class _EnvDefaults:
     """Default environment configuration values for tests."""
+
     seed = 42
     num_actions_total = 13527  # Default from schema
 
+
 class _TrainDefaults:
     """Default training configuration values for tests."""
+
     learning_rate = 1e-3
     gamma = 0.99
     clip_epsilon = 0.2
@@ -46,6 +50,7 @@ class _TrainDefaults:
     se_ratio = 0.25
     gradient_clip_max_norm = 0.5
     lambda_gae = 0.95
+
 
 # Create instances to be imported by test files
 ENV_DEFAULTS = _EnvDefaults()

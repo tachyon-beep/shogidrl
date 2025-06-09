@@ -4,7 +4,7 @@
 -e git+https://github.com/tachyon-beep/shogidrl.git@60aa1cdb0e9e2980f39f13f93c59518dde9a1ca5#egg=keisei
 
 # Core libraries
-numpy==2.2.6
+numpy
 torch==2.7.0
 pydantic==2.11.4
 python-dotenv==1.1.0

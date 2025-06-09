@@ -29,13 +29,13 @@ class DisplayManager:
 
         # Initialize Rich console components with explicit unicode support
         self.rich_console = Console(
-            file=sys.stderr, 
-            record=True, 
+            file=sys.stderr,
+            record=True,
             force_terminal=True,
-            color_system='truecolor',  # Enable full color support
-            emoji=True,               # Enable emoji/unicode support
-            markup=True,              # Enable rich markup
-            legacy_windows=False      # Disable legacy Windows mode that might break Unicode
+            color_system="truecolor",  # Enable full color support
+            emoji=True,  # Enable emoji/unicode support
+            markup=True,  # Enable rich markup
+            legacy_windows=False,  # Disable legacy Windows mode that might break Unicode
         )
         self.rich_log_messages: List[Text] = []
 

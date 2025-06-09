@@ -43,7 +43,7 @@ class HorizontalSeparator:
     def render(self, available_width: int = 50) -> RenderableType:
         """
         Render a horizontal separator line.
-        
+
         Args:
             available_width: The available width for the separator
         """
@@ -76,22 +76,32 @@ class ShogiBoard:
 
         # This handles your non-unicode fallback if you have it
         if not self.use_unicode:
-            return getattr(piece, 'symbol', lambda: '?')()
+            return getattr(piece, "symbol", lambda: "?")()
 
         # --- Definitive Unicode Symbol Lookup ---
         symbols = {
-            "PAWN": "歩", "LANCE": "香", "KNIGHT": "桂", "SILVER": "銀",
-            "GOLD": "金", "BISHOP": "角", "ROOK": "飛", "KING": "王",
-            "PROMOTED_PAWN": "と", "PROMOTED_LANCE": "杏", "PROMOTED_KNIGHT": "圭",
-            "PROMOTED_SILVER": "全", "PROMOTED_BISHOP": "馬", "PROMOTED_ROOK": "龍",
+            "PAWN": "歩",
+            "LANCE": "香",
+            "KNIGHT": "桂",
+            "SILVER": "銀",
+            "GOLD": "金",
+            "BISHOP": "角",
+            "ROOK": "飛",
+            "KING": "王",
+            "PROMOTED_PAWN": "と",
+            "PROMOTED_LANCE": "杏",
+            "PROMOTED_KNIGHT": "圭",
+            "PROMOTED_SILVER": "全",
+            "PROMOTED_BISHOP": "馬",
+            "PROMOTED_ROOK": "龍",
         }
 
         try:
             # 1. Get the piece type name safely.
-            piece_type_name_attr = getattr(piece, 'type', None)
+            piece_type_name_attr = getattr(piece, "type", None)
             if not piece_type_name_attr:
-                return "?" # The object has no 'type' attribute
-            
+                return "?"  # The object has no 'type' attribute
+
             # 2. Make the lookup case-insensitive.
             lookup_key = str(piece_type_name_attr.name).upper()
 
@@ -101,11 +111,12 @@ class ShogiBoard:
         except (AttributeError, IndexError):
             # This is a final catch-all if the piece object is malformed.
             from rich.console import Console
+
             console = Console(stderr=True, style="bold red")
-            console.print(f"[ShogiBoard] Error: Invalid object passed as a piece: {piece}")
+            console.print(
+                f"[ShogiBoard] Error: Invalid object passed as a piece: {piece}"
+            )
             return "!"
-
-
 
     def _colorize(self, symbol: str, piece) -> Text:
         """Apply per-piece colouring and bold styling for heavier appearance."""
@@ -122,13 +133,15 @@ class ShogiBoard:
         """Return the symbol unchanged. Used for consistent symbol formatting."""
         return symbol
 
-    def _create_cell_panel(self, piece, r_idx: int, c_idx: int, hot_squares: Optional[set]) -> Panel:
+    def _create_cell_panel(
+        self, piece, r_idx: int, c_idx: int, hot_squares: Optional[set]
+    ) -> Panel:
         """Creates a single styled Panel for a board square."""
         light_bg_color = "#EEC28A"
         dark_bg_color = "#C19A55"
         light_bg = Style(bgcolor=light_bg_color)
         dark_bg = Style(bgcolor=dark_bg_color)
-        
+
         is_light = (r_idx + c_idx) % 2 == 0
         bg_style = light_bg if is_light else dark_bg
 
@@ -154,10 +167,12 @@ class ShogiBoard:
         sq_name = self._get_shogi_notation(r_idx, board_col)
         if hot_squares and sq_name in hot_squares:
             cell_panel.border_style = "bold dark_red"
-        
+
         return cell_panel
 
-    def _generate_board_grid(self, board_state, hot_squares: Optional[set] = None) -> Table:
+    def _generate_board_grid(
+        self, board_state, hot_squares: Optional[set] = None
+    ) -> Table:
         """Create a 9x9 grid of Panels representing the board."""
         board_grid = Table.grid(expand=False)
         for _ in range(9):
@@ -169,7 +184,7 @@ class ShogiBoard:
                 for c_idx, piece in enumerate(reversed(row))
             ]
             board_grid.add_row(*row_renderables)
-            
+
         return board_grid
 
     def render(
@@ -178,7 +193,9 @@ class ShogiBoard:
         """Returns a final Panel containing the board grid and coordinate labels."""
         if not board_state:
             return Panel(
-                Text("No active game", justify="center"), title="Main Board", border_style="blue"
+                Text("No active game", justify="center"),
+                title="Main Board",
+                border_style="blue",
             )
 
         # 1. Generate the core 9x9 board of panels.
@@ -189,29 +206,41 @@ class ShogiBoard:
         # 2. Create the outer layout to hold the board and coordinates.
         layout_grid = Table.grid(expand=False, padding=0)
         layout_grid.add_column(width=2, justify="center")  # For rank labels (a-i)
-        layout_grid.add_column()                           # For the board itself
+        layout_grid.add_column()  # For the board itself
 
         # 3. Add the top file labels (9 to 1) in their own sub-grid.
-        file_labels = [Text(str(n), justify="center", style="bold") for n in range(9, 0, -1)]
+        file_labels = [
+            Text(str(n), justify="center", style="bold") for n in range(9, 0, -1)
+        ]
         top_label_grid = Table.grid(expand=False)
         for _ in range(9):
             top_label_grid.add_column(width=self.cell_width)
         top_label_grid.add_row(*file_labels)
-        
+
         # Add an empty top-left cell, then the file labels.
         layout_grid.add_row(Text(" "), top_label_grid)
 
         # 4. Create rank labels and combine them with the board grid.
         # This is the corrected logic that fixes the "no attribute 'renderable'" error.
         rank_labels = Group(
-            *(Align.center(Text(chr(ord('a') + i), style="bold"), vertical="middle", height=self.cell_height) for i in range(9))
+            *(
+                Align.center(
+                    Text(chr(ord("a") + i), style="bold"),
+                    vertical="middle",
+                    height=self.cell_height,
+                )
+                for i in range(9)
+            )
         )
         layout_grid.add_row(rank_labels, board_grid)
 
         return Panel(Align.center(layout_grid), title="Main Board", border_style="blue")
 
+
 class RecentMovesPanel:
-    def __init__(self, max_moves: int = 20, newest_on_top: bool = True, flash_ms: int = 0):
+    def __init__(
+        self, max_moves: int = 20, newest_on_top: bool = True, flash_ms: int = 0
+    ):
         self.max_moves = max_moves
         self.newest_on_top = newest_on_top
         self.flash_ms = flash_ms
@@ -239,7 +268,9 @@ class RecentMovesPanel:
         if moves and moves[-1] != self._last_move:
             self._last_move = moves[-1]
             if self.flash_ms > 0:
-                self._flash_deadline = __import__("time").monotonic() + self.flash_ms / 1000
+                self._flash_deadline = (
+                    __import__("time").monotonic() + self.flash_ms / 1000
+                )
 
         # 1. Slice the list to the configured max_moves. No more capacity logic.
         slice_ = moves[-self.max_moves :]
@@ -253,7 +284,9 @@ class RecentMovesPanel:
 
         # 4. Create the panel and let the Layout manager handle sizing.
         title = (
-            f"Recent Moves ({len(moves)} | {ply_per_sec:.1f} ply/s)" if ply_per_sec else f"Recent Moves ({len(moves)})"
+            f"Recent Moves ({len(moves)} | {ply_per_sec:.1f} ply/s)"
+            if ply_per_sec
+            else f"Recent Moves ({len(moves)})"
         )
         return Panel(body, title=title, border_style="yellow", expand=True)
 
@@ -271,7 +304,11 @@ class PieceStandPanel:
             "BISHOP": "角",
             "ROOK": "飛",
         }
-        parts = [f"{symbols.get(getattr(k, 'name', k), '?')}x{v}" for k, v in hand.items() if v > 0]
+        parts = [
+            f"{symbols.get(getattr(k, 'name', k), '?')}x{v}"
+            for k, v in hand.items()
+            if v > 0
+        ]
         return " ".join(parts) or ""
 
     def render(self, game) -> RenderableType:
@@ -279,12 +316,16 @@ class PieceStandPanel:
         if not game:
             return Panel("...", title="Captured Pieces", border_style="yellow")
 
-        sente_hand_str = self._format_hand(getattr(game, "hands", {}).get(Color.BLACK.value, {}))
-        gote_hand_str = self._format_hand(getattr(game, "hands", {}).get(Color.WHITE.value, {}))
+        sente_hand_str = self._format_hand(
+            getattr(game, "hands", {}).get(Color.BLACK.value, {})
+        )
+        gote_hand_str = self._format_hand(
+            getattr(game, "hands", {}).get(Color.WHITE.value, {})
+        )
 
         # Use a simple Table for clean, two-column alignment.
         hand_table = Table.grid(padding=(0, 1))
-        hand_table.add_column(style="bold", justify="right", width=7) # e.g., "Sente: "
+        hand_table.add_column(style="bold", justify="right", width=7)  # e.g., "Sente: "
         hand_table.add_column()
 
         # Add rows for each player, applying color and bold styling to the pieces.
@@ -406,7 +447,11 @@ class GameStatisticsPanel:
             "BISHOP": "角",
             "ROOK": "飛",
         }
-        parts = [f"{symbols.get(getattr(k, 'name', k), '?')}x{v}" for k, v in hand.items() if v > 0]
+        parts = [
+            f"{symbols.get(getattr(k, 'name', k), '?')}x{v}"
+            for k, v in hand.items()
+            if v > 0
+        ]
         return " ".join(parts) or ""
 
     def _format_opening_name(self, move_str: str) -> str:
@@ -484,8 +529,12 @@ class GameStatisticsPanel:
         # --- Get Session Stats (now pre-formatted) ---
         sente_openings = metrics_manager.sente_opening_history
         gote_openings = metrics_manager.gote_opening_history
-        fav_sente_opening_raw = Counter(sente_openings).most_common(1)[0][0] if sente_openings else "N/A"
-        fav_gote_opening_raw = Counter(gote_openings).most_common(1)[0][0] if gote_openings else "N/A"
+        fav_sente_opening_raw = (
+            Counter(sente_openings).most_common(1)[0][0] if sente_openings else "N/A"
+        )
+        fav_gote_opening_raw = (
+            Counter(gote_openings).most_common(1)[0][0] if gote_openings else "N/A"
+        )
 
         # Use the new helper to format the names before displaying them
         fav_sente_opening_formatted = self._format_opening_name(fav_sente_opening_raw)

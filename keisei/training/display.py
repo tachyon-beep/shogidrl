@@ -73,7 +73,9 @@ class TrainingDisplay:
                 width=self.display_config.sparkline_width,
                 metrics=["Moves", "Turns"],
             )
-            self.completion_rate_calc = RollingAverageCalculator(window_size=self.display_config.metrics_window_size)
+            self.completion_rate_calc = RollingAverageCalculator(
+                window_size=self.display_config.metrics_window_size
+            )
         if self.display_config.enable_elo_ratings:
             self.elo_component_enabled = True
 
@@ -88,7 +90,9 @@ class TrainingDisplay:
         self.previous_model_stats: Optional[Dict[str, Dict[str, float]]] = None
         self.config_panel_rendered: bool = False
 
-    def _create_compact_layout(self, log_panel: Panel, progress_bar: Progress) -> Layout:
+    def _create_compact_layout(
+        self, log_panel: Panel, progress_bar: Progress
+    ) -> Layout:
         layout = Layout(name="root")
         layout.split_column(
             Layout(name="main_log", ratio=1),
@@ -98,12 +102,16 @@ class TrainingDisplay:
         layout["progress_display"].update(progress_bar)
         return layout
 
-    def _create_enhanced_layout(self, log_panel: Panel, progress_bar: Progress) -> Layout:
+    def _create_enhanced_layout(
+        self, log_panel: Panel, progress_bar: Progress
+    ) -> Layout:
         layout = Layout(name="root")
         layout.split_column(
             Layout(name="main_log", ratio=1),
             Layout(name="dashboard", ratio=self.display_config.dashboard_height_ratio),
-            Layout(name="progress_display", size=self.display_config.progress_bar_height),
+            Layout(
+                name="progress_display", size=self.display_config.progress_bar_height
+            ),
         )
 
         # --- Correct three-column layout with fixed board height ---
@@ -114,9 +122,9 @@ class TrainingDisplay:
         )
 
         layout["left_column"].split_column(
-            Layout(name="board_panel", ratio=3),           # Give the board the most space
-            Layout(name="komadai_panel", size=4),         # The piece stand needs 4 lines total
-            Layout(name="moves_panel", size=8),           # Fixed size for recent moves panel
+            Layout(name="board_panel", ratio=3),  # Give the board the most space
+            Layout(name="komadai_panel", size=4),  # The piece stand needs 4 lines total
+            Layout(name="moves_panel", size=8),  # Fixed size for recent moves panel
         )
 
         layout["middle_column"].split_column(
@@ -153,7 +161,9 @@ class TrainingDisplay:
             TimeElapsedColumn(),
             TextColumn("•"),
             TimeRemainingColumn(),
-            TextColumn("• Steps: {task.completed}/{task.total} ({task.fields[speed]:.1f} it/s)"),
+            TextColumn(
+                "• Steps: {task.completed}/{task.total} ({task.fields[speed]:.1f} it/s)"
+            ),
             TextColumn("• {task.fields[ep_metrics]}", style="bright_cyan"),
             TextColumn("• {task.fields[ppo_metrics]}", style="bright_yellow"),
             TextColumn(
@@ -254,11 +264,17 @@ class TrainingDisplay:
 
         for name, history_key in metrics_to_display:
             if history_key == "win_rates_black":
-                data_list = [d.get("win_rate_black", 0.0) for d in history.win_rates_history]
+                data_list = [
+                    d.get("win_rate_black", 0.0) for d in history.win_rates_history
+                ]
             elif history_key == "win_rates_white":
-                data_list = [d.get("win_rate_white", 0.0) for d in history.win_rates_history]
+                data_list = [
+                    d.get("win_rate_white", 0.0) for d in history.win_rates_history
+                ]
             elif history_key == "draw_rates":
-                data_list = [d.get("win_rate_draw", 0.0) for d in history.win_rates_history]
+                data_list = [
+                    d.get("win_rate_draw", 0.0) for d in history.win_rates_history
+                ]
             else:
                 data_list = getattr(history, history_key, [])
 
@@ -267,7 +283,11 @@ class TrainingDisplay:
             avg_slice = data_list[-5:]
             avg_val = sum(avg_slice) / len(avg_slice) if avg_slice else None
 
-            spark = trend.generate(data_list[-SPARKLINE_WIDTH:]) if data_list else " " * SPARKLINE_WIDTH
+            spark = (
+                trend.generate(data_list[-SPARKLINE_WIDTH:])
+                if data_list
+                else " " * SPARKLINE_WIDTH
+            )
 
             table.add_row(
                 name,
@@ -304,9 +324,13 @@ class TrainingDisplay:
         if self.board_component:
             try:
                 hot_sq = trainer.metrics_manager.get_hot_squares(top_n=3)
-                board_panel = self.board_component.render(trainer.game, highlight_squares=hot_sq)
+                board_panel = self.board_component.render(
+                    trainer.game, highlight_squares=hot_sq
+                )
                 if isinstance(board_panel, Panel):
-                    board_panel.border_style = "red"  # Override border style for debugging
+                    board_panel.border_style = (
+                        "red"  # Override border style for debugging
+                    )
                 self.layout["board_panel"].update(board_panel)
             except (AttributeError, KeyError, TypeError, ValueError) as e:
                 self.rich_console.log(f"[bold red]Error rendering board: {e}[/]")
@@ -321,13 +345,17 @@ class TrainingDisplay:
                 self.layout["komadai_panel"].update(komadai_panel)
             except (AttributeError, KeyError, TypeError) as e:
                 self.rich_console.log(f"[bold red]Error rendering piece stand: {e}[/]")
-                self.layout["komadai_panel"].update(Panel("Error", border_style="green"))
+                self.layout["komadai_panel"].update(
+                    Panel("Error", border_style="green")
+                )
 
         # 3. Moves Panel (Blue Border)
         # In refresh_dashboard_panels()
         if self.moves_component:
             try:
-                move_strings = trainer.step_manager.move_log if trainer.step_manager else None
+                move_strings = (
+                    trainer.step_manager.move_log if trainer.step_manager else None
+                )
                 pps = getattr(trainer, "last_ply_per_sec", 0.0)
                 # The render method no longer needs available_height
                 moves_panel = self.moves_component.render(move_strings, ply_per_sec=pps)
@@ -370,7 +398,9 @@ class TrainingDisplay:
             if getattr(trainer.metrics_manager, "processing", False):
                 group_items.append(Text("PROCESSING", style="bold red"))
 
-            self.layout["trends_panel"].update(Panel(Group(*group_items), border_style="cyan", title="Metric Trends"))
+            self.layout["trends_panel"].update(
+                Panel(Group(*group_items), border_style="cyan", title="Metric Trends")
+            )
 
             # TODO: the panel should exist; asserting inside try for safety
             try:
@@ -380,7 +410,11 @@ class TrainingDisplay:
                     Panel,
                     self.game_stats_component.render(
                         trainer.game,
-                        (trainer.step_manager.move_log if trainer.step_manager else None),
+                        (
+                            trainer.step_manager.move_log
+                            if trainer.step_manager
+                            else None
+                        ),
                         trainer.metrics_manager,
                         getattr(trainer.step_manager, "sente_best_capture", None),
                         getattr(trainer.step_manager, "gote_best_capture", None),
@@ -407,7 +441,9 @@ class TrainingDisplay:
                 ValueError,
                 AssertionError,
             ) as e:
-                self.layout["stats_panel"].update(Panel(f"Error: {e}", title="Game Statistics"))
+                self.layout["stats_panel"].update(
+                    Panel(f"Error: {e}", title="Game Statistics")
+                )
 
         if not self.config_panel_rendered:
             try:
@@ -433,7 +469,9 @@ class TrainingDisplay:
                 )
                 self.config_panel_rendered = True
             except (AttributeError, KeyError, TypeError) as e:
-                self.layout["config_panel"].update(Panel(f"Error loading config:\n{e}", title="Configuration"))
+                self.layout["config_panel"].update(
+                    Panel(f"Error loading config:\n{e}", title="Configuration")
+                )
 
         model = getattr(trainer.agent, "model", None)
         if model is not None:
@@ -443,7 +481,8 @@ class TrainingDisplay:
             # --- 1. Calculate current statistics ---
             for name, p in named_params.items():
                 if ".weight" in name and any(
-                    keyword in name for keyword in self.display_config.log_layer_keyword_filters
+                    keyword in name
+                    for keyword in self.display_config.log_layer_keyword_filters
                 ):
                     data = p.data.float().cpu().numpy()
                     current_stats[name] = {
@@ -519,12 +558,16 @@ class TrainingDisplay:
                 # Fallback to a simple table version if config is unavailable
                 fallback_table = Table.grid(expand=True, padding=(0, 1))
                 fallback_table.add_column(justify="center")
-                fallback_table.add_row(Text("[Input] -> [Core] -> [Policy/Value Heads]", style="bold"))
+                fallback_table.add_row(
+                    Text("[Input] -> [Core] -> [Policy/Value Heads]", style="bold")
+                )
                 arch_diagram = fallback_table
 
             # Group the architecture diagram and the new stats table
             panel_content = Group(arch_diagram, stats_table)
-            self.layout["evolution_panel"].update(Panel(panel_content, border_style="magenta", title="Model Evolution"))
+            self.layout["evolution_panel"].update(
+                Panel(panel_content, border_style="magenta", title="Model Evolution")
+            )
 
             # --- 4. Store a deep copy for the next update (The Bug Fix) ---
             self.previous_model_stats = copy.deepcopy(current_stats)
@@ -539,7 +582,9 @@ class TrainingDisplay:
                     "Waiting for initial model evaluations...",
                     style="yellow",
                 )
-            self.layout["elo_panel"].update(Panel(content, border_style="yellow", title="Elo Ratings"))
+            self.layout["elo_panel"].update(
+                Panel(content, border_style="yellow", title="Elo Ratings")
+            )
 
     def start(self):
         return Live(

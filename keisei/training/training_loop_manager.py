@@ -84,9 +84,13 @@ class TrainingLoopManager:
         log_both = self.trainer.log_both
         if not log_both:
             # This should be set by Trainer.run_training_loop before calling this
-            raise RuntimeError("Trainer's log_both callback is not set before running TrainingLoopManager.")
+            raise RuntimeError(
+                "Trainer's log_both callback is not set before running TrainingLoopManager."
+            )
         if self.episode_state is None:
-            raise RuntimeError("Initial episode state not set in TrainingLoopManager before run.")
+            raise RuntimeError(
+                "Initial episode state not set in TrainingLoopManager before run."
+            )
 
         self.last_time_for_sps = time.time()
         self.steps_since_last_time_for_sps = 0
@@ -95,11 +99,17 @@ class TrainingLoopManager:
         # Start parallel workers if parallel training is enabled
         if self.parallel_manager and self.config.parallel.enabled:
             if self.trainer.agent and self.trainer.agent.model:
-                log_both(f"Starting {self.config.parallel.num_workers} parallel workers...")
-                if self.parallel_manager.start_workers(cast(nn.Module, self.trainer.agent.model)):
+                log_both(
+                    f"Starting {self.config.parallel.num_workers} parallel workers..."
+                )
+                if self.parallel_manager.start_workers(
+                    cast(nn.Module, self.trainer.agent.model)
+                ):
                     log_both("Parallel workers started successfully")
                 else:
-                    log_both("Failed to start parallel workers, falling back to sequential training")
+                    log_both(
+                        "Failed to start parallel workers, falling back to sequential training"
+                    )
                     self.parallel_manager = None
             else:
                 log_both("Cannot start parallel workers: model not available")
@@ -119,7 +129,9 @@ class TrainingLoopManager:
 
                 if self.episode_state and self.episode_state.current_obs is not None:
                     self.trainer.metrics_manager.set_processing(True)
-                    self.trainer.perform_ppo_update(self.episode_state.current_obs, log_both)
+                    self.trainer.perform_ppo_update(
+                        self.episode_state.current_obs, log_both
+                    )
                     self.trainer.metrics_manager.set_processing(False)
                 else:
                     log_both(
@@ -179,7 +191,9 @@ class TrainingLoopManager:
         collection_attempts = 0
         max_collection_attempts = 50  # Prevent infinite loops
 
-        log_both(f"Starting parallel experience collection for epoch {self.current_epoch}")
+        log_both(
+            f"Starting parallel experience collection for epoch {self.current_epoch}"
+        )
 
         while (
             num_steps_collected < self.config.training.steps_per_epoch
@@ -197,16 +211,22 @@ class TrainingLoopManager:
                     cast(nn.Module, self.agent.model), self.trainer.global_timestep
                 )
             ):
-                log_both(f"Model synchronized with workers at step {self.trainer.global_timestep}")
+                log_both(
+                    f"Model synchronized with workers at step {self.trainer.global_timestep}"
+                )
 
             # Collect experiences from workers
             try:
                 if self.buffer:
-                    experiences_collected = self.parallel_manager.collect_experiences(self.buffer)
+                    experiences_collected = self.parallel_manager.collect_experiences(
+                        self.buffer
+                    )
 
                     if experiences_collected > 0:
                         num_steps_collected += experiences_collected
-                        self.trainer.metrics_manager.increment_timestep_by(experiences_collected)
+                        self.trainer.metrics_manager.increment_timestep_by(
+                            experiences_collected
+                        )
                         # Fix B11: Update SPS calculation counter for parallel mode
                         self.steps_since_last_time_for_sps += experiences_collected
 
@@ -278,7 +298,9 @@ class TrainingLoopManager:
         if self.step_manager is None:
             raise RuntimeError(STEP_MANAGER_NOT_AVAILABLE_MSG)
 
-        updated_episode_state = self.step_manager.update_episode_state(episode_state, step_result)
+        updated_episode_state = self.step_manager.update_episode_state(
+            episode_state, step_result
+        )
 
         if step_result.done:
             current_cumulative_stats = {
@@ -287,12 +309,14 @@ class TrainingLoopManager:
                 "draws": self.trainer.metrics_manager.draws,
             }
 
-            new_episode_state_after_end, episode_winner_color = self.step_manager.handle_episode_end(
-                updated_episode_state,
-                step_result,
-                current_cumulative_stats,
-                self.trainer.metrics_manager.total_episodes_completed,
-                log_both,
+            new_episode_state_after_end, episode_winner_color = (
+                self.step_manager.handle_episode_end(
+                    updated_episode_state,
+                    step_result,
+                    current_cumulative_stats,
+                    self.trainer.metrics_manager.total_episodes_completed,
+                    log_both,
+                )
             )
 
             winner_color_enum = (
@@ -343,7 +367,9 @@ class TrainingLoopManager:
             self.episode_state = self.step_manager.reset_episode()
             return True  # Continue epoch
 
-        self.episode_state = self._handle_successful_step(self.episode_state, step_result, log_both)
+        self.episode_state = self._handle_successful_step(
+            self.episode_state, step_result, log_both
+        )
 
         self.trainer.metrics_manager.increment_timestep()
         self.steps_since_last_time_for_sps += 1
@@ -360,7 +386,11 @@ class TrainingLoopManager:
             turns_count,
             result,
             ep_rew,
-            (self.trainer.step_manager.move_history if self.trainer.step_manager else None),
+            (
+                self.trainer.step_manager.move_history
+                if self.trainer.step_manager
+                else None
+            ),
             self.trainer.policy_output_mapper,
         )
 
@@ -369,9 +399,19 @@ class TrainingLoopManager:
             + self.trainer.metrics_manager.white_wins
             + self.trainer.metrics_manager.draws
         )
-        bw_rate = self.trainer.metrics_manager.black_wins / total_games if total_games > 0 else 0.0
-        ww_rate = self.trainer.metrics_manager.white_wins / total_games if total_games > 0 else 0.0
-        d_rate = self.trainer.metrics_manager.draws / total_games if total_games > 0 else 0.0
+        bw_rate = (
+            self.trainer.metrics_manager.black_wins / total_games
+            if total_games > 0
+            else 0.0
+        )
+        ww_rate = (
+            self.trainer.metrics_manager.white_wins / total_games
+            if total_games > 0
+            else 0.0
+        )
+        d_rate = (
+            self.trainer.metrics_manager.draws / total_games if total_games > 0 else 0.0
+        )
 
         self.trainer.metrics_manager.pending_progress_updates.update(
             {
@@ -394,20 +434,32 @@ class TrainingLoopManager:
             extra_updates: Optional dictionary of additional updates to include
         """
         current_time = time.time()
-        display_update_interval = getattr(self.config.training, "rich_display_update_interval_seconds", 0.2)
+        display_update_interval = getattr(
+            self.config.training, "rich_display_update_interval_seconds", 0.2
+        )
 
         if (current_time - self.last_display_update_time) > display_update_interval:
             time_delta_sps = current_time - self.last_time_for_sps
-            current_speed = self.steps_since_last_time_for_sps / time_delta_sps if time_delta_sps > 0 else 0.0
+            current_speed = (
+                self.steps_since_last_time_for_sps / time_delta_sps
+                if time_delta_sps > 0
+                else 0.0
+            )
 
-            self.trainer.metrics_manager.pending_progress_updates.setdefault("current_epoch", self.current_epoch)
+            self.trainer.metrics_manager.pending_progress_updates.setdefault(
+                "current_epoch", self.current_epoch
+            )
 
             # Add any extra updates provided
             if extra_updates:
                 for key, value in extra_updates.items():
-                    self.trainer.metrics_manager.pending_progress_updates.setdefault(key, value)
+                    self.trainer.metrics_manager.pending_progress_updates.setdefault(
+                        key, value
+                    )
 
-            if hasattr(self.display, "update_progress") and callable(self.display.update_progress):
+            if hasattr(self.display, "update_progress") and callable(
+                self.display.update_progress
+            ):
                 self.display.update_progress(
                     self.trainer,
                     current_speed,
@@ -422,7 +474,9 @@ class TrainingLoopManager:
     def _handle_display_updates(self):
         """Handles periodic display updates based on time and step intervals."""
         if self.trainer.global_timestep % self.config.training.render_every_steps == 0:
-            if hasattr(self.display, "refresh_dashboard_panels") and callable(self.display.refresh_dashboard_panels):
+            if hasattr(self.display, "refresh_dashboard_panels") and callable(
+                self.display.refresh_dashboard_panels
+            ):
                 self.display.refresh_dashboard_panels(self.trainer)
 
         self._update_display_if_needed()
