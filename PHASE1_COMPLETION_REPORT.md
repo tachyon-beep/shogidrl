@@ -564,6 +564,8 @@ Once Phase 4 is complete, the project will proceed with **Phase 5: Testing, Docu
     - Added tests for `LadderEvaluator` opponent pool setup and `BenchmarkEvaluator` config validation.
 - [x] **EvaluationManager Test**
     - Added test ensuring `EvaluationManager.evaluate_checkpoint` invokes the configured evaluator.
+- [x] **Import Cleanup**
+    - Updated `keisei.__init__` to avoid importing legacy evaluation code by default, preventing heavy `torch` dependencies during simple imports.
 - [ ] **Integration Tests and Performance Benchmarks** *(pending)*
 
 Phase 5 work continues with additional integration tests and documentation updates.

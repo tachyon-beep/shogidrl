@@ -8,7 +8,10 @@ This package contains:
 - Training utilities
 """
 
-from .evaluation.evaluate import execute_full_evaluation_run
+# Import the new evaluation manager. Legacy evaluation entrypoints are
+# available via ``keisei.evaluation.evaluate`` but are not imported here to
+# avoid heavy dependencies (e.g. ``torch``) when the top-level package is
+# imported during lightweight operations such as running unit tests.
 from .evaluation.manager import EvaluationManager
 
 # Re-export the main components for easy access
@@ -22,7 +25,6 @@ __all__ = [
     "Piece",
     "MoveTuple",
     "ShogiGame",
-    "execute_full_evaluation_run",
     "EvaluationManager",
     # Let the other modules be imported explicitly
 ]
