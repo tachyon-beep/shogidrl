@@ -382,3 +382,24 @@ class EvaluationResult:
             instance.elo_tracker = EloTracker(initial_ratings=data["elo_snapshot"])
 
         return instance
+
+
+def create_game_result(
+    game_id: str,
+    winner: Optional[int],
+    moves_count: int,
+    duration_seconds: float,
+    agent_info: "AgentInfo",
+    opponent_info: "OpponentInfo",
+    metadata: Optional[Dict[str, Any]] = None,
+) -> GameResult:
+    """Convenience helper to build a GameResult."""
+    return GameResult(
+        game_id=game_id,
+        winner=winner,
+        moves_count=moves_count,
+        duration_seconds=duration_seconds,
+        agent_info=agent_info,
+        opponent_info=opponent_info,
+        metadata=metadata or {},
+    )

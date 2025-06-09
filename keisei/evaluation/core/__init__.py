@@ -26,7 +26,6 @@ from .evaluation_result import (
     EvaluationResult,
     GameResult,
     SummaryStats,
-    aggregate_results,
     create_game_result,
 )
 
@@ -54,5 +53,4 @@ __all__ = [
     "GameResult",
     "SummaryStats",
     "create_game_result",
-    "aggregate_results",
 ]

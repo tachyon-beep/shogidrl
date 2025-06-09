@@ -482,6 +482,10 @@ With Phase 3 complete, the project is ready to proceed with **Phase 4: Full Impl
 - [ ] **Testing**:
     - [~] Add comprehensive unit tests for each new evaluator. (TournamentEvaluator in progress)
     - [ ] Add integration tests to verify the interaction of evaluators with core components and analytics.
+- [x] **Trainer Integration**:
+    - [x] Integrate new evaluators with the `Trainer` class and `EvaluationCallback` via an `EvaluationManager`.
+- [x] **Legacy Compatibility Layer**:
+    - [x] Implement wrapper functions so legacy `execute_full_evaluation_run` calls map to the new system.
 
 ---
 
@@ -521,6 +525,9 @@ With Phase 3 complete, the project is ready to proceed with **Phase 4: Full Impl
     - Confirmed correct passing to `load_evaluation_agent` and `initialize_opponent`.
     - Confirmed correct usage of `get_legal_mask` in action selection.
     - No further refinements deemed necessary at this stage.
+- **Training & Compatibility Integration**:
+    - Integrated `EvaluationManager` into `Trainer` and `EvaluationCallback`.
+    - Added compatibility wrappers so legacy evaluation imports continue to work.
 
 ---
 

@@ -9,6 +9,7 @@ This package contains:
 """
 
 from .evaluation.evaluate import execute_full_evaluation_run
+from .evaluation.manager import EvaluationManager
 
 # Re-export the main components for easy access
 from .shogi.shogi_core_definitions import Color, MoveTuple, Piece, PieceType
@@ -22,5 +23,6 @@ __all__ = [
     "MoveTuple",
     "ShogiGame",
     "execute_full_evaluation_run",
+    "EvaluationManager",
     # Let the other modules be imported explicitly
 ]

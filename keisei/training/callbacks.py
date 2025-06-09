@@ -131,45 +131,21 @@ class EvaluationCallback(Callback):
                 )
 
             current_model.eval()  # Set the agent's model to eval mode
-            if trainer.execute_full_evaluation_run is not None:
-                eval_results = trainer.execute_full_evaluation_run(
-                    agent_checkpoint_path=eval_ckpt_path,
-                    opponent_type="ppo",
-                    opponent_checkpoint_path=str(opponent_ckpt),
-                    num_games=getattr(self.eval_cfg, "num_games", 20),
-                    max_moves_per_game=getattr(
-                        self.eval_cfg,
-                        "max_moves_per_game",
-                        trainer.config.env.max_moves_per_game,
+            eval_results = trainer.evaluation_manager.evaluate_checkpoint(
+                eval_ckpt_path,
+                opponent_checkpoint=str(opponent_ckpt) if opponent_ckpt else None,
+            )
+            current_model.train()  # Set model back to train mode
+            if trainer.log_both is not None:
+                trainer.log_both(
+                    f"Periodic evaluation finished. Results: {eval_results}",
+                    also_to_wandb=True,
+                    wandb_data=(
+                        dict(eval_results)
+                        if isinstance(eval_results, dict)
+                        else {"eval_summary": str(eval_results)}
                     ),
-                    device_str=trainer.config.env.device,
-                    log_file_path_eval=getattr(self.eval_cfg, "log_file_path_eval", ""),
-                    policy_mapper=trainer.policy_output_mapper,
-                    seed=trainer.config.env.seed,
-                    wandb_log_eval=getattr(self.eval_cfg, "wandb_log_eval", False),
-                    wandb_project_eval=getattr(
-                        self.eval_cfg, "wandb_project_eval", None
-                    ),
-                    wandb_entity_eval=getattr(self.eval_cfg, "wandb_entity_eval", None),
-                    wandb_run_name_eval=f"periodic_eval_{trainer.run_name}_ts{trainer.global_timestep+1}",
-                    wandb_group=trainer.run_name,
-                    wandb_reinit=True,
-                    logger_also_stdout=False,
-                    elo_registry_path=getattr(self.eval_cfg, "elo_registry_path", None),
-                    agent_id=os.path.basename(eval_ckpt_path),
-                    opponent_id=os.path.basename(str(opponent_ckpt)),
                 )
-                current_model.train()  # Set model back to train mode
-                if trainer.log_both is not None:
-                    trainer.log_both(
-                        f"Periodic evaluation finished. Results: {eval_results}",
-                        also_to_wandb=True,
-                        wandb_data=(
-                            dict(eval_results)
-                            if isinstance(eval_results, dict)
-                            else {"eval_summary": str(eval_results)}
-                        ),
-                    )
 
                 if getattr(self.eval_cfg, "elo_registry_path", None):
                     try:
@@ -210,5 +186,4 @@ class EvaluationCallback(Callback):
                                 also_to_wandb=True,
                             )
                         trainer.evaluation_elo_snapshot = None
-            else:  # if execute_full_evaluation_run is None
-                current_model.train()  # Ensure model is set back to train mode
+            # EvaluationManager always handles model mode switching; nothing else to do

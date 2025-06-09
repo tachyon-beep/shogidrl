@@ -13,6 +13,8 @@ from keisei.core.actor_critic_protocol import ActorCriticProtocol
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.ppo_agent import PPOAgent
 from keisei.evaluation.evaluate import execute_full_evaluation_run
+from keisei.evaluation.manager import EvaluationManager
+from keisei.evaluation.core import from_legacy_config
 from keisei.utils import TrainingLogger
 
 from .callback_manager import CallbackManager
@@ -96,12 +98,26 @@ class Trainer(CompatibilityMixin):
         self.previous_model_selector = PreviousModelSelector(
             pool_size=config.evaluation.previous_model_pool_size
         )
+        legacy_eval_cfg = config.evaluation.model_dump()
+        new_eval_cfg = from_legacy_config(legacy_eval_cfg)
+        self.evaluation_manager = EvaluationManager(
+            new_eval_cfg,
+            self.run_name,
+        )
         self.evaluation_elo_snapshot: Optional[Dict[str, Any]] = None
         self.callback_manager = CallbackManager(config, self.model_dir)
         self.setup_manager = SetupManager(config, self.device)
 
         # Setup components using SetupManager
         self._initialize_components()
+
+        # Configure evaluation manager with runtime components
+        self.evaluation_manager.setup(
+            device=config.env.device,
+            policy_mapper=self.policy_output_mapper,
+            model_dir=self.model_dir,
+            wandb_active=self.is_train_wandb_active,
+        )
 
         # Setup display and callbacks
         self.display = self.display_manager.setup_display(self)
