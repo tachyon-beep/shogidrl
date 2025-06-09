@@ -84,6 +84,8 @@
         "display_moves": false,
         "turn_tick": 0.0,
         "board_unicode_pieces": true,
+        "board_cell_width": 5,
+        "board_cell_height": 3,
         "board_highlight_last_move": true,
         "sparkline_width": 15,
         "trend_history_length": 100,
@@ -102,6 +104,11 @@
         "metrics_window_size": 100,
         "trend_smoothing_factor": 0.1,
         "metrics_panel_height": 6,
-        "enable_trendlines": true
+        "enable_trendlines": true,
+        "log_layer_keyword_filters": [
+            "stem",
+            "policy_head",
+            "value_head"
+        ]
     }
 }

@@ -778,6 +778,7 @@ def test_checkmate_minimal(
     game.current_player = Color.WHITE
 
     game.set_piece(8, 4, Piece(PieceType.KING, Color.BLACK))
+    game.set_piece(0, 0, Piece(PieceType.KING, Color.WHITE))  # Add WHITE king
     game.set_piece(6, 4, Piece(PieceType.GOLD, Color.WHITE))
     game.set_piece(7, 3, Piece(PieceType.GOLD, Color.WHITE))
     game.set_piece(7, 5, Piece(PieceType.GOLD, Color.WHITE))

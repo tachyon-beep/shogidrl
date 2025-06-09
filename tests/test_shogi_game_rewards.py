@@ -237,21 +237,21 @@ def test_make_move_returns_perspective_specific_reward():
     # Set up so Black will be checkmated after they move
     game.set_piece(0, 4, Piece(PieceType.KING, Color.BLACK))
     game.set_piece(
-        0, 5, Piece(PieceType.ROOK, Color.WHITE)
-    )  # White rook ready to checkmate
+        2, 5, Piece(PieceType.ROOK, Color.WHITE)
+    )  # White rook positioned to checkmate after BLACK moves
     game.set_piece(8, 4, Piece(PieceType.KING, Color.WHITE))
     game.set_piece(
         6, 0, Piece(PieceType.PAWN, Color.BLACK)
-    )  # Black must move this pawn
+    )  # Black pawn that can move
 
-    # Set black to move - they must move the pawn which will result in checkmate
+    # Set black to move - they can move the pawn
     game.current_player = Color.BLACK
 
     # Black makes their move
     _move_outcome = game.make_move((6, 0, 5, 0, False))  # Prefixed unused variable
 
     # Now White can checkmate
-    game.make_move((0, 5, 0, 4, False))
+    game.make_move((2, 5, 0, 5, False))  # Rook moves to give checkmate
 
     # Manually set the game state to simulate checkmate
     game.game_over = True
