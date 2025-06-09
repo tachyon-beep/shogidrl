@@ -57,8 +57,10 @@ class CheckpointCallback(Callback):
                         f"Checkpoint saved via ModelManager to {ckpt_save_path}",
                         also_to_wandb=True,
                     )
-                    if hasattr(trainer, "previous_model_selector"):
-                        trainer.previous_model_selector.add_checkpoint(ckpt_save_path)
+                    if hasattr(trainer, "evaluation_manager"):
+                        trainer.evaluation_manager.opponent_pool.add_checkpoint(
+                            ckpt_save_path
+                        )
             else:
                 if trainer.log_both:
                     trainer.log_both(
@@ -102,13 +104,10 @@ class EvaluationCallback(Callback):
                     )
                 return
 
-            eval_ckpt_path = os.path.join(
-                trainer.model_dir, f"eval_checkpoint_ts{trainer.global_timestep+1}.pth"
-            )
 
             opponent_ckpt = None
-            if hasattr(trainer, "previous_model_selector"):
-                opponent_ckpt = trainer.previous_model_selector.get_random_checkpoint()
+            if hasattr(trainer, "evaluation_manager"):
+                opponent_ckpt = trainer.evaluation_manager.opponent_pool.sample()
             if opponent_ckpt is None:
                 if trainer.log_both:
                     trainer.log_both(
@@ -117,13 +116,6 @@ class EvaluationCallback(Callback):
                     )
                 return
 
-            # Save the current agent state for evaluation
-            trainer.agent.save_model(
-                eval_ckpt_path,
-                trainer.global_timestep + 1,
-                trainer.total_episodes_completed,
-            )
-
             if trainer.log_both is not None:
                 trainer.log_both(
                     f"Starting periodic evaluation at timestep {trainer.global_timestep + 1}...",
@@ -131,9 +123,8 @@ class EvaluationCallback(Callback):
                 )
 
             current_model.eval()  # Set the agent's model to eval mode
-            eval_results = trainer.evaluation_manager.evaluate_checkpoint(
-                eval_ckpt_path,
-                opponent_checkpoint=str(opponent_ckpt) if opponent_ckpt else None,
+            eval_results = trainer.evaluation_manager.evaluate_current_agent(
+                trainer.agent
             )
             current_model.train()  # Set model back to train mode
             if trainer.log_both is not None:
@@ -151,10 +142,8 @@ class EvaluationCallback(Callback):
                     try:
                         registry = EloRegistry(Path(self.eval_cfg.elo_registry_path))
                         snapshot = {
-                            "current_id": os.path.basename(eval_ckpt_path),
-                            "current_rating": registry.get_rating(
-                                os.path.basename(eval_ckpt_path)
-                            ),
+                            "current_id": trainer.run_name,
+                            "current_rating": registry.get_rating(trainer.run_name),
                             "opponent_id": os.path.basename(str(opponent_ckpt)),
                             "opponent_rating": registry.get_rating(
                                 os.path.basename(str(opponent_ckpt))

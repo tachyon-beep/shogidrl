@@ -23,7 +23,6 @@ from .display_manager import DisplayManager
 from .env_manager import EnvManager
 from .metrics_manager import MetricsManager
 from .model_manager import ModelManager
-from .previous_model_selector import PreviousModelSelector
 from .session_manager import SessionManager
 from .setup_manager import SetupManager
 from .step_manager import EpisodeState, StepManager
@@ -95,14 +94,13 @@ class Trainer(CompatibilityMixin):
             elo_initial_rating=config.display.elo_initial_rating,
             elo_k_factor=config.display.elo_k_factor,
         )
-        self.previous_model_selector = PreviousModelSelector(
-            pool_size=config.evaluation.previous_model_pool_size
-        )
         legacy_eval_cfg = config.evaluation.model_dump()
         new_eval_cfg = from_legacy_config(legacy_eval_cfg)
         self.evaluation_manager = EvaluationManager(
             new_eval_cfg,
             self.run_name,
+            pool_size=config.evaluation.previous_model_pool_size,
+            elo_registry_path=config.evaluation.elo_registry_path,
         )
         self.evaluation_elo_snapshot: Optional[Dict[str, Any]] = None
         self.callback_manager = CallbackManager(config, self.model_dir)

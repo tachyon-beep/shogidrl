@@ -5,17 +5,9 @@ This module contains the original evaluation files moved here during the refacto
 to maintain backward compatibility while the new system is being developed.
 """
 
-# Legacy components - maintain imports for backward compatibility
-try:
+# Import only EloRegistry here to avoid heavy dependencies during testing
+try:  # pragma: no cover - optional import
     from .elo_registry import EloRegistry
-    from .evaluate import Evaluator
-    from .loop import run_evaluation_loop
-
-    __all__ = [
-        "Evaluator",
-        "run_evaluation_loop",
-        "EloRegistry",
-    ]
-except ImportError:
-    # Files may not be present yet during migration
+    __all__ = ["EloRegistry"]
+except Exception:  # noqa: BLE001 - graceful fallback if file missing
     __all__ = []

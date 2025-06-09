@@ -5,8 +5,7 @@ from keisei.config_schema import AppConfig
 from keisei.evaluation.elo_registry import EloRegistry
 from keisei.training.callbacks import EvaluationCallback
 from keisei.training.metrics_manager import MetricsManager
-from keisei.training.previous_model_selector import PreviousModelSelector
-from keisei.training.trainer import Trainer
+from keisei.evaluation.opponents import OpponentPool
 from keisei.utils import PolicyOutputMapper
 from tests.evaluation.conftest import make_test_config
 
@@ -31,22 +30,25 @@ class DummyTrainer:
         self.global_timestep = 0
         self.total_episodes_completed = 0
         self.agent = DummyAgent()
-        self.execute_full_evaluation_run = self.fake_eval
         self.metrics_manager = MetricsManager()
-        self.previous_model_selector = PreviousModelSelector(pool_size=2)
+        self.evaluation_manager = MagicMock()
+        self.evaluation_manager.opponent_pool = OpponentPool(
+            pool_size=2, elo_registry_path=self.config.evaluation.elo_registry_path
+        )
+        self.evaluation_manager.evaluate_current_agent = self.fake_eval_current
         self.evaluation_elo_snapshot = None
         self.log_both = lambda *a, **kw: None
         # Add one previous checkpoint
         ck = Path(tmp_path / "old.pth")
         ck.write_text("a")
-        self.previous_model_selector.add_checkpoint(ck)
+        self.evaluation_manager.opponent_pool.add_checkpoint(ck)
 
-    def fake_eval(self, **kwargs):
-        # Simulate one win for the agent
+    def fake_eval_current(self, agent, opponent_checkpoint: str | None = None):
+        """Simulate evaluation and update Elo ratings."""
         registry = EloRegistry(Path(self.config.evaluation.elo_registry_path))
-        registry.update_ratings(
-            kwargs["agent_id"], kwargs["opponent_id"], ["agent_win"]
-        )
+        agent_id = self.run_name
+        opponent_id = Path(opponent_checkpoint).name if opponent_checkpoint else "opponent"
+        registry.update_ratings(agent_id, opponent_id, ["agent_win"])
         registry.save()
         return {"win_rate": 1.0, "loss_rate": 0.0}
 
@@ -59,3 +61,4 @@ def test_evaluation_callback_updates_elo(tmp_path):
     assert trainer.evaluation_elo_snapshot is not None
     assert trainer.evaluation_elo_snapshot["current_rating"] != 1500.0
     assert len(reg.ratings) == 2
+

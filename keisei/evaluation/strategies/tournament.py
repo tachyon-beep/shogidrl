@@ -69,16 +69,23 @@ class TournamentEvaluator(BaseEvaluator):
         input_channels: int,
     ) -> Any:
         """Helper to load an agent or opponent for a game."""
-        if isinstance(entity_info, AgentInfo) or (
-            isinstance(entity_info, OpponentInfo) and entity_info.type == "ppo_agent"
-        ):
+        if isinstance(entity_info, AgentInfo):
+            if "agent_instance" in entity_info.metadata:
+                return entity_info.metadata["agent_instance"]
             return load_evaluation_agent(
                 checkpoint_path=entity_info.checkpoint_path or "",
                 device_str=device_str,
                 policy_mapper=self.policy_mapper,
                 input_channels=input_channels,
             )
-        elif isinstance(entity_info, OpponentInfo):
+        if isinstance(entity_info, OpponentInfo) and entity_info.type == "ppo_agent":
+            return load_evaluation_agent(
+                checkpoint_path=entity_info.checkpoint_path or "",
+                device_str=device_str,
+                policy_mapper=self.policy_mapper,
+                input_channels=input_channels,
+            )
+        if isinstance(entity_info, OpponentInfo):
             return initialize_opponent(
                 opponent_type=entity_info.type,
                 opponent_path=entity_info.checkpoint_path,

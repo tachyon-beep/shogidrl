@@ -62,9 +62,16 @@ class SingleOpponentEvaluator(BaseEvaluator):
         input_channels: int,
     ) -> Any:  # Added return type hint
         """Helper to load an agent or opponent."""
-        if isinstance(entity_info, AgentInfo) or (
-            isinstance(entity_info, OpponentInfo) and entity_info.type == "ppo_agent"
-        ):
+        if isinstance(entity_info, AgentInfo):
+            if "agent_instance" in entity_info.metadata:
+                return entity_info.metadata["agent_instance"]
+            return load_evaluation_agent(
+                checkpoint_path=entity_info.checkpoint_path or "",
+                device_str=device_str,
+                policy_mapper=self.policy_mapper,
+                input_channels=input_channels,
+            )
+        if isinstance(entity_info, OpponentInfo) and entity_info.type == "ppo_agent":
             return load_evaluation_agent(
                 checkpoint_path=entity_info.checkpoint_path or "",
                 device_str=device_str,
