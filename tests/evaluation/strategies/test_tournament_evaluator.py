@@ -33,28 +33,7 @@ from keisei.shogi.shogi_game import ShogiGame
 from keisei.utils import PolicyOutputMapper
 
 
-# Helper to run async tests
-def async_test(coro):
-    def wrapper(*args, **kwargs):
-        loop = asyncio.get_event_loop()
-        try:
-            # Ensure the loop is not closed if it's a pre-existing one from pytest-asyncio
-            if loop.is_closed():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-            return loop.run_until_complete(coro(*args, **kwargs))
-        except RuntimeError as e:
-            if "cannot schedule new futures after shutdown" in str(
-                e
-            ) or "Event loop is closed" in str(
-                e
-            ):  # Handle closed loop
-                new_loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(new_loop)
-                return new_loop.run_until_complete(coro(*args, **kwargs))
-            raise
-
-    return wrapper
+# Note: Using @pytest.mark.asyncio for async tests instead of custom wrapper
 
 
 @pytest.fixture
@@ -127,7 +106,7 @@ class TestTournamentEvaluator:
         ), "Logger should be initialized by BaseEvaluator"
         assert isinstance(evaluator.policy_mapper, PolicyOutputMapper)
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_load_tournament_opponents_empty_config(
         self, mock_tournament_config, mock_evaluation_context
     ):
@@ -141,7 +120,7 @@ class TestTournamentEvaluator:
             assert opponents == []
             mock_logger.warning.assert_called_once()
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_load_tournament_opponents_valid_config(
         self, mock_tournament_config, mock_evaluation_context
     ):
@@ -166,7 +145,7 @@ class TestTournamentEvaluator:
             assert opponents[1].checkpoint_path == "/path/opp2.ptk"
             assert opponents[1].metadata == {}
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_load_tournament_opponents_already_opponent_info(
         self, mock_tournament_config, mock_evaluation_context
     ):
@@ -184,7 +163,7 @@ class TestTournamentEvaluator:
             assert opponents[1].name == "Opp2"
             assert opponents[1].type == "random"
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_load_tournament_opponents_malformed_entry(
         self, mock_tournament_config, mock_evaluation_context
     ):
@@ -205,7 +184,7 @@ class TestTournamentEvaluator:
                 1,
             )
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_load_tournament_opponents_error_in_processing_entry(
         self, mock_tournament_config, mock_evaluation_context
     ):
@@ -287,7 +266,7 @@ class TestTournamentEvaluator:
         with patch.object(BaseEvaluator, "validate_config", return_value=False):
             assert evaluator.validate_config() is False
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_evaluate_no_opponents(
         self, mock_tournament_config, mock_agent_info, mock_evaluation_context
     ):
@@ -313,7 +292,7 @@ class TestTournamentEvaluator:
             evaluator.log_evaluation_start.assert_called_once()
             evaluator.log_evaluation_complete.assert_called_once()
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_calculate_tournament_standings_no_games(
         self, mock_tournament_config, mock_agent_info
     ):
@@ -330,7 +309,7 @@ class TestTournamentEvaluator:
         assert standings["per_opponent_results"]["Opp1"]["played"] == 0
         assert standings["per_opponent_results"]["Opp2"]["played"] == 0
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_calculate_tournament_standings_with_games(
         self, mock_tournament_config, mock_agent_info
     ):
@@ -401,7 +380,7 @@ class TestTournamentEvaluator:
             0.0
         )
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_play_games_against_opponent(
         self,
         mock_tournament_config,
@@ -458,7 +437,7 @@ class TestTournamentEvaluator:
 
         assert mock_from_dict.call_count == num_games_to_play
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_play_games_against_opponent_eval_step_error(
         self,
         mock_tournament_config,
@@ -489,7 +468,7 @@ class TestTournamentEvaluator:
         assert "Error during game orchestration" in errors[0]
         assert "Simulated game error" in errors[0]
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_evaluate_step_successful_game_agent_sente(
         self,
         mock_tournament_config,
@@ -537,7 +516,7 @@ class TestTournamentEvaluator:
             mock_agent_entity, mock_opponent_entity, mock_evaluation_context
         )
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_evaluate_step_successful_game_agent_gote(
         self,
         mock_tournament_config,
@@ -576,7 +555,7 @@ class TestTournamentEvaluator:
             mock_opponent_entity, mock_agent_entity, mock_evaluation_context
         )
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_evaluate_step_game_loop_error(
         self,
         mock_tournament_config,
@@ -606,7 +585,7 @@ class TestTournamentEvaluator:
         )
         assert "Loop error!" in result.metadata["termination_reason"]
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_evaluate_step_load_entity_error(
         self,
         mock_tournament_config,
@@ -636,7 +615,7 @@ class TestTournamentEvaluator:
         assert "Load failed!" in result.metadata["termination_reason"]
         evaluator._game_run_game_loop.assert_not_called()
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_evaluate_full_run_calculates_num_games_per_opponent_dynamically(
         self, mock_tournament_config, mock_agent_info, mock_evaluation_context
     ):
@@ -677,7 +656,7 @@ class TestTournamentEvaluator:
         )
         assert evaluator._play_games_against_opponent.call_count == 2
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_evaluate_full_run_with_opponents_and_games(
         self,
         mock_tournament_config,
@@ -766,7 +745,7 @@ class TestTournamentEvaluator:
 
     # --- Tests for Game Playing Helper Methods ---
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_game_load_evaluation_entity_agent(
         self, mock_tournament_config, mock_agent_info, mock_evaluation_context
     ):
@@ -789,7 +768,7 @@ class TestTournamentEvaluator:
                 input_channels=46,
             )
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_game_load_evaluation_entity_opponent_ppo(
         self, mock_tournament_config, mock_evaluation_context
     ):
@@ -816,7 +795,7 @@ class TestTournamentEvaluator:
                 input_channels=46,
             )
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_game_load_evaluation_entity_opponent_other(
         self, mock_tournament_config, mock_evaluation_context
     ):
@@ -844,7 +823,7 @@ class TestTournamentEvaluator:
                 input_channels=46,
             )
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_game_load_evaluation_entity_unknown_type(
         self, mock_tournament_config, mock_evaluation_context
     ):
@@ -854,7 +833,7 @@ class TestTournamentEvaluator:
         with pytest.raises(ValueError, match="Unknown entity type for loading"):
             await evaluator._game_load_evaluation_entity(mock_unknown_info, "cpu", 46)
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_game_get_player_action_ppo_agent(self, mock_tournament_config):
         evaluator = TournamentEvaluator(mock_tournament_config)
         mock_player_entity = MagicMock()
@@ -874,7 +853,7 @@ class TestTournamentEvaluator:
             "observation_data", mock_legal_mask, is_training=False
         )
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_game_get_player_action_heuristic_opponent(
         self, mock_tournament_config
     ):
@@ -893,7 +872,7 @@ class TestTournamentEvaluator:
         assert action == "heuristic_move"
         mock_player_entity.select_move.assert_called_once_with(mock_game)
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_game_get_player_action_unsupported_entity(
         self, mock_tournament_config
     ):
@@ -909,7 +888,7 @@ class TestTournamentEvaluator:
                 mock_player_entity, mock_game, mock_legal_mask
             )
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_game_validate_and_make_move_valid(self, mock_tournament_config):
         evaluator = TournamentEvaluator(mock_tournament_config)
         mock_game = MagicMock(spec=ShogiGame)
@@ -927,7 +906,7 @@ class TestTournamentEvaluator:
         mock_game.make_move.assert_called_once_with(valid_move)
         assert mock_game.game_over is False
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_game_validate_and_make_move_none_move(self, mock_tournament_config):
         evaluator = TournamentEvaluator(mock_tournament_config)
         mock_game = MagicMock(spec=ShogiGame)
@@ -942,7 +921,7 @@ class TestTournamentEvaluator:
         assert mock_game.winner == Color(1)
         assert mock_game.termination_reason == TERMINATION_REASON_ILLEGAL_MOVE
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_game_validate_and_make_move_illegal_move(
         self, mock_tournament_config
     ):
@@ -962,7 +941,7 @@ class TestTournamentEvaluator:
         assert mock_game.winner == Color(0)
         assert mock_game.termination_reason == TERMINATION_REASON_ILLEGAL_MOVE
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_game_validate_and_make_move_execution_error(
         self, mock_tournament_config
     ):
@@ -988,7 +967,7 @@ class TestTournamentEvaluator:
             == f"{TERMINATION_REASON_MOVE_EXECUTION_ERROR}: ShogiGame internal error"
         )
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_handle_no_legal_moves_shogigame_sets_winner(
         self, mock_tournament_config
     ):
@@ -1004,7 +983,7 @@ class TestTournamentEvaluator:
         assert mock_game.winner == Color(1)
         assert mock_game.termination_reason == "Checkmate"
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_handle_no_legal_moves_shogigame_no_winner_set(
         self, mock_tournament_config
     ):
@@ -1027,7 +1006,7 @@ class TestTournamentEvaluator:
         )
         mock_logger.warning.assert_called_once()
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_game_process_one_turn_successful(
         self, mock_tournament_config, mock_evaluation_context
     ):
@@ -1061,7 +1040,7 @@ class TestTournamentEvaluator:
             mock_game, "7g7f", ["7g7f"], 0, type(mock_player_entity).__name__
         )
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_game_process_one_turn_no_legal_moves(
         self, mock_tournament_config, mock_evaluation_context
     ):
@@ -1079,7 +1058,7 @@ class TestTournamentEvaluator:
         assert result is False
         evaluator._handle_no_legal_moves.assert_called_once_with(mock_game)
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_game_process_one_turn_action_selection_error(
         self, mock_tournament_config, mock_evaluation_context
     ):
@@ -1110,7 +1089,7 @@ class TestTournamentEvaluator:
             == f"{TERMINATION_REASON_ACTION_SELECTION_ERROR}: Action selection failed"
         )
 
-    @async_test
+    @pytest.mark.asyncio
     async def test_game_process_one_turn_invalid_move(
         self, mock_tournament_config, mock_evaluation_context
     ):

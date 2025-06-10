@@ -73,7 +73,7 @@ class EvaluationManager:
         # Many evaluators are async; run in asyncio event loop
         return asyncio.run(evaluator.evaluate(agent_info, context))
 
-    async def evaluate_current_agent(self, agent) -> EvaluationResult:
+    def evaluate_current_agent(self, agent) -> EvaluationResult:
         """Evaluate an in-memory PPOAgent instance."""
 
         # Ensure the agent has the expected attributes
@@ -98,14 +98,41 @@ class EvaluationManager:
         )
 
         evaluator = EvaluatorFactory.create(self.config)
-        # Don't use asyncio.run when already in an async context
-        try:
-            # Try to get the current event loop
-            loop = asyncio.get_running_loop()
-            result = await evaluator.evaluate(agent_info, context)
-        except RuntimeError:
-            # No event loop running, safe to use asyncio.run
-            result = asyncio.run(evaluator.evaluate(agent_info, context))
+        # Use asyncio.run to handle async evaluator
+        result = asyncio.run(evaluator.evaluate(agent_info, context))
+
+        # Restore training mode after evaluation
+        if hasattr(model, "train"):
+            model.train()
+
+        return result
+
+    async def evaluate_current_agent_async(self, agent) -> EvaluationResult:
+        """Async version of evaluate_current_agent for use in async contexts."""
+
+        # Ensure the agent has the expected attributes
+        model = getattr(agent, "model", None)
+        if model is None:
+            raise ValueError("Agent must have a 'model' attribute for evaluation")
+
+        # Switch to eval mode for duration of evaluation
+        if hasattr(model, "eval"):
+            model.eval()
+
+        agent_info = AgentInfo(
+            name=getattr(agent, "name", "current_agent"),
+            metadata={"agent_instance": agent},
+        )
+        context = EvaluationContext(
+            session_id=str(uuid4()),
+            timestamp=datetime.now(),
+            agent_info=agent_info,
+            configuration=self.config,
+            environment_info={"device": self.device},
+        )
+
+        evaluator = EvaluatorFactory.create(self.config)
+        result = await evaluator.evaluate(agent_info, context)
 
         # Restore training mode after evaluation
         if hasattr(model, "train"):
@@ -120,7 +147,7 @@ class EvaluationManager:
     ) -> EvaluationResult:
         """Evaluate agent using in-memory weights without file I/O."""
         if not self.enable_in_memory_eval:
-            return await self.evaluate_current_agent(agent)  # Fallback to file-based
+            return self.evaluate_current_agent(agent)  # Fallback to file-based
 
         try:
             # Extract current agent weights
@@ -179,7 +206,7 @@ class EvaluationManager:
         except (ValueError, FileNotFoundError, RuntimeError) as e:
             # Fallback to file-based evaluation on error
             print(f"In-memory evaluation failed, falling back to file-based: {e}")
-            return await self.evaluate_current_agent(agent)
+            return self.evaluate_current_agent(agent)
 
     async def _run_in_memory_evaluation(
         self,

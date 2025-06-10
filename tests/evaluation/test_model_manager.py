@@ -223,14 +223,70 @@ class TestModelWeightManager:
             finally:
                 tmp_path.unlink()
 
-    @patch('keisei.evaluation.core.model_manager.PPOAgent')
-    def test_create_agent_from_weights_placeholder(self, mock_ppo_agent_class):
-        """Test create_agent_from_weights method (placeholder implementation)."""
-        # This is a basic test since the full implementation requires proper agent construction
-        weights = {'weight': torch.randn(5, 5)}
-        mock_config = Mock()
+    def test_create_agent_from_weights_success(self):
+        """Test create_agent_from_weights method successful agent creation."""
+        # Create realistic model weights that match ActorCritic architecture
+        # Based on the actual ActorCritic structure: conv, policy_head, value_head
+        # Use a smaller action space (4096) that will be inferred from weights
+        weights = {
+            'conv.weight': torch.randn(16, 46, 3, 3),  # Conv2d layer
+            'conv.bias': torch.randn(16),
+            'policy_head.weight': torch.randn(4096, 1296),  # Linear layer: 16*9*9 = 1296 inputs, 4096 actions
+            'policy_head.bias': torch.randn(4096),
+            'value_head.weight': torch.randn(1, 1296),  # Linear layer: 16*9*9 = 1296 inputs
+            'value_head.bias': torch.randn(1),
+        }
         
-        # The current implementation will likely fail since it's not fully implemented
-        # This test serves as a placeholder for when the method is properly implemented
-        with pytest.raises((ValueError, RuntimeError)):
-            self.manager.create_agent_from_weights(weights, mock_ppo_agent_class, mock_config)
+        # Test agent creation
+        agent = self.manager.create_agent_from_weights(weights)
+        
+        # Verify agent was created successfully
+        assert agent is not None
+        assert hasattr(agent, 'model')
+        assert hasattr(agent, 'device')
+        assert agent.name == "WeightReconstructedAgent"
+        
+        # Verify model is in eval mode
+        assert not agent.model.training
+        
+        # Verify some weights were loaded (check a few key parameters)
+        model_state = agent.model.state_dict()
+        assert 'conv.weight' in model_state
+        # Verify the loaded weights match (at least for conv layer)
+        assert torch.allclose(model_state['conv.weight'], weights['conv.weight'], atol=1e-6)
+
+    def test_create_agent_from_weights_infer_channels(self):
+        """Test that input channels are correctly inferred from weights."""
+        # Test with different input channel sizes  
+        test_cases = [
+            (40, 'conv.weight'),  # Regular conv layer
+            (50, 'conv.weight'),  # Different input channels
+        ]
+        
+        for input_channels, weight_name in test_cases:
+            weights = {
+                weight_name: torch.randn(16, input_channels, 3, 3),
+                'conv.bias': torch.randn(16),  # Add missing bias
+                'policy_head.weight': torch.randn(4096, 1296),
+                'policy_head.bias': torch.randn(4096),
+                'value_head.weight': torch.randn(1, 1296),
+                'value_head.bias': torch.randn(1),
+            }
+            
+            agent = self.manager.create_agent_from_weights(weights)
+            # The agent should be created successfully with inferred channels
+            assert agent is not None
+
+    def test_create_agent_from_weights_invalid_weights(self):
+        """Test create_agent_from_weights with invalid weights."""
+        # Test with empty weights
+        with pytest.raises(RuntimeError):
+            self.manager.create_agent_from_weights({})
+        
+        # Test with incompatible weights (wrong shape)
+        invalid_weights = {
+            'conv.weight': torch.randn(1, 1),  # Wrong shape for conv layer
+            'invalid_layer': torch.randn(10, 10),
+        }
+        with pytest.raises(RuntimeError):
+            self.manager.create_agent_from_weights(invalid_weights)

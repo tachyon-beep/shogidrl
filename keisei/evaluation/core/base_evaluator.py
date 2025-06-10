@@ -40,12 +40,13 @@ class BaseEvaluator(ABC):
         """
         self.config = config
         self.context: Optional[EvaluationContext] = None
+        self.logger = logging.getLogger(self.__class__.__name__)
         self._setup_logging()
 
     def _setup_logging(self):
         """Configure logging for this evaluator."""
         level = getattr(logging, self.config.log_level.upper())
-        logger.setLevel(level)
+        self.logger.setLevel(level)
 
     @abstractmethod
     async def evaluate(

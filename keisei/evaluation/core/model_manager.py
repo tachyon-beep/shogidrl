@@ -53,7 +53,7 @@ class ModelWeightManager:
         for name, param in agent.model.state_dict().items():
             weights[name] = param.clone().detach().cpu()
 
-        logger.debug(f"Extracted {len(weights)} weight tensors from agent")
+        logger.debug("Extracted %d weight tensors from agent", len(weights))
         return weights
 
     def cache_opponent_weights(self, opponent_id: str, checkpoint_path: Path) -> Dict[str, torch.Tensor]:
@@ -76,14 +76,14 @@ class ModelWeightManager:
             # Move to end for LRU
             self._cache_order.remove(opponent_id)
             self._cache_order.append(opponent_id)
-            logger.debug(f"Using cached weights for opponent {opponent_id}")
+            logger.debug("Using cached weights for opponent %s", opponent_id)
             return self._weight_cache[opponent_id]
 
         # Evict oldest if cache is full
         while len(self._weight_cache) >= self.max_cache_size:
             oldest_id = self._cache_order.pop(0)
             del self._weight_cache[oldest_id]
-            logger.debug(f"Evicted cached weights for opponent {oldest_id}")
+            logger.debug("Evicted cached weights for opponent %s", oldest_id)
 
         # Load checkpoint
         try:
@@ -112,11 +112,11 @@ class ModelWeightManager:
             self._weight_cache[opponent_id] = cpu_weights
             self._cache_order.append(opponent_id)
             
-            logger.debug(f"Cached weights for opponent {opponent_id} ({len(cpu_weights)} tensors)")
+            logger.debug("Cached weights for opponent %s (%d tensors)", opponent_id, len(cpu_weights))
             return cpu_weights
 
         except Exception as e:
-            logger.error(f"Failed to load weights from {checkpoint_path}: {e}")
+            logger.error("Failed to load weights from %s: %s", checkpoint_path, e)
             raise RuntimeError(f"Checkpoint loading failed: {e}") from e
 
     def create_agent_from_weights(
@@ -142,16 +142,79 @@ class ModelWeightManager:
             ValueError: If required parameters are missing
             RuntimeError: If agent creation fails
         """
-        # This is a placeholder implementation - full implementation requires:
-        # 1. Proper model reconstruction from weights
-        # 2. Agent-specific configuration handling
-        # 3. Model architecture compatibility checks
+        try:
+            # Import required modules for agent creation
+            from keisei.config_schema import (
+                AppConfig, DemoConfig, EnvConfig, EvaluationConfig,
+                LoggingConfig, ParallelConfig, TrainingConfig, WandBConfig
+            )
+            from keisei.core.neural_network import ActorCritic
+
+            # Determine device
+            target_device = torch.device(device or self.device)
+            
+            # Infer model architecture from weights
+            input_channels = self._infer_input_channels_from_weights(weights)
+            total_actions = self._infer_total_actions_from_weights(weights)
+            
+            # Create minimal config if not provided
+            if config is None:
+                config = self._create_minimal_config(input_channels, total_actions, target_device)
+            
+            # Create ActorCritic model with inferred architecture
+            model = ActorCritic(input_channels, total_actions).to(target_device)
+            
+            # Create agent with model using dependency injection
+            agent = agent_class(
+                model=model,
+                config=config,
+                device=target_device,
+                name="WeightReconstructedAgent"
+            )
+            
+            # Load weights into model
+            # Ensure weights are on correct device
+            device_weights = {}
+            for tensor_name, tensor in weights.items():
+                if isinstance(tensor, torch.Tensor):
+                    device_weights[tensor_name] = tensor.to(target_device)
+                else:
+                    device_weights[tensor_name] = tensor
+            
+            agent.model.load_state_dict(device_weights, strict=True)
+            agent.model.eval()  # Set to evaluation mode
+            
+            logger.debug("Successfully created agent from %d weight tensors", len(weights))
+            return agent
+            
+        except Exception as e:
+            logger.error("Failed to create agent from weights: %s", e)
+            raise RuntimeError(f"Agent creation from weights failed: {e}") from e
+
+    def _infer_total_actions_from_weights(self, weights: Dict[str, torch.Tensor]) -> int:
+        """
+        Infer the total number of actions from model weights.
         
-        raise RuntimeError(
-            "create_agent_from_weights is not yet fully implemented. "
-            "This method requires proper model reconstruction from state dictionaries, "
-            "which needs coordination with the actual agent and model architecture."
-        )
+        Args:
+            weights: Dictionary of model weights
+            
+        Returns:
+            Total number of actions
+        """
+        # Look for policy head layer to infer number of actions
+        policy_layer_names = ['policy_head.weight', 'actor_head.weight', 'policy.weight']
+        
+        for layer_name in policy_layer_names:
+            if layer_name in weights and isinstance(weights[layer_name], torch.Tensor):
+                tensor = weights[layer_name]
+                if len(tensor.shape) == 2:  # Linear layer weight shape: [out_features, in_features]
+                    return tensor.shape[0]
+        
+        # Fallback to default action space from PolicyOutputMapper
+        from keisei.utils import PolicyOutputMapper
+        policy_mapper = PolicyOutputMapper()
+        logger.warning("Could not infer total actions from weights, using PolicyOutputMapper default")
+        return policy_mapper.get_total_actions()
 
     def get_cache_stats(self) -> Dict[str, Any]:
         """
@@ -174,7 +237,7 @@ class ModelWeightManager:
         self._cache_order.clear()
         logger.debug("Cleared weight cache")
 
-    def get_memory_usage(self) -> Dict[str, float]:
+    def get_memory_usage(self) -> Dict[str, Any]:
         """
         Get estimated memory usage of cached weights.
 
@@ -186,7 +249,7 @@ class ModelWeightManager:
 
         for opponent_id, weights in self._weight_cache.items():
             opponent_size = 0
-            for name, tensor in weights.items():
+            for _, tensor in weights.items():
                 if isinstance(tensor, torch.Tensor):
                     opponent_size += tensor.numel() * tensor.element_size()
             
@@ -197,3 +260,131 @@ class ModelWeightManager:
             'total_mb': total_size / (1024 * 1024),
             'by_opponent_mb': sizes_by_opponent
         }
+
+    def _infer_input_channels_from_weights(self, weights: Dict[str, torch.Tensor]) -> int:
+        """
+        Infer the number of input channels from model weights.
+        
+        Args:
+            weights: Dictionary of model weights
+            
+        Returns:
+            Number of input channels
+            
+        Raises:
+            ValueError: If input channels cannot be inferred
+        """
+        # Look for common first layer names to infer input channels
+        first_layer_names = ['conv.weight', 'stem.weight', 'conv1.weight']
+        
+        for layer_name in first_layer_names:
+            if layer_name in weights and isinstance(weights[layer_name], torch.Tensor):
+                tensor = weights[layer_name]
+                if len(tensor.shape) == 4:  # Conv2d weight shape: [out_channels, in_channels, kernel_h, kernel_w]
+                    return tensor.shape[1]
+                
+        # Fallback: look for any conv layer that might be the first layer
+        for name, tensor in weights.items():
+            if 'conv' in name and 'weight' in name and isinstance(tensor, torch.Tensor):
+                if len(tensor.shape) == 4:  # Conv2d weight
+                    return tensor.shape[1]
+        
+        # Default fallback
+        logger.warning("Could not infer input channels from weights, using default 46")
+        return 46
+
+    def _create_minimal_config(self, input_channels: int, total_actions: int, device: torch.device) -> Any:
+        """
+        Create a minimal AppConfig for agent initialization.
+        
+        Args:
+            input_channels: Number of input channels
+            total_actions: Total number of actions
+            device: Target device
+            
+        Returns:
+            Minimal AppConfig instance
+        """
+        from keisei.config_schema import (
+            AppConfig, DemoConfig, EnvConfig, EvaluationConfig,
+            LoggingConfig, ParallelConfig, TrainingConfig, WandBConfig
+        )
+        
+        return AppConfig(
+            parallel=ParallelConfig(
+                enabled=False,
+                num_workers=1,
+                batch_size=32,
+                sync_interval=100,
+                compression_enabled=True,
+                timeout_seconds=10.0,
+                max_queue_size=1000,
+                worker_seed_offset=1000,
+            ),
+            env=EnvConfig(
+                device=str(device),
+                input_channels=input_channels,
+                num_actions_total=total_actions,
+                seed=42,
+                max_moves_per_game=500,
+            ),
+            training=TrainingConfig(
+                total_timesteps=1,
+                steps_per_epoch=1,
+                ppo_epochs=1,
+                minibatch_size=1,
+                learning_rate=1e-4,
+                gamma=0.99,
+                clip_epsilon=0.2,
+                value_loss_coeff=0.5,
+                entropy_coef=0.01,
+                input_features="core46",
+                render_every_steps=1,
+                refresh_per_second=4,
+                enable_spinner=True,
+                tower_depth=9,
+                tower_width=256,
+                se_ratio=0.25,
+                model_type="resnet",
+                mixed_precision=False,
+                ddp=False,
+                gradient_clip_max_norm=0.5,
+                lambda_gae=0.95,
+                checkpoint_interval_timesteps=10000,
+                evaluation_interval_timesteps=50000,
+                weight_decay=0.0,
+                normalize_advantages=True,
+                lr_schedule_type=None,
+                lr_schedule_kwargs=None,
+                lr_schedule_step_on="epoch",
+            ),
+            evaluation=EvaluationConfig(
+                num_games=1,
+                opponent_type="random",
+                evaluation_interval_timesteps=50000,
+                enable_periodic_evaluation=False,
+                max_moves_per_game=500,
+                log_file_path_eval="/tmp/eval.log",
+                wandb_log_eval=False,
+                elo_registry_path=None,
+                agent_id=None,
+                opponent_id=None,
+                previous_model_pool_size=5,
+            ),
+            logging=LoggingConfig(
+                log_file="/tmp/eval.log", 
+                model_dir="/tmp/", 
+                run_name="eval-run"
+            ),
+            wandb=WandBConfig(
+                enabled=False,
+                project="eval",
+                entity=None,
+                run_name_prefix="eval-run",
+                watch_model=False,
+                watch_log_freq=1000,
+                watch_log_type="all",
+                log_model_artifact=False,
+            ),
+            demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.0),
+        )

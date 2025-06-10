@@ -470,46 +470,82 @@ class SingleOpponentEvaluator(BaseEvaluator):
     ) -> Any:
         """Helper to load an agent or opponent from in-memory weights."""
         if isinstance(entity_info, AgentInfo):
-            # For agent, use in-memory weights if available
-            if "agent_instance" in entity_info.metadata:
-                return entity_info.metadata["agent_instance"]
-            elif self.agent_weights is not None:
-                # TODO: Create agent from weights
-                # This would require proper agent instantiation from weights
-                # For now, fallback to regular loading
-                pass
-            
+            return await self._load_agent_in_memory(entity_info, device_str, input_channels)
+        elif isinstance(entity_info, OpponentInfo):
+            return await self._load_opponent_in_memory(entity_info, device_str, input_channels)
+        
+        raise ValueError(f"Unknown entity type for loading: {type(entity_info)}")
+
+    async def _load_agent_in_memory(
+        self,
+        agent_info: AgentInfo,
+        device_str: str,
+        input_channels: int,
+    ) -> Any:
+        """Load agent using in-memory weights if available."""
+        # Check for direct agent instance
+        if "agent_instance" in agent_info.metadata:
+            return agent_info.metadata["agent_instance"]
+        
+        # Try to create from in-memory weights
+        if self.agent_weights is not None:
+            try:
+                from ..core.model_manager import ModelWeightManager
+                manager = ModelWeightManager(device=device_str)
+                agent = manager.create_agent_from_weights(
+                    weights=self.agent_weights,
+                    device=device_str
+                )
+                logger.debug("Successfully created agent from in-memory weights")
+                return agent
+            except Exception as e:
+                logger.warning("Failed to create agent from in-memory weights: %s", e)
+        
+        # Fallback to regular loading
+        return load_evaluation_agent(
+            checkpoint_path=agent_info.checkpoint_path or "",
+            device_str=device_str,
+            policy_mapper=self.policy_mapper,
+            input_channels=input_channels,
+        )
+
+    async def _load_opponent_in_memory(
+        self,
+        opponent_info: OpponentInfo,
+        device_str: str,
+        input_channels: int,
+    ) -> Any:
+        """Load opponent using in-memory weights if available."""
+        # Try to create PPO opponent from in-memory weights
+        if opponent_info.type == "ppo_agent" and self.opponent_weights is not None:
+            try:
+                from ..core.model_manager import ModelWeightManager
+                manager = ModelWeightManager(device=device_str)
+                opponent = manager.create_agent_from_weights(
+                    weights=self.opponent_weights,
+                    device=device_str
+                )
+                logger.debug("Successfully created opponent from in-memory weights")
+                return opponent
+            except Exception as e:
+                logger.warning("Failed to create opponent from in-memory weights: %s", e)
+        
+        # Fallback to regular loading
+        if opponent_info.type == "ppo_agent":
             return load_evaluation_agent(
-                checkpoint_path=entity_info.checkpoint_path or "",
+                checkpoint_path=opponent_info.checkpoint_path or "",
                 device_str=device_str,
                 policy_mapper=self.policy_mapper,
                 input_channels=input_channels,
             )
-        elif isinstance(entity_info, OpponentInfo):
-            # For opponent, use in-memory weights if available
-            if entity_info.type == "ppo_agent" and self.opponent_weights is not None:
-                # TODO: Create opponent agent from weights
-                # This would require proper agent instantiation from weights
-                # For now, fallback to regular loading
-                pass
-            
-            if entity_info.type == "ppo_agent":
-                return load_evaluation_agent(
-                    checkpoint_path=entity_info.checkpoint_path or "",
-                    device_str=device_str,
-                    policy_mapper=self.policy_mapper,
-                    input_channels=input_channels,
-                )
-            else:
-                return initialize_opponent(
-                    opponent_type=entity_info.type,
-                    opponent_path=entity_info.checkpoint_path,
-                    device_str=device_str,
-                    policy_mapper=self.policy_mapper,
-                    input_channels=input_channels,
-                )
-        
-        raise ValueError(f"Unknown entity type for loading: {type(entity_info)}")
+        else:
+            return initialize_opponent(
+                opponent_type=opponent_info.type,
+                opponent_path=opponent_info.checkpoint_path,
+                device_str=device_str,
+                policy_mapper=self.policy_mapper,
+                input_channels=input_channels,
+            )
 
     async def evaluate_step(
         self,

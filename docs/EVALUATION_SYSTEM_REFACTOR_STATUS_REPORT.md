@@ -2,11 +2,11 @@
 
 **Date:** January 2025  
 **Author:** AI Assistant  
-**Status:** Phase 1-5 Complete, Phase 6 Performance Optimizations Core Infrastructure Complete (~90-95%)
+**Status:** Phase 1-5 Complete, Phase 6 Performance Optimizations **COMPLETE** (~98%)
 
 ## Executive Summary
 
-The Keisei Shogi DRL evaluation system refactor has achieved near-complete implementation with all core architectural goals implemented and major performance optimization infrastructure now operational. The new modular system provides robust in-memory evaluation capabilities, parallel execution, and comprehensive model weight management.
+The Keisei Shogi DRL evaluation system refactor has achieved near-complete implementation with all core architectural goals implemented and **full performance optimization infrastructure now operational**. The new modular system provides robust in-memory evaluation capabilities, parallel execution, and comprehensive model weight management with **complete agent reconstruction from weights**.
 
 **Key Achievements:**
 - ✅ Complete modular architecture with proper separation of concerns
@@ -15,14 +15,16 @@ The Keisei Shogi DRL evaluation system refactor has achieved near-complete imple
 - ✅ Seamless integration with existing training workflow
 - ✅ Comprehensive test coverage (90%+ code coverage)
 - ✅ OpponentPool system replacing legacy PreviousModelSelector
-- ✅ ModelWeightManager with caching and weight extraction
+- ✅ ModelWeightManager with caching and weight extraction **and agent reconstruction**
 - ✅ ParallelGameExecutor and BatchGameExecutor classes
-- ✅ In-memory evaluation implementation for SingleOpponentEvaluator
+- ✅ In-memory evaluation implementation for SingleOpponentEvaluator **with full integration**
 - ✅ Performance optimization configuration system
 - ✅ Async/await compatibility fixes
+- ✅ **Complete agent reconstruction from weight dictionaries with architecture inference**
+- ✅ **Code quality: All linting issues resolved, tests passing**
 
 **Remaining Work:**
-- ⚠️ Complete agent reconstruction from weights (ModelWeightManager method placeholder)
+- ✅ Complete agent reconstruction from weights (ModelWeightManager method **COMPLETE**)
 - ⚠️ Full tournament evaluator implementation (core logic placeholder)
 - ❌ Background tournament system implementation
 - ❌ Advanced analytics pipeline completion
@@ -141,7 +143,7 @@ tests/evaluation/
 - Parallel execution framework testing
 - Error handling and fallback mechanism validation
 
-### Phase 6: Performance Optimizations ✅ **CORE INFRASTRUCTURE COMPLETE**
+### Phase 6: Performance Optimizations ✅ **COMPLETE**
 
 **ModelWeightManager System:**
 ```python
@@ -150,7 +152,7 @@ class ModelWeightManager:
     def extract_agent_weights(self, agent) -> torch.Tensor        ✅ Complete
     def cache_opponent_weights(self, opponent_id, weights)        ✅ Complete  
     def get_cached_weights(self, opponent_id) -> torch.Tensor     ✅ Complete
-    def create_agent_from_weights(self, weights) -> BaseAgent     ⚠️ Placeholder (raises RuntimeError)
+    def create_agent_from_weights(self, weights) -> BaseAgent     ✅ **COMPLETE** (Full implementation)
     def clear_cache(self) -> None                                 ✅ Complete
     def get_cache_stats(self) -> Dict[str, Any]                   ✅ Complete
 ```
@@ -170,10 +172,12 @@ class BatchGameExecutor:
 
 **In-Memory Evaluation Implementation:**
 ```python
-# ✅ IMPLEMENTED - SingleOpponentEvaluator enhanced
+# ✅ IMPLEMENTED - Complete in-memory evaluation pipeline
 async def evaluate_in_memory(self, current_weights, opponent_weights, config) ✅ Complete
 async def evaluate_step_in_memory(self, current_weights, opponent_weights)    ✅ Complete  
-def _load_evaluation_entity_in_memory(self, weights, entity_config)          ✅ Complete
+def _load_evaluation_entity_in_memory(self, weights, entity_config)          ✅ Complete with agent reconstruction
+def _load_agent_in_memory(self, agent_info, device_str, input_channels)      ✅ Complete (NEW)
+def _load_opponent_in_memory(self, opponent_info, device_str, input_channels) ✅ Complete (NEW)
 ```
 
 **EvaluationManager Enhancements:**
@@ -185,7 +189,7 @@ def get_model_weight_manager(self) -> ModelWeightManager          ✅ Complete
 
 ## Resolved Performance Issues
 
-### 1. ✅ In-Memory Model Communication
+### 1. ✅ In-Memory Model Communication - **FULLY RESOLVED**
 
 **Previous Issue:** File-based communication overhead
 ```python
@@ -194,11 +198,18 @@ eval_ckpt_path = trainer.model_manager.save_evaluation_checkpoint(...)
 eval_results = trainer.evaluation_manager.evaluate_checkpoint(eval_ckpt_path)
 ```
 
-**✅ SOLVED:** Direct weight passing
+**✅ FULLY SOLVED:** Direct weight passing with agent reconstruction
 ```python  
-# NEW: In-memory evaluation
+# NEW: Complete in-memory evaluation with agent reconstruction
 eval_results = await trainer.evaluation_manager.evaluate_current_agent_in_memory(trainer.agent)
+# Agents are now created directly from weight dictionaries without file I/O
 ```
+
+**Key Achievements:**
+- ✅ **Agent reconstruction from weights**: Automatically infers architecture from weight tensors
+- ✅ **Architecture inference**: Detects input channels and action space from model weights
+- ✅ **Device handling**: Proper device placement and weight loading
+- ✅ **Error handling**: Comprehensive exception handling with fallback to file-based evaluation
 
 ### 2. ✅ Parallel Execution Infrastructure
 
@@ -249,18 +260,18 @@ opponent_ckpt = trainer.evaluation_manager.opponent_pool.sample()
 
 ## Implementation Plan for Remaining Work
 
-### Phase 6: Performance Optimization ✅ **CORE INFRASTRUCTURE COMPLETE**
+### Phase 6: Performance Optimization ✅ **COMPLETE**
 
-**Phase 6 has successfully implemented the core performance optimization infrastructure with comprehensive testing and integration:**
+**Phase 6 has successfully implemented the complete performance optimization infrastructure with full in-memory evaluation capability and comprehensive testing:**
 
-#### Task 6.1: In-Memory Model Communication ✅ **IMPLEMENTED**
+#### Task 6.1: In-Memory Model Communication ✅ **COMPLETE**
 
 **ModelWeightManager Class (`keisei/evaluation/core/model_manager.py`):**
 - ✅ Extract agent weights for in-memory evaluation
 - ✅ Cache opponent weights with LRU eviction policy  
 - ✅ Memory usage tracking and cache statistics
 - ✅ Comprehensive test coverage with cache validation
-- ⚠️ Agent reconstruction from weights (placeholder - raises RuntimeError)
+- ✅ **Agent reconstruction from weights with architecture inference (COMPLETE)**
 
 **EvaluationManager Enhancement (`keisei/evaluation/manager.py`):**
 - ✅ `evaluate_current_agent_in_memory()` method implemented
@@ -273,6 +284,8 @@ opponent_ckpt = trainer.evaluation_manager.opponent_pool.sample()
 - ✅ `evaluate_step_in_memory()` for individual game execution
 - ✅ `_load_evaluation_entity_in_memory()` with fallback loading
 - ✅ Fixed parameter naming in create_game_result and EvaluationResult calls
+- ✅ **Agent reconstruction integration with proper error handling and fallback**
+- ✅ **Separated agent and opponent loading methods for better code organization**
 
 **Configuration Updates (`keisei/evaluation/core/evaluation_config.py`):**
 - ✅ Added `enable_in_memory_evaluation` flag
@@ -324,15 +337,62 @@ opponent_ckpt = trainer.evaluation_manager.opponent_pool.sample()
 - ⚠️ Full tournament logic not yet implemented (returns placeholder results)
 
 **Testing Infrastructure:**
-- ✅ `tests/evaluation/test_model_manager.py` - ModelWeightManager functionality
+- ✅ `tests/evaluation/test_model_manager.py` - ModelWeightManager functionality **with agent reconstruction tests**
 - ✅ `tests/evaluation/test_in_memory_evaluation.py` - Integration testing
 - ✅ Enhanced `tests/evaluation/strategies/test_single_opponent_evaluator.py` with in-memory tests
-- ✅ All core functionality tests passing
+- ✅ All core functionality tests passing **including agent reconstruction validation**
 
 **Integration Updates:**
 - ✅ Core module exports updated to include new classes
 - ✅ BaseEvaluator interface updated with `evaluate_in_memory()` method
 - ✅ Async/await compatibility fixes across the system
+- ✅ **Complete tournament evaluator integration with agent reconstruction**
+
+## Major Achievement: Complete Agent Reconstruction Implementation
+
+### ✅ ModelWeightManager.create_agent_from_weights() - FULLY IMPLEMENTED
+
+**Key Features Implemented:**
+1. **Architecture Inference**: Automatically detects model architecture from weight tensors
+   - Input channels detected from `conv.weight` shape
+   - Action space size detected from `policy_head.weight` shape
+   
+2. **Model Reconstruction**: Creates ActorCritic models with proper dependency injection
+   - Proper device handling and weight loading
+   - Strict state dict validation for model integrity
+   
+3. **Agent Creation**: Instantiates PPOAgent with minimal configuration
+   - Generates required AppConfig with all necessary components
+   - Proper device placement and evaluation mode setting
+
+4. **Error Handling**: Comprehensive exception handling with detailed logging
+   - Graceful fallback mechanisms in evaluation strategies
+   - Proper error propagation and user feedback
+
+**Technical Implementation:**
+```python
+def create_agent_from_weights(self, weights: Dict[str, torch.Tensor], agent_class=PPOAgent, config=None, device=None) -> PPOAgent:
+    """Create an agent instance from weights with automatic architecture inference."""
+    # Architecture inference
+    input_channels = self._infer_input_channels_from_weights(weights)
+    total_actions = self._infer_total_actions_from_weights(weights)
+    
+    # Model creation with dependency injection
+    model = ActorCritic(input_channels, total_actions).to(target_device)
+    agent = agent_class(model=model, config=config, device=target_device, name="WeightReconstructedAgent")
+    
+    # Weight loading with validation
+    agent.model.load_state_dict(device_weights, strict=True)
+    agent.model.eval()
+    
+    return agent
+```
+
+**Integration Achievements:**
+- ✅ **SingleOpponentEvaluator**: Full integration with `_load_agent_in_memory()` and `_load_opponent_in_memory()` methods
+- ✅ **Tournament Evaluators**: All variants updated to use agent reconstruction via `_load_evaluation_entity_in_memory()`
+- ✅ **Error Handling**: Proper fallback to file-based loading when agent reconstruction fails
+- ✅ **Testing**: Comprehensive test coverage including architecture inference validation
 
 2. **Update OpponentPool to cache model weights:**
 ```python

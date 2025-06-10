@@ -715,39 +715,46 @@ class TournamentEvaluator(BaseEvaluator):
     ) -> Any:
         """Load an agent or opponent using in-memory weights if available."""
         try:
-            # Try to get the model weight manager from the evaluation manager
-            from ..manager import get_model_weight_manager
-            manager = get_model_weight_manager()
+            # Try to create from cached weights using ModelWeightManager
+            from pathlib import Path
+            from ..core.model_manager import ModelWeightManager
             
-            if manager:
-                # For agents, try to use cached weights
-                if isinstance(entity_info, AgentInfo):
-                    try:
-                        # Try to create agent from cached weights
-                        if entity_info.checkpoint_path:
-                            cached_weights = manager.get_cached_weights(entity_info.checkpoint_path)
-                            if cached_weights is not None:
-                                # This will raise RuntimeError until we implement weight-to-agent conversion
-                                return manager.create_agent_from_weights(cached_weights)
-                    except RuntimeError:
-                        # Expected - create_agent_from_weights is not implemented yet
-                        logger.debug("In-memory agent creation not yet implemented, falling back to regular loading")
-                    except Exception as e:
-                        logger.warning(f"Failed to load agent from cached weights: {e}")
-                
-                # For opponents, try to use cached weights
-                elif isinstance(entity_info, OpponentInfo) and entity_info.type == "ppo_agent":
-                    try:
-                        if entity_info.checkpoint_path:
-                            cached_weights = manager.get_cached_weights(entity_info.checkpoint_path)
-                            if cached_weights is not None:
-                                # This will raise RuntimeError until we implement weight-to-agent conversion
-                                return manager.create_agent_from_weights(cached_weights)
-                    except RuntimeError:
-                        # Expected - create_agent_from_weights is not implemented yet
-                        logger.debug("In-memory opponent creation not yet implemented, falling back to regular loading")
-                    except Exception as e:
-                        logger.warning(f"Failed to load opponent from cached weights: {e}")
+            # Create a local manager instance since we don't have direct access to the evaluation manager here
+            manager = ModelWeightManager(device=getattr(context.configuration, "default_device", "cpu"))
+            
+            # For agents, try to use cached weights
+            if isinstance(entity_info, AgentInfo) and entity_info.checkpoint_path:
+                try:
+                    cached_weights = manager.cache_opponent_weights(
+                        entity_info.name or "agent", 
+                        Path(entity_info.checkpoint_path)
+                    )
+                    if cached_weights is not None:
+                        agent = manager.create_agent_from_weights(
+                            cached_weights, 
+                            device=getattr(context.configuration, "default_device", "cpu")
+                        )
+                        logger.debug("Successfully created agent from cached weights")
+                        return agent
+                except Exception as e:
+                    logger.warning("Failed to load agent from cached weights: %s", e)
+            
+            # For opponents, try to use cached weights
+            elif isinstance(entity_info, OpponentInfo) and entity_info.type == "ppo_agent" and entity_info.checkpoint_path:
+                try:
+                    cached_weights = manager.cache_opponent_weights(
+                        entity_info.name or "opponent", 
+                        Path(entity_info.checkpoint_path)
+                    )
+                    if cached_weights is not None:
+                        opponent = manager.create_agent_from_weights(
+                            cached_weights,
+                            device=getattr(context.configuration, "default_device", "cpu")
+                        )
+                        logger.debug("Successfully created opponent from cached weights")
+                        return opponent
+                except Exception as e:
+                    logger.warning("Failed to load opponent from cached weights: %s", e)
             
             # Fallback to regular loading
             device_str = getattr(context.configuration, "default_device", "cpu")
@@ -756,7 +763,7 @@ class TournamentEvaluator(BaseEvaluator):
             return await self._game_load_evaluation_entity(entity_info, device_str, input_channels)
             
         except Exception as e:
-            logger.error(f"Error loading evaluation entity in memory: {e}", exc_info=True)
+            logger.error("Error loading evaluation entity in memory: %s", e, exc_info=True)
             # Final fallback to regular loading
             device_str = getattr(context.configuration, "default_device", "cpu") 
             input_channels = getattr(context.configuration, "input_channels", 46)
