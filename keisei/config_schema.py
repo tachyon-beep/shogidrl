@@ -7,6 +7,9 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+# Evaluation strategy constants - matches EvaluationStrategy enum values
+VALID_EVALUATION_STRATEGIES = ["single_opponent", "tournament", "ladder", "benchmark"]
+
 
 class EnvConfig(BaseModel):
     device: str = Field("cpu", description="Device to use: 'cpu' or 'cuda'.")
@@ -128,8 +131,8 @@ class EvaluationConfig(BaseModel):
         50000, description="Run evaluation every N timesteps."
     )
 
-    # Strategy and game parameters
-    strategy: str = Field(
+    # Strategy and game parameters  
+    strategy: Literal["single_opponent", "tournament", "ladder", "benchmark"] = Field(
         "single_opponent",
         description="Evaluation strategy: 'single_opponent', 'tournament', 'ladder', 'benchmark'",
     )
@@ -235,9 +238,8 @@ class EvaluationConfig(BaseModel):
 
     @field_validator("strategy")
     def strategy_valid(cls, v):  # pylint: disable=no-self-argument
-        valid_strategies = ["single_opponent", "tournament", "ladder", "benchmark"]
-        if v not in valid_strategies:
-            raise ValueError(f"strategy must be one of {valid_strategies}")
+        if v not in VALID_EVALUATION_STRATEGIES:
+            raise ValueError(f"strategy must be one of {VALID_EVALUATION_STRATEGIES}")
         return v
 
     @field_validator("max_concurrent_games")
