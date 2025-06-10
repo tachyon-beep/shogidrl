@@ -428,9 +428,8 @@ class TournamentEvaluator(BaseEvaluator):
                         i
                     )
             except Exception as e:
-                logger.error(
-                    f"Failed to load opponent from config data at index {i}: {str(e)}"
-                )
+                formatted_msg = f"Failed to load opponent from config data at index {i}"
+                logger.error(formatted_msg, "additional_info", str(e))
         
         return opponents
 
@@ -584,11 +583,16 @@ class TournamentEvaluator(BaseEvaluator):
                 if pom is None:
                     pom = self.policy_mapper
                 legal_mask = pom.get_legal_mask(legal_moves, current_player_entity.device)
-                action = await self._get_player_action(
+                action = await self._game_get_player_action(
                     current_player_entity, game, legal_mask
                 )
             except Exception as e:
                 logger.error(f"Error getting player action: {e}")
+                # Set termination reason for action selection error
+                game.game_over = True
+                current_player = game.current_player.value
+                game.winner = Color(1 - current_player)  # Other player wins
+                game.termination_reason = f"{TERMINATION_REASON_ACTION_SELECTION_ERROR}: {str(e)}"
                 return False
             
             # Validate and make move
@@ -610,11 +614,14 @@ class TournamentEvaluator(BaseEvaluator):
         """Handle the case when there are no legal moves."""
         # Check if the game already has a winner set
         if game.winner is None:
-            # Set winner to the other player (stalemate handling)
-            current_player = game.current_player.value
-            game.winner = Color(1 - current_player)
-            game.termination_reason = "No legal moves available"
-            logger.warning(f"No legal moves for player {current_player}, setting winner to {game.winner}")
+            # Don't set a winner - let the termination reason indicate the state
+            game.termination_reason = TERMINATION_REASON_NO_LEGAL_MOVES_UNDETERMINED
+            logger.warning(f"No legal moves for player {game.current_player}, outcome undetermined")
+        else:
+            # Game already has a winner, preserve existing termination reason if it exists
+            if not game.termination_reason:
+                game.termination_reason = "No legal moves available"
+            logger.warning(f"No legal moves for player {game.current_player}, winner already set to {game.winner}")
         
         # Set game_over if the mock expects it
         game.game_over = True

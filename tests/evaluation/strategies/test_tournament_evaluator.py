@@ -1118,165 +1118,139 @@ class TestTournamentEvaluator:
     @patch(
         "keisei.evaluation.strategies.tournament.TournamentEvaluator._game_get_player_action"
     )
-    async def test_game_process_one_turn_valid_move_agent_turn(self, mock_get_action):
+    async def test_game_process_one_turn_valid_move_agent_turn(self, mock_get_action, mock_tournament_config, mock_evaluation_context):
         """Tests _game_process_one_turn: agent's turn, valid move made."""
-        self.evaluator.current_game_move_history = []  # Initialize for this test
+        evaluator = TournamentEvaluator(mock_tournament_config)
+        mock_game = MagicMock(spec=ShogiGame)
+        mock_game.get_legal_moves.return_value = ["7g7f"]
+        mock_game.current_player = Color(0)  # Sente
+        mock_game.game_over = False
+        
+        mock_player_entity = MagicMock()
+        mock_player_entity.device = torch.device("cpu")
+        
         mock_get_action.return_value = "7g7f"
-        self.mock_game.is_legal_move.return_value = True
-        self.mock_game.is_sente_turn.return_value = True  # Agent is Sente
+        evaluator._game_validate_and_make_move = AsyncMock(return_value=True)
+        evaluator.policy_mapper.get_legal_mask = MagicMock(return_value="legal_mask_tensor")
 
-        agent_policy = MagicMock()
-        opponent_policy = MagicMock()
-
-        should_continue, reason = await self.evaluator._game_process_one_turn(
-            game=self.mock_game,
-            current_player_is_agent=True,
-            agent_policy=agent_policy,
-            opponent_policy=opponent_policy,
-            pom=self.mock_pom,
-            agent_plays_sente=True,
-            # game_move_history is now an instance variable, no need to pass
+        result = await evaluator._game_process_one_turn(
+            mock_game, mock_player_entity, mock_evaluation_context
         )
 
-        assert should_continue is True
-        assert reason is None
+        assert result is True
         mock_get_action.assert_called_once_with(
-            self.mock_game, agent_policy, True, self.mock_pom, True
+            mock_player_entity, mock_game, "legal_mask_tensor"
         )
-        self.mock_game.is_legal_move.assert_called_once_with("7g7f")
-        self.mock_game.make_move.assert_called_once_with("7g7f")
-        assert "7g7f" in self.evaluator.current_game_move_history
-        self.evaluator.current_game_move_history.clear()
+        evaluator._game_validate_and_make_move.assert_called_once()
 
     @patch(
         "keisei.evaluation.strategies.tournament.TournamentEvaluator._game_get_player_action"
     )
     async def test_game_process_one_turn_valid_move_opponent_turn(
-        self, mock_get_action
+        self, mock_get_action, mock_tournament_config, mock_evaluation_context
     ):
         """Tests _game_process_one_turn: opponent's turn, valid move made."""
-        self.evaluator.current_game_move_history = []
+        evaluator = TournamentEvaluator(mock_tournament_config)
+        mock_game = MagicMock(spec=ShogiGame)
+        mock_game.get_legal_moves.return_value = ["2g2f"]
+        mock_game.current_player = Color(1)  # Gote
+        mock_game.game_over = False
+        
+        mock_player_entity = MagicMock()
+        mock_player_entity.device = torch.device("cpu")
+        
         mock_get_action.return_value = "2g2f"
-        self.mock_game.is_legal_move.return_value = True
-        self.mock_game.is_sente_turn.return_value = (
-            False  # Opponent is Gote (agent Sente)
+        evaluator._game_validate_and_make_move = AsyncMock(return_value=True)
+        evaluator.policy_mapper.get_legal_mask = MagicMock(return_value="legal_mask_tensor")
+
+        result = await evaluator._game_process_one_turn(
+            mock_game, mock_player_entity, mock_evaluation_context
         )
 
-        agent_policy = MagicMock()
-        opponent_policy = MagicMock()
-
-        should_continue, reason = await self.evaluator._game_process_one_turn(
-            game=self.mock_game,
-            current_player_is_agent=False,
-            agent_policy=agent_policy,
-            opponent_policy=opponent_policy,
-            pom=self.mock_pom,
-            agent_plays_sente=True,
-        )
-
-        assert should_continue is True
-        assert reason is None
+        assert result is True
         mock_get_action.assert_called_once_with(
-            self.mock_game, opponent_policy, False, self.mock_pom, True
+            mock_player_entity, mock_game, "legal_mask_tensor"
         )
-        self.mock_game.is_legal_move.assert_called_once_with("2g2f")
-        self.mock_game.make_move.assert_called_once_with("2g2f")
-        assert "2g2f" in self.evaluator.current_game_move_history
-        self.evaluator.current_game_move_history.clear()
+        evaluator._game_validate_and_make_move.assert_called_once()
 
     @patch(
         "keisei.evaluation.strategies.tournament.TournamentEvaluator._game_get_player_action"
     )
-    async def test_game_process_one_turn_invalid_move(self, mock_get_action):
+    async def test_game_process_one_turn_invalid_move(self, mock_get_action, mock_tournament_config, mock_evaluation_context):
         """Tests _game_process_one_turn: player makes an invalid move."""
-        self.evaluator.current_game_move_history = []
+        evaluator = TournamentEvaluator(mock_tournament_config)
+        mock_game = MagicMock(spec=ShogiGame)
+        mock_game.get_legal_moves.return_value = ["7g7f"]
+        mock_game.current_player = Color(0)  # Sente
+        mock_game.game_over = False
+        
+        mock_player_entity = MagicMock()
+        mock_player_entity.device = torch.device("cpu")
+        
         mock_get_action.return_value = "1a1b"  # Invalid move
-        self.mock_game.is_legal_move.return_value = False
-        self.mock_game.is_sente_turn.return_value = True
+        evaluator._game_validate_and_make_move = AsyncMock(return_value=False)  # Validation fails
+        evaluator.policy_mapper.get_legal_mask = MagicMock(return_value="legal_mask_tensor")
 
-        agent_policy = MagicMock()
-        opponent_policy = MagicMock()
-
-        should_continue, reason = await self.evaluator._game_process_one_turn(
-            game=self.mock_game,
-            current_player_is_agent=True,
-            agent_policy=agent_policy,
-            opponent_policy=opponent_policy,
-            pom=self.mock_pom,
-            agent_plays_sente=True,
+        result = await evaluator._game_process_one_turn(
+            mock_game, mock_player_entity, mock_evaluation_context
         )
 
-        assert should_continue is False
-        assert reason == GameTerminationReason.INVALID_MOVE
+        assert result is False
         mock_get_action.assert_called_once_with(
-            self.mock_game, agent_policy, True, self.mock_pom, True
+            mock_player_entity, mock_game, "legal_mask_tensor"
         )
-        self.mock_game.is_legal_move.assert_called_once_with("1a1b")
-        self.mock_game.make_move.assert_not_called()
-        assert not self.evaluator.current_game_move_history
+        evaluator._game_validate_and_make_move.assert_called_once()
 
     @patch(
         "keisei.evaluation.strategies.tournament.TournamentEvaluator._game_get_player_action"
     )
     async def test_game_process_one_turn_no_action_no_legal_moves_stalemate(
-        self, mock_get_action
+        self, mock_get_action, mock_tournament_config, mock_evaluation_context
     ):
         """Tests _game_process_one_turn: no action from policy, no legal moves (stalemate)."""
-        self.evaluator.current_game_move_history = []
-        mock_get_action.return_value = None
-        self.mock_game.get_legal_moves.return_value = []
-        self.mock_game.is_sente_turn.return_value = True
+        evaluator = TournamentEvaluator(mock_tournament_config)
+        mock_game = MagicMock(spec=ShogiGame)
+        mock_game.get_legal_moves.return_value = []  # No legal moves
+        mock_game.current_player = Color(0)  # Sente
+        mock_game.game_over = False
+        
+        mock_player_entity = MagicMock()
+        mock_player_entity.device = torch.device("cpu")
+        
+        evaluator._handle_no_legal_moves = AsyncMock()
 
-        agent_policy = MagicMock()
-        opponent_policy = MagicMock()
-
-        should_continue, reason = await self.evaluator._game_process_one_turn(
-            game=self.mock_game,
-            current_player_is_agent=True,
-            agent_policy=agent_policy,
-            opponent_policy=opponent_policy,
-            pom=self.mock_pom,
-            agent_plays_sente=True,
+        result = await evaluator._game_process_one_turn(
+            mock_game, mock_player_entity, mock_evaluation_context
         )
 
-        assert should_continue is False
-        assert reason == GameTerminationReason.STALEMATE
-        mock_get_action.assert_called_once_with(
-            self.mock_game, agent_policy, True, self.mock_pom, True
-        )
-        self.mock_game.is_legal_move.assert_not_called()
-        self.mock_game.make_move.assert_not_called()
-        assert not self.evaluator.current_game_move_history
+        assert result is False
+        evaluator._handle_no_legal_moves.assert_called_once_with(mock_game)
+        mock_get_action.assert_not_called()
 
     @patch(
         "keisei.evaluation.strategies.tournament.TournamentEvaluator._game_get_player_action"
     )
     async def test_game_process_one_turn_no_action_with_legal_moves_policy_error(
-        self, mock_get_action
+        self, mock_get_action, mock_tournament_config, mock_evaluation_context
     ):
-        """Tests _game_process_one_turn: no action from policy, but legal moves exist (policy error)."""
-        self.evaluator.current_game_move_history = []
-        mock_get_action.return_value = None
-        self.mock_game.get_legal_moves.return_value = ["7g7f"]
-        self.mock_game.is_sente_turn.return_value = True
+        """Tests _game_process_one_turn: action selection error."""
+        evaluator = TournamentEvaluator(mock_tournament_config)
+        mock_game = MagicMock(spec=ShogiGame)
+        mock_game.get_legal_moves.return_value = ["7g7f"]
+        mock_game.current_player = Color(0)  # Sente
+        mock_game.game_over = False
+        
+        mock_player_entity = MagicMock()
+        mock_player_entity.device = torch.device("cpu")
+        
+        mock_get_action.side_effect = RuntimeError("Action selection failed")
+        evaluator.policy_mapper.get_legal_mask = MagicMock(return_value="legal_mask_tensor")
 
-        agent_policy = MagicMock()
-        opponent_policy = MagicMock()
-
-        should_continue, reason = await self.evaluator._game_process_one_turn(
-            game=self.mock_game,
-            current_player_is_agent=True,
-            agent_policy=agent_policy,
-            opponent_policy=opponent_policy,
-            pom=self.mock_pom,
-            agent_plays_sente=True,
+        result = await evaluator._game_process_one_turn(
+            mock_game, mock_player_entity, mock_evaluation_context
         )
 
-        assert should_continue is False
-        assert reason == GameTerminationReason.POLICY_ERROR
-        mock_get_action.assert_called_once_with(
-            self.mock_game, agent_policy, True, self.mock_pom, True
-        )
-        self.mock_game.is_legal_move.assert_not_called()
-        self.mock_game.make_move.assert_not_called()
-        assert not self.evaluator.current_game_move_history
+        assert result is False
+        assert mock_game.game_over is True
+        assert mock_game.winner == Color(1)  # Other player wins
+        assert "Action selection error: Action selection failed" in mock_game.termination_reason
