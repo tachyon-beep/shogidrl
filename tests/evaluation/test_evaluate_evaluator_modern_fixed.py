@@ -278,9 +278,12 @@ def test_evaluation_manager_error_handling_integration(tmp_path):
     )
 
     # Test: Agent without model attribute should raise ValueError
-    mock_agent_no_model = MagicMock()
-    mock_agent_no_model.name = "AgentWithoutModel"
-    # Deliberately not setting mock_agent_no_model.model
+    class AgentWithoutModel:
+        def __init__(self):
+            self.name = "AgentWithoutModel"
+        # Deliberately no model attribute
+    
+    mock_agent_no_model = AgentWithoutModel()
 
     try:
         eval_manager.evaluate_current_agent(mock_agent_no_model)

@@ -83,9 +83,10 @@ class EvaluationManager:
         """Evaluate an in-memory PPOAgent instance."""
 
         # Ensure the agent has the expected attributes
-        model = getattr(agent, "model", None)
-        if model is None:
+        if not hasattr(agent, "model") or agent.model is None:
             raise ValueError("Agent must have a 'model' attribute for evaluation")
+        
+        model = agent.model
 
         # Switch to eval mode for duration of evaluation
         if hasattr(model, "eval"):
@@ -117,9 +118,10 @@ class EvaluationManager:
         """Async version of evaluate_current_agent for use in async contexts."""
 
         # Ensure the agent has the expected attributes
-        model = getattr(agent, "model", None)
-        if model is None:
+        if not hasattr(agent, "model") or agent.model is None:
             raise ValueError("Agent must have a 'model' attribute for evaluation")
+        
+        model = agent.model
 
         # Switch to eval mode for duration of evaluation
         if hasattr(model, "eval"):
