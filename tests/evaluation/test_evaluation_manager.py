@@ -5,7 +5,7 @@ from keisei.evaluation.core import (
     EvaluationResult,
     EvaluationStrategy,
 )
-from keisei.evaluation.manager import EvaluationManager
+from keisei.evaluation.core_manager import EvaluationManager
 
 
 class DummyEvaluator:
@@ -22,7 +22,7 @@ def test_evaluate_checkpoint(monkeypatch, tmp_path):
 
     dummy_evaluator = DummyEvaluator(cfg)
     monkeypatch.setattr(
-        "keisei.evaluation.manager.EvaluatorFactory.create", lambda cfg: dummy_evaluator
+        "keisei.evaluation.core_manager.EvaluatorFactory.create", lambda cfg: dummy_evaluator
     )
 
     # Create dummy checkpoint file
@@ -54,7 +54,7 @@ def test_evaluate_current_agent(monkeypatch):
             )
 
     monkeypatch.setattr(
-        "keisei.evaluation.manager.EvaluatorFactory.create",
+        "keisei.evaluation.core_manager.EvaluatorFactory.create",
         lambda cfg: DummyEvaluator(cfg),
     )
 

@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from keisei.config_schema import AppConfig
-from keisei.evaluation.manager import EvaluationManager
+from keisei.evaluation.core_manager import EvaluationManager
 from keisei.training.trainer import Trainer
 from keisei.utils import load_config
 from keisei.utils.opponents import SimpleRandomOpponent

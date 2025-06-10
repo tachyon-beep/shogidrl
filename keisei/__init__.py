@@ -12,7 +12,7 @@ This package contains:
 # available via ``keisei.evaluation.evaluate`` but are not imported here to
 # avoid heavy dependencies (e.g. ``torch``) when the top-level package is
 # imported during lightweight operations such as running unit tests.
-from .evaluation.manager import EvaluationManager
+from .evaluation.core_manager import EvaluationManager
 
 # Re-export the main components for easy access
 from .shogi.shogi_core_definitions import Color, MoveTuple, Piece, PieceType

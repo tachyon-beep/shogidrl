@@ -17,7 +17,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from keisei.evaluation.core import create_evaluation_config, EvaluationStrategy
-from keisei.evaluation.manager import EvaluationManager
+from keisei.evaluation.core_manager import EvaluationManager
 from keisei.evaluation.core.model_manager import ModelWeightManager
 
 

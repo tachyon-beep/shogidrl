@@ -12,7 +12,7 @@ from keisei.config_schema import AppConfig
 from keisei.core.actor_critic_protocol import ActorCriticProtocol
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.ppo_agent import PPOAgent
-from keisei.evaluation.manager import EvaluationManager
+from keisei.evaluation.core_manager import EvaluationManager
 from keisei.utils import TrainingLogger
 
 from .callback_manager import CallbackManager

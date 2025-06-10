@@ -6,7 +6,7 @@ print('=' * 60)
 
 # Test 1: Core imports
 print('\n1. Testing Core System Imports...')
-from keisei.evaluation.manager import EvaluationManager
+from keisei.evaluation.core_manager import EvaluationManager
 print('✅ Core evaluation system working')
 
 # Test 2: Enhanced imports
