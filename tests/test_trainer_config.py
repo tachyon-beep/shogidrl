@@ -134,7 +134,11 @@ def test_trainer_instantiates_resnet_and_features():
     assert trainer.model is not None
     assert trainer.model_manager.feature_spec is not None
     assert trainer.model_manager.feature_spec.name == "core46+all"
-    assert trainer.model_manager.obs_shape == (51, 9, 9)  # For core46+all (46 + 1 + 1 + 1 + 2 = 51)
+    assert trainer.model_manager.obs_shape == (
+        51,
+        9,
+        9,
+    )  # For core46+all (46 + 1 + 1 + 1 + 2 = 51)
 
     # Check model config with explicit casting for type checker
     model = cast(ActorCriticResTower, trainer.model)

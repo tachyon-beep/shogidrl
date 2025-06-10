@@ -557,7 +557,10 @@ class TestWandBLoggingIntegration:
                             log_payload = {"train_message": message}
                             if wandb_data:
                                 log_payload.update(wandb_data)
-                            mock_wandb_log(log_payload, step=trainer.metrics_manager.global_timestep)
+                            mock_wandb_log(
+                                log_payload,
+                                step=trainer.metrics_manager.global_timestep,
+                            )
 
                 # Test W&B logging when conditions are met
                 log_both_impl(
@@ -613,7 +616,10 @@ class TestWandBLoggingIntegration:
                             log_payload = {"train_message": message}
                             if wandb_data:
                                 log_payload.update(wandb_data)
-                            wandb.log(log_payload, step=trainer.metrics_manager.global_timestep)
+                            wandb.log(
+                                log_payload,
+                                step=trainer.metrics_manager.global_timestep,
+                            )
 
                 # Should not crash, should not call wandb.log
                 log_both_impl(
@@ -666,7 +672,10 @@ class TestWandBLoggingIntegration:
                             log_payload = {"train_message": message}
                             if wandb_data:
                                 log_payload.update(wandb_data)
-                            wandb.log(log_payload, step=trainer.metrics_manager.global_timestep)
+                            wandb.log(
+                                log_payload,
+                                step=trainer.metrics_manager.global_timestep,
+                            )
 
                 # Should not log to W&B due to is_train_wandb_active = False
                 log_both_impl(
@@ -718,7 +727,10 @@ class TestWandBLoggingIntegration:
                             log_payload = {"train_message": message}
                             if wandb_data:
                                 log_payload.update(wandb_data)
-                            wandb.log(log_payload, step=trainer.metrics_manager.global_timestep)
+                            wandb.log(
+                                log_payload,
+                                step=trainer.metrics_manager.global_timestep,
+                            )
 
                 # Test with also_to_wandb=False
                 log_both_impl(

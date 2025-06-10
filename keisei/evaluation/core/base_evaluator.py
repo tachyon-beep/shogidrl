@@ -71,7 +71,7 @@ class BaseEvaluator(ABC):
         *,
         agent_weights: Optional[Dict[str, torch.Tensor]] = None,
         opponent_weights: Optional[Dict[str, torch.Tensor]] = None,
-        opponent_info: Optional[OpponentInfo] = None
+        opponent_info: Optional[OpponentInfo] = None,
     ) -> EvaluationResult:
         """
         Run evaluation using in-memory weights (optional optimization).
@@ -311,8 +311,6 @@ class BaseEvaluator(ABC):
         )
         if stats.avg_game_length:
             logger.info(f"Average game length: {stats.avg_game_length:.1f} moves")
-
-
 
 
 class EvaluatorFactory:

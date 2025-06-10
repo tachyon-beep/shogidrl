@@ -7,14 +7,14 @@ common evaluation strategy used during training.
 
 import logging
 import uuid
-from typing import (
+from typing import (  # Ensure Union is imported; Added List
     TYPE_CHECKING,
     Any,
     Dict,
     List,
     Optional,
     Union,
-)  # Ensure Union is imported; Added List
+)
 
 import torch  # Import torch at the module level
 
@@ -350,7 +350,7 @@ class SingleOpponentEvaluator(BaseEvaluator):
         *,
         agent_weights: Optional[Dict[str, torch.Tensor]] = None,
         opponent_weights: Optional[Dict[str, torch.Tensor]] = None,
-        opponent_info: Optional[OpponentInfo] = None
+        opponent_info: Optional[OpponentInfo] = None,
     ) -> EvaluationResult:
         """
         Run single opponent evaluation using in-memory weights.
@@ -375,7 +375,7 @@ class SingleOpponentEvaluator(BaseEvaluator):
         # Store weights for use during evaluation
         self.agent_weights = agent_weights
         self.opponent_weights = opponent_weights
-        
+
         try:
             # Set up context
             if context is None:
@@ -405,10 +405,14 @@ class SingleOpponentEvaluator(BaseEvaluator):
                 # Run games with agent as first player
                 for i in range(games_per_color["agent_first"]):
                     try:
-                        game = await self.evaluate_step_in_memory(agent_info, opponent_info, context)
+                        game = await self.evaluate_step_in_memory(
+                            agent_info, opponent_info, context
+                        )
                         games.append(game)
                     except Exception as e:
-                        logger.error(f"Error in game {i} (agent first): {e}", exc_info=True)
+                        logger.error(
+                            f"Error in game {i} (agent first): {e}", exc_info=True
+                        )
                         errors.append(f"Game {i} (agent first): {str(e)}")
 
                 # Run games with agent as second player (if color balancing enabled)
@@ -456,7 +460,7 @@ class SingleOpponentEvaluator(BaseEvaluator):
 
             self.log_evaluation_complete(result)
             return result
-            
+
         finally:
             # Clean up references
             self.agent_weights = None
@@ -470,10 +474,14 @@ class SingleOpponentEvaluator(BaseEvaluator):
     ) -> Any:
         """Helper to load an agent or opponent from in-memory weights."""
         if isinstance(entity_info, AgentInfo):
-            return await self._load_agent_in_memory(entity_info, device_str, input_channels)
+            return await self._load_agent_in_memory(
+                entity_info, device_str, input_channels
+            )
         elif isinstance(entity_info, OpponentInfo):
-            return await self._load_opponent_in_memory(entity_info, device_str, input_channels)
-        
+            return await self._load_opponent_in_memory(
+                entity_info, device_str, input_channels
+            )
+
         raise ValueError(f"Unknown entity type for loading: {type(entity_info)}")
 
     async def _load_agent_in_memory(
@@ -486,21 +494,21 @@ class SingleOpponentEvaluator(BaseEvaluator):
         # Check for direct agent instance
         if "agent_instance" in agent_info.metadata:
             return agent_info.metadata["agent_instance"]
-        
+
         # Try to create from in-memory weights
         if self.agent_weights is not None:
             try:
                 from ..core.model_manager import ModelWeightManager
+
                 manager = ModelWeightManager(device=device_str)
                 agent = manager.create_agent_from_weights(
-                    weights=self.agent_weights,
-                    device=device_str
+                    weights=self.agent_weights, device=device_str
                 )
                 logger.debug("Successfully created agent from in-memory weights")
                 return agent
             except Exception as e:
                 logger.warning("Failed to create agent from in-memory weights: %s", e)
-        
+
         # Fallback to regular loading
         return load_evaluation_agent(
             checkpoint_path=agent_info.checkpoint_path or "",
@@ -520,16 +528,18 @@ class SingleOpponentEvaluator(BaseEvaluator):
         if opponent_info.type == "ppo_agent" and self.opponent_weights is not None:
             try:
                 from ..core.model_manager import ModelWeightManager
+
                 manager = ModelWeightManager(device=device_str)
                 opponent = manager.create_agent_from_weights(
-                    weights=self.opponent_weights,
-                    device=device_str
+                    weights=self.opponent_weights, device=device_str
                 )
                 logger.debug("Successfully created opponent from in-memory weights")
                 return opponent
             except Exception as e:
-                logger.warning("Failed to create opponent from in-memory weights: %s", e)
-        
+                logger.warning(
+                    "Failed to create opponent from in-memory weights: %s", e
+                )
+
         # Fallback to regular loading
         if opponent_info.type == "ppo_agent":
             return load_evaluation_agent(
@@ -615,7 +625,8 @@ class SingleOpponentEvaluator(BaseEvaluator):
             duration = time.time() - start_time
             logger.error(
                 "Critical error in evaluate_step for game %s: %s",
-                game_id, e,
+                game_id,
+                e,
                 exc_info=True,
             )
 
@@ -690,7 +701,10 @@ class SingleOpponentEvaluator(BaseEvaluator):
                 winner=final_winner_code,
                 moves_count=game_outcome["moves_count"],
                 duration_seconds=duration,
-                metadata={"termination_reason": game_outcome["termination_reason"], "in_memory": True},
+                metadata={
+                    "termination_reason": game_outcome["termination_reason"],
+                    "in_memory": True,
+                },
             )
 
         except Exception as e:
@@ -707,7 +721,10 @@ class SingleOpponentEvaluator(BaseEvaluator):
                 winner=None,
                 moves_count=0,
                 duration_seconds=duration,
-                metadata={"termination_reason": f"Evaluate_step_in_memory error: {str(e)}", "in_memory": True},
+                metadata={
+                    "termination_reason": f"Evaluate_step_in_memory error: {str(e)}",
+                    "in_memory": True,
+                },
             )
 
     def get_opponents(self, context: EvaluationContext) -> List[OpponentInfo]:

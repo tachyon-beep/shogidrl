@@ -5,7 +5,7 @@ Tournament evaluation strategy implementation with in-memory evaluation support.
 import logging
 import time
 import uuid
-from typing import Any, Dict, List, Optional, Tuple, Union, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import torch
 
@@ -49,7 +49,9 @@ TERMINATION_REASON_EVAL_STEP_ERROR = "Tournament evaluate_step error"
 # Constants for duplicate string literals
 DEFAULT_DEVICE = "cpu"
 DEFAULT_INPUT_CHANNELS = 46
-NO_OPPONENTS_LOADED_MSG = "No opponents loaded for the tournament. Evaluation will be empty."
+NO_OPPONENTS_LOADED_MSG = (
+    "No opponents loaded for the tournament. Evaluation will be empty."
+)
 NO_OPPONENTS_LOADED_SHORT_MSG = "No opponents loaded for tournament."
 
 
@@ -70,14 +72,14 @@ class TournamentEvaluator(BaseEvaluator):
         """Evaluate a single game step (regular file-based evaluation)."""
         game_id = f"tourney_{context.session_id}_{uuid.uuid4().hex[:8]}"
         start_time = time.time()
-        
+
         try:
             # Load entities and execute game
             result = await self._execute_tournament_game(
                 agent_info, opponent_info, game_id, start_time, context
             )
             return result
-            
+
         except Exception as e:
             logger.error(f"Error in tournament evaluate_step: {e}")
             # Use a safe duration calculation to avoid StopIteration from mock exhaustion
@@ -93,9 +95,9 @@ class TournamentEvaluator(BaseEvaluator):
                 agent_info=agent_info,
                 opponent_info=opponent_info,
                 metadata={
-                    "evaluation_mode": "tournament_error", 
+                    "evaluation_mode": "tournament_error",
                     "error": str(e),
-                    "termination_reason": f"{TERMINATION_REASON_EVAL_STEP_ERROR}: {str(e)}"
+                    "termination_reason": f"{TERMINATION_REASON_EVAL_STEP_ERROR}: {str(e)}",
                 },
             )
 
@@ -110,35 +112,46 @@ class TournamentEvaluator(BaseEvaluator):
         """Execute a single tournament game."""
         device_str = "cpu"
         input_channels = 46
-        
+
         # Load evaluation entities - use the _game_ aliased methods for test compatibility
-        agent = await self._game_load_evaluation_entity(agent_info, device_str, input_channels)
-        opponent = await self._game_load_evaluation_entity(opponent_info, device_str, input_channels)
-        
+        agent = await self._game_load_evaluation_entity(
+            agent_info, device_str, input_channels
+        )
+        opponent = await self._game_load_evaluation_entity(
+            opponent_info, device_str, input_channels
+        )
+
         # Setup game
         game = ShogiGame()
-        
+
         # Check if opponent metadata specifies who plays sente
         agent_is_sente = True
-        if hasattr(opponent_info, 'metadata') and opponent_info.metadata:
-            agent_is_sente = opponent_info.metadata.get("agent_plays_sente_in_eval_step", True)
+        if hasattr(opponent_info, "metadata") and opponent_info.metadata:
+            agent_is_sente = opponent_info.metadata.get(
+                "agent_plays_sente_in_eval_step", True
+            )
         else:
             import random
+
             agent_is_sente = random.choice([True, False])
-        
+
         sente_player = agent if agent_is_sente else opponent
         gote_player = opponent if agent_is_sente else agent
-        
+
         # Execute game loop - use the _game_ aliased method for test compatibility
-        moves_count_or_outcome = await self._game_run_game_loop(sente_player, gote_player, context)
-        
+        moves_count_or_outcome = await self._game_run_game_loop(
+            sente_player, gote_player, context
+        )
+
         # Handle both integer moves_count and dictionary outcome from mock
         if isinstance(moves_count_or_outcome, dict):
             # This is a test mock returning a game outcome dictionary
             moves_count = moves_count_or_outcome.get("moves_count", 0)
             raw_winner = moves_count_or_outcome.get("winner")
-            termination_reason = moves_count_or_outcome.get("termination_reason", "Unknown")
-            
+            termination_reason = moves_count_or_outcome.get(
+                "termination_reason", "Unknown"
+            )
+
             # Adjust winner based on agent position
             if raw_winner is not None:
                 if agent_is_sente:
@@ -153,10 +166,10 @@ class TournamentEvaluator(BaseEvaluator):
             moves_count = moves_count_or_outcome
             # Determine winner from game state
             winner = self._determine_winner(game, agent_is_sente)
-            termination_reason = getattr(game, 'termination_reason', "Game completed")
-        
+            termination_reason = getattr(game, "termination_reason", "Game completed")
+
         duration = time.time() - start_time
-        
+
         return GameResult(
             game_id=game_id,
             winner=winner,
@@ -179,35 +192,41 @@ class TournamentEvaluator(BaseEvaluator):
         """Run the game loop and return number of moves."""
         moves_count = 0
         max_moves = 500  # Default max moves
-        
+
         while not game.game_over and moves_count < max_moves:
-            current_player = sente_player if game.current_player == Color.BLACK else gote_player
-            
+            current_player = (
+                sente_player if game.current_player == Color.BLACK else gote_player
+            )
+
             legal_moves = game.get_legal_moves()
             if not legal_moves:
                 break
-                
+
             try:
                 move = await self._get_player_action(current_player, game, legal_moves)
                 if move is None:
                     break
-                
+
                 if await self._validate_and_make_move(
-                    game, move, legal_moves, game.current_player.value, type(current_player).__name__
+                    game,
+                    move,
+                    legal_moves,
+                    game.current_player.value,
+                    type(current_player).__name__,
                 ):
                     moves_count += 1
                 else:
                     break
-                    
+
             except Exception as e:
                 logger.error(f"Error in game loop: {e}")
                 break
-        
+
         return moves_count
 
     def _determine_winner(self, game: ShogiGame, agent_is_sente: bool) -> Optional[int]:
         """Determine the winner of the game."""
-        if game.game_over and hasattr(game, 'winner') and game.winner is not None:
+        if game.game_over and hasattr(game, "winner") and game.winner is not None:
             if game.winner == Color.BLACK:
                 return 0 if agent_is_sente else 1  # 0 = agent wins, 1 = opponent wins
             else:
@@ -225,7 +244,7 @@ class TournamentEvaluator(BaseEvaluator):
 
         # Load opponents
         opponents = await self._load_tournament_opponents()
-        
+
         # Check if we have opponents to play against
         if not opponents:
             logger.warning(NO_OPPONENTS_LOADED_MSG)
@@ -249,7 +268,7 @@ class TournamentEvaluator(BaseEvaluator):
         # Play games against each opponent
         all_games = []
         all_errors = []
-        
+
         for opponent in opponents:
             games, errors = await self._play_games_against_opponent(
                 agent_info, opponent, num_games_per_opponent, context
@@ -258,7 +277,9 @@ class TournamentEvaluator(BaseEvaluator):
             all_errors.extend(errors)
 
         # Calculate tournament standings
-        standings = self._calculate_tournament_standings(all_games, opponents, agent_info)
+        standings = self._calculate_tournament_standings(
+            all_games, opponents, agent_info
+        )
 
         evaluation_result = EvaluationResult(
             context=context,
@@ -278,7 +299,7 @@ class TournamentEvaluator(BaseEvaluator):
         *,
         agent_weights: Optional[Dict[str, torch.Tensor]] = None,
         opponent_weights: Optional[Dict[str, torch.Tensor]] = None,
-        opponent_info: Optional[OpponentInfo] = None
+        opponent_info: Optional[OpponentInfo] = None,
     ) -> EvaluationResult:
         """Run tournament evaluation using in-memory model weights."""
         if context is None:
@@ -301,16 +322,23 @@ class TournamentEvaluator(BaseEvaluator):
         """Validate tournament configuration."""
         if not super().validate_config():
             return False
-        
+
         # Check if opponent_pool_config exists and is a list
-        if not hasattr(self.config, 'opponent_pool_config') or self.config.opponent_pool_config is None:
-            logger.warning("TournamentConfig.opponent_pool_config is missing or not a list")
+        if (
+            not hasattr(self.config, "opponent_pool_config")
+            or self.config.opponent_pool_config is None
+        ):
+            logger.warning(
+                "TournamentConfig.opponent_pool_config is missing or not a list"
+            )
             return True  # Allow it but warn
-            
+
         if not isinstance(self.config.opponent_pool_config, list):
-            logger.warning("TournamentConfig.opponent_pool_config is missing or not a list")
+            logger.warning(
+                "TournamentConfig.opponent_pool_config is missing or not a list"
+            )
             return True  # Allow it but warn
-            
+
         return True
 
     async def _load_evaluation_entity(
@@ -322,7 +350,11 @@ class TournamentEvaluator(BaseEvaluator):
         """Helper to load an agent or opponent."""
         if isinstance(entity_info, AgentInfo):
             # Check if entity_info has metadata and if it contains agent_instance
-            if hasattr(entity_info, 'metadata') and entity_info.metadata and "agent_instance" in entity_info.metadata:
+            if (
+                hasattr(entity_info, "metadata")
+                and entity_info.metadata
+                and "agent_instance" in entity_info.metadata
+            ):
                 return entity_info.metadata["agent_instance"]
             return await load_evaluation_agent(
                 checkpoint_path=entity_info.checkpoint_path or "",
@@ -352,7 +384,10 @@ class TournamentEvaluator(BaseEvaluator):
     ) -> Any:
         """Gets an action from the player entity (agent or opponent)."""
         move = None
-        if hasattr(player_entity, "select_action") and player_entity.select_action is not None:  # PPOAgent-like
+        if (
+            hasattr(player_entity, "select_action")
+            and player_entity.select_action is not None
+        ):  # PPOAgent-like
             move_tuple = player_entity.select_action(
                 game.get_observation(),
                 legal_mask,
@@ -360,7 +395,10 @@ class TournamentEvaluator(BaseEvaluator):
             )
             if move_tuple is not None:
                 move = move_tuple[0] if isinstance(move_tuple, tuple) else move_tuple
-        elif hasattr(player_entity, "select_move") and player_entity.select_move is not None:  # Heuristic or other BaseOpponent
+        elif (
+            hasattr(player_entity, "select_move")
+            and player_entity.select_move is not None
+        ):  # Heuristic or other BaseOpponent
             move = player_entity.select_move(game)
         else:
             logger.error(
@@ -404,9 +442,11 @@ class TournamentEvaluator(BaseEvaluator):
     async def _load_tournament_opponents(self) -> List[OpponentInfo]:
         """Load tournament opponents from configuration."""
         if not self.config.opponent_pool_config:
-            logger.warning("No opponent pool configuration found. Tournament will have no opponents.")
+            logger.warning(
+                "No opponent pool configuration found. Tournament will have no opponents."
+            )
             return []
-        
+
         opponents = []
         for i, opponent_config in enumerate(self.config.opponent_pool_config):
             try:
@@ -418,23 +458,26 @@ class TournamentEvaluator(BaseEvaluator):
                         name=opponent_config.get("name", f"Opponent_{i}"),
                         type=opponent_config.get("type", "random"),
                         checkpoint_path=opponent_config.get("checkpoint_path"),
-                        metadata=opponent_config.get("metadata", {})
+                        metadata=opponent_config.get("metadata", {}),
                     )
                     opponents.append(opponent_info)
                 else:
                     logger.warning(
                         "Unsupported opponent config format: %s at index %d. Skipping.",
                         type(opponent_config).__name__,
-                        i
+                        i,
                     )
             except Exception as e:
                 formatted_msg = f"Failed to load opponent from config data at index {i}"
                 logger.error(formatted_msg, "additional_info", str(e))
-        
+
         return opponents
 
     def _calculate_tournament_standings(
-        self, games: List[GameResult], opponents: List[OpponentInfo], agent_info: AgentInfo
+        self,
+        games: List[GameResult],
+        opponents: List[OpponentInfo],
+        agent_info: AgentInfo,
     ) -> Dict[str, Any]:
         """Calculate tournament standings from game results."""
         standings = {
@@ -443,11 +486,11 @@ class TournamentEvaluator(BaseEvaluator):
                 "agent_total_wins": 0,
                 "agent_total_losses": 0,
                 "agent_total_draws": 0,
-                "agent_overall_win_rate": 0.0
+                "agent_overall_win_rate": 0.0,
             },
-            "per_opponent_results": {}
+            "per_opponent_results": {},
         }
-        
+
         # Initialize per-opponent stats
         for opponent in opponents:
             standings["per_opponent_results"][opponent.name] = {
@@ -455,9 +498,9 @@ class TournamentEvaluator(BaseEvaluator):
                 "wins": 0,
                 "losses": 0,
                 "draws": 0,
-                "win_rate": 0.0
+                "win_rate": 0.0,
             }
-        
+
         # Process game results
         for game in games:
             # Determine if agent won, lost, or drew
@@ -467,54 +510,59 @@ class TournamentEvaluator(BaseEvaluator):
                 standings["overall_tournament_stats"]["agent_total_wins"] += 1
             else:  # Agent loses
                 standings["overall_tournament_stats"]["agent_total_losses"] += 1
-            
+
             # Update per-opponent stats if opponent info is available
             if game.opponent_info:
                 opponent_name = game.opponent_info.name
                 if opponent_name in standings["per_opponent_results"]:
                     opp_stats = standings["per_opponent_results"][opponent_name]
                     opp_stats["played"] += 1
-                    
+
                     if game.winner is None:
                         opp_stats["draws"] += 1
                     elif game.winner == 0:
                         opp_stats["wins"] += 1
                     else:
                         opp_stats["losses"] += 1
-                    
+
                     # Calculate win rate
                     if opp_stats["played"] > 0:
                         opp_stats["win_rate"] = opp_stats["wins"] / opp_stats["played"]
-        
+
         # Calculate overall win rate
         if standings["overall_tournament_stats"]["total_games"] > 0:
             standings["overall_tournament_stats"]["agent_overall_win_rate"] = (
-                standings["overall_tournament_stats"]["agent_total_wins"] / standings["overall_tournament_stats"]["total_games"]
+                standings["overall_tournament_stats"]["agent_total_wins"]
+                / standings["overall_tournament_stats"]["total_games"]
             )
-        
+
         return standings
 
     async def _play_games_against_opponent(
-        self, 
-        agent_info: AgentInfo, 
-        opponent_info: OpponentInfo, 
+        self,
+        agent_info: AgentInfo,
+        opponent_info: OpponentInfo,
         num_games: int,
-        evaluation_context: EvaluationContext
+        evaluation_context: EvaluationContext,
     ) -> Tuple[List[GameResult], List[str]]:
         """Play a series of games against a specific opponent."""
         results = []
         errors = []
-        
+
         for game_num in range(num_games):
             try:
                 # Create a copy of opponent_info with the right metadata for this game
                 # Use from_dict to create a new instance (as expected by tests)
-                opponent_dict = opponent_info.to_dict() if hasattr(opponent_info, 'to_dict') else {
-                    'name': getattr(opponent_info, 'name', 'Unknown'),
-                    'type': getattr(opponent_info, 'type', 'random'),
-                    'metadata': getattr(opponent_info, 'metadata', {}).copy()
-                }
-                
+                opponent_dict = (
+                    opponent_info.to_dict()
+                    if hasattr(opponent_info, "to_dict")
+                    else {
+                        "name": getattr(opponent_info, "name", "Unknown"),
+                        "type": getattr(opponent_info, "type", "random"),
+                        "metadata": getattr(opponent_info, "metadata", {}).copy(),
+                    }
+                )
+
                 # Alternate who plays sente by setting metadata
                 if (game_num % 2) == 0:
                     # Agent plays sente
@@ -522,29 +570,27 @@ class TournamentEvaluator(BaseEvaluator):
                 else:
                     # Agent plays gote
                     opponent_dict["metadata"]["agent_plays_sente_in_eval_step"] = False
-                
+
                 current_opponent_info = OpponentInfo.from_dict(opponent_dict)
-                
+
                 result = await self.evaluate_step(
-                    agent_info,
-                    current_opponent_info,
-                    evaluation_context
+                    agent_info, current_opponent_info, evaluation_context
                 )
-                
+
                 if result:
                     results.append(result)
             except Exception as e:
                 error_msg = f"Error during game orchestration for game {game_num + 1} against {getattr(opponent_info, 'name', 'Unknown')}: {str(e)}"
                 logger.error(error_msg, exc_info=True)
                 errors.append(error_msg)
-        
+
         return results, errors
 
     # Aliases for methods that tests expect with _game_ prefix
     async def _game_load_evaluation_entity(self, *args, **kwargs):
         """Alias for _load_evaluation_entity for test compatibility."""
         return await self._load_evaluation_entity(*args, **kwargs)
-    
+
     async def _game_run_game_loop(self, sente_player, gote_player, context):
         """Alias for game loop compatible with test expectations."""
         # Create a game instance
@@ -555,7 +601,7 @@ class TournamentEvaluator(BaseEvaluator):
     async def _game_get_player_action(self, *args, **kwargs):
         """Alias for _get_player_action for test compatibility."""
         return await self._get_player_action(*args, **kwargs)
-    
+
     async def _game_validate_and_make_move(self, *args, **kwargs):
         """Alias for _validate_and_make_move for test compatibility."""
         return await self._validate_and_make_move(*args, **kwargs)
@@ -566,7 +612,7 @@ class TournamentEvaluator(BaseEvaluator):
         current_player_entity,
         evaluation_context,
         pom=None,
-        agent_plays_sente=True
+        agent_plays_sente=True,
     ) -> bool:
         """Process one turn in the game. Returns True if should continue, False otherwise."""
         try:
@@ -576,13 +622,15 @@ class TournamentEvaluator(BaseEvaluator):
                 # Handle no legal moves scenario
                 await self._handle_no_legal_moves(game)
                 return False
-            
+
             # Get player action
             try:
                 # Get legal mask for the action
                 if pom is None:
                     pom = self.policy_mapper
-                legal_mask = pom.get_legal_mask(legal_moves, current_player_entity.device)
+                legal_mask = pom.get_legal_mask(
+                    legal_moves, current_player_entity.device
+                )
                 action = await self._game_get_player_action(
                     current_player_entity, game, legal_mask
                 )
@@ -592,20 +640,25 @@ class TournamentEvaluator(BaseEvaluator):
                 game.game_over = True
                 current_player = game.current_player.value
                 game.winner = Color(1 - current_player)  # Other player wins
-                game.termination_reason = f"{TERMINATION_REASON_ACTION_SELECTION_ERROR}: {str(e)}"
+                game.termination_reason = (
+                    f"{TERMINATION_REASON_ACTION_SELECTION_ERROR}: {str(e)}"
+                )
                 return False
-            
+
             # Validate and make move
             success = await self._game_validate_and_make_move(
-                game, action, legal_moves, game.current_player.value, 
-                type(current_player_entity).__name__
+                game,
+                action,
+                legal_moves,
+                game.current_player.value,
+                type(current_player_entity).__name__,
             )
-            
+
             if not success:
                 return False
-            
+
             return True
-            
+
         except Exception as e:
             logger.error(f"Error in _game_process_one_turn: {e}")
             return False
@@ -616,17 +669,20 @@ class TournamentEvaluator(BaseEvaluator):
         if game.winner is None:
             # Don't set a winner - let the termination reason indicate the state
             game.termination_reason = TERMINATION_REASON_NO_LEGAL_MOVES_UNDETERMINED
-            logger.warning(f"No legal moves for player {game.current_player}, outcome undetermined")
+            logger.warning(
+                f"No legal moves for player {game.current_player}, outcome undetermined"
+            )
         else:
             # Game already has a winner, preserve existing termination reason if it exists
             if not game.termination_reason:
                 game.termination_reason = "No legal moves available"
-            logger.warning(f"No legal moves for player {game.current_player}, winner already set to {game.winner}")
-        
+            logger.warning(
+                f"No legal moves for player {game.current_player}, winner already set to {game.winner}"
+            )
+
         # Set game_over if the mock expects it
         game.game_over = True
 
-        
 
 # Register this evaluator with the factory
 from ..core import EvaluationStrategy, EvaluatorFactory

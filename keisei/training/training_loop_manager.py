@@ -116,12 +116,18 @@ class TrainingLoopManager:
                 self.parallel_manager = None
 
         try:
-            while self.trainer.metrics_manager.global_timestep < self.config.training.total_timesteps:
+            while (
+                self.trainer.metrics_manager.global_timestep
+                < self.config.training.total_timesteps
+            ):
                 self.current_epoch += 1
 
                 self._run_epoch(log_both)
 
-                if self.trainer.metrics_manager.global_timestep >= self.config.training.total_timesteps:
+                if (
+                    self.trainer.metrics_manager.global_timestep
+                    >= self.config.training.total_timesteps
+                ):
                     log_both(
                         f"Target timesteps ({self.config.training.total_timesteps}) reached during epoch {self.current_epoch}."
                     )
@@ -197,7 +203,8 @@ class TrainingLoopManager:
 
         while (
             num_steps_collected < self.config.training.steps_per_epoch
-            and self.trainer.metrics_manager.global_timestep < self.config.training.total_timesteps
+            and self.trainer.metrics_manager.global_timestep
+            < self.config.training.total_timesteps
             and collection_attempts < max_collection_attempts
         ):
 
@@ -208,7 +215,8 @@ class TrainingLoopManager:
                 self.agent
                 and self.agent.model
                 and self.parallel_manager.sync_model_if_needed(
-                    cast(nn.Module, self.agent.model), self.trainer.metrics_manager.global_timestep
+                    cast(nn.Module, self.agent.model),
+                    self.trainer.metrics_manager.global_timestep,
                 )
             ):
                 log_both(
@@ -336,7 +344,10 @@ class TrainingLoopManager:
         """Processes a single step and handles episode completion if necessary.
         Returns True if the loop should continue, False if a critical error occurred or max timesteps reached.
         """
-        if self.trainer.metrics_manager.global_timestep >= self.config.training.total_timesteps:
+        if (
+            self.trainer.metrics_manager.global_timestep
+            >= self.config.training.total_timesteps
+        ):
             return False  # Stop epoch
 
         if self.episode_state is None:
@@ -473,7 +484,11 @@ class TrainingLoopManager:
 
     def _handle_display_updates(self):
         """Handles periodic display updates based on time and step intervals."""
-        if self.trainer.metrics_manager.global_timestep % self.config.training.render_every_steps == 0:
+        if (
+            self.trainer.metrics_manager.global_timestep
+            % self.config.training.render_every_steps
+            == 0
+        ):
             if hasattr(self.display, "refresh_dashboard_panels") and callable(
                 self.display.refresh_dashboard_panels
             ):

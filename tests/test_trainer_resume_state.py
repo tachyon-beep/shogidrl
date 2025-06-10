@@ -242,7 +242,9 @@ class TestTrainerResumeState:
 
         # Debug prints
         print("DEBUG: After trainer creation:")
-        print(f"DEBUG: trainer.metrics_manager.global_timestep = {trainer.metrics_manager.global_timestep}")
+        print(
+            f"DEBUG: trainer.metrics_manager.global_timestep = {trainer.metrics_manager.global_timestep}"
+        )
         print(
             f"DEBUG: trainer.model_manager.checkpoint_data = {getattr(trainer.model_manager, 'checkpoint_data', 'NOT SET')}"
         )
@@ -376,8 +378,12 @@ class TestTrainerResumeState:
         assert (
             trainer.metrics_manager.total_episodes_completed == 0
         )  # Missing field, should default to 0
-        assert trainer.metrics_manager.black_wins == 0  # Missing field, should default to 0
-        assert trainer.metrics_manager.white_wins == 0  # Missing field, should default to 0
+        assert (
+            trainer.metrics_manager.black_wins == 0
+        )  # Missing field, should default to 0
+        assert (
+            trainer.metrics_manager.white_wins == 0
+        )  # Missing field, should default to 0
         assert trainer.metrics_manager.draws == 0  # Missing field, should default to 0
 
     @patch("keisei.training.trainer.EnvManager")
@@ -788,8 +794,13 @@ class TestTrainerResumeState:
         mock_training_loop_instance.trainer = trainer
 
         # Verify the TrainingLoopManager can access restored state
-        assert mock_training_loop_instance.trainer.metrics_manager.global_timestep == 5000
-        assert mock_training_loop_instance.trainer.metrics_manager.total_episodes_completed == 350
+        assert (
+            mock_training_loop_instance.trainer.metrics_manager.global_timestep == 5000
+        )
+        assert (
+            mock_training_loop_instance.trainer.metrics_manager.total_episodes_completed
+            == 350
+        )
         assert mock_training_loop_instance.trainer.metrics_manager.black_wins == 140
         assert mock_training_loop_instance.trainer.metrics_manager.white_wins == 120
         assert mock_training_loop_instance.trainer.metrics_manager.draws == 90

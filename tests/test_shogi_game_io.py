@@ -93,7 +93,7 @@ def game_with_promotion():
         # Add kings so legal move generation works
         game.set_piece(0, 0, Piece(PieceType.KING, Color.WHITE))
         game.set_piece(8, 8, Piece(PieceType.KING, Color.BLACK))
-        
+
         # Setup position for a promotion (black to move)
         game.set_piece(3, 4, Piece(PieceType.PAWN, Color.BLACK))
         game.make_move((3, 4, 2, 4, True))  # Black pawn promotes

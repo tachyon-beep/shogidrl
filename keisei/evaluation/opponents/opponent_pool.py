@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import random
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Deque, Iterable, Optional, Sequence
-import random
 
 from keisei.evaluation.opponents.elo_registry import EloRegistry
 
@@ -19,7 +19,9 @@ class OpponentEntry:
 class OpponentPool:
     """Manage a pool of opponent checkpoints and their Elo ratings."""
 
-    def __init__(self, pool_size: int = 5, elo_registry_path: Optional[str] = None) -> None:
+    def __init__(
+        self, pool_size: int = 5, elo_registry_path: Optional[str] = None
+    ) -> None:
         self.pool_size = pool_size
         self._entries: Deque[Path] = deque(maxlen=pool_size)
         self.elo_registry: Optional[EloRegistry] = None

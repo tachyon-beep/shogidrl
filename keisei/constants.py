@@ -48,6 +48,7 @@ class GameTerminationReason:
     STALEMATE = "stalemate"
     POLICY_ERROR = "policy_error"
 
+
 # Parallel training defaults
 
 # Timeout and retry constants

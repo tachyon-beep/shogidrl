@@ -4,10 +4,10 @@ import pytest
 
 from keisei.evaluation.core import (
     AgentInfo,
-    OpponentInfo,
     EvaluationContext,
-    SingleOpponentConfig,
     GameResult,
+    OpponentInfo,
+    SingleOpponentConfig,
     SummaryStats,
 )
 

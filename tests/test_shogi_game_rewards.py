@@ -240,9 +240,7 @@ def test_make_move_returns_perspective_specific_reward():
         2, 5, Piece(PieceType.ROOK, Color.WHITE)
     )  # White rook positioned to checkmate after BLACK moves
     game.set_piece(8, 4, Piece(PieceType.KING, Color.WHITE))
-    game.set_piece(
-        6, 0, Piece(PieceType.PAWN, Color.BLACK)
-    )  # Black pawn that can move
+    game.set_piece(6, 0, Piece(PieceType.PAWN, Color.BLACK))  # Black pawn that can move
 
     # Set black to move - they can move the pawn
     game.current_player = Color.BLACK

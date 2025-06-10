@@ -33,4 +33,3 @@ def test_pool_champion_rating(tmp_path):
     # Update Elo so ck2 becomes champion
     pool.update_ratings(ck2.name, ck1.name, ["agent_win"])
     assert pool.champion() == ck2
-

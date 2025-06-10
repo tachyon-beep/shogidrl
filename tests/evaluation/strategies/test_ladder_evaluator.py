@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 from keisei.evaluation.core import EvaluationContext, LadderConfig
 from keisei.evaluation.strategies.ladder import LadderEvaluator
@@ -16,7 +17,11 @@ async def test_initialize_opponent_pool_defaults():
 
 @pytest.mark.asyncio
 async def test_initialize_opponent_pool_custom_config():
-    cfg = LadderConfig(opponent_pool_config=[{"name": "opp1", "type": "random", "initial_rating": 1600}])
+    cfg = LadderConfig(
+        opponent_pool_config=[
+            {"name": "opp1", "type": "random", "initial_rating": 1600}
+        ]
+    )
     evaluator = LadderEvaluator(cfg)
     context = MagicMock(spec=EvaluationContext)
     await evaluator._initialize_opponent_pool(context)

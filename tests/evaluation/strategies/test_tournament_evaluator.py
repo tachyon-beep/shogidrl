@@ -32,7 +32,6 @@ from keisei.shogi.shogi_core_definitions import Color
 from keisei.shogi.shogi_game import ShogiGame
 from keisei.utils import PolicyOutputMapper
 
-
 # Note: Using @pytest.mark.asyncio for async tests instead of custom wrapper
 
 
@@ -1118,20 +1117,24 @@ class TestTournamentEvaluator:
     @patch(
         "keisei.evaluation.strategies.tournament.TournamentEvaluator._game_get_player_action"
     )
-    async def test_game_process_one_turn_valid_move_agent_turn(self, mock_get_action, mock_tournament_config, mock_evaluation_context):
+    async def test_game_process_one_turn_valid_move_agent_turn(
+        self, mock_get_action, mock_tournament_config, mock_evaluation_context
+    ):
         """Tests _game_process_one_turn: agent's turn, valid move made."""
         evaluator = TournamentEvaluator(mock_tournament_config)
         mock_game = MagicMock(spec=ShogiGame)
         mock_game.get_legal_moves.return_value = ["7g7f"]
         mock_game.current_player = Color(0)  # Sente
         mock_game.game_over = False
-        
+
         mock_player_entity = MagicMock()
         mock_player_entity.device = torch.device("cpu")
-        
+
         mock_get_action.return_value = "7g7f"
         evaluator._game_validate_and_make_move = AsyncMock(return_value=True)
-        evaluator.policy_mapper.get_legal_mask = MagicMock(return_value="legal_mask_tensor")
+        evaluator.policy_mapper.get_legal_mask = MagicMock(
+            return_value="legal_mask_tensor"
+        )
 
         result = await evaluator._game_process_one_turn(
             mock_game, mock_player_entity, mock_evaluation_context
@@ -1155,13 +1158,15 @@ class TestTournamentEvaluator:
         mock_game.get_legal_moves.return_value = ["2g2f"]
         mock_game.current_player = Color(1)  # Gote
         mock_game.game_over = False
-        
+
         mock_player_entity = MagicMock()
         mock_player_entity.device = torch.device("cpu")
-        
+
         mock_get_action.return_value = "2g2f"
         evaluator._game_validate_and_make_move = AsyncMock(return_value=True)
-        evaluator.policy_mapper.get_legal_mask = MagicMock(return_value="legal_mask_tensor")
+        evaluator.policy_mapper.get_legal_mask = MagicMock(
+            return_value="legal_mask_tensor"
+        )
 
         result = await evaluator._game_process_one_turn(
             mock_game, mock_player_entity, mock_evaluation_context
@@ -1176,20 +1181,26 @@ class TestTournamentEvaluator:
     @patch(
         "keisei.evaluation.strategies.tournament.TournamentEvaluator._game_get_player_action"
     )
-    async def test_game_process_one_turn_invalid_move(self, mock_get_action, mock_tournament_config, mock_evaluation_context):
+    async def test_game_process_one_turn_invalid_move(
+        self, mock_get_action, mock_tournament_config, mock_evaluation_context
+    ):
         """Tests _game_process_one_turn: player makes an invalid move."""
         evaluator = TournamentEvaluator(mock_tournament_config)
         mock_game = MagicMock(spec=ShogiGame)
         mock_game.get_legal_moves.return_value = ["7g7f"]
         mock_game.current_player = Color(0)  # Sente
         mock_game.game_over = False
-        
+
         mock_player_entity = MagicMock()
         mock_player_entity.device = torch.device("cpu")
-        
+
         mock_get_action.return_value = "1a1b"  # Invalid move
-        evaluator._game_validate_and_make_move = AsyncMock(return_value=False)  # Validation fails
-        evaluator.policy_mapper.get_legal_mask = MagicMock(return_value="legal_mask_tensor")
+        evaluator._game_validate_and_make_move = AsyncMock(
+            return_value=False
+        )  # Validation fails
+        evaluator.policy_mapper.get_legal_mask = MagicMock(
+            return_value="legal_mask_tensor"
+        )
 
         result = await evaluator._game_process_one_turn(
             mock_game, mock_player_entity, mock_evaluation_context
@@ -1213,10 +1224,10 @@ class TestTournamentEvaluator:
         mock_game.get_legal_moves.return_value = []  # No legal moves
         mock_game.current_player = Color(0)  # Sente
         mock_game.game_over = False
-        
+
         mock_player_entity = MagicMock()
         mock_player_entity.device = torch.device("cpu")
-        
+
         evaluator._handle_no_legal_moves = AsyncMock()
 
         result = await evaluator._game_process_one_turn(
@@ -1239,12 +1250,14 @@ class TestTournamentEvaluator:
         mock_game.get_legal_moves.return_value = ["7g7f"]
         mock_game.current_player = Color(0)  # Sente
         mock_game.game_over = False
-        
+
         mock_player_entity = MagicMock()
         mock_player_entity.device = torch.device("cpu")
-        
+
         mock_get_action.side_effect = RuntimeError("Action selection failed")
-        evaluator.policy_mapper.get_legal_mask = MagicMock(return_value="legal_mask_tensor")
+        evaluator.policy_mapper.get_legal_mask = MagicMock(
+            return_value="legal_mask_tensor"
+        )
 
         result = await evaluator._game_process_one_turn(
             mock_game, mock_player_entity, mock_evaluation_context
@@ -1253,4 +1266,7 @@ class TestTournamentEvaluator:
         assert result is False
         assert mock_game.game_over is True
         assert mock_game.winner == Color(1)  # Other player wins
-        assert "Action selection error: Action selection failed" in mock_game.termination_reason
+        assert (
+            "Action selection error: Action selection failed"
+            in mock_game.termination_reason
+        )

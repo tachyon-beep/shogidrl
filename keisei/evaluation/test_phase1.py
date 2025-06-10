@@ -218,8 +218,8 @@ async def test_legacy_compatibility():
     print("\nTesting legacy compatibility...")
 
     # Test direct config creation instead of legacy conversion
-    from keisei.evaluation.core import create_evaluation_config, EvaluationStrategy
-    
+    from keisei.evaluation.core import EvaluationStrategy, create_evaluation_config
+
     config = create_evaluation_config(
         strategy=EvaluationStrategy.SINGLE_OPPONENT,
         num_games=20,

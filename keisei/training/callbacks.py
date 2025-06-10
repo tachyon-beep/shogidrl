@@ -104,7 +104,6 @@ class EvaluationCallback(Callback):
                     )
                 return
 
-
             opponent_ckpt = None
             if hasattr(trainer, "evaluation_manager"):
                 opponent_ckpt = trainer.evaluation_manager.opponent_pool.sample()
