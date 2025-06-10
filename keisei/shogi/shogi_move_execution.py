@@ -4,6 +4,7 @@ Contains functions for applying and reverting moves in the Shogi game.
 These functions operate on a ShogiGame instance.
 """
 
+from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -24,6 +25,12 @@ from .shogi_core_definitions import (
 
 if TYPE_CHECKING:
     from .shogi_game import ShogiGame
+
+@dataclass
+class MoveApplicationResult:
+    """Result information from applying a move to the board."""
+    captured_piece_type: Optional[PieceType] = None
+    was_promotion: bool = False
 
 
 def apply_move_to_board(

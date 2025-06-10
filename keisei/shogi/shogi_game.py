@@ -7,8 +7,7 @@ Orchestrates game state and delegates complex logic to helper modules.
 
 import copy  # Added for __deepcopy__
 import logging
-import re  # Added for SFEN parsing
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -19,10 +18,7 @@ logger = logging.getLogger(__name__)
 from . import shogi_game_io, shogi_move_execution, shogi_rules_logic
 
 # Import types and fundamental classes from shogi_core_definitions
-from .shogi_core_definitions import BASE_TO_PROMOTED_TYPE  # For SFEN deserialization
 from .shogi_core_definitions import PIECE_TYPE_TO_HAND_TYPE  # Used in add_to_hand
-from .shogi_core_definitions import PROMOTED_TYPES_SET  # For SFEN serialization
-from .shogi_core_definitions import SYMBOL_TO_PIECE_TYPE  # Added for SFEN parsing
 from .shogi_core_definitions import MoveTuple  # Already imported above
 from .shogi_core_definitions import (
     Color,
@@ -37,23 +33,6 @@ class ShogiGame:
     Represents the Shogi game state, board, and operations.
     Delegates complex rule logic, I/O, and move execution to helper modules.
     """
-
-    _SFEN_BOARD_CHARS: Dict[PieceType, str] = {
-        PieceType.PAWN: "P",
-        PieceType.LANCE: "L",
-        PieceType.KNIGHT: "N",
-        PieceType.SILVER: "S",
-        PieceType.GOLD: "G",
-        PieceType.BISHOP: "B",
-        PieceType.ROOK: "R",
-        PieceType.KING: "K",
-        PieceType.PROMOTED_PAWN: "P",  # Note: SFEN uses the base piece char for promoted pieces on board, promotion is indicated by '+'
-        PieceType.PROMOTED_LANCE: "L",
-        PieceType.PROMOTED_KNIGHT: "N",
-        PieceType.PROMOTED_SILVER: "S",
-        PieceType.PROMOTED_BISHOP: "B",
-        PieceType.PROMOTED_ROOK: "R",
-    }
 
     def __init__(
         self, max_moves_per_game: int = 500
@@ -255,34 +234,7 @@ class ShogiGame:
             self, color, debug_recursion=debug_recursion
         )  # Pass debug flag
 
-    # --- SFEN Encoding Helper Methods ---
-    def _sfen_sq(self, r: int, c: int) -> str:
-        """Converts 0-indexed (row, col) to SFEN square string (e.g., (0,0) -> "9a")."""
-        if not (0 <= r <= 8 and 0 <= c <= 8):
-            raise ValueError(f"Invalid Shogi coordinate for SFEN: row {r}, col {c}")
-        file = str(9 - c)
-        rank = chr(ord("a") + r)
-        return file + rank
-
-    def _get_sfen_drop_char(self, piece_type: PieceType) -> str:
-        """Helper to get the uppercase SFEN character for a droppable piece type."""
-        # Using a mapping for clarity and directness
-        sfen_char_map: Dict[PieceType, str] = {
-            PieceType.PAWN: "P",
-            PieceType.LANCE: "L",
-            PieceType.KNIGHT: "N",
-            PieceType.SILVER: "S",
-            PieceType.GOLD: "G",
-            PieceType.BISHOP: "B",
-            PieceType.ROOK: "R",
-        }
-        char = sfen_char_map.get(piece_type)
-        if char is None:
-            raise ValueError(
-                f"PieceType {piece_type.name if hasattr(piece_type, 'name') else piece_type} "
-                f"is not a standard droppable piece for SFEN notation or is invalid."
-            )
-        return char
+    # --- SFEN methods now delegate to shogi_game_io.py ---
 
     def sfen_encode_move(
         self, move_tuple: MoveTuple
@@ -292,74 +244,7 @@ class ShogiGame:
         Board move: (from_r, from_c, to_r, to_c, promote_bool) -> e.g., "7g7f" or "2b3a+"
         Drop move: (None, None, to_r, to_c, piece_type) -> e.g., "P*5e"
         """
-        if (
-            len(move_tuple) == 5
-            and isinstance(move_tuple[0], int)
-            and isinstance(move_tuple[1], int)
-            and isinstance(move_tuple[2], int)
-            and isinstance(move_tuple[3], int)
-            and isinstance(move_tuple[4], bool)
-        ):
-            from_r, from_c, to_r, to_c, promote = (
-                move_tuple[0],
-                move_tuple[1],
-                move_tuple[2],
-                move_tuple[3],
-                move_tuple[4],
-            )
-            from_sq_str = self._sfen_sq(from_r, from_c)
-            to_sq_str = self._sfen_sq(to_r, to_c)
-            promo_char = "+" if promote else ""
-            return f"{from_sq_str}{to_sq_str}{promo_char}"
-        elif (
-            len(move_tuple) == 5
-            and move_tuple[0] is None
-            and move_tuple[1] is None
-            and isinstance(move_tuple[2], int)
-            and isinstance(move_tuple[3], int)
-            and isinstance(move_tuple[4], PieceType)
-        ):
-            _, _, to_r, to_c, piece_to_drop = (
-                move_tuple[0],
-                move_tuple[1],
-                move_tuple[2],
-                move_tuple[3],
-                move_tuple[4],
-            )
-            piece_char = self._get_sfen_drop_char(piece_to_drop)
-            to_sq_str = self._sfen_sq(to_r, to_c)
-            return f"{piece_char}*{to_sq_str}"
-        else:
-            element_types = [type(el).__name__ for el in move_tuple]
-            element_values = [str(el) for el in move_tuple]
-            raise ValueError(
-                f"Invalid MoveTuple format for SFEN conversion: {move_tuple}. "
-                f"Types: {element_types}. Values: {element_values}."
-            )
-
-    # --- SFEN Game State Serialization ---
-    def _get_sfen_board_char(self, piece: Piece) -> str:
-        """Helper to get the SFEN character for a piece on the board."""
-        if not isinstance(piece, Piece):
-            raise TypeError(f"Expected a Piece object, got {type(piece)}")
-
-        # Get the base character (e.g., 'P' for PAWN and PROMOTED_PAWN)
-        base_char = self._SFEN_BOARD_CHARS.get(piece.type)
-        if base_char is None:
-            # This handles cases like KING which don't have a separate entry for a promoted type
-            # but are in _SFEN_BOARD_CHARS. It mainly catches truly unknown types.
-            raise ValueError(
-                f"Unknown piece type for SFEN board character: {piece.type}"
-            )
-
-        sfen_char = ""
-        if piece.type in PROMOTED_TYPES_SET:
-            sfen_char += "+"
-        sfen_char += base_char
-
-        if piece.color == Color.WHITE:
-            return sfen_char.lower()
-        return sfen_char
+        return shogi_game_io.encode_move_to_sfen_string(move_tuple)
 
     def to_sfen_string(self) -> str:
         """
@@ -367,143 +252,20 @@ class ShogiGame:
         Format: <board> <turn> <hands> <move_number>
         Example: lnsgkgsnl/1r5b1/ppppppppp/9/9/9/PPPPPPPPP/1B5R1/LNSGKGSNL b - 1
         """
-        sfen_ranks = []
-        # Board: ranks 1-9 (board[0] to board[8]), files 1-9 (col[8] to col[0])
-        for r in range(9):  # board row 0 (SFEN rank 1) to board row 8 (SFEN rank 9)
-            empty_squares_count = 0
-            sfen_rank_str = ""
-            # Iterate from file 9 (board column 0) down to file 1 (board column 8) for SFEN
-            # Our internal board is board[row][col] where col 0 is file 9 (leftmost from Black's view)
-            # So we iterate columns from 0 to 8 for our board, which corresponds to SFEN files 9 to 1.
-            for c in range(9):  # Iterate through columns 0 to 8 (SFEN files 9 to 1)
-                piece = self.board[r][c]
-                if piece:
-                    if empty_squares_count > 0:
-                        sfen_rank_str += str(empty_squares_count)
-                        empty_squares_count = 0
-                    sfen_rank_str += self._get_sfen_board_char(piece)
-                else:
-                    empty_squares_count += 1
+        return shogi_game_io.convert_game_to_sfen_string(self)
 
-            if empty_squares_count > 0:  # Append any trailing empty count for the rank
-                sfen_rank_str += str(empty_squares_count)
-            sfen_ranks.append(sfen_rank_str)
-        board_sfen = "/".join(sfen_ranks)
-
-        # Player turn
-        turn_sfen = "b" if self.current_player == Color.BLACK else "w"
-
-        # Hands
-        # SFEN standard hand piece order: R, B, G, S, N, L, P.
-        # Uppercase for Black, lowercase for White.
-        # If a player has multiple pieces of the same type, the number precedes the piece character (e.g., 2P).
-        # If no pieces in hand, it's "-".
-
-        # Canonical order for pieces in hand as per many SFEN implementations/expectations.
-        # Though the spec might be flexible, tests often expect this order.
-        SFEN_HAND_PIECE_CANONICAL_ORDER = [
-            PieceType.ROOK,
-            PieceType.BISHOP,
-            PieceType.GOLD,
-            PieceType.SILVER,
-            PieceType.KNIGHT,
-            PieceType.LANCE,
-            PieceType.PAWN,
-        ]
-
-        hand_sfen_parts = []
-        has_black_pieces = False
-        # Black's hand (uppercase)
-        for piece_type in SFEN_HAND_PIECE_CANONICAL_ORDER:
-            count = self.hands[Color.BLACK.value].get(piece_type, 0)
-            if count > 0:
-                has_black_pieces = True
-                sfen_char = self._SFEN_BOARD_CHARS[
-                    piece_type
-                ]  # Should be uppercase by convention from _SFEN_BOARD_CHARS
-                if count > 1:
-                    hand_sfen_parts.append(str(count))
-                hand_sfen_parts.append(sfen_char)
-
-        has_white_pieces = False
-        # White's hand (lowercase)
-        for piece_type in SFEN_HAND_PIECE_CANONICAL_ORDER:
-            count = self.hands[Color.WHITE.value].get(piece_type, 0)
-            if count > 0:
-                has_white_pieces = True
-                sfen_char_upper = self._SFEN_BOARD_CHARS[piece_type]
-                sfen_char = sfen_char_upper.lower()  # Ensure lowercase for White
-                if count > 1:
-                    hand_sfen_parts.append(str(count))
-                hand_sfen_parts.append(sfen_char)
-
-        hands_sfen = (
-            "".join(hand_sfen_parts) if (has_black_pieces or has_white_pieces) else "-"
-        )
-
-        # Move number (1-indexed)
-        # self.move_count is 0 for the first move to be made, so SFEN move number is move_count + 1
-        move_num_sfen = str(self.move_count + 1)
-
-        return f"{board_sfen} {turn_sfen} {hands_sfen} {move_num_sfen}"
-
-    # --- SFEN Game State Deserialization ---
-
-    @staticmethod
-    def _parse_sfen_board_piece(
-        sfen_char_on_board: str, is_promoted_sfen_token: bool
-    ) -> Tuple[PieceType, Color]:
-        """
-        Parses an SFEN board piece character (e.g., 'P', 'l', 'R') and promotion status
-        into (PieceType, Color).
-        `sfen_char_on_board` is the actual piece letter (e.g., 'P' from "+P", or 'K').
-        `is_promoted_sfen_token` is True if a '+' preceded this character in SFEN.
-        Returns (PieceType, Color)
-        """
-        color = Color.BLACK if "A" <= sfen_char_on_board <= "Z" else Color.WHITE
-
-        base_char_upper = sfen_char_on_board.upper()
-        base_piece_type = SYMBOL_TO_PIECE_TYPE.get(base_char_upper)
-
-        if base_piece_type is None:
-            raise ValueError(
-                f"Invalid SFEN piece character for board: {sfen_char_on_board}"
-            )
-
-        if is_promoted_sfen_token:
-            if base_piece_type in BASE_TO_PROMOTED_TYPE:
-                final_piece_type = BASE_TO_PROMOTED_TYPE[base_piece_type]
-            elif (
-                base_piece_type in PROMOTED_TYPES_SET
-            ):  # Already a promoted type, e.g. if SYMBOL_TO_PIECE_TYPE mapped +P directly
-                final_piece_type = base_piece_type
-            else:
-                # '+' was applied to a non-promotable piece like King or Gold
-                raise ValueError(
-                    f"Invalid promotion: SFEN token '+' applied to non-promotable piece type {base_piece_type.name} (from char '{sfen_char_on_board}')"
-                )
-        else:  # Not a promoted token
-            # If the base_piece_type itself is a promoted type (e.g. if _SFEN_BOARD_CHARS had +P: P and no plain P:P)
-            # this would be an issue, but SYMBOL_TO_PIECE_TYPE should map to base types.
-            if base_piece_type in PROMOTED_TYPES_SET:
-                raise ValueError(
-                    f"Invalid SFEN: Character '{sfen_char_on_board}' (mapped to {base_piece_type.name}) implies promotion, but no '+' prefix found."
-                )
-            final_piece_type = base_piece_type
-
-        return final_piece_type, color
+    def to_sfen(self) -> str:
+        """Alias for to_sfen_string() for convenience."""
+        return self.to_sfen_string()
 
     @classmethod
     def from_sfen(
         cls, sfen_str: str, max_moves_for_game_instance: int = 500
     ) -> "ShogiGame":
         """Loads a game state from an SFEN string."""
-        sfen_pattern = re.compile(r"^\s*([^ ]+)\s+([bw])\s+([^ ]+)\s+(\d+)\s*$")
-        match = sfen_pattern.match(sfen_str.strip())
-        if not match:
-            raise ValueError(f"Invalid SFEN string structure: '{sfen_str}'")
-
-        board_sfen, turn_sfen, hands_sfen, move_number_sfen = match.groups()
+        # Parse SFEN string components
+        board_sfen, turn_sfen, hands_sfen, move_number_sfen = shogi_game_io.parse_sfen_string_components(sfen_str)
+        
         current_player = Color.BLACK if turn_sfen == "b" else Color.WHITE
 
         try:
@@ -517,9 +279,9 @@ class ShogiGame:
                 f"Invalid move number in SFEN: '{move_number_sfen}'"
             ) from e
 
-        game = cls()
+        # Create game instance and initialize
+        game = cls(max_moves_per_game=max_moves_for_game_instance)
         game.current_player = current_player
-        game._max_moves_this_game = max_moves_for_game_instance
         game.move_count = move_number - 1
         game.board = [[None for _ in range(9)] for _ in range(9)]
         game.hands = {
@@ -529,119 +291,13 @@ class ShogiGame:
         game.move_history = []
         game.board_history = []
 
-        # Parse board
-        rows = board_sfen.split("/")
-        if len(rows) != 9:
-            raise ValueError("Expected 9 ranks")
+        # Populate board from SFEN
+        shogi_game_io.populate_board_from_sfen_segment(game.board, board_sfen)
 
-        for r, row_str in enumerate(rows):
-            c = 0
-            promoted_flag_active = False
-            while c < 9 and row_str:
-                char_sfen = row_str[0]
-                row_str = row_str[1:]
-                if char_sfen == "+":
-                    if promoted_flag_active:
-                        raise ValueError(
-                            "Invalid piece character sequence starting with '+'"
-                        )
-                    promoted_flag_active = True
-                    continue
-                elif char_sfen.isdigit():
-                    if promoted_flag_active:
-                        raise ValueError(
-                            f"Invalid SFEN: Digit ('{char_sfen}') cannot immediately follow a promotion token ('+')."
-                        )
-                    if char_sfen == "0":
-                        raise ValueError("Invalid SFEN piece character for board: 0")
-                    empty_squares = int(char_sfen)
-                    if not 1 <= empty_squares <= 9 - c:
-                        raise ValueError(
-                            f"Row {r+1} ('{row_str}') describes {c+empty_squares} columns, expected 9"
-                        )
-                    c += empty_squares
-                else:
-                    piece_char_upper = char_sfen.upper()
-                    base_piece_type = SYMBOL_TO_PIECE_TYPE.get(piece_char_upper)
-                    if base_piece_type is None:
-                        raise ValueError(
-                            f"Invalid SFEN piece character for board: {char_sfen}"
-                        )
-                    piece_color = Color.BLACK if char_sfen.isupper() else Color.WHITE
-                    final_piece_type = base_piece_type
-                    if promoted_flag_active:
-                        if base_piece_type in BASE_TO_PROMOTED_TYPE:
-                            final_piece_type = BASE_TO_PROMOTED_TYPE[base_piece_type]
-                            # Removed unused variable 'is_actually_promoted'
-                        elif base_piece_type in PROMOTED_TYPES_SET:
-                            raise ValueError(
-                                f"Invalid promotion: SFEN token '+' applied to non-promotable piece type {base_piece_type.name}"
-                            )
-                        else:
-                            raise ValueError(
-                                f"Invalid promotion: SFEN token '+' applied to non-promotable piece type {base_piece_type.name}"
-                            )
-                    elif (
-                        not promoted_flag_active
-                        and base_piece_type in PROMOTED_TYPES_SET
-                    ):
-                        raise ValueError(
-                            f"Invalid SFEN piece character for board: {char_sfen}"
-                        )
-                    game.board[r][c] = Piece(final_piece_type, piece_color)
-                    # is_promoted is automatically handled by the Piece constructor
-                    # based on final_piece_type. No explicit setting needed here.
-                    c += 1
-                    promoted_flag_active = False
-            if c != 9:
-                raise ValueError(
-                    f"Row {r+1} ('{rows[r]}') describes {c} columns, expected 9"
-                )
-
-        # Parse hands
-        if hands_sfen != "-":
-            hand_segment_pattern = re.compile(r"(\d*)([PLNSGBRplnsgbr])")
-            pos = 0
-            parsing_white_hand_pieces = False
-            while pos < len(hands_sfen):
-                match_hand = hand_segment_pattern.match(hands_sfen, pos)
-                if not match_hand:
-                    if hands_sfen[pos:].startswith("K") or hands_sfen[pos:].startswith(
-                        "k"
-                    ):
-                        raise ValueError(
-                            "Invalid piece character 'K' or non-droppable piece type in SFEN hands"
-                        )
-                    raise ValueError("Invalid character sequence in SFEN hands")
-                count_str, piece_char = match_hand.groups()
-                count = int(count_str) if count_str else 1
-
-                is_current_piece_white = piece_char.islower()
-                is_current_piece_black = piece_char.isupper()
-
-                if is_current_piece_white:
-                    parsing_white_hand_pieces = True
-                elif is_current_piece_black and parsing_white_hand_pieces:
-                    raise ValueError(
-                        "Invalid SFEN hands: Black's pieces must precede White's pieces."
-                    )
-
-                try:
-                    piece_type_in_hand = SYMBOL_TO_PIECE_TYPE[piece_char.upper()]
-                    hand_color = Color.BLACK if is_current_piece_black else Color.WHITE
-                except KeyError as e:
-                    raise ValueError("Invalid character sequence in SFEN hands") from e
-                if piece_type_in_hand == PieceType.KING:
-                    raise ValueError(
-                        "Invalid piece character 'K' or non-droppable piece type in SFEN hands"
-                    )
-                if piece_type_in_hand in PROMOTED_TYPES_SET:
-                    raise ValueError("Invalid character sequence in SFEN hands")
-                current_hand_for_color = game.hands[hand_color.value]
-                current_hand_for_color[piece_type_in_hand] = (
-                    current_hand_for_color.get(piece_type_in_hand, 0) + count
-                )
-                pos = match_hand.end()
+        # Populate hands from SFEN
+        shogi_game_io.populate_hands_from_sfen_segment(game.hands, hands_sfen)
+        
+        # Finalize setup
         game._initial_board_setup_done = True
         game.board_history.append(game._board_state_hash())
 
@@ -667,9 +323,6 @@ class ShogiGame:
             game.game_over = True
             game.winner = None
             game.termination_reason = "Sennichite"
-
-        # Removed hardcoded SFEN string checks for termination.
-        # The general logic above should handle game termination.
 
         return game
 
