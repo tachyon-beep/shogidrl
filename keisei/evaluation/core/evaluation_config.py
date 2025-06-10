@@ -46,6 +46,14 @@ class EvaluationConfig:
     wandb_logging: bool = True
     update_elo: bool = True
 
+    # Performance optimization settings
+    enable_in_memory_evaluation: bool = True
+    model_weight_cache_size: int = 5
+    enable_parallel_execution: bool = True
+    process_restart_threshold: int = 100
+    temp_agent_device: str = "cpu"
+    clear_cache_after_evaluation: bool = True
+
     # Additional parameters (strategy-specific)
     strategy_params: Dict[str, Any] = field(default_factory=dict)
 

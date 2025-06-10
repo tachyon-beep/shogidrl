@@ -28,6 +28,13 @@ from .evaluation_result import (
     SummaryStats,
     create_game_result,
 )
+from .model_manager import ModelWeightManager
+from .parallel_executor import (
+    BatchGameExecutor,
+    ParallelGameExecutor,
+    ParallelGameTask,
+    create_parallel_game_tasks,
+)
 
 __all__ = [
     # Base classes
@@ -53,4 +60,11 @@ __all__ = [
     "GameResult",
     "SummaryStats",
     "create_game_result",
+    # Model management
+    "ModelWeightManager",
+    # Parallel execution
+    "ParallelGameExecutor",
+    "BatchGameExecutor", 
+    "ParallelGameTask",
+    "create_parallel_game_tasks",
 ]

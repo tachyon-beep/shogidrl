@@ -13,6 +13,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, AsyncIterator, Dict, List, Optional, Union
 
+import torch
+
 from .evaluation_config import EvaluationConfig
 from .evaluation_context import AgentInfo, EvaluationContext, OpponentInfo
 from .evaluation_result import EvaluationResult, GameResult
@@ -60,6 +62,34 @@ class BaseEvaluator(ABC):
             Complete evaluation results
         """
         pass
+
+    async def evaluate_in_memory(
+        self,
+        agent_info: AgentInfo,
+        context: Optional[EvaluationContext] = None,
+        *,
+        agent_weights: Optional[Dict[str, torch.Tensor]] = None,
+        opponent_weights: Optional[Dict[str, torch.Tensor]] = None,
+        opponent_info: Optional[OpponentInfo] = None
+    ) -> EvaluationResult:
+        """
+        Run evaluation using in-memory weights (optional optimization).
+
+        Default implementation falls back to regular evaluation.
+        Subclasses can override for performance optimization.
+
+        Args:
+            agent_info: Information about the agent to evaluate
+            context: Optional evaluation context
+            agent_weights: Pre-extracted agent model weights
+            opponent_weights: Pre-extracted opponent model weights
+            opponent_info: Opponent information
+
+        Returns:
+            Complete evaluation results
+        """
+        # Default implementation: fallback to regular evaluation
+        return await self.evaluate(agent_info, context)
 
     @abstractmethod
     async def evaluate_step(

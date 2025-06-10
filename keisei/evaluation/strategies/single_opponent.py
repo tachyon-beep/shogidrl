@@ -55,6 +55,11 @@ class SingleOpponentEvaluator(BaseEvaluator):
         self.config: SingleOpponentConfig = config
         self.policy_mapper = PolicyOutputMapper()
 
+        # In-memory evaluation support
+        self.agent_weights: Optional[Dict[str, torch.Tensor]] = None
+        self.opponent_weights: Optional[Dict[str, torch.Tensor]] = None
+        self.temp_agent_config = None
+
     async def _load_evaluation_entity(
         self,
         entity_info: Union[AgentInfo, OpponentInfo],
@@ -330,13 +335,181 @@ class SingleOpponentEvaluator(BaseEvaluator):
             context=context,
             games=games,
             summary_stats=summary_stats,
-            analytics=self._calculate_analytics(games),
+            analytics_data=self._calculate_analytics(games),
             errors=errors,
-            elo_snapshot={},  # Will be filled by ELO system if enabled
+            elo_tracker=None,  # Will be filled by ELO system if enabled
         )
 
         self.log_evaluation_complete(result)
         return result
+
+    async def evaluate_in_memory(
+        self,
+        agent_info: AgentInfo,
+        context: Optional[EvaluationContext] = None,
+        *,
+        agent_weights: Optional[Dict[str, torch.Tensor]] = None,
+        opponent_weights: Optional[Dict[str, torch.Tensor]] = None,
+        opponent_info: Optional[OpponentInfo] = None
+    ) -> EvaluationResult:
+        """
+        Run single opponent evaluation using in-memory weights.
+
+        Args:
+            agent_info: Information about the agent to evaluate
+            context: Optional evaluation context
+            agent_weights: Pre-extracted agent model weights
+            opponent_weights: Pre-extracted opponent model weights
+            opponent_info: Opponent information
+
+        Returns:
+            Complete evaluation results
+        """
+        # Validate inputs
+        if not self.validate_agent(agent_info):
+            raise ValueError("Invalid agent configuration")
+
+        if not self.validate_config():
+            raise ValueError("Invalid evaluator configuration")
+
+        # Store weights for use during evaluation
+        self.agent_weights = agent_weights
+        self.opponent_weights = opponent_weights
+        
+        try:
+            # Set up context
+            if context is None:
+                context = self.setup_context(agent_info)
+            else:
+                context = self.setup_context(agent_info, context)
+
+            self.log_evaluation_start(agent_info, context)
+
+            # Create opponent info if not provided
+            if opponent_info is None:
+                opponent_info = OpponentInfo(
+                    name=self.config.opponent_name,
+                    type="ppo_agent" if self.opponent_weights else "unknown",
+                    checkpoint_path=self.config.opponent_path,
+                    metadata=self.config.opponent_params.copy(),
+                )
+
+            # Run games with in-memory weights
+            games = []
+            errors = []
+
+            try:
+                # Determine game distribution
+                games_per_color = self._calculate_game_distribution()
+
+                # Run games with agent as first player
+                for i in range(games_per_color["agent_first"]):
+                    try:
+                        game = await self.evaluate_step_in_memory(agent_info, opponent_info, context)
+                        games.append(game)
+                    except Exception as e:
+                        logger.error(f"Error in game {i} (agent first): {e}", exc_info=True)
+                        errors.append(f"Game {i} (agent first): {str(e)}")
+
+                # Run games with agent as second player (if color balancing enabled)
+                if games_per_color["agent_second"] > 0:
+                    for i in range(games_per_color["agent_second"]):
+                        game_index = games_per_color["agent_first"] + i
+                        try:
+                            # Create modified opponent for color-swapped game
+                            swapped_opponent_meta = opponent_info.metadata.copy()
+                            swapped_opponent_meta["agent_plays_second"] = True
+
+                            current_opponent_info = OpponentInfo(
+                                name=opponent_info.name,
+                                type=opponent_info.type,
+                                checkpoint_path=opponent_info.checkpoint_path,
+                                metadata=swapped_opponent_meta,
+                            )
+                            game = await self.evaluate_step_in_memory(
+                                agent_info, current_opponent_info, context
+                            )
+                            games.append(game)
+                        except Exception as e:
+                            logger.error(
+                                f"Error in game {game_index} (agent second): {e}",
+                                exc_info=True,
+                            )
+                            errors.append(f"Game {game_index} (agent second): {str(e)}")
+
+            except Exception as e:
+                logger.error("Critical error during in-memory evaluation: %s", e)
+                errors.append(f"Critical error: {str(e)}")
+
+            # Calculate summary statistics
+            summary_stats = SummaryStats.from_games(games)
+
+            # Create result
+            result = EvaluationResult(
+                context=context,
+                games=games,
+                summary_stats=summary_stats,
+                analytics_data=self._calculate_analytics(games),
+                errors=errors,
+                elo_tracker=None,  # Will be filled by ELO system if enabled
+            )
+
+            self.log_evaluation_complete(result)
+            return result
+            
+        finally:
+            # Clean up references
+            self.agent_weights = None
+            self.opponent_weights = None
+
+    async def _load_evaluation_entity_in_memory(
+        self,
+        entity_info: Union[AgentInfo, OpponentInfo],
+        device_str: str,
+        input_channels: int,
+    ) -> Any:
+        """Helper to load an agent or opponent from in-memory weights."""
+        if isinstance(entity_info, AgentInfo):
+            # For agent, use in-memory weights if available
+            if "agent_instance" in entity_info.metadata:
+                return entity_info.metadata["agent_instance"]
+            elif self.agent_weights is not None:
+                # TODO: Create agent from weights
+                # This would require proper agent instantiation from weights
+                # For now, fallback to regular loading
+                pass
+            
+            return load_evaluation_agent(
+                checkpoint_path=entity_info.checkpoint_path or "",
+                device_str=device_str,
+                policy_mapper=self.policy_mapper,
+                input_channels=input_channels,
+            )
+        elif isinstance(entity_info, OpponentInfo):
+            # For opponent, use in-memory weights if available
+            if entity_info.type == "ppo_agent" and self.opponent_weights is not None:
+                # TODO: Create opponent agent from weights
+                # This would require proper agent instantiation from weights
+                # For now, fallback to regular loading
+                pass
+            
+            if entity_info.type == "ppo_agent":
+                return load_evaluation_agent(
+                    checkpoint_path=entity_info.checkpoint_path or "",
+                    device_str=device_str,
+                    policy_mapper=self.policy_mapper,
+                    input_channels=input_channels,
+                )
+            else:
+                return initialize_opponent(
+                    opponent_type=entity_info.type,
+                    opponent_path=entity_info.checkpoint_path,
+                    device_str=device_str,
+                    policy_mapper=self.policy_mapper,
+                    input_channels=input_channels,
+                )
+        
+        raise ValueError(f"Unknown entity type for loading: {type(entity_info)}")
 
     async def evaluate_step(
         self,
@@ -399,14 +572,14 @@ class SingleOpponentEvaluator(BaseEvaluator):
                 winner=final_winner_code,
                 moves_count=game_outcome["moves_count"],
                 duration_seconds=duration,
-                termination_reason=game_outcome["termination_reason"],
-                simulation=False,
+                metadata={"termination_reason": game_outcome["termination_reason"]},
             )
 
         except Exception as e:
             duration = time.time() - start_time
             logger.error(
-                f"Critical error in evaluate_step for game {game_id}: {e}",
+                "Critical error in evaluate_step for game %s: %s",
+                game_id, e,
                 exc_info=True,
             )
 
@@ -417,8 +590,88 @@ class SingleOpponentEvaluator(BaseEvaluator):
                 winner=None,
                 moves_count=0,
                 duration_seconds=duration,
-                termination_reason=f"Evaluate_step error: {str(e)}",
-                simulation=False,
+                metadata={"termination_reason": f"Evaluate_step error: {str(e)}"},
+            )
+
+    async def evaluate_step_in_memory(
+        self,
+        agent_info: AgentInfo,
+        opponent_info: OpponentInfo,
+        context: EvaluationContext,
+    ) -> GameResult:
+        """
+        Evaluate a single game between agent and opponent using in-memory weights.
+        """
+        import time
+
+        game_id = f"inmem_{context.session_id}_{uuid.uuid4().hex[:8]}"
+        start_time = time.time()
+
+        agent_plays_sente = not opponent_info.metadata.get("agent_plays_second", False)
+
+        try:
+            device_str = "cpu"
+            input_channels = 46
+
+            # Load the logical agent and opponent entities with in-memory weights
+            logical_agent_entity = await self._load_evaluation_entity_in_memory(
+                agent_info, device_str, input_channels
+            )
+            logical_opponent_entity = await self._load_evaluation_entity_in_memory(
+                opponent_info, device_str, input_channels
+            )
+
+            # Determine who plays Sente (player 0) and Gote (player 1) for this game
+            sente_player = (
+                logical_agent_entity if agent_plays_sente else logical_opponent_entity
+            )
+            gote_player = (
+                logical_opponent_entity if agent_plays_sente else logical_agent_entity
+            )
+
+            # The _run_game_loop always assumes the first arg is Sente, second is Gote.
+            game_outcome = await self._run_game_loop(sente_player, gote_player, context)
+
+            duration = time.time() - start_time
+
+            # game_outcome["winner"] is 0 if Sente won, 1 if Gote won, None if draw.
+            # We need to map this to: 0 if logical_agent_entity won, 1 if logical_opponent_entity won.
+
+            final_winner_code = None  # For agent vs opponent perspective
+            if game_outcome["winner"] is not None:  # Not a draw from game error
+                sente_won = game_outcome["winner"] == 0
+                if agent_plays_sente:  # Agent was Sente
+                    final_winner_code = 0 if sente_won else 1
+                else:  # Agent was Gote
+                    final_winner_code = (
+                        0 if not sente_won else 1
+                    )  # Agent wins if Gote won (sente_won is false)
+
+            return create_game_result(
+                game_id=game_id,
+                agent_info=agent_info,
+                opponent_info=opponent_info,
+                winner=final_winner_code,
+                moves_count=game_outcome["moves_count"],
+                duration_seconds=duration,
+                metadata={"termination_reason": game_outcome["termination_reason"], "in_memory": True},
+            )
+
+        except Exception as e:
+            duration = time.time() - start_time
+            logger.error(
+                f"Critical error in evaluate_step_in_memory for game {game_id}: {e}",
+                exc_info=True,
+            )
+
+            return create_game_result(
+                game_id=game_id,
+                agent_info=agent_info,
+                opponent_info=opponent_info,
+                winner=None,
+                moves_count=0,
+                duration_seconds=duration,
+                metadata={"termination_reason": f"Evaluate_step_in_memory error: {str(e)}", "in_memory": True},
             )
 
     def get_opponents(self, context: EvaluationContext) -> List[OpponentInfo]:
