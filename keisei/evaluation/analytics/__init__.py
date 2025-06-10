@@ -16,3 +16,10 @@ __all__ = [
     "EloTracker",
     "ReportGenerator",
 ]
+
+# Enhanced features (optional)
+try:
+    from .advanced_analytics import AdvancedAnalytics, StatisticalTest, TrendAnalysis, PerformanceComparison
+    __all__.extend(['AdvancedAnalytics', 'StatisticalTest', 'TrendAnalysis', 'PerformanceComparison'])
+except ImportError:
+    pass
