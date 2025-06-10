@@ -116,12 +116,18 @@ class TrainingLoopManager:
                 self.parallel_manager = None
 
         try:
-            while self.trainer.global_timestep < self.config.training.total_timesteps:
+            while (
+                self.trainer.metrics_manager.global_timestep
+                < self.config.training.total_timesteps
+            ):
                 self.current_epoch += 1
 
                 self._run_epoch(log_both)
 
-                if self.trainer.global_timestep >= self.config.training.total_timesteps:
+                if (
+                    self.trainer.metrics_manager.global_timestep
+                    >= self.config.training.total_timesteps
+                ):
                     log_both(
                         f"Target timesteps ({self.config.training.total_timesteps}) reached during epoch {self.current_epoch}."
                     )
@@ -136,7 +142,7 @@ class TrainingLoopManager:
                 else:
                     log_both(
                         "[WARNING] Skipping PPO update due to missing current_obs in episode_state. "
-                        f"(Timestep: {self.trainer.global_timestep})",
+                        f"(Timestep: {self.trainer.metrics_manager.global_timestep})",
                         also_to_wandb=True,
                     )
                     self.trainer.metrics_manager.set_processing(False)
@@ -197,7 +203,8 @@ class TrainingLoopManager:
 
         while (
             num_steps_collected < self.config.training.steps_per_epoch
-            and self.trainer.global_timestep < self.config.training.total_timesteps
+            and self.trainer.metrics_manager.global_timestep
+            < self.config.training.total_timesteps
             and collection_attempts < max_collection_attempts
         ):
 
@@ -208,11 +215,12 @@ class TrainingLoopManager:
                 self.agent
                 and self.agent.model
                 and self.parallel_manager.sync_model_if_needed(
-                    cast(nn.Module, self.agent.model), self.trainer.global_timestep
+                    cast(nn.Module, self.agent.model),
+                    self.trainer.metrics_manager.global_timestep,
                 )
             ):
                 log_both(
-                    f"Model synchronized with workers at step {self.trainer.global_timestep}"
+                    f"Model synchronized with workers at step {self.trainer.metrics_manager.global_timestep}"
                 )
 
             # Collect experiences from workers
@@ -336,7 +344,10 @@ class TrainingLoopManager:
         """Processes a single step and handles episode completion if necessary.
         Returns True if the loop should continue, False if a critical error occurred or max timesteps reached.
         """
-        if self.trainer.global_timestep >= self.config.training.total_timesteps:
+        if (
+            self.trainer.metrics_manager.global_timestep
+            >= self.config.training.total_timesteps
+        ):
             return False  # Stop epoch
 
         if self.episode_state is None:
@@ -353,13 +364,13 @@ class TrainingLoopManager:
 
         step_result = self.step_manager.execute_step(
             episode_state=self.episode_state,
-            global_timestep=self.trainer.global_timestep,
+            global_timestep=self.trainer.metrics_manager.global_timestep,
             logger_func=log_both,
         )
 
         if not step_result.success:
             log_both(
-                f"[WARNING] Step failed at {self.trainer.global_timestep}. Resetting.",
+                f"[WARNING] Step failed at {self.trainer.metrics_manager.global_timestep}. Resetting.",
                 also_to_wandb=True,
             )
             if self.step_manager is None:
@@ -473,7 +484,11 @@ class TrainingLoopManager:
 
     def _handle_display_updates(self):
         """Handles periodic display updates based on time and step intervals."""
-        if self.trainer.global_timestep % self.config.training.render_every_steps == 0:
+        if (
+            self.trainer.metrics_manager.global_timestep
+            % self.config.training.render_every_steps
+            == 0
+        ):
             if hasattr(self.display, "refresh_dashboard_panels") and callable(
                 self.display.refresh_dashboard_panels
             ):

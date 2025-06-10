@@ -267,13 +267,14 @@ def test_make_move_promotion(empty_game):
 
 
 def test_make_move_piece_drop(empty_game):
-    """Test dropping a piece from hand."""
+    """Test dropping a piece from hand - tests the mechanics of drop moves."""
     empty_game.hands[Color.BLACK.value][PieceType.PAWN] = 1
     empty_game.current_player = Color.BLACK
 
     drop_move = (None, None, 5, 4, PieceType.PAWN)  # Using piece type for drop
 
-    empty_game.make_move(drop_move)
+    # Use is_simulation=True to test drop mechanics without legal move validation
+    empty_game.make_move(drop_move, is_simulation=True)
 
     dropped_piece = empty_game.get_piece(5, 4)
     assert isinstance(dropped_piece, Piece), "Dropped piece not found."
@@ -395,21 +396,22 @@ def test_undo_promotion_move(empty_game):
 
 
 def test_undo_drop_move(empty_game):
-    """Test undoing a drop move."""
+    """Test undoing a drop move - tests the mechanics of undoing drops."""
     empty_game.hands[Color.BLACK.value][PieceType.PAWN] = 1
     empty_game.current_player = Color.BLACK
 
     state_before_drop = GameState.from_game(empty_game)
 
     drop_move = (None, None, 5, 4, PieceType.PAWN)
-    empty_game.make_move(drop_move)
+    # Use is_simulation=True to test drop mechanics without legal move validation
+    simulation_details = empty_game.make_move(drop_move, is_simulation=True)
 
     dropped_piece = empty_game.get_piece(5, 4)
     assert isinstance(dropped_piece, Piece), "Dropped piece not at (5,4)."
     assert dropped_piece.type.value == PieceType.PAWN.value
     assert empty_game.hands[Color.BLACK.value].get(PieceType.PAWN, 0) == 0
 
-    empty_game.undo_move()
+    empty_game.undo_move(simulation_undo_details=simulation_details)
 
     assert empty_game.get_piece(5, 4) is None
     assert empty_game.hands[Color.BLACK.value].get(PieceType.PAWN, 0) == 1

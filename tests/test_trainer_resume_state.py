@@ -242,7 +242,9 @@ class TestTrainerResumeState:
 
         # Debug prints
         print("DEBUG: After trainer creation:")
-        print(f"DEBUG: trainer.global_timestep = {trainer.global_timestep}")
+        print(
+            f"DEBUG: trainer.metrics_manager.global_timestep = {trainer.metrics_manager.global_timestep}"
+        )
         print(
             f"DEBUG: trainer.model_manager.checkpoint_data = {getattr(trainer.model_manager, 'checkpoint_data', 'NOT SET')}"
         )
@@ -261,11 +263,11 @@ class TestTrainerResumeState:
             )
 
         # Verify state variables are correctly restored from checkpoint data
-        assert trainer.global_timestep == 2500
-        assert trainer.total_episodes_completed == 150
-        assert trainer.black_wins == 60
-        assert trainer.white_wins == 55
-        assert trainer.draws == 35
+        assert trainer.metrics_manager.global_timestep == 2500
+        assert trainer.metrics_manager.total_episodes_completed == 150
+        assert trainer.metrics_manager.black_wins == 60
+        assert trainer.metrics_manager.white_wins == 55
+        assert trainer.metrics_manager.draws == 35
         assert trainer.resumed_from_checkpoint == "/path/to/checkpoint.pth"
 
     @patch("keisei.training.trainer.EnvManager")
@@ -372,13 +374,17 @@ class TestTrainerResumeState:
             trainer = Trainer(mock_config, args)
 
         # Verify that missing fields default to 0 (using dict.get() with default)
-        assert trainer.global_timestep == 1000  # Present field
+        assert trainer.metrics_manager.global_timestep == 1000  # Present field
         assert (
-            trainer.total_episodes_completed == 0
+            trainer.metrics_manager.total_episodes_completed == 0
         )  # Missing field, should default to 0
-        assert trainer.black_wins == 0  # Missing field, should default to 0
-        assert trainer.white_wins == 0  # Missing field, should default to 0
-        assert trainer.draws == 0  # Missing field, should default to 0
+        assert (
+            trainer.metrics_manager.black_wins == 0
+        )  # Missing field, should default to 0
+        assert (
+            trainer.metrics_manager.white_wins == 0
+        )  # Missing field, should default to 0
+        assert trainer.metrics_manager.draws == 0  # Missing field, should default to 0
 
     @patch("keisei.training.trainer.EnvManager")
     @patch("keisei.training.trainer.ModelManager")
@@ -463,11 +469,11 @@ class TestTrainerResumeState:
         trainer._handle_checkpoint_resume()
 
         # Verify state variables remain at initial values (0)
-        assert trainer.global_timestep == 0
-        assert trainer.total_episodes_completed == 0
-        assert trainer.black_wins == 0
-        assert trainer.white_wins == 0
-        assert trainer.draws == 0
+        assert trainer.metrics_manager.global_timestep == 0
+        assert trainer.metrics_manager.total_episodes_completed == 0
+        assert trainer.metrics_manager.black_wins == 0
+        assert trainer.metrics_manager.white_wins == 0
+        assert trainer.metrics_manager.draws == 0
         assert trainer.resumed_from_checkpoint is None
 
     @patch("keisei.training.trainer.EnvManager")
@@ -661,11 +667,11 @@ class TestTrainerResumeState:
             )
 
             # Verify Trainer state was updated from ModelManager data
-            assert trainer.global_timestep == 3000
-            assert trainer.total_episodes_completed == 200
-            assert trainer.black_wins == 80
-            assert trainer.white_wins == 70
-            assert trainer.draws == 50
+            assert trainer.metrics_manager.global_timestep == 3000
+            assert trainer.metrics_manager.total_episodes_completed == 200
+            assert trainer.metrics_manager.black_wins == 80
+            assert trainer.metrics_manager.white_wins == 70
+            assert trainer.metrics_manager.draws == 50
             assert trainer.resumed_from_checkpoint == checkpoint_path
 
     @patch("keisei.training.trainer.EnvManager")
@@ -778,21 +784,26 @@ class TestTrainerResumeState:
             trainer = Trainer(mock_config, args)
 
         # Verify state is restored from checkpoint
-        assert trainer.global_timestep == 5000
-        assert trainer.total_episodes_completed == 350
-        assert trainer.black_wins == 140
-        assert trainer.white_wins == 120
-        assert trainer.draws == 90
+        assert trainer.metrics_manager.global_timestep == 5000
+        assert trainer.metrics_manager.total_episodes_completed == 350
+        assert trainer.metrics_manager.black_wins == 140
+        assert trainer.metrics_manager.white_wins == 120
+        assert trainer.metrics_manager.draws == 90
 
         # Mock TrainingLoopManager to verify it receives correct trainer state
         mock_training_loop_instance.trainer = trainer
 
         # Verify the TrainingLoopManager can access restored state
-        assert mock_training_loop_instance.trainer.global_timestep == 5000
-        assert mock_training_loop_instance.trainer.total_episodes_completed == 350
-        assert mock_training_loop_instance.trainer.black_wins == 140
-        assert mock_training_loop_instance.trainer.white_wins == 120
-        assert mock_training_loop_instance.trainer.draws == 90
+        assert (
+            mock_training_loop_instance.trainer.metrics_manager.global_timestep == 5000
+        )
+        assert (
+            mock_training_loop_instance.trainer.metrics_manager.total_episodes_completed
+            == 350
+        )
+        assert mock_training_loop_instance.trainer.metrics_manager.black_wins == 140
+        assert mock_training_loop_instance.trainer.metrics_manager.white_wins == 120
+        assert mock_training_loop_instance.trainer.metrics_manager.draws == 90
 
         # Verify resumed_from_checkpoint is properly set
         assert trainer.resumed_from_checkpoint == checkpoint_path

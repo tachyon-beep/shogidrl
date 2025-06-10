@@ -44,15 +44,6 @@ class GameResult:
         """True if the game was a draw."""
         return self.winner is None
 
-    def to_legacy_format(self) -> str:
-        """Convert to legacy result format for compatibility."""
-        if self.is_agent_win:
-            return "agent_win"
-        elif self.is_opponent_win:
-            return "opponent_win"
-        else:
-            return "draw"
-
     def to_dict(self) -> Dict[str, Any]:
         """Convert GameResult to a dictionary for serialization."""
         return {
@@ -198,9 +189,9 @@ class EvaluationResult:
             self._stats_calculated = True
 
         if not self._analyzer and self.games:
-            from ..analytics.performance_analyzer import (
+            from ..analytics.performance_analyzer import (  # Local import
                 PerformanceAnalyzer,
-            )  # Local import
+            )
 
             self._analyzer = PerformanceAnalyzer(self)
 
@@ -220,9 +211,9 @@ class EvaluationResult:
             return self.analytics_data
 
         if not self._analyzer:
-            from ..analytics.performance_analyzer import (
+            from ..analytics.performance_analyzer import (  # Local import
                 PerformanceAnalyzer,
-            )  # Local import
+            )
 
             self._analyzer = PerformanceAnalyzer(self)
 
@@ -382,3 +373,24 @@ class EvaluationResult:
             instance.elo_tracker = EloTracker(initial_ratings=data["elo_snapshot"])
 
         return instance
+
+
+def create_game_result(
+    game_id: str,
+    winner: Optional[int],
+    moves_count: int,
+    duration_seconds: float,
+    agent_info: "AgentInfo",
+    opponent_info: "OpponentInfo",
+    metadata: Optional[Dict[str, Any]] = None,
+) -> GameResult:
+    """Convenience helper to build a GameResult."""
+    return GameResult(
+        game_id=game_id,
+        winner=winner,
+        moves_count=moves_count,
+        duration_seconds=duration_seconds,
+        agent_info=agent_info,
+        opponent_info=opponent_info,
+        metadata=metadata or {},
+    )

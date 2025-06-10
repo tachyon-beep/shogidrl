@@ -40,15 +40,30 @@
     "evaluation": {
         "enable_periodic_evaluation": false,
         "evaluation_interval_timesteps": 1000,
+        "strategy": "single_opponent",
         "num_games": 1,
+        "max_concurrent_games": 4,
+        "timeout_per_game": null,
         "opponent_type": "random",
         "max_moves_per_game": 500,
+        "randomize_positions": true,
+        "random_seed": null,
+        "save_games": true,
+        "save_path": null,
         "log_file_path_eval": "eval_log.txt",
+        "log_level": "INFO",
         "wandb_log_eval": false,
+        "update_elo": true,
         "elo_registry_path": "elo_ratings.json",
         "agent_id": null,
         "opponent_id": null,
-        "previous_model_pool_size": 5
+        "previous_model_pool_size": 5,
+        "enable_in_memory_evaluation": true,
+        "model_weight_cache_size": 5,
+        "enable_parallel_execution": true,
+        "process_restart_threshold": 100,
+        "temp_agent_device": "cpu",
+        "clear_cache_after_evaluation": true
     },
     "logging": {
         "log_file": "test_training.log",
@@ -84,6 +99,8 @@
         "display_moves": false,
         "turn_tick": 0.0,
         "board_unicode_pieces": true,
+        "board_cell_width": 5,
+        "board_cell_height": 3,
         "board_highlight_last_move": true,
         "sparkline_width": 15,
         "trend_history_length": 100,
@@ -102,6 +119,11 @@
         "metrics_window_size": 100,
         "trend_smoothing_factor": 0.1,
         "metrics_panel_height": 6,
-        "enable_trendlines": true
+        "enable_trendlines": true,
+        "log_layer_keyword_filters": [
+            "stem",
+            "policy_head",
+            "value_head"
+        ]
     }
 }

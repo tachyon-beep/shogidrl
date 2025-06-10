@@ -152,13 +152,13 @@ class TestTrainerTrainingLoopIntegration:
                 trainer.run_training_loop()
 
                 # Verify checkpoint data was loaded correctly
-                assert trainer.global_timestep == 1500
+                assert trainer.metrics_manager.global_timestep == 1500
                 assert (
-                    trainer.total_episodes_completed >= 100
+                    trainer.metrics_manager.total_episodes_completed >= 100
                 )  # Should be maintained from checkpoint
-                assert trainer.black_wins == 40
-                assert trainer.white_wins == 35
-                assert trainer.draws == 25
+                assert trainer.metrics_manager.black_wins == 40
+                assert trainer.metrics_manager.white_wins == 35
+                assert trainer.metrics_manager.draws == 25
 
     @patch("wandb.init")
     @patch("wandb.log")
@@ -233,13 +233,15 @@ class TestTrainerTrainingLoopIntegration:
             trainer.run_training_loop()
 
             # Verify fresh start state (should start from 0 and progress)
-            assert trainer.global_timestep >= 0  # Should start from 0 or small value
             assert (
-                trainer.total_episodes_completed >= 1
+                trainer.metrics_manager.global_timestep >= 0
+            )  # Should start from 0 or small value
+            assert (
+                trainer.metrics_manager.total_episodes_completed >= 1
             )  # Should have run at least one episode
-            assert trainer.black_wins >= 0
-            assert trainer.white_wins >= 0
-            assert trainer.draws >= 0
+            assert trainer.metrics_manager.black_wins >= 0
+            assert trainer.metrics_manager.white_wins >= 0
+            assert trainer.metrics_manager.draws >= 0
 
     @patch("wandb.init")
     @patch("wandb.log")
@@ -323,8 +325,8 @@ class TestTrainerTrainingLoopIntegration:
             assert mock_execute_step.call_count >= 2
 
             # Verify trainer state remained consistent
-            assert trainer.global_timestep >= 0
-            assert trainer.total_episodes_completed >= 0
+            assert trainer.metrics_manager.global_timestep >= 0
+            assert trainer.metrics_manager.total_episodes_completed >= 0
 
     @patch("wandb.init")
     @patch("wandb.log")
@@ -409,8 +411,8 @@ class TestTrainerTrainingLoopIntegration:
             assert mock_execute_step.call_count >= 2
 
             # Verify trainer state remained consistent
-            assert trainer.global_timestep >= 0
-            assert trainer.total_episodes_completed >= 0
+            assert trainer.metrics_manager.global_timestep >= 0
+            assert trainer.metrics_manager.total_episodes_completed >= 0
 
     @patch("wandb.init")
     @patch("wandb.log")
@@ -489,11 +491,11 @@ class TestTrainerTrainingLoopIntegration:
                 )
 
             # Verify initial state after checkpoint resume
-            initial_global_timestep = trainer.global_timestep
-            initial_episodes = trainer.total_episodes_completed
-            initial_black_wins = trainer.black_wins
-            initial_white_wins = trainer.white_wins
-            initial_draws = trainer.draws
+            initial_global_timestep = trainer.metrics_manager.global_timestep
+            initial_episodes = trainer.metrics_manager.total_episodes_completed
+            initial_black_wins = trainer.metrics_manager.black_wins
+            initial_white_wins = trainer.metrics_manager.white_wins
+            initial_draws = trainer.metrics_manager.draws
 
             assert initial_global_timestep == 2000
             assert initial_episodes == 150
@@ -544,15 +546,19 @@ class TestTrainerTrainingLoopIntegration:
 
             # Verify state consistency was maintained
             # Global timestep should have advanced from the checkpoint
-            assert trainer.global_timestep >= initial_global_timestep
+            assert trainer.metrics_manager.global_timestep >= initial_global_timestep
 
             # Episode count should have increased (we ran more steps)
-            assert trainer.total_episodes_completed >= initial_episodes
+            assert trainer.metrics_manager.total_episodes_completed >= initial_episodes
 
             # Win counts should be maintained or increased (we only added black wins)
-            assert trainer.black_wins >= initial_black_wins
-            assert trainer.white_wins >= initial_white_wins  # Should be same or more
-            assert trainer.draws >= initial_draws  # Should be same or more
+            assert trainer.metrics_manager.black_wins >= initial_black_wins
+            assert (
+                trainer.metrics_manager.white_wins >= initial_white_wins
+            )  # Should be same or more
+            assert (
+                trainer.metrics_manager.draws >= initial_draws
+            )  # Should be same or more
 
             # Verify some training actually happened
             assert mock_execute_step.call_count > 0

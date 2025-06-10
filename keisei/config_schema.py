@@ -7,6 +7,9 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+# Evaluation strategy constants - matches EvaluationStrategy enum values
+VALID_EVALUATION_STRATEGIES = ["single_opponent", "tournament", "ladder", "benchmark"]
+
 
 class EnvConfig(BaseModel):
     device: str = Field("cpu", description="Device to use: 'cpu' or 'cuda'.")
@@ -120,25 +123,58 @@ class TrainingConfig(BaseModel):
 
 
 class EvaluationConfig(BaseModel):
+    # Core periodic evaluation settings
     enable_periodic_evaluation: bool = Field(
         True, description="Enable periodic evaluation during training."
     )
     evaluation_interval_timesteps: int = Field(
         50000, description="Run evaluation every N timesteps."
     )
+
+    # Strategy and game parameters  
+    strategy: Literal["single_opponent", "tournament", "ladder", "benchmark"] = Field(
+        "single_opponent",
+        description="Evaluation strategy: 'single_opponent', 'tournament', 'ladder', 'benchmark'",
+    )
     num_games: int = Field(20, description="Number of games to play during evaluation.")
+    max_concurrent_games: int = Field(
+        4, description="Maximum number of concurrent games for parallel execution."
+    )
+    timeout_per_game: Optional[float] = Field(
+        None, description="Timeout per game in seconds (None for no timeout)."
+    )
+
+    # Game configuration
     opponent_type: str = Field(
         "random", description="Type of opponent: 'random', 'heuristic', etc."
     )
     max_moves_per_game: int = Field(
         500, description="Maximum number of moves per evaluation game."
     )
+    randomize_positions: bool = Field(
+        True, description="Randomize starting positions for evaluation games."
+    )
+    random_seed: Optional[int] = Field(
+        None, description="Random seed for evaluation (None for random)."
+    )
+
+    # Output and logging
+    save_games: bool = Field(True, description="Save evaluation game records.")
+    save_path: Optional[str] = Field(
+        None, description="Path to save evaluation results (None for auto-generated)."
+    )
     log_file_path_eval: str = Field(
         "eval_log.txt", description="Path for the evaluation log file."
+    )
+    log_level: str = Field(
+        "INFO", description="Logging level for evaluation: DEBUG, INFO, WARNING, ERROR"
     )
     wandb_log_eval: bool = Field(
         False, description="Enable Weights & Biases logging for evaluation."
     )
+
+    # Elo and opponent management
+    update_elo: bool = Field(True, description="Update Elo ratings after evaluation.")
     elo_registry_path: Optional[str] = Field(
         "elo_ratings.json", description="Path to Elo registry JSON file"
     )
@@ -151,6 +187,26 @@ class EvaluationConfig(BaseModel):
     previous_model_pool_size: int = Field(
         5,
         description="Number of previous checkpoints to keep for Elo evaluation.",
+    )
+
+    # Performance optimization settings
+    enable_in_memory_evaluation: bool = Field(
+        True, description="Enable in-memory evaluation for better performance."
+    )
+    model_weight_cache_size: int = Field(
+        5, description="Number of opponent model weights to cache in memory."
+    )
+    enable_parallel_execution: bool = Field(
+        True, description="Enable parallel game execution."
+    )
+    process_restart_threshold: int = Field(
+        100, description="Restart worker processes after N games."
+    )
+    temp_agent_device: str = Field(
+        "cpu", description="Device for temporary agents during evaluation."
+    )
+    clear_cache_after_evaluation: bool = Field(
+        True, description="Clear model weight cache after evaluation."
     )
 
     @field_validator("evaluation_interval_timesteps")
@@ -178,6 +234,37 @@ class EvaluationConfig(BaseModel):
     def pool_size_positive(cls, v):  # pylint: disable=no-self-argument
         if v <= 0:
             raise ValueError("previous_model_pool_size must be positive")
+        return v
+
+    @field_validator("strategy")
+    def strategy_valid(cls, v):  # pylint: disable=no-self-argument
+        if v not in VALID_EVALUATION_STRATEGIES:
+            raise ValueError(f"strategy must be one of {VALID_EVALUATION_STRATEGIES}")
+        return v
+
+    @field_validator("max_concurrent_games")
+    def max_concurrent_positive(cls, v):  # pylint: disable=no-self-argument
+        if v <= 0:
+            raise ValueError("max_concurrent_games must be positive")
+        return v
+
+    @field_validator("log_level")
+    def log_level_valid(cls, v):  # pylint: disable=no-self-argument
+        valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+        if v.upper() not in valid_levels:
+            raise ValueError(f"log_level must be one of {valid_levels}")
+        return v.upper()
+
+    @field_validator("model_weight_cache_size")
+    def cache_size_positive(cls, v):  # pylint: disable=no-self-argument
+        if v <= 0:
+            raise ValueError("model_weight_cache_size must be positive")
+        return v
+
+    @field_validator("process_restart_threshold")
+    def restart_threshold_positive(cls, v):  # pylint: disable=no-self-argument
+        if v <= 0:
+            raise ValueError("process_restart_threshold must be positive")
         return v
 
 

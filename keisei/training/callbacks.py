@@ -7,7 +7,7 @@ from abc import ABC
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from keisei.evaluation.elo_registry import EloRegistry
+from keisei.evaluation.opponents.elo_registry import EloRegistry
 
 if TYPE_CHECKING:
     from .trainer import Trainer
@@ -25,7 +25,7 @@ class CheckpointCallback(Callback):
         self.model_dir = model_dir
 
     def on_step_end(self, trainer: "Trainer"):
-        if (trainer.global_timestep + 1) % self.interval == 0:
+        if (trainer.metrics_manager.global_timestep + 1) % self.interval == 0:
             if not trainer.agent:
                 if trainer.log_both:
                     trainer.log_both(
@@ -35,17 +35,17 @@ class CheckpointCallback(Callback):
                 return
 
             game_stats = {
-                "black_wins": trainer.black_wins,
-                "white_wins": trainer.white_wins,
-                "draws": trainer.draws,
+                "black_wins": trainer.metrics_manager.black_wins,
+                "white_wins": trainer.metrics_manager.white_wins,
+                "draws": trainer.metrics_manager.draws,
             }
 
             # Use the consolidated save_checkpoint method from ModelManager
             success, ckpt_save_path = trainer.model_manager.save_checkpoint(
                 agent=trainer.agent,
                 model_dir=self.model_dir,  # model_dir is part of CheckpointCallback's state
-                timestep=trainer.global_timestep + 1,
-                episode_count=trainer.total_episodes_completed,
+                timestep=trainer.metrics_manager.global_timestep + 1,
+                episode_count=trainer.metrics_manager.total_episodes_completed,
                 stats=game_stats,
                 run_name=trainer.run_name,
                 is_wandb_active=trainer.is_train_wandb_active,
@@ -57,12 +57,14 @@ class CheckpointCallback(Callback):
                         f"Checkpoint saved via ModelManager to {ckpt_save_path}",
                         also_to_wandb=True,
                     )
-                    if hasattr(trainer, "previous_model_selector"):
-                        trainer.previous_model_selector.add_checkpoint(ckpt_save_path)
+                    if hasattr(trainer, "evaluation_manager"):
+                        trainer.evaluation_manager.opponent_pool.add_checkpoint(
+                            ckpt_save_path
+                        )
             else:
                 if trainer.log_both:
                     trainer.log_both(
-                        f"[ERROR] CheckpointCallback: Failed to save checkpoint via ModelManager for timestep {trainer.global_timestep + 1}.",
+                        f"[ERROR] CheckpointCallback: Failed to save checkpoint via ModelManager for timestep {trainer.metrics_manager.global_timestep + 1}.",
                         also_to_wandb=True,
                     )
 
@@ -75,7 +77,7 @@ class EvaluationCallback(Callback):
     def on_step_end(self, trainer: "Trainer"):
         if not getattr(self.eval_cfg, "enable_periodic_evaluation", False):
             return
-        if (trainer.global_timestep + 1) % self.interval == 0:
+        if (trainer.metrics_manager.global_timestep + 1) % self.interval == 0:
             if not trainer.agent:
                 if trainer.log_both:
                     trainer.log_both(
@@ -102,13 +104,9 @@ class EvaluationCallback(Callback):
                     )
                 return
 
-            eval_ckpt_path = os.path.join(
-                trainer.model_dir, f"eval_checkpoint_ts{trainer.global_timestep+1}.pth"
-            )
-
             opponent_ckpt = None
-            if hasattr(trainer, "previous_model_selector"):
-                opponent_ckpt = trainer.previous_model_selector.get_random_checkpoint()
+            if hasattr(trainer, "evaluation_manager"):
+                opponent_ckpt = trainer.evaluation_manager.opponent_pool.sample()
             if opponent_ckpt is None:
                 if trainer.log_both:
                     trainer.log_both(
@@ -117,68 +115,34 @@ class EvaluationCallback(Callback):
                     )
                 return
 
-            # Save the current agent state for evaluation
-            trainer.agent.save_model(
-                eval_ckpt_path,
-                trainer.global_timestep + 1,
-                trainer.total_episodes_completed,
-            )
-
             if trainer.log_both is not None:
                 trainer.log_both(
-                    f"Starting periodic evaluation at timestep {trainer.global_timestep + 1}...",
+                    f"Starting periodic evaluation at timestep {trainer.metrics_manager.global_timestep + 1}...",
                     also_to_wandb=True,
                 )
 
             current_model.eval()  # Set the agent's model to eval mode
-            if trainer.execute_full_evaluation_run is not None:
-                eval_results = trainer.execute_full_evaluation_run(
-                    agent_checkpoint_path=eval_ckpt_path,
-                    opponent_type="ppo",
-                    opponent_checkpoint_path=str(opponent_ckpt),
-                    num_games=getattr(self.eval_cfg, "num_games", 20),
-                    max_moves_per_game=getattr(
-                        self.eval_cfg,
-                        "max_moves_per_game",
-                        trainer.config.env.max_moves_per_game,
+            eval_results = trainer.evaluation_manager.evaluate_current_agent(
+                trainer.agent
+            )
+            current_model.train()  # Set model back to train mode
+            if trainer.log_both is not None:
+                trainer.log_both(
+                    f"Periodic evaluation finished. Results: {eval_results}",
+                    also_to_wandb=True,
+                    wandb_data=(
+                        dict(eval_results)
+                        if isinstance(eval_results, dict)
+                        else {"eval_summary": str(eval_results)}
                     ),
-                    device_str=trainer.config.env.device,
-                    log_file_path_eval=getattr(self.eval_cfg, "log_file_path_eval", ""),
-                    policy_mapper=trainer.policy_output_mapper,
-                    seed=trainer.config.env.seed,
-                    wandb_log_eval=getattr(self.eval_cfg, "wandb_log_eval", False),
-                    wandb_project_eval=getattr(
-                        self.eval_cfg, "wandb_project_eval", None
-                    ),
-                    wandb_entity_eval=getattr(self.eval_cfg, "wandb_entity_eval", None),
-                    wandb_run_name_eval=f"periodic_eval_{trainer.run_name}_ts{trainer.global_timestep+1}",
-                    wandb_group=trainer.run_name,
-                    wandb_reinit=True,
-                    logger_also_stdout=False,
-                    elo_registry_path=getattr(self.eval_cfg, "elo_registry_path", None),
-                    agent_id=os.path.basename(eval_ckpt_path),
-                    opponent_id=os.path.basename(str(opponent_ckpt)),
                 )
-                current_model.train()  # Set model back to train mode
-                if trainer.log_both is not None:
-                    trainer.log_both(
-                        f"Periodic evaluation finished. Results: {eval_results}",
-                        also_to_wandb=True,
-                        wandb_data=(
-                            dict(eval_results)
-                            if isinstance(eval_results, dict)
-                            else {"eval_summary": str(eval_results)}
-                        ),
-                    )
 
                 if getattr(self.eval_cfg, "elo_registry_path", None):
                     try:
                         registry = EloRegistry(Path(self.eval_cfg.elo_registry_path))
                         snapshot = {
-                            "current_id": os.path.basename(eval_ckpt_path),
-                            "current_rating": registry.get_rating(
-                                os.path.basename(eval_ckpt_path)
-                            ),
+                            "current_id": trainer.run_name,
+                            "current_rating": registry.get_rating(trainer.run_name),
                             "opponent_id": os.path.basename(str(opponent_ckpt)),
                             "opponent_rating": registry.get_rating(
                                 os.path.basename(str(opponent_ckpt))
@@ -186,13 +150,13 @@ class EvaluationCallback(Callback):
                             "last_outcome": (
                                 "win"
                                 if eval_results
-                                and eval_results.get("win_rate", 0)
-                                > eval_results.get("loss_rate", 0)
+                                and eval_results.summary_stats.win_rate
+                                > eval_results.summary_stats.loss_rate
                                 else (
                                     "loss"
                                     if eval_results
-                                    and eval_results.get("loss_rate", 0)
-                                    > eval_results.get("win_rate", 0)
+                                    and eval_results.summary_stats.loss_rate
+                                    > eval_results.summary_stats.win_rate
                                     else "draw"
                                 )
                             ),
@@ -203,12 +167,11 @@ class EvaluationCallback(Callback):
                             )[:3],
                         }
                         trainer.evaluation_elo_snapshot = snapshot
-                    except Exception as e:  # noqa: BLE001
+                    except (OSError, RuntimeError, ValueError, AttributeError) as e:
                         if trainer.log_both is not None:
                             trainer.log_both(
                                 f"[ERROR] Failed to update Elo registry: {type(e).__name__}: {e}",
                                 also_to_wandb=True,
                             )
                         trainer.evaluation_elo_snapshot = None
-            else:  # if execute_full_evaluation_run is None
-                current_model.train()  # Ensure model is set back to train mode
+            # EvaluationManager always handles model mode switching; nothing else to do

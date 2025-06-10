@@ -38,8 +38,9 @@ def mock_trainer():
     mock_trainer.callbacks = []
 
     # Mock state
-    mock_trainer.global_timestep = 0
-    mock_trainer.total_episodes_completed = 0
+    mock_trainer.metrics_manager = Mock()
+    mock_trainer.metrics_manager.global_timestep = 0
+    mock_trainer.metrics_manager.total_episodes_completed = 0
     mock_trainer.total_wins = 0
     mock_trainer.total_draws = 0
     mock_trainer.last_10_game_results = []
@@ -115,7 +116,6 @@ def test_run_epoch_functionality(mock_trainer):
     manager = TrainingLoopManager(mock_trainer)
 
     # Mock the necessary trainer methods for epoch execution
-    mock_trainer.global_timestep = 0
     mock_trainer.config.training.total_timesteps = 1000
     mock_trainer.config.training.steps_per_epoch = 32
 
@@ -161,7 +161,6 @@ def test_training_loop_manager_run_method_structure(mock_trainer, mock_episode_s
     manager.set_initial_episode_state(mock_episode_state)
 
     # Mock trainer state for controlled execution
-    mock_trainer.global_timestep = 0
     mock_trainer.config.training.total_timesteps = 32  # Small for fast test
     mock_trainer.config.training.steps_per_epoch = 16
 
@@ -191,8 +190,7 @@ def test_training_loop_manager_run_method_structure(mock_trainer, mock_episode_s
 
     # Update global_timestep as steps are taken
     def update_timestep(*args, **kwargs):
-        mock_trainer.global_timestep += 1
-        mock_trainer.metrics_manager.global_timestep = mock_trainer.global_timestep
+        mock_trainer.metrics_manager.global_timestep += 1
 
     mock_trainer.step_manager.take_step.side_effect = lambda *args, **kwargs: (
         update_timestep(),

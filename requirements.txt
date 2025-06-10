@@ -5,6 +5,7 @@
 
 # Core libraries
 numpy
+scipy>=1.10.0      # For advanced analytics and statistical tests
 torch==2.7.0
 pydantic==2.11.4
 python-dotenv==1.1.0

@@ -12,23 +12,21 @@ from keisei.config_schema import AppConfig
 from keisei.core.actor_critic_protocol import ActorCriticProtocol
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.ppo_agent import PPOAgent
-from keisei.evaluation.evaluate import execute_full_evaluation_run
+from keisei.evaluation.core_manager import EvaluationManager
 from keisei.utils import TrainingLogger
 
 from .callback_manager import CallbackManager
-from .compatibility_mixin import CompatibilityMixin
 from .display_manager import DisplayManager
 from .env_manager import EnvManager
 from .metrics_manager import MetricsManager
 from .model_manager import ModelManager
-from .previous_model_selector import PreviousModelSelector
 from .session_manager import SessionManager
 from .setup_manager import SetupManager
 from .step_manager import EpisodeState, StepManager
 from .training_loop_manager import TrainingLoopManager
 
 
-class Trainer(CompatibilityMixin):
+class Trainer:
     """
     Manages the training process for the PPO Shogi agent.
     This class orchestrates setup, training loop, evaluation, and logging.
@@ -55,7 +53,6 @@ class Trainer(CompatibilityMixin):
         self.action_space_size = 0
         self.obs_space_shape = ()
         self.log_both: Optional[Callable] = None
-        self.execute_full_evaluation_run: Optional[Callable] = None
         self.resumed_from_checkpoint = False
 
         # Initialize device
@@ -93,8 +90,35 @@ class Trainer(CompatibilityMixin):
             elo_initial_rating=config.display.elo_initial_rating,
             elo_k_factor=config.display.elo_k_factor,
         )
-        self.previous_model_selector = PreviousModelSelector(
-            pool_size=config.evaluation.previous_model_pool_size
+        # Create evaluation config directly from central config
+        from keisei.evaluation.core import create_evaluation_config
+
+        eval_config = create_evaluation_config(
+            strategy=config.evaluation.strategy,
+            num_games=config.evaluation.num_games,
+            max_concurrent_games=config.evaluation.max_concurrent_games,
+            timeout_per_game=config.evaluation.timeout_per_game,
+            randomize_positions=config.evaluation.randomize_positions,
+            random_seed=config.evaluation.random_seed,
+            save_games=config.evaluation.save_games,
+            save_path=config.evaluation.save_path,
+            log_level=config.evaluation.log_level,
+            wandb_logging=config.evaluation.wandb_log_eval,
+            update_elo=config.evaluation.update_elo,
+            enable_in_memory_evaluation=config.evaluation.enable_in_memory_evaluation,
+            model_weight_cache_size=config.evaluation.model_weight_cache_size,
+            enable_parallel_execution=config.evaluation.enable_parallel_execution,
+            process_restart_threshold=config.evaluation.process_restart_threshold,
+            temp_agent_device=config.evaluation.temp_agent_device,
+            clear_cache_after_evaluation=config.evaluation.clear_cache_after_evaluation,
+            # Add strategy-specific parameters for single_opponent strategy
+            opponent_name=config.evaluation.opponent_type,
+        )
+        self.evaluation_manager = EvaluationManager(
+            eval_config,
+            self.run_name,
+            pool_size=config.evaluation.previous_model_pool_size,
+            elo_registry_path=config.evaluation.elo_registry_path,
         )
         self.evaluation_elo_snapshot: Optional[Dict[str, Any]] = None
         self.callback_manager = CallbackManager(config, self.model_dir)
@@ -102,6 +126,14 @@ class Trainer(CompatibilityMixin):
 
         # Setup components using SetupManager
         self._initialize_components()
+
+        # Configure evaluation manager with runtime components
+        self.evaluation_manager.setup(
+            device=config.env.device,
+            policy_mapper=self.policy_output_mapper,
+            model_dir=self.model_dir,
+            wandb_active=self.is_train_wandb_active,
+        )
 
         # Setup display and callbacks
         self.display = self.display_manager.setup_display(self)
@@ -346,7 +378,6 @@ class Trainer(CompatibilityMixin):
                     wandb.log(log_payload, step=self.metrics_manager.global_timestep)
 
             self.log_both = log_both_impl
-            self.execute_full_evaluation_run = execute_full_evaluation_run
 
             session_start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.log_both(

@@ -12,6 +12,7 @@ mccabe==0.7.0      # flake8 dependency
 
 # Testing Frameworks and Plugins
 pytest==8.3.5
+pytest-asyncio==0.23.6
 pytest-cov==6.1.1
 pytest-pylint==0.21.0
 coverage==7.8.0 # For test coverage reports

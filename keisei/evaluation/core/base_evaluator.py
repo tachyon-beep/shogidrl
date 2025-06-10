@@ -13,6 +13,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, AsyncIterator, Dict, List, Optional, Union
 
+import torch
+
 from .evaluation_config import EvaluationConfig
 from .evaluation_context import AgentInfo, EvaluationContext, OpponentInfo
 from .evaluation_result import EvaluationResult, GameResult
@@ -38,12 +40,13 @@ class BaseEvaluator(ABC):
         """
         self.config = config
         self.context: Optional[EvaluationContext] = None
+        self.logger = logging.getLogger(self.__class__.__name__)
         self._setup_logging()
 
     def _setup_logging(self):
         """Configure logging for this evaluator."""
         level = getattr(logging, self.config.log_level.upper())
-        logger.setLevel(level)
+        self.logger.setLevel(level)
 
     @abstractmethod
     async def evaluate(
@@ -60,6 +63,34 @@ class BaseEvaluator(ABC):
             Complete evaluation results
         """
         pass
+
+    async def evaluate_in_memory(
+        self,
+        agent_info: AgentInfo,
+        context: Optional[EvaluationContext] = None,
+        *,
+        agent_weights: Optional[Dict[str, torch.Tensor]] = None,
+        opponent_weights: Optional[Dict[str, torch.Tensor]] = None,
+        opponent_info: Optional[OpponentInfo] = None,
+    ) -> EvaluationResult:
+        """
+        Run evaluation using in-memory weights (optional optimization).
+
+        Default implementation falls back to regular evaluation.
+        Subclasses can override for performance optimization.
+
+        Args:
+            agent_info: Information about the agent to evaluate
+            context: Optional evaluation context
+            agent_weights: Pre-extracted agent model weights
+            opponent_weights: Pre-extracted opponent model weights
+            opponent_info: Opponent information
+
+        Returns:
+            Complete evaluation results
+        """
+        # Default implementation: fallback to regular evaluation
+        return await self.evaluate(agent_info, context)
 
     @abstractmethod
     async def evaluate_step(
@@ -280,43 +311,6 @@ class BaseEvaluator(ABC):
         )
         if stats.avg_game_length:
             logger.info(f"Average game length: {stats.avg_game_length:.1f} moves")
-
-    # Legacy compatibility methods
-    def to_legacy_format(self) -> Dict[str, Any]:
-        """
-        Convert to legacy evaluator format for backward compatibility.
-
-        Returns:
-            Dictionary in legacy format
-        """
-        return {
-            "num_games": self.config.num_games,
-            "max_workers": self.config.max_concurrent_games,
-            "randomize": self.config.randomize_positions,
-            "save_games": self.config.save_games,
-            "log_to_wandb": self.config.wandb_logging,
-            "update_elo": self.config.update_elo,
-            "strategy": self.config.strategy.value,
-            **self.config.strategy_params,
-        }
-
-    @classmethod
-    def from_legacy_evaluator(
-        cls, legacy_evaluator: Any, config: EvaluationConfig
-    ) -> "BaseEvaluator":
-        """
-        Create new evaluator from legacy evaluator instance.
-
-        Args:
-            legacy_evaluator: Legacy evaluator instance
-            config: New evaluation configuration
-
-        Returns:
-            New evaluator instance
-        """
-        # This would be implemented by specific strategy classes
-        # to handle migration from legacy evaluators
-        raise NotImplementedError("Subclasses must implement legacy migration")
 
 
 class EvaluatorFactory:
