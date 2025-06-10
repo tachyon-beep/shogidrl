@@ -49,7 +49,9 @@ TERMINATION_REASON_EVAL_STEP_ERROR = "Tournament evaluate_step error"
 # Constants for duplicate string literals
 DEFAULT_DEVICE = "cpu"
 DEFAULT_INPUT_CHANNELS = 46
-NO_OPPONENTS_LOADED_MSG = "No opponents loaded for the tournament. Evaluation will be empty."
+NO_OPPONENTS_LOADED_MSG = (
+    "No opponents loaded for the tournament. Evaluation will be empty."
+)
 NO_OPPONENTS_LOADED_SHORT_MSG = "No opponents loaded for tournament."
 
 
@@ -154,7 +156,9 @@ class TournamentEvaluator(BaseEvaluator):
             )
             game.game_over = True
             game.winner = Color(1 - current_player_color_value)
-            game.termination_reason = f"{TERMINATION_REASON_MOVE_EXECUTION_ERROR}: {str(e)}"
+            game.termination_reason = (
+                f"{TERMINATION_REASON_MOVE_EXECUTION_ERROR}: {str(e)}"
+            )
             return False
 
     async def _handle_no_legal_moves(self, game: ShogiGame) -> None:
@@ -201,7 +205,9 @@ class TournamentEvaluator(BaseEvaluator):
         else:
             default_device = DEFAULT_DEVICE
             if context and context.configuration:
-                default_device = getattr(context.configuration, "default_device", DEFAULT_DEVICE)
+                default_device = getattr(
+                    context.configuration, "default_device", DEFAULT_DEVICE
+                )
             device_obj = torch.device(default_device)
 
         legal_mask = self.policy_mapper.get_legal_mask(legal_moves, device_obj)
@@ -218,7 +224,9 @@ class TournamentEvaluator(BaseEvaluator):
             )
             game.game_over = True
             game.winner = Color(1 - current_player_color_value)
-            game.termination_reason = f"{TERMINATION_REASON_ACTION_SELECTION_ERROR}: {str(e)}"
+            game.termination_reason = (
+                f"{TERMINATION_REASON_ACTION_SELECTION_ERROR}: {str(e)}"
+            )
             return False  # Game ended
 
         if not await self._game_validate_and_make_move(
@@ -242,7 +250,9 @@ class TournamentEvaluator(BaseEvaluator):
 
         while not game.game_over and move_count < max_moves:
             current_player_entity = player_map[game.current_player.value]
-            if not await self._game_process_one_turn(game, current_player_entity, context):
+            if not await self._game_process_one_turn(
+                game, current_player_entity, context
+            ):
                 break
             move_count += 1
 
@@ -284,19 +294,25 @@ class TournamentEvaluator(BaseEvaluator):
         errors_for_opponent: List[str] = []
 
         for i in range(num_games_to_play):
-            current_opponent_info_for_game = OpponentInfo.from_dict(opponent_info.to_dict())
+            current_opponent_info_for_game = OpponentInfo.from_dict(
+                opponent_info.to_dict()
+            )
             if opponent_info.metadata:
                 current_opponent_info_for_game.metadata = opponent_info.metadata.copy()
             else:
                 current_opponent_info_for_game.metadata = {}
 
             agent_plays_sente_in_this_game = i < (num_games_to_play + 1) // 2
-            current_opponent_info_for_game.metadata["agent_plays_sente_in_eval_step"] = agent_plays_sente_in_this_game
+            current_opponent_info_for_game.metadata[
+                "agent_plays_sente_in_eval_step"
+            ] = agent_plays_sente_in_this_game
 
             game_desc = f"game {i+1}/{num_games_to_play} vs {opponent_info.name} (Agent as {'Sente' if agent_plays_sente_in_this_game else 'Gote'})"
             try:
                 logger.debug("Starting %s", game_desc)
-                game_result = await self.evaluate_step(agent_info, current_opponent_info_for_game, context)
+                game_result = await self.evaluate_step(
+                    agent_info, current_opponent_info_for_game, context
+                )
                 game_results_for_opponent.append(game_result)
             except Exception as e:
                 error_msg = f"Error during game orchestration for {game_desc}: {e}"
@@ -343,7 +359,9 @@ class TournamentEvaluator(BaseEvaluator):
 
         if num_games_per_opponent_pair is None:
             if opponents:
-                num_games_per_opponent_pair = max(1, num_total_games_config // len(opponents))
+                num_games_per_opponent_pair = max(
+                    1, num_total_games_config // len(opponents)
+                )
             else:
                 num_games_per_opponent_pair = 0
             logger.info(
@@ -362,8 +380,10 @@ class TournamentEvaluator(BaseEvaluator):
 
         for opponent_info in opponents:
             if num_games_per_opponent_pair > 0:
-                results_one_opp, errors_one_opp = await self._play_games_against_opponent(
-                    agent_info, opponent_info, num_games_per_opponent_pair, context
+                results_one_opp, errors_one_opp = (
+                    await self._play_games_against_opponent(
+                        agent_info, opponent_info, num_games_per_opponent_pair, context
+                    )
                 )
                 all_game_results.extend(results_one_opp)
                 errors.extend(errors_one_opp)
@@ -374,7 +394,9 @@ class TournamentEvaluator(BaseEvaluator):
                 )
 
         summary_stats = SummaryStats.from_games(all_game_results)
-        tournament_analytics_data = self._calculate_tournament_standings(all_game_results, opponents, agent_info)
+        tournament_analytics_data = self._calculate_tournament_standings(
+            all_game_results, opponents, agent_info
+        )
 
         current_analytics = {}
 
@@ -389,7 +411,9 @@ class TournamentEvaluator(BaseEvaluator):
         if evaluation_result.analytics_data is None:
             evaluation_result.analytics_data = {}
 
-        evaluation_result.analytics_data["tournament_specific_analytics"] = tournament_analytics_data
+        evaluation_result.analytics_data["tournament_specific_analytics"] = (
+            tournament_analytics_data
+        )
 
         self.log_evaluation_complete(evaluation_result)
         return evaluation_result
@@ -401,7 +425,7 @@ class TournamentEvaluator(BaseEvaluator):
         *,
         agent_weights: Optional[Dict[str, torch.Tensor]] = None,
         opponent_weights: Optional[Dict[str, torch.Tensor]] = None,
-        opponent_info: Optional[OpponentInfo] = None
+        opponent_info: Optional[OpponentInfo] = None,
     ) -> EvaluationResult:
         """Run tournament evaluation using in-memory model weights and parallel execution."""
         if context is None:
@@ -410,19 +434,23 @@ class TournamentEvaluator(BaseEvaluator):
         self.log_evaluation_start(agent_info, context)
 
         # Check if parallel execution is enabled
-        enable_parallel = getattr(context.configuration, 'enable_parallel_execution', False)
-        
+        enable_parallel = getattr(
+            context.configuration, "enable_parallel_execution", False
+        )
+
         if enable_parallel:
             return await self._evaluate_tournament_parallel(agent_info, context)
         else:
-            return await self._evaluate_tournament_sequential_in_memory(agent_info, context)
+            return await self._evaluate_tournament_sequential_in_memory(
+                agent_info, context
+            )
 
     async def _evaluate_tournament_parallel(
         self, agent_info: AgentInfo, context: EvaluationContext
     ) -> EvaluationResult:
         """Execute tournament evaluation with parallel game execution."""
         from ..core import BatchGameExecutor
-        
+
         opponents = await self._load_tournament_opponents()
         if not opponents:
             logger.warning(NO_OPPONENTS_LOADED_MSG)
@@ -444,23 +472,31 @@ class TournamentEvaluator(BaseEvaluator):
         )
 
         # Create parallel game tasks
-        tasks = self._create_parallel_game_tasks(agent_info, opponents, num_games_per_opponent, context)
+        tasks = self._create_parallel_game_tasks(
+            agent_info, opponents, num_games_per_opponent, context
+        )
 
         # Execute games in parallel batches
         batch_executor = BatchGameExecutor(
-            batch_size=getattr(context.configuration, 'parallel_batch_size', 8),
-            max_concurrent_games=getattr(context.configuration, 'max_concurrent_games', 4),
+            batch_size=getattr(context.configuration, "parallel_batch_size", 8),
+            max_concurrent_games=getattr(
+                context.configuration, "max_concurrent_games", 4
+            ),
         )
 
         def progress_callback(completed: int, total: int):
-            logger.info(f"Tournament progress: {completed}/{total} games completed ({completed/total:.1%})")
+            logger.info(
+                f"Tournament progress: {completed}/{total} games completed ({completed/total:.1%})"
+            )
 
         game_results, errors = await batch_executor.execute_games_in_batches(
             tasks, progress_callback=progress_callback
         )
 
         summary_stats = SummaryStats.from_games(game_results)
-        tournament_analytics = self._calculate_tournament_standings(game_results, opponents, agent_info)
+        tournament_analytics = self._calculate_tournament_standings(
+            game_results, opponents, agent_info
+        )
 
         evaluation_result = EvaluationResult(
             context=context,
@@ -474,8 +510,11 @@ class TournamentEvaluator(BaseEvaluator):
         return evaluation_result
 
     def _create_parallel_game_tasks(
-        self, agent_info: AgentInfo, opponents: List[OpponentInfo], 
-        num_games_per_opponent: int, context: EvaluationContext
+        self,
+        agent_info: AgentInfo,
+        opponents: List[OpponentInfo],
+        num_games_per_opponent: int,
+        context: EvaluationContext,
     ) -> List[Any]:
         """Create parallel game execution tasks."""
         tasks = []
@@ -488,12 +527,16 @@ class TournamentEvaluator(BaseEvaluator):
                     current_opponent_info.metadata = {}
 
                 agent_plays_sente = i < (num_games_per_opponent + 1) // 2
-                current_opponent_info.metadata["agent_plays_sente_in_eval_step"] = agent_plays_sente
+                current_opponent_info.metadata["agent_plays_sente_in_eval_step"] = (
+                    agent_plays_sente
+                )
 
                 # Create task function
                 async def game_task():
-                    return await self.evaluate_step_in_memory(agent_info, current_opponent_info, context)
-                
+                    return await self.evaluate_step_in_memory(
+                        agent_info, current_opponent_info, context
+                    )
+
                 tasks.append(game_task)
         return tasks
 
@@ -526,16 +569,22 @@ class TournamentEvaluator(BaseEvaluator):
 
         for opponent_info in opponents:
             if num_games_per_opponent > 0:
-                results_one_opp, errors_one_opp = await self._play_games_against_opponent_in_memory(
-                    agent_info, opponent_info, num_games_per_opponent, context
+                results_one_opp, errors_one_opp = (
+                    await self._play_games_against_opponent_in_memory(
+                        agent_info, opponent_info, num_games_per_opponent, context
+                    )
                 )
                 all_game_results.extend(results_one_opp)
                 errors.extend(errors_one_opp)
             else:
-                logger.info(f"Skipping games against {opponent_info.name} as num_games_per_opponent is 0.")
+                logger.info(
+                    f"Skipping games against {opponent_info.name} as num_games_per_opponent is 0."
+                )
 
         summary_stats = SummaryStats.from_games(all_game_results)
-        tournament_analytics = self._calculate_tournament_standings(all_game_results, opponents, agent_info)
+        tournament_analytics = self._calculate_tournament_standings(
+            all_game_results, opponents, agent_info
+        )
 
         evaluation_result = EvaluationResult(
             context=context,
@@ -560,14 +609,18 @@ class TournamentEvaluator(BaseEvaluator):
         errors_for_opponent: List[str] = []
 
         for i in range(num_games_to_play):
-            current_opponent_info_for_game = OpponentInfo.from_dict(opponent_info.to_dict())
+            current_opponent_info_for_game = OpponentInfo.from_dict(
+                opponent_info.to_dict()
+            )
             if opponent_info.metadata:
                 current_opponent_info_for_game.metadata = opponent_info.metadata.copy()
             else:
                 current_opponent_info_for_game.metadata = {}
 
             agent_plays_sente_in_this_game = i < (num_games_to_play + 1) // 2
-            current_opponent_info_for_game.metadata["agent_plays_sente_in_eval_step"] = agent_plays_sente_in_this_game
+            current_opponent_info_for_game.metadata[
+                "agent_plays_sente_in_eval_step"
+            ] = agent_plays_sente_in_this_game
 
             game_desc = f"game {i+1}/{num_games_to_play} vs {opponent_info.name} (Agent as {'Sente' if agent_plays_sente_in_this_game else 'Gote'})"
             try:
@@ -577,11 +630,18 @@ class TournamentEvaluator(BaseEvaluator):
                 )
                 game_results_for_opponent.append(game_result)
             except Exception as e:
-                error_msg = f"Error during in-memory game orchestration for {game_desc}: {e}"
-                logger.error(f"Error orchestrating in-memory game: {game_desc}. Details: {e}", exc_info=True)
+                error_msg = (
+                    f"Error during in-memory game orchestration for {game_desc}: {e}"
+                )
+                logger.error(
+                    f"Error orchestrating in-memory game: {game_desc}. Details: {e}",
+                    exc_info=True,
+                )
                 errors_for_opponent.append(error_msg)
 
-        logger.info(f"Completed {len(game_results_for_opponent)} in-memory games against {opponent_info.name}.")
+        logger.info(
+            f"Completed {len(game_results_for_opponent)} in-memory games against {opponent_info.name}."
+        )
         return game_results_for_opponent, errors_for_opponent
 
     async def evaluate_step_in_memory(
@@ -594,31 +654,49 @@ class TournamentEvaluator(BaseEvaluator):
         game_id = f"tourney_mem_{context.session_id}_{uuid.uuid4().hex[:8]}"
         start_time = time.time()
 
-        agent_plays_sente = opponent_info.metadata.get("agent_plays_sente_in_eval_step", True)
+        agent_plays_sente = opponent_info.metadata.get(
+            "agent_plays_sente_in_eval_step", True
+        )
 
         try:
             # Try to load entities from memory first
-            logical_agent_entity = await self._load_evaluation_entity_in_memory(agent_info, context)
-            logical_opponent_entity = await self._load_evaluation_entity_in_memory(opponent_info, context)
+            logical_agent_entity = await self._load_evaluation_entity_in_memory(
+                agent_info, context
+            )
+            logical_opponent_entity = await self._load_evaluation_entity_in_memory(
+                opponent_info, context
+            )
 
-            sente_player = logical_agent_entity if agent_plays_sente else logical_opponent_entity
-            gote_player = logical_opponent_entity if agent_plays_sente else logical_agent_entity
+            sente_player = (
+                logical_agent_entity if agent_plays_sente else logical_opponent_entity
+            )
+            gote_player = (
+                logical_opponent_entity if agent_plays_sente else logical_agent_entity
+            )
 
-            game_outcome = await self._game_run_game_loop(sente_player, gote_player, context)
+            game_outcome = await self._game_run_game_loop(
+                sente_player, gote_player, context
+            )
             duration = time.time() - start_time
 
             final_winner_code = None
             if game_outcome["winner"] is not None:
                 sente_won = game_outcome["winner"] == 0
                 final_winner_code = (
-                    0 if (agent_plays_sente and sente_won) or (not agent_plays_sente and not sente_won)
+                    0
+                    if (agent_plays_sente and sente_won)
+                    or (not agent_plays_sente and not sente_won)
                     else 1
                 )
 
             game_metadata = opponent_info.metadata.copy()
             game_metadata["agent_color"] = "Sente" if agent_plays_sente else "Gote"
-            game_metadata["sente_player_name"] = agent_info.name if agent_plays_sente else opponent_info.name
-            game_metadata["gote_player_name"] = opponent_info.name if agent_plays_sente else agent_info.name
+            game_metadata["sente_player_name"] = (
+                agent_info.name if agent_plays_sente else opponent_info.name
+            )
+            game_metadata["gote_player_name"] = (
+                opponent_info.name if agent_plays_sente else agent_info.name
+            )
             game_metadata["termination_reason"] = game_outcome["termination_reason"]
             game_metadata["evaluation_mode"] = "in_memory"
             game_metadata.pop("agent_plays_sente_in_eval_step", None)
@@ -635,7 +713,10 @@ class TournamentEvaluator(BaseEvaluator):
 
         except Exception as e:
             duration = time.time() - start_time
-            logger.error(f"Critical error in TournamentEvaluator.evaluate_step_in_memory for game {game_id}: {e}", exc_info=True)
+            logger.error(
+                f"Critical error in TournamentEvaluator.evaluate_step_in_memory for game {game_id}: {e}",
+                exc_info=True,
+            )
             error_metadata = {
                 "error": str(e),
                 "agent_plays_sente_in_eval_step": agent_plays_sente,
@@ -660,7 +741,9 @@ class TournamentEvaluator(BaseEvaluator):
         """Load an agent or opponent using in-memory weights if available."""
         # Simplified implementation that falls back to regular loading
         # The in-memory weight management is not fully implemented yet
-        logger.debug("In-memory weight loading not yet fully implemented, falling back to regular loading")
+        logger.debug(
+            "In-memory weight loading not yet fully implemented, falling back to regular loading"
+        )
         return await self._fallback_to_regular_loading(entity_info, context)
 
     async def _fallback_to_regular_loading(
@@ -670,8 +753,12 @@ class TournamentEvaluator(BaseEvaluator):
     ) -> Any:
         """Fallback to regular entity loading."""
         device_str = getattr(context.configuration, "default_device", DEFAULT_DEVICE)
-        input_channels = getattr(context.configuration, "input_channels", DEFAULT_INPUT_CHANNELS)
-        return await self._game_load_evaluation_entity(entity_info, device_str, input_channels)
+        input_channels = getattr(
+            context.configuration, "input_channels", DEFAULT_INPUT_CHANNELS
+        )
+        return await self._game_load_evaluation_entity(
+            entity_info, device_str, input_channels
+        )
 
     async def _load_tournament_opponents(self) -> List[OpponentInfo]:
         """Load all opponents for the tournament based on configuration."""
@@ -703,7 +790,9 @@ class TournamentEvaluator(BaseEvaluator):
                 opp_type = opp_config_data.get("type", "random")
 
                 metadata_source = opp_config_data.get("metadata", {})
-                metadata = metadata_source.copy() if isinstance(metadata_source, dict) else {}
+                metadata = (
+                    metadata_source.copy() if isinstance(metadata_source, dict) else {}
+                )
 
                 opponent_info = OpponentInfo(
                     name=name,
@@ -739,7 +828,9 @@ class TournamentEvaluator(BaseEvaluator):
         agent_total_draws = 0
 
         for opponent in opponents:
-            opponent_games = [g for g in results if g.opponent_info.name == opponent.name]
+            opponent_games = [
+                g for g in results if g.opponent_info.name == opponent.name
+            ]
             if not opponent_games:
                 standings["per_opponent_results"][opponent.name] = {
                     "played": 0,
@@ -766,14 +857,18 @@ class TournamentEvaluator(BaseEvaluator):
                 "win_rate": wins / len(opponent_games) if opponent_games else 0,
             }
 
-        total_tournament_games = agent_total_wins + agent_total_losses + agent_total_draws
+        total_tournament_games = (
+            agent_total_wins + agent_total_losses + agent_total_draws
+        )
         standings["overall_tournament_stats"] = {
             "total_games": total_tournament_games,
             "agent_total_wins": agent_total_wins,
             "agent_total_losses": agent_total_losses,
             "agent_total_draws": agent_total_draws,
             "agent_overall_win_rate": (
-                agent_total_wins / total_tournament_games if total_tournament_games else 0
+                agent_total_wins / total_tournament_games
+                if total_tournament_games
+                else 0
             ),
         }
 

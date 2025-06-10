@@ -9,26 +9,30 @@ from pathlib import Path
 from typing import Optional
 from uuid import uuid4
 
+# Import strategies to ensure they register with the factory
+from . import strategies
 from .core import (
     AgentInfo,
+    EvaluationConfig,
     EvaluationContext,
     EvaluationResult,
     EvaluatorFactory,
-    EvaluationConfig,
     ModelWeightManager,
     OpponentInfo,
 )
 from .opponents import OpponentPool
 
-# Import strategies to ensure they register with the factory
-from . import strategies
-
 
 class EvaluationManager:
     """Manage evaluator creation and execution."""
 
-    def __init__(self, config: EvaluationConfig, run_name: str,
-                 pool_size: int = 5, elo_registry_path: str | None = None) -> None:
+    def __init__(
+        self,
+        config: EvaluationConfig,
+        run_name: str,
+        pool_size: int = 5,
+        elo_registry_path: str | None = None,
+    ) -> None:
         self.config = config
         self.run_name = run_name
         self.device = "cpu"
@@ -36,13 +40,15 @@ class EvaluationManager:
         self.model_dir: str | None = None
         self.wandb_active = False
         self.opponent_pool = OpponentPool(pool_size, elo_registry_path)
-        
+
         # Initialize model weight manager for in-memory evaluation
         self.model_weight_manager = ModelWeightManager(
-            device=getattr(config, 'temp_agent_device', 'cpu'),
-            max_cache_size=getattr(config, 'model_weight_cache_size', 5)
+            device=getattr(config, "temp_agent_device", "cpu"),
+            max_cache_size=getattr(config, "model_weight_cache_size", 5),
         )
-        self.enable_in_memory_eval = getattr(config, 'enable_in_memory_evaluation', True)
+        self.enable_in_memory_eval = getattr(
+            config, "enable_in_memory_evaluation", True
+        )
 
     def setup(
         self,
@@ -61,10 +67,7 @@ class EvaluationManager:
         self, agent_checkpoint: str, opponent_checkpoint: Optional[str] = None
     ) -> EvaluationResult:
         """Evaluate a saved agent checkpoint."""
-        agent_info = AgentInfo(
-            name="current_agent", 
-            checkpoint_path=agent_checkpoint
-        )
+        agent_info = AgentInfo(name="current_agent", checkpoint_path=agent_checkpoint)
         context = EvaluationContext(
             session_id=str(uuid4()),
             timestamp=datetime.now(),
@@ -144,9 +147,7 @@ class EvaluationManager:
         return result
 
     async def evaluate_current_agent_in_memory(
-        self,
-        agent,
-        opponent_checkpoint: Optional[str] = None
+        self, agent, opponent_checkpoint: Optional[str] = None
     ) -> EvaluationResult:
         """Evaluate agent using in-memory weights without file I/O."""
         if not self.enable_in_memory_eval:
@@ -158,7 +159,7 @@ class EvaluationManager:
             agent_info = AgentInfo(
                 name=getattr(agent, "name", "current_agent"),
                 model_type=type(agent).__name__,
-                metadata={"agent_instance": agent, "in_memory_weights": True}
+                metadata={"agent_instance": agent, "in_memory_weights": True},
             )
 
             # Get opponent
@@ -170,7 +171,7 @@ class EvaluationManager:
                 opponent_info = OpponentInfo(
                     name=opponent_path.stem,
                     type="ppo",
-                    checkpoint_path=str(opponent_path)
+                    checkpoint_path=str(opponent_path),
                 )
             else:
                 # Sample from pool
@@ -185,7 +186,7 @@ class EvaluationManager:
                 opponent_info = OpponentInfo(
                     name=opponent_path.stem,
                     type="ppo",
-                    checkpoint_path=str(opponent_path_obj)
+                    checkpoint_path=str(opponent_path_obj),
                 )
 
             # Create evaluation context
@@ -197,8 +198,8 @@ class EvaluationManager:
                 environment_info={
                     "device": self.device,
                     "evaluation_mode": "in_memory",
-                    "opponent_info": opponent_info.__dict__
-                }
+                    "opponent_info": opponent_info.__dict__,
+                },
             )
 
             # Run in-memory evaluation
@@ -212,27 +213,21 @@ class EvaluationManager:
             return self.evaluate_current_agent(agent)
 
     async def _run_in_memory_evaluation(
-        self,
-        agent_weights,
-        opponent_weights,
-        agent_info,
-        opponent_info,
-        context
+        self, agent_weights, opponent_weights, agent_info, opponent_info, context
     ) -> EvaluationResult:
         """Run evaluation using in-memory weights."""
         # Get the evaluator
         evaluator = EvaluatorFactory.create(self.config)
-        
+
         # Check if evaluator supports in-memory evaluation
-        if hasattr(evaluator, 'evaluate_in_memory'):
+        if hasattr(evaluator, "evaluate_in_memory"):
             return await evaluator.evaluate_in_memory(
                 agent_info,
                 context,
                 agent_weights=agent_weights,
                 opponent_weights=opponent_weights,
-                opponent_info=opponent_info
+                opponent_info=opponent_info,
             )
         else:
             # Fallback to regular evaluation
             return await evaluator.evaluate(agent_info, context)
-

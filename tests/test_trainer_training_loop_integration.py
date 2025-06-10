@@ -233,7 +233,9 @@ class TestTrainerTrainingLoopIntegration:
             trainer.run_training_loop()
 
             # Verify fresh start state (should start from 0 and progress)
-            assert trainer.metrics_manager.global_timestep >= 0  # Should start from 0 or small value
+            assert (
+                trainer.metrics_manager.global_timestep >= 0
+            )  # Should start from 0 or small value
             assert (
                 trainer.metrics_manager.total_episodes_completed >= 1
             )  # Should have run at least one episode
@@ -551,8 +553,12 @@ class TestTrainerTrainingLoopIntegration:
 
             # Win counts should be maintained or increased (we only added black wins)
             assert trainer.metrics_manager.black_wins >= initial_black_wins
-            assert trainer.metrics_manager.white_wins >= initial_white_wins  # Should be same or more
-            assert trainer.metrics_manager.draws >= initial_draws  # Should be same or more
+            assert (
+                trainer.metrics_manager.white_wins >= initial_white_wins
+            )  # Should be same or more
+            assert (
+                trainer.metrics_manager.draws >= initial_draws
+            )  # Should be same or more
 
             # Verify some training actually happened
             assert mock_execute_step.call_count > 0

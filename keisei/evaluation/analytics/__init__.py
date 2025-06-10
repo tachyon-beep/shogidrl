@@ -19,7 +19,20 @@ __all__ = [
 
 # Enhanced features (optional)
 try:
-    from .advanced_analytics import AdvancedAnalytics, StatisticalTest, TrendAnalysis, PerformanceComparison
-    __all__.extend(['AdvancedAnalytics', 'StatisticalTest', 'TrendAnalysis', 'PerformanceComparison'])
+    from .advanced_analytics import (
+        AdvancedAnalytics,
+        PerformanceComparison,
+        StatisticalTest,
+        TrendAnalysis,
+    )
+
+    __all__.extend(
+        [
+            "AdvancedAnalytics",
+            "StatisticalTest",
+            "TrendAnalysis",
+            "PerformanceComparison",
+        ]
+    )
 except ImportError:
     pass

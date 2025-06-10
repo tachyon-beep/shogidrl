@@ -246,6 +246,3 @@ def create_evaluation_config(
         }
         base_params["strategy_params"] = strategy_params
         return EvaluationConfig(strategy=strategy, **base_params)
-
-
-

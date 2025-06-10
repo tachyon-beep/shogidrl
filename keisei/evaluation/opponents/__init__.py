@@ -6,7 +6,14 @@ __all__ = ["OpponentPool"]
 
 # Enhanced features (optional)
 try:
-    from .enhanced_manager import EnhancedOpponentManager, SelectionStrategy, OpponentPerformanceData
-    __all__.extend(['EnhancedOpponentManager', 'SelectionStrategy', 'OpponentPerformanceData'])
+    from .enhanced_manager import (
+        EnhancedOpponentManager,
+        OpponentPerformanceData,
+        SelectionStrategy,
+    )
+
+    __all__.extend(
+        ["EnhancedOpponentManager", "SelectionStrategy", "OpponentPerformanceData"]
+    )
 except ImportError:
     pass

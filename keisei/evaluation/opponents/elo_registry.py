@@ -15,7 +15,9 @@ logger = logging.getLogger(__name__)
 class EloRegistry:
     """Simple Elo rating registry for opponents."""
 
-    def __init__(self, file_path: Path, initial_rating: float = 1500.0, k_factor: float = 32.0):
+    def __init__(
+        self, file_path: Path, initial_rating: float = 1500.0, k_factor: float = 32.0
+    ):
         """
         Initialize the Elo registry.
 
@@ -34,9 +36,11 @@ class EloRegistry:
         """Load ratings from file if it exists."""
         if self.file_path.exists():
             try:
-                with open(self.file_path, 'r', encoding='utf-8') as f:
+                with open(self.file_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    self.ratings = {k: float(v) for k, v in data.get('ratings', {}).items()}
+                    self.ratings = {
+                        k: float(v) for k, v in data.get("ratings", {}).items()
+                    }
                 logger.info(f"Loaded {len(self.ratings)} ratings from {self.file_path}")
             except Exception as e:
                 logger.warning(f"Failed to load ratings from {self.file_path}: {e}")
@@ -47,13 +51,13 @@ class EloRegistry:
         try:
             self.file_path.parent.mkdir(parents=True, exist_ok=True)
             data = {
-                'ratings': self.ratings,
-                'metadata': {
-                    'initial_rating': self.initial_rating,
-                    'k_factor': self.k_factor,
-                }
+                "ratings": self.ratings,
+                "metadata": {
+                    "initial_rating": self.initial_rating,
+                    "k_factor": self.k_factor,
+                },
             }
-            with open(self.file_path, 'w', encoding='utf-8') as f:
+            with open(self.file_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
             logger.debug(f"Saved {len(self.ratings)} ratings to {self.file_path}")
         except Exception as e:
@@ -69,7 +73,9 @@ class EloRegistry:
         """Set rating for a player."""
         self.ratings[player_id] = rating
 
-    def update_ratings(self, player1_id: str, player2_id: str, results: List[str]) -> None:
+    def update_ratings(
+        self, player1_id: str, player2_id: str, results: List[str]
+    ) -> None:
         """
         Update ratings based on match results.
 
@@ -87,9 +93,9 @@ class EloRegistry:
         # Calculate total score for player1
         score1 = 0.0
         for result in results:
-            if result == 'agent_win':
+            if result == "agent_win":
                 score1 += 1.0
-            elif result == 'draw':
+            elif result == "draw":
                 score1 += 0.5
             # opponent_win adds 0.0
 

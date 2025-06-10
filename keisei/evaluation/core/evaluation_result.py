@@ -189,9 +189,9 @@ class EvaluationResult:
             self._stats_calculated = True
 
         if not self._analyzer and self.games:
-            from ..analytics.performance_analyzer import (
+            from ..analytics.performance_analyzer import (  # Local import
                 PerformanceAnalyzer,
-            )  # Local import
+            )
 
             self._analyzer = PerformanceAnalyzer(self)
 
@@ -211,9 +211,9 @@ class EvaluationResult:
             return self.analytics_data
 
         if not self._analyzer:
-            from ..analytics.performance_analyzer import (
+            from ..analytics.performance_analyzer import (  # Local import
                 PerformanceAnalyzer,
-            )  # Local import
+            )
 
             self._analyzer = PerformanceAnalyzer(self)
 

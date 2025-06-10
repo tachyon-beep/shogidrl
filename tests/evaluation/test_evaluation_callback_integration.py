@@ -2,10 +2,10 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from keisei.config_schema import AppConfig
+from keisei.evaluation.opponents import OpponentPool
 from keisei.evaluation.opponents.elo_registry import EloRegistry
 from keisei.training.callbacks import EvaluationCallback
 from keisei.training.metrics_manager import MetricsManager
-from keisei.evaluation.opponents import OpponentPool
 from keisei.utils import PolicyOutputMapper
 from tests.evaluation.conftest import make_test_config
 
@@ -48,17 +48,17 @@ class DummyTrainer:
         """Simulate evaluation and update Elo ratings."""
         registry = EloRegistry(Path(self.config.evaluation.elo_registry_path))
         agent_id = self.run_name or "test"  # Ensure non-None value
-        
+
         # Use the opponent from the pool (simulated)
         opponent_ckpt = self.evaluation_manager.opponent_pool.sample()
         if opponent_ckpt:
             opponent_id = Path(opponent_ckpt).name
         else:
             opponent_id = "opponent"
-        
+
         registry.update_ratings(agent_id, opponent_id, ["agent_win"])
         registry.save()
-        
+
         # Create a mock evaluation result that matches expected interface
         mock_result = MagicMock()
         mock_result.summary_stats = MagicMock()
@@ -76,4 +76,3 @@ def test_evaluation_callback_updates_elo(tmp_path):
     assert trainer.evaluation_elo_snapshot is not None
     assert trainer.evaluation_elo_snapshot["current_rating"] != 1500.0
     assert len(reg.ratings) == 2  # agent and opponent
-

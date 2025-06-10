@@ -92,6 +92,7 @@ class Trainer:
         )
         # Create evaluation config directly from central config
         from keisei.evaluation.core import create_evaluation_config
+
         eval_config = create_evaluation_config(
             strategy=config.evaluation.strategy,
             num_games=config.evaluation.num_games,

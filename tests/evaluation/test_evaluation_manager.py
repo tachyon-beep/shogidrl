@@ -1,6 +1,10 @@
 from unittest.mock import MagicMock
 
-from keisei.evaluation.core import EvaluationConfig, EvaluationStrategy, EvaluationResult
+from keisei.evaluation.core import (
+    EvaluationConfig,
+    EvaluationResult,
+    EvaluationStrategy,
+)
 from keisei.evaluation.manager import EvaluationManager
 
 
@@ -45,10 +49,13 @@ def test_evaluate_current_agent(monkeypatch):
 
         async def evaluate(self, agent_info, context):
             captured["agent"] = agent_info.metadata.get("agent_instance")
-            return EvaluationResult(context=context, games=[], summary_stats=MagicMock())
+            return EvaluationResult(
+                context=context, games=[], summary_stats=MagicMock()
+            )
 
     monkeypatch.setattr(
-        "keisei.evaluation.manager.EvaluatorFactory.create", lambda cfg: DummyEvaluator(cfg)
+        "keisei.evaluation.manager.EvaluatorFactory.create",
+        lambda cfg: DummyEvaluator(cfg),
     )
 
     result = manager.evaluate_current_agent(dummy_agent)

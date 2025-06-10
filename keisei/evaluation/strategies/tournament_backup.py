@@ -53,7 +53,9 @@ TERMINATION_REASON_UNKNOWN_LOOP_TERMINATION = "Unknown (Loop terminated unexpect
 # Constants for duplicate string literals
 DEFAULT_DEVICE = "cpu"
 DEFAULT_INPUT_CHANNELS = 46
-IN_MEMORY_FALLBACK_MSG = "In-memory %s creation not yet implemented, falling back to regular loading"
+IN_MEMORY_FALLBACK_MSG = (
+    "In-memory %s creation not yet implemented, falling back to regular loading"
+)
 CACHED_WEIGHTS_ERROR_MSG = "Failed to load %s from cached weights: %s"
 TERMINATION_REASON_EVAL_STEP_ERROR = "Tournament evaluate_step error"
 
@@ -459,7 +461,7 @@ class TournamentEvaluator(BaseEvaluator):
         *,
         agent_weights: Optional[Dict[str, torch.Tensor]] = None,
         opponent_weights: Optional[Dict[str, torch.Tensor]] = None,
-        opponent_info: Optional[OpponentInfo] = None
+        opponent_info: Optional[OpponentInfo] = None,
     ) -> EvaluationResult:
         """
         Run tournament evaluation using in-memory model weights and parallel execution.
@@ -470,22 +472,28 @@ class TournamentEvaluator(BaseEvaluator):
         self.log_evaluation_start(agent_info, context)
 
         # Check if parallel execution is enabled
-        enable_parallel = getattr(context.configuration, 'enable_parallel_execution', False)
-        
+        enable_parallel = getattr(
+            context.configuration, "enable_parallel_execution", False
+        )
+
         if enable_parallel:
             return await self._evaluate_tournament_parallel(agent_info, context)
         else:
-            return await self._evaluate_tournament_sequential_in_memory(agent_info, context)
+            return await self._evaluate_tournament_sequential_in_memory(
+                agent_info, context
+            )
 
     async def _evaluate_tournament_parallel(
         self, agent_info: AgentInfo, context: EvaluationContext
     ) -> EvaluationResult:
         """Execute tournament evaluation with parallel game execution."""
-        from ..core import create_parallel_game_tasks, BatchGameExecutor
-        
+        from ..core import BatchGameExecutor, create_parallel_game_tasks
+
         opponents = await self._load_tournament_opponents()
         if not opponents:
-            logger.warning("No opponents loaded for the tournament. Evaluation will be empty.")
+            logger.warning(
+                "No opponents loaded for the tournament. Evaluation will be empty."
+            )
             return EvaluationResult(
                 context=context,
                 games=[],
@@ -509,24 +517,34 @@ class TournamentEvaluator(BaseEvaluator):
             opponents=opponents,
             games_per_opponent=num_games_per_opponent,
             context=context,
-            game_executor=self.evaluate_step_in_memory if hasattr(self, 'evaluate_step_in_memory') else self.evaluate_step
+            game_executor=(
+                self.evaluate_step_in_memory
+                if hasattr(self, "evaluate_step_in_memory")
+                else self.evaluate_step
+            ),
         )
 
         # Execute games in parallel batches
         batch_executor = BatchGameExecutor(
-            batch_size=getattr(context.configuration, 'parallel_batch_size', 8),
-            max_concurrent_games=getattr(context.configuration, 'max_concurrent_games', 4),
+            batch_size=getattr(context.configuration, "parallel_batch_size", 8),
+            max_concurrent_games=getattr(
+                context.configuration, "max_concurrent_games", 4
+            ),
         )
 
         def progress_callback(completed: int, total: int):
-            logger.info(f"Tournament progress: {completed}/{total} games completed ({completed/total:.1%})")
+            logger.info(
+                f"Tournament progress: {completed}/{total} games completed ({completed/total:.1%})"
+            )
 
         game_results, errors = await batch_executor.execute_games_in_batches(
             tasks, progress_callback=progress_callback
         )
 
         summary_stats = SummaryStats.from_games(game_results)
-        tournament_analytics = self._calculate_tournament_standings(game_results, opponents, agent_info)
+        tournament_analytics = self._calculate_tournament_standings(
+            game_results, opponents, agent_info
+        )
 
         evaluation_result = EvaluationResult(
             context=context,
@@ -545,7 +563,9 @@ class TournamentEvaluator(BaseEvaluator):
         """Execute tournament evaluation sequentially using in-memory weights."""
         opponents = await self._load_tournament_opponents()
         if not opponents:
-            logger.warning("No opponents loaded for the tournament. Evaluation will be empty.")
+            logger.warning(
+                "No opponents loaded for the tournament. Evaluation will be empty."
+            )
             return EvaluationResult(
                 context=context,
                 games=[],
@@ -568,16 +588,22 @@ class TournamentEvaluator(BaseEvaluator):
 
         for opponent_info in opponents:
             if num_games_per_opponent > 0:
-                results_one_opp, errors_one_opp = await self._play_games_against_opponent_in_memory(
-                    agent_info, opponent_info, num_games_per_opponent, context
+                results_one_opp, errors_one_opp = (
+                    await self._play_games_against_opponent_in_memory(
+                        agent_info, opponent_info, num_games_per_opponent, context
+                    )
                 )
                 all_game_results.extend(results_one_opp)
                 errors.extend(errors_one_opp)
             else:
-                logger.info(f"Skipping games against {opponent_info.name} as num_games_per_opponent is 0.")
+                logger.info(
+                    f"Skipping games against {opponent_info.name} as num_games_per_opponent is 0."
+                )
 
         summary_stats = SummaryStats.from_games(all_game_results)
-        tournament_analytics = self._calculate_tournament_standings(all_game_results, opponents, agent_info)
+        tournament_analytics = self._calculate_tournament_standings(
+            all_game_results, opponents, agent_info
+        )
 
         evaluation_result = EvaluationResult(
             context=context,
@@ -602,21 +628,25 @@ class TournamentEvaluator(BaseEvaluator):
         errors_for_opponent: List[str] = []
 
         for i in range(num_games_to_play):
-            current_opponent_info_for_game = OpponentInfo.from_dict(opponent_info.to_dict())
+            current_opponent_info_for_game = OpponentInfo.from_dict(
+                opponent_info.to_dict()
+            )
             if opponent_info.metadata:
                 current_opponent_info_for_game.metadata = opponent_info.metadata.copy()
             else:
                 current_opponent_info_for_game.metadata = {}
 
             agent_plays_sente_in_this_game = i < (num_games_to_play + 1) // 2
-            current_opponent_info_for_game.metadata["agent_plays_sente_in_eval_step"] = agent_plays_sente_in_this_game
+            current_opponent_info_for_game.metadata[
+                "agent_plays_sente_in_eval_step"
+            ] = agent_plays_sente_in_this_game
 
             game_desc = f"game {i+1}/{num_games_to_play} vs {opponent_info.name} (Agent as {'Sente' if agent_plays_sente_in_this_game else 'Gote'})"
             try:
                 logger.debug(f"Starting in-memory {game_desc}")
-                
+
                 # Try in-memory evaluation first, fallback to regular if not available
-                if hasattr(self, 'evaluate_step_in_memory'):
+                if hasattr(self, "evaluate_step_in_memory"):
                     game_result = await self.evaluate_step_in_memory(
                         agent_info, current_opponent_info_for_game, context
                     )
@@ -624,14 +654,21 @@ class TournamentEvaluator(BaseEvaluator):
                     game_result = await self.evaluate_step(
                         agent_info, current_opponent_info_for_game, context
                     )
-                
+
                 game_results_for_opponent.append(game_result)
             except Exception as e:
-                error_msg = f"Error during in-memory game orchestration for {game_desc}: {e}"
-                logger.error(f"Error orchestrating in-memory game: {game_desc}. Details: {e}", exc_info=True)
+                error_msg = (
+                    f"Error during in-memory game orchestration for {game_desc}: {e}"
+                )
+                logger.error(
+                    f"Error orchestrating in-memory game: {game_desc}. Details: {e}",
+                    exc_info=True,
+                )
                 errors_for_opponent.append(error_msg)
 
-        logger.info(f"Completed {len(game_results_for_opponent)} in-memory games against {opponent_info.name}.")
+        logger.info(
+            f"Completed {len(game_results_for_opponent)} in-memory games against {opponent_info.name}."
+        )
         return game_results_for_opponent, errors_for_opponent
 
     async def evaluate_step_in_memory(
@@ -646,7 +683,9 @@ class TournamentEvaluator(BaseEvaluator):
         game_id = f"tourney_mem_{context.session_id}_{uuid.uuid4().hex[:8]}"
         start_time = time.time()
 
-        agent_plays_sente = opponent_info.metadata.get("agent_plays_sente_in_eval_step", True)
+        agent_plays_sente = opponent_info.metadata.get(
+            "agent_plays_sente_in_eval_step", True
+        )
 
         try:
             # Try to load entities from memory first
@@ -657,24 +696,36 @@ class TournamentEvaluator(BaseEvaluator):
                 opponent_info, context
             )
 
-            sente_player = logical_agent_entity if agent_plays_sente else logical_opponent_entity
-            gote_player = logical_opponent_entity if agent_plays_sente else logical_agent_entity
+            sente_player = (
+                logical_agent_entity if agent_plays_sente else logical_opponent_entity
+            )
+            gote_player = (
+                logical_opponent_entity if agent_plays_sente else logical_agent_entity
+            )
 
-            game_outcome = await self._game_run_game_loop(sente_player, gote_player, context)
+            game_outcome = await self._game_run_game_loop(
+                sente_player, gote_player, context
+            )
             duration = time.time() - start_time
 
             final_winner_code = None
             if game_outcome["winner"] is not None:
                 sente_won = game_outcome["winner"] == 0
                 final_winner_code = (
-                    0 if (agent_plays_sente and sente_won) or (not agent_plays_sente and not sente_won)
+                    0
+                    if (agent_plays_sente and sente_won)
+                    or (not agent_plays_sente and not sente_won)
                     else 1
                 )
 
             game_metadata = opponent_info.metadata.copy()
             game_metadata["agent_color"] = "Sente" if agent_plays_sente else "Gote"
-            game_metadata["sente_player_name"] = agent_info.name if agent_plays_sente else opponent_info.name
-            game_metadata["gote_player_name"] = opponent_info.name if agent_plays_sente else agent_info.name
+            game_metadata["sente_player_name"] = (
+                agent_info.name if agent_plays_sente else opponent_info.name
+            )
+            game_metadata["gote_player_name"] = (
+                opponent_info.name if agent_plays_sente else agent_info.name
+            )
             game_metadata["termination_reason"] = game_outcome["termination_reason"]
             game_metadata["evaluation_mode"] = "in_memory"
             game_metadata.pop("agent_plays_sente_in_eval_step", None)
@@ -691,7 +742,10 @@ class TournamentEvaluator(BaseEvaluator):
 
         except Exception as e:
             duration = time.time() - start_time
-            logger.error(f"Critical error in TournamentEvaluator.evaluate_step_in_memory for game {game_id}: {e}", exc_info=True)
+            logger.error(
+                f"Critical error in TournamentEvaluator.evaluate_step_in_memory for game {game_id}: {e}",
+                exc_info=True,
+            )
             error_metadata = {
                 "error": str(e),
                 "agent_plays_sente_in_eval_step": agent_plays_sente,
@@ -717,57 +771,75 @@ class TournamentEvaluator(BaseEvaluator):
         try:
             # Try to create from cached weights using ModelWeightManager
             from pathlib import Path
+
             from ..core.model_manager import ModelWeightManager
-            
+
             # Create a local manager instance since we don't have direct access to the evaluation manager here
-            manager = ModelWeightManager(device=getattr(context.configuration, "default_device", "cpu"))
-            
+            manager = ModelWeightManager(
+                device=getattr(context.configuration, "default_device", "cpu")
+            )
+
             # For agents, try to use cached weights
             if isinstance(entity_info, AgentInfo) and entity_info.checkpoint_path:
                 try:
                     cached_weights = manager.cache_opponent_weights(
-                        entity_info.name or "agent", 
-                        Path(entity_info.checkpoint_path)
+                        entity_info.name or "agent", Path(entity_info.checkpoint_path)
                     )
                     if cached_weights is not None:
                         agent = manager.create_agent_from_weights(
-                            cached_weights, 
-                            device=getattr(context.configuration, "default_device", "cpu")
+                            cached_weights,
+                            device=getattr(
+                                context.configuration, "default_device", "cpu"
+                            ),
                         )
                         logger.debug("Successfully created agent from cached weights")
                         return agent
                 except Exception as e:
                     logger.warning("Failed to load agent from cached weights: %s", e)
-            
+
             # For opponents, try to use cached weights
-            elif isinstance(entity_info, OpponentInfo) and entity_info.type == "ppo_agent" and entity_info.checkpoint_path:
+            elif (
+                isinstance(entity_info, OpponentInfo)
+                and entity_info.type == "ppo_agent"
+                and entity_info.checkpoint_path
+            ):
                 try:
                     cached_weights = manager.cache_opponent_weights(
-                        entity_info.name or "opponent", 
-                        Path(entity_info.checkpoint_path)
+                        entity_info.name or "opponent",
+                        Path(entity_info.checkpoint_path),
                     )
                     if cached_weights is not None:
                         opponent = manager.create_agent_from_weights(
                             cached_weights,
-                            device=getattr(context.configuration, "default_device", "cpu")
+                            device=getattr(
+                                context.configuration, "default_device", "cpu"
+                            ),
                         )
-                        logger.debug("Successfully created opponent from cached weights")
+                        logger.debug(
+                            "Successfully created opponent from cached weights"
+                        )
                         return opponent
                 except Exception as e:
                     logger.warning("Failed to load opponent from cached weights: %s", e)
-            
+
             # Fallback to regular loading
             device_str = getattr(context.configuration, "default_device", "cpu")
             input_channels = getattr(context.configuration, "input_channels", 46)
-            
-            return await self._game_load_evaluation_entity(entity_info, device_str, input_channels)
-            
+
+            return await self._game_load_evaluation_entity(
+                entity_info, device_str, input_channels
+            )
+
         except Exception as e:
-            logger.error("Error loading evaluation entity in memory: %s", e, exc_info=True)
+            logger.error(
+                "Error loading evaluation entity in memory: %s", e, exc_info=True
+            )
             # Final fallback to regular loading
-            device_str = getattr(context.configuration, "default_device", "cpu") 
+            device_str = getattr(context.configuration, "default_device", "cpu")
             input_channels = getattr(context.configuration, "input_channels", 46)
-            return await self._game_load_evaluation_entity(entity_info, device_str, input_channels)
+            return await self._game_load_evaluation_entity(
+                entity_info, device_str, input_channels
+            )
 
     async def _load_tournament_opponents(
         self,

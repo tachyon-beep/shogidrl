@@ -62,19 +62,22 @@ __all__ = [
     "ModelWeightManager",
     # Parallel execution
     "ParallelGameExecutor",
-    "BatchGameExecutor", 
+    "BatchGameExecutor",
     "ParallelGameTask",
     "create_parallel_game_tasks",
 ]
 
 # Enhanced features (optional)
 try:
-    from .background_tournament import BackgroundTournamentManager, TournamentProgress, TournamentStatus
-    __all__.extend([
-        "BackgroundTournamentManager",
-        "TournamentProgress", 
-        "TournamentStatus"
-    ])
+    from .background_tournament import (
+        BackgroundTournamentManager,
+        TournamentProgress,
+        TournamentStatus,
+    )
+
+    __all__.extend(
+        ["BackgroundTournamentManager", "TournamentProgress", "TournamentStatus"]
+    )
 except ImportError:
     # Background tournament features not available
     pass

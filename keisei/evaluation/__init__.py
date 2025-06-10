@@ -8,6 +8,7 @@ __all__ = ["EvaluationManager"]
 # Enhanced features (optional)
 try:
     from .enhanced_manager import EnhancedEvaluationManager
-    __all__.append('EnhancedEvaluationManager')
+
+    __all__.append("EnhancedEvaluationManager")
 except ImportError:
     pass

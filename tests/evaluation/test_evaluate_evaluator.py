@@ -10,12 +10,12 @@ from unittest.mock import MagicMock, patch
 import torch
 
 from keisei.core.ppo_agent import PPOAgent
-from keisei.evaluation.manager import EvaluationManager
 from keisei.evaluation.core.evaluation_config import (
-    EvaluationStrategy, 
+    EvaluationStrategy,
     SingleOpponentConfig,
-    create_evaluation_config
+    create_evaluation_config,
 )
+from keisei.evaluation.manager import EvaluationManager
 from keisei.utils import PolicyOutputMapper
 from keisei.utils.utils import BaseOpponent
 from tests.evaluation.conftest import make_test_config
@@ -62,7 +62,7 @@ def test_evaluation_manager_replaces_evaluator_basic(tmp_path):
         strategy=EvaluationStrategy.SINGLE_OPPONENT,
         num_games=1,
         wandb_logging=False,  # Equivalent to wandb_log_eval=False
-        opponent_name="random"
+        opponent_name="random",
     )
 
     # Create EvaluationManager (replacement for Evaluator)
@@ -70,7 +70,9 @@ def test_evaluation_manager_replaces_evaluator_basic(tmp_path):
         config=config,
         run_name="legacy_compatibility_test",  # Equivalent to wandb_run_name_eval
         pool_size=3,
-        elo_registry_path=str(tmp_path / "elo.json")  # Same as legacy elo_registry_path
+        elo_registry_path=str(
+            tmp_path / "elo.json"
+        ),  # Same as legacy elo_registry_path
     )
 
     # Setup (equivalent to legacy initialization)
@@ -79,19 +81,24 @@ def test_evaluation_manager_replaces_evaluator_basic(tmp_path):
         device="cpu",  # Equivalent to device_str="cpu"
         policy_mapper=policy_mapper,
         model_dir=str(tmp_path),
-        wandb_active=False
+        wandb_active=False,
     )
 
     # Mock the evaluation strategy directly instead of legacy components
-    with patch('keisei.evaluation.manager.EvaluatorFactory.create') as mock_create_evaluator:
-        
+    with patch(
+        "keisei.evaluation.manager.EvaluatorFactory.create"
+    ) as mock_create_evaluator:
+
         # Create a mock evaluator that returns expected results
         mock_evaluator = MagicMock()
-        
+
         # Mock evaluation result
-        from keisei.evaluation.core.evaluation_result import EvaluationResult, SummaryStats
         from keisei.evaluation.core.evaluation_context import EvaluationContext
-        
+        from keisei.evaluation.core.evaluation_result import (
+            EvaluationResult,
+            SummaryStats,
+        )
+
         # Create proper context and summary stats
         mock_context = MagicMock(spec=EvaluationContext)
         mock_summary = SummaryStats(
@@ -104,20 +111,20 @@ def test_evaluation_manager_replaces_evaluator_basic(tmp_path):
             draw_rate=0.0,
             avg_game_length=5.0,
             total_moves=10,
-            avg_duration_seconds=30.0
+            avg_duration_seconds=30.0,
         )
-        
+
         # Create mock evaluation result
         mock_result = EvaluationResult(
             context=mock_context,
             games=[],  # Empty games list for simplicity
-            summary_stats=mock_summary
+            summary_stats=mock_summary,
         )
-        
+
         # Configure mock evaluator to return this result
         async def mock_evaluate(agent_info, context):
             return mock_result
-        
+
         mock_evaluator.evaluate = mock_evaluate
         mock_create_evaluator.return_value = mock_evaluator
 
@@ -129,13 +136,13 @@ def test_evaluation_manager_replaces_evaluator_basic(tmp_path):
 
         # Verify results structure (equivalent to legacy Evaluator.evaluate() output)
         assert result is not None
-        
+
         # Extract summary statistics (equivalent to legacy results dict)
         summary = result.summary_stats
         assert summary.total_games == 1  # Equivalent to results["games_played"]
-        assert summary.agent_wins == 1   # Equivalent to results["agent_wins"]
+        assert summary.agent_wins == 1  # Equivalent to results["agent_wins"]
         assert summary.opponent_wins == 0  # Equivalent to results["opponent_wins"]
-        assert summary.draws == 0        # Equivalent to results["draws"]
+        assert summary.draws == 0  # Equivalent to results["draws"]
         assert abs(summary.win_rate - 1.0) < 0.01
 
         # Manually trigger ELO registry creation (since mock bypasses normal flow)
@@ -153,7 +160,7 @@ def test_evaluation_manager_replaces_evaluator_basic(tmp_path):
 def test_evaluation_manager_checkpoint_compatibility(tmp_path):
     """
     Test that EvaluationManager checkpoint evaluation is compatible with legacy usage.
-    
+
     This verifies the modern system can handle checkpoint evaluation like the old
     Evaluator class with agent_checkpoint_path parameter.
     """
@@ -163,7 +170,7 @@ def test_evaluation_manager_checkpoint_compatibility(tmp_path):
         strategy=EvaluationStrategy.SINGLE_OPPONENT,
         num_games=1,
         wandb_logging=False,
-        opponent_name="random"
+        opponent_name="random",
     )
 
     # Create EvaluationManager
@@ -171,7 +178,7 @@ def test_evaluation_manager_checkpoint_compatibility(tmp_path):
         config=config,
         run_name="checkpoint_compatibility_test",
         pool_size=3,
-        elo_registry_path=str(tmp_path / "elo.json")
+        elo_registry_path=str(tmp_path / "elo.json"),
     )
 
     # Setup
@@ -180,22 +187,27 @@ def test_evaluation_manager_checkpoint_compatibility(tmp_path):
         device="cpu",
         policy_mapper=policy_mapper,
         model_dir=str(tmp_path),
-        wandb_active=False
+        wandb_active=False,
     )
 
     # Create test checkpoint file (equivalent to agent_checkpoint_path in legacy)
     checkpoint_path = tmp_path / "dummy_agent.pth"
     torch.save({"dummy": "checkpoint"}, checkpoint_path)
 
-    with patch('keisei.evaluation.manager.EvaluatorFactory.create') as mock_create_evaluator:
-        
+    with patch(
+        "keisei.evaluation.manager.EvaluatorFactory.create"
+    ) as mock_create_evaluator:
+
         # Create a mock evaluator that returns expected results
         mock_evaluator = MagicMock()
-        
+
         # Mock evaluation result for checkpoint test
-        from keisei.evaluation.core.evaluation_result import EvaluationResult, SummaryStats
         from keisei.evaluation.core.evaluation_context import EvaluationContext
-        
+        from keisei.evaluation.core.evaluation_result import (
+            EvaluationResult,
+            SummaryStats,
+        )
+
         # Create proper context and summary stats for checkpoint test
         mock_context = MagicMock(spec=EvaluationContext)
         mock_summary = SummaryStats(
@@ -208,20 +220,20 @@ def test_evaluation_manager_checkpoint_compatibility(tmp_path):
             draw_rate=0.0,
             avg_game_length=5.0,
             total_moves=10,
-            avg_duration_seconds=30.0
+            avg_duration_seconds=30.0,
         )
-        
+
         # Create mock evaluation result
         mock_result = EvaluationResult(
             context=mock_context,
             games=[],  # Empty games list for simplicity
-            summary_stats=mock_summary
+            summary_stats=mock_summary,
         )
-        
+
         # Configure mock evaluator to return this result
         async def mock_evaluate(agent_info, context):
             return mock_result
-        
+
         mock_evaluator.evaluate = mock_evaluate
         mock_create_evaluator.return_value = mock_evaluator
 
