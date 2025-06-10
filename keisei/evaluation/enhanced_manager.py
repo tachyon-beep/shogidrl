@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from .core import AgentInfo, EvaluationResult, OpponentInfo
-from .manager import EvaluationManager
+from .core_manager import EvaluationManager
 
 logger = logging.getLogger(__name__)
 

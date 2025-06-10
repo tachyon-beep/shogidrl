@@ -14,7 +14,7 @@ from keisei.evaluation.core.evaluation_config import (
     EvaluationStrategy,
     create_evaluation_config,
 )
-from keisei.evaluation.manager import EvaluationManager
+from keisei.evaluation.core_manager import EvaluationManager
 from keisei.utils import PolicyOutputMapper
 from tests.evaluation.conftest import make_test_config
 
@@ -83,7 +83,7 @@ def test_evaluation_manager_integration_basic(tmp_path):
 
     # Mock the evaluation strategy directly instead of legacy components
     with patch(
-        "keisei.evaluation.manager.EvaluatorFactory.create"
+        "keisei.evaluation.core_manager.EvaluatorFactory.create"
     ) as mock_create_evaluator:
 
         # Create a mock evaluator that returns expected results
@@ -189,7 +189,7 @@ def test_evaluation_manager_checkpoint_integration(tmp_path):
 
     # Mock the evaluation strategy for checkpoint test
     with patch(
-        "keisei.evaluation.manager.EvaluatorFactory.create"
+        "keisei.evaluation.core_manager.EvaluatorFactory.create"
     ) as mock_create_evaluator:
 
         # Create a mock evaluator that returns expected results

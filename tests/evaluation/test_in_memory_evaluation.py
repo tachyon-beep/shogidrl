@@ -18,7 +18,7 @@ from keisei.evaluation.core import (
     ModelWeightManager,
     create_evaluation_config,
 )
-from keisei.evaluation.manager import EvaluationManager
+from keisei.evaluation.core_manager import EvaluationManager
 
 # Import strategies to ensure factory registration
 from keisei.evaluation.strategies import SingleOpponentEvaluator
