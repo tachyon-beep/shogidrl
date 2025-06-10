@@ -181,18 +181,30 @@ training:
 # =============================================================================
 # EVALUATION CONFIGURATION (EvaluationConfig)
 # =============================================================================
-# Periodic evaluation settings for assessing training progress.
-# Used by: PeriodicEvaluationCallback, Evaluator class, performance monitoring
+# Comprehensive evaluation settings for the refactored evaluation system.
+# Used by: EvaluationManager, evaluation strategies, and performance monitoring
 evaluation:
+  # --- Core Periodic Evaluation Settings ---
   # Enable periodic evaluation during training (recommended for monitoring progress)
   enable_periodic_evaluation: true
 
   # Run evaluation every N timesteps (should be multiple of steps_per_epoch)
   evaluation_interval_timesteps: 50000
 
+  # --- Strategy and Game Parameters ---
+  # Evaluation strategy: "single_opponent", "tournament", "ladder", "benchmark"
+  strategy: "single_opponent"
+
   # Number of games to play during each evaluation session
   num_games: 20
 
+  # Maximum number of concurrent games for parallel execution
+  max_concurrent_games: 4
+
+  # Timeout per game in seconds (null for no timeout)
+  timeout_per_game: null
+
+  # --- Game Configuration ---
   # Type of opponent for evaluation games
   # Options: "random" (random moves), "heuristic" (rule-based), or other implemented opponents
   opponent_type: "random"
@@ -200,16 +212,63 @@ evaluation:
   # Maximum moves per evaluation game (prevents infinite games)
   max_moves_per_game: 500
 
-  # File path for evaluation game logs and results
+  # Randomize starting positions for evaluation games
+  randomize_positions: true
+
+  # Random seed for evaluation (null for random)
+  random_seed: null
+
+  # --- Output and Logging ---
+  # Save evaluation game records
+  save_games: true
+
+  # Path to save evaluation results (null for auto-generated)
+  save_path: null
+
+  # Path for the evaluation log file
   log_file_path_eval: "eval_log.txt"
 
-  # Enable Weights & Biases logging for evaluation metrics
+  # Logging level: "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
+  log_level: "INFO"
+
+  # Enable Weights & Biases logging for evaluation
   wandb_log_eval: false
+
+  # --- Elo and Opponent Management ---
+  # Update Elo ratings after evaluation
+  update_elo: true
+
+  # Path to Elo registry JSON file
   elo_registry_path: "elo_ratings.json"
+
+  # Identifier for the evaluated model (null for auto-generated)
   agent_id: null
+
+  # Identifier for the opponent model (null for auto-generated)
   opponent_id: null
+
   # Number of previous checkpoints to keep for Elo evaluation
   previous_model_pool_size: 5
+
+  # --- Performance Optimization Settings ---
+  # Enable in-memory evaluation for better performance (recommended)
+  enable_in_memory_evaluation: true
+
+  # Number of opponent model weights to cache in memory
+  model_weight_cache_size: 5
+
+  # Enable parallel game execution (recommended for multi-core systems)
+  enable_parallel_execution: true
+
+  # Restart worker processes after N games (prevents memory leaks)
+  process_restart_threshold: 100
+
+  # Device for temporary agents during evaluation ("cpu" or "cuda")
+  temp_agent_device: "cpu"
+
+  # Clear model weight cache after evaluation (recommended)
+  clear_cache_after_evaluation: true
+
 # =============================================================================
 # LOGGING CONFIGURATION (LoggingConfig)
 # =============================================================================

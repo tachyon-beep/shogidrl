@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from keisei.evaluation.elo_registry import EloRegistry
+from keisei.evaluation.opponents.elo_registry import EloRegistry
 
 
 def test_elo_registry_load_update_save(tmp_path):
@@ -13,5 +13,5 @@ def test_elo_registry_load_update_save(tmp_path):
     registry.save()
     assert path.exists()
     data = json.loads(path.read_text())
-    assert "A" in data and "B" in data
-    assert data["A"] != 1500.0
+    assert "A" in data["ratings"] and "B" in data["ratings"]
+    assert abs(data["ratings"]["A"] - 1500.0) > 1e-6  # A's rating should have changed

@@ -19,15 +19,20 @@ from .evaluation_config import (
     SingleOpponentConfig,
     TournamentConfig,
     create_evaluation_config,
-    from_legacy_config,
 )
 from .evaluation_context import AgentInfo, EvaluationContext, OpponentInfo
 from .evaluation_result import (
     EvaluationResult,
     GameResult,
     SummaryStats,
-    aggregate_results,
     create_game_result,
+)
+from .model_manager import ModelWeightManager
+from .parallel_executor import (
+    BatchGameExecutor,
+    ParallelGameExecutor,
+    ParallelGameTask,
+    create_parallel_game_tasks,
 )
 
 __all__ = [
@@ -44,7 +49,6 @@ __all__ = [
     "LadderConfig",
     "BenchmarkConfig",
     "create_evaluation_config",
-    "from_legacy_config",
     # Context and metadata
     "EvaluationContext",
     "AgentInfo",
@@ -54,5 +58,26 @@ __all__ = [
     "GameResult",
     "SummaryStats",
     "create_game_result",
-    "aggregate_results",
+    # Model management
+    "ModelWeightManager",
+    # Parallel execution
+    "ParallelGameExecutor",
+    "BatchGameExecutor",
+    "ParallelGameTask",
+    "create_parallel_game_tasks",
 ]
+
+# Enhanced features (optional)
+try:
+    from .background_tournament import (
+        BackgroundTournamentManager,
+        TournamentProgress,
+        TournamentStatus,
+    )
+
+    __all__.extend(
+        ["BackgroundTournamentManager", "TournamentProgress", "TournamentStatus"]
+    )
+except ImportError:
+    # Background tournament features not available
+    pass

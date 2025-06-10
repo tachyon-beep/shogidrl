@@ -417,8 +417,10 @@ def test_undo_move_drop(new_game: ShogiGame):
     game.hands[Color.BLACK.value][PieceType.PAWN] = 1
     game.current_player = Color.BLACK
 
-    # Clear a square for dropping
-    game.set_piece(4, 4, None)
+    # Clear a square for dropping AND remove the existing BLACK pawn from this column
+    # to avoid Nifu (two pawns on same file)
+    game.set_piece(4, 4, None)  # Clear drop target
+    game.set_piece(6, 4, None)  # Remove existing BLACK pawn on column 4
 
     initial_black_hand = game.get_pieces_in_hand(Color.BLACK).copy()
     initial_board_str = game.to_string()

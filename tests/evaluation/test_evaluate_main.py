@@ -1,9 +1,8 @@
 """
-Tests for the main execution functions in the evaluation system.
+Tests for the modern evaluation system components.
 
-This module contains tests for execute_full_evaluation_run function which orchestrates
-the complete evaluation process including agent loading, opponent initialization,
-W&B integration, and seeding.
+This module contains tests for EvaluationManager and modern evaluation strategies,
+replacing the legacy execute_full_evaluation_run function tests.
 """
 
 from unittest.mock import MagicMock, patch
@@ -11,538 +10,418 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from keisei.core.ppo_agent import PPOAgent
-from keisei.evaluation.evaluate import execute_full_evaluation_run
+from keisei.evaluation.core.evaluation_config import (
+    EvaluationStrategy,
+    create_evaluation_config,
+)
+from keisei.evaluation.core_manager import EvaluationManager
 from keisei.utils import PolicyOutputMapper
-from keisei.utils.opponents import SimpleHeuristicOpponent, SimpleRandomOpponent
-from keisei.utils.utils import EvaluationLogger
-
-# Mock decorators for execute_full_evaluation_run tests
-COMMON_MAIN_MOCKS = [
-    "keisei.evaluation.evaluate.load_config",
-    "keisei.evaluation.evaluate.EvaluationLogger",
-    "keisei.evaluation.evaluate.run_evaluation_loop",
-    "keisei.evaluation.evaluate.initialize_opponent",
-    "keisei.evaluation.evaluate.load_evaluation_agent",
-    "keisei.evaluation.evaluate.PolicyOutputMapper",
-    "random.seed",
-    "numpy.random.seed",
-    "torch.manual_seed",
-]
 
 
-def apply_mocks(mock_list):
-    """Helper decorator to apply multiple patches consistently."""
-
-    def decorator(func):
-        for mock_path in reversed(mock_list):
-            func = patch(mock_path)(func)
-        return func
-
-    return decorator
-
-
-@apply_mocks(COMMON_MAIN_MOCKS)
-def test_execute_full_evaluation_run_basic_random(
-    mock_torch_seed,  # pylint: disable=unused-argument
-    mock_np_seed,  # pylint: disable=unused-argument
-    mock_random_seed,  # pylint: disable=unused-argument
-    mock_policy_output_mapper_class,
-    mock_load_agent,
-    mock_init_opponent,
-    mock_run_loop,
-    mock_eval_logger_class,
-    mock_load_config,
-    mock_wandb_disabled,
-    tmp_path,
-):
+def test_evaluation_manager_single_opponent_basic(tmp_path):
     """
-    Test basic functionality of execute_full_evaluation_run with random opponent.
+    Test basic functionality of EvaluationManager with single opponent strategy.
 
-    Verifies the complete evaluation pipeline works correctly including:
-    - Agent loading from checkpoint
-    - Random opponent initialization
-    - Evaluation loop execution
+    Verifies the modern evaluation pipeline works correctly including:
+    - EvaluationManager initialization
+    - Single opponent evaluation strategy
+    - Agent evaluation without W&B integration
     - Result aggregation
-    - No W&B integration when disabled
     """
-    # Set up mock_load_config to return a config with the required structure
-    mock_config = MagicMock()
-    mock_config.env.input_channels = 46  # INPUT_CHANNELS
-    mock_load_config.return_value = mock_config
-
-    # Create a real PolicyOutputMapper instance for the test
-    policy_mapper_instance = PolicyOutputMapper()
-
-    mock_agent_instance = MagicMock(spec=PPOAgent)
-    mock_agent_instance.name = "LoadedEvalAgent"
-    mock_load_agent.return_value = mock_agent_instance
-
-    mock_opponent_instance = SimpleRandomOpponent(name="EvalRandomOpponent")
-    mock_init_opponent.return_value = mock_opponent_instance
-
-    mock_logger_instance = MagicMock(spec=EvaluationLogger)
-    mock_eval_logger_class.return_value.__enter__.return_value = mock_logger_instance
-
-    expected_run_loop_results = {
-        "games_played": 1,
-        "agent_wins": 1,
-        "opponent_wins": 0,
-        "draws": 0,
-        "game_results": [],
-        "win_rate": 1.0,
-        "loss_rate": 0.0,
-        "draw_rate": 0.0,
-        "avg_game_length": 10.0,
-    }
-    mock_run_loop.return_value = expected_run_loop_results
-
-    log_file = tmp_path / "eval_basic_run.log"
-    agent_ckpt_path = "./agent_for_eval.pth"
-    num_games_to_run = 1
-    max_moves_for_game = 250
-
-    # Call the function being tested
-    results = execute_full_evaluation_run(
-        agent_checkpoint_path=agent_ckpt_path,
-        opponent_type="random",
-        opponent_checkpoint_path=None,
-        num_games=num_games_to_run,
-        max_moves_per_game=max_moves_for_game,
-        device_str="cpu",
-        log_file_path_eval=str(log_file),
-        policy_mapper=policy_mapper_instance,
-        seed=None,
-        wandb_log_eval=False,
+    # Create evaluation configuration
+    config = create_evaluation_config(
+        strategy=EvaluationStrategy.SINGLE_OPPONENT,
+        num_games=2,
+        wandb_logging=False,
+        opponent_name="random",
     )
 
-    # Verify mocks were called correctly
-    mock_policy_output_mapper_class.assert_not_called()
-
-    mock_load_agent.assert_called_once_with(
-        agent_ckpt_path, "cpu", policy_mapper_instance, 46
-    )
-    mock_init_opponent.assert_called_once_with(
-        "random", None, "cpu", policy_mapper_instance, 46
-    )
-    mock_eval_logger_class.assert_called_once_with(str(log_file), also_stdout=True)
-
-    mock_run_loop.assert_called_once()
-    pos_args, kw_args = mock_run_loop.call_args
-    assert pos_args[0] == mock_agent_instance
-    assert pos_args[1] == mock_opponent_instance
-    assert pos_args[2] == num_games_to_run
-    assert pos_args[3] == mock_logger_instance
-    assert pos_args[4] == max_moves_for_game
-    assert pos_args[5] == policy_mapper_instance  # Now includes policy_mapper parameter
-    assert not kw_args
-
-    mock_wandb_disabled["init"].assert_not_called()
-    mock_wandb_disabled["log"].assert_not_called()
-    mock_wandb_disabled["finish"].assert_not_called()
-    mock_wandb_disabled["run"].assert_not_called()
-
-    assert results == expected_run_loop_results
-
-
-@apply_mocks(COMMON_MAIN_MOCKS)
-def test_execute_full_evaluation_run_heuristic_opponent_with_wandb(
-    mock_torch_seed,
-    mock_np_seed,
-    mock_random_seed,
-    mock_policy_output_mapper_class,
-    mock_load_agent,
-    mock_init_opponent,
-    mock_run_loop,
-    mock_eval_logger_class,
-    mock_load_config,
-    mock_wandb_active,
-    tmp_path,
-):
-    """
-    Test execute_full_evaluation_run with heuristic opponent and W&B integration.
-
-    Verifies:
-    - Heuristic opponent initialization
-    - W&B integration with proper logging and configuration
-    - Wandb project, entity, and run name configuration
-    - Final summary metrics logging to W&B
-    """
-    # Set up mock_load_config
-    mock_config = MagicMock()
-    mock_config.env.input_channels = 46
-    mock_load_config.return_value = mock_config
-
-    policy_mapper_instance = PolicyOutputMapper()
-
-    mock_agent_instance = MagicMock(spec=PPOAgent)
-    mock_agent_instance.name = "LoadedMainAgentWandb"
-    mock_load_agent.return_value = mock_agent_instance
-
-    mock_opponent_instance = SimpleHeuristicOpponent(name="MainHeuristicOpponent")
-    mock_init_opponent.return_value = mock_opponent_instance
-
-    mock_logger_instance = MagicMock(spec=EvaluationLogger)
-    mock_eval_logger_class.return_value.__enter__.return_value = mock_logger_instance
-
-    expected_run_loop_results = {
-        "games_played": 2,
-        "agent_wins": 1,
-        "opponent_wins": 1,
-        "draws": 0,
-        "game_results": [],
-        "win_rate": 0.5,
-        "loss_rate": 0.5,
-        "draw_rate": 0.0,
-        "avg_game_length": 20.0,
-    }
-    mock_run_loop.return_value = expected_run_loop_results
-
-    log_file = tmp_path / "eval_wandb.log"
-    agent_ckpt_path = "./agent_wandb.pth"
-    num_games_to_run = 2
-    max_moves_for_game = 300
-    seed_to_use = None
-
-    # W&B setup
-    wandb_project_name = "test_project"
-    wandb_entity_name = "test_entity"
-    wandb_run_name_custom = "custom_eval_run"
-
-    mock_wandb_active["init"].return_value.name = wandb_run_name_custom
-    mock_wandb_active["run"].name = wandb_run_name_custom
-
-    # Call function
-    results = execute_full_evaluation_run(
-        agent_checkpoint_path=agent_ckpt_path,
-        opponent_type="heuristic",
-        opponent_checkpoint_path=None,
-        num_games=num_games_to_run,
-        max_moves_per_game=max_moves_for_game,
-        device_str="cpu",
-        log_file_path_eval=str(log_file),
-        policy_mapper=policy_mapper_instance,
-        seed=seed_to_use,
-        wandb_log_eval=True,
-        wandb_project_eval=wandb_project_name,
-        wandb_entity_eval=wandb_entity_name,
-        wandb_run_name_eval=wandb_run_name_custom,
-        wandb_reinit=True,
+    # Create EvaluationManager
+    eval_manager = EvaluationManager(
+        config=config,
+        run_name="test_run",
+        pool_size=3,
+        elo_registry_path=str(tmp_path / "elo_registry.json"),
     )
 
-    # Verify calls
-    mock_policy_output_mapper_class.assert_not_called()
-    mock_load_agent.assert_called_once_with(
-        agent_ckpt_path, "cpu", policy_mapper_instance, 46
+    # Setup with mock components
+    policy_mapper = PolicyOutputMapper()
+    eval_manager.setup(
+        device="cpu",
+        policy_mapper=policy_mapper,
+        model_dir=str(tmp_path),
+        wandb_active=False,
     )
-    mock_init_opponent.assert_called_once_with(
-        "heuristic", None, "cpu", policy_mapper_instance, 46
-    )
-    mock_eval_logger_class.assert_called_once_with(str(log_file), also_stdout=True)
 
-    # Verify run_evaluation_loop call
-    run_loop_pos_args, run_loop_kwargs = mock_run_loop.call_args
-    assert run_loop_pos_args[0] == mock_agent_instance
-    assert run_loop_pos_args[1] == mock_opponent_instance
-    assert run_loop_pos_args[2] == num_games_to_run
-    assert run_loop_pos_args[3] == mock_logger_instance
-    assert run_loop_pos_args[4] == max_moves_for_game
-    assert (
-        run_loop_pos_args[5] == policy_mapper_instance
-    )  # Now includes policy_mapper parameter
-    assert not run_loop_kwargs
+    # Mock the evaluation strategy directly instead of legacy components
+    with patch(
+        "keisei.evaluation.core_manager.EvaluatorFactory.create"
+    ) as mock_create_evaluator:
 
-    # Verify W&B integration
-    expected_wandb_config = {
-        "agent_checkpoint": agent_ckpt_path,
-        "opponent_type": "heuristic",
-        "opponent_checkpoint": None,
-        "num_games": num_games_to_run,
-        "max_moves_per_game": max_moves_for_game,
-        "device": "cpu",
-        "seed": seed_to_use,
-    }
-    mock_wandb_active["init"].assert_called_once_with(
-        project=wandb_project_name,
-        entity=wandb_entity_name,
-        name=wandb_run_name_custom,
-        config=expected_wandb_config,
-        reinit=True,
-    )
-    mock_wandb_active["log"].assert_called_once_with(
-        {
-            "eval/final_win_rate": expected_run_loop_results["win_rate"],
-            "eval/final_loss_rate": expected_run_loop_results["loss_rate"],
-            "eval/final_draw_rate": expected_run_loop_results["draw_rate"],
-            "eval/final_avg_game_length": expected_run_loop_results["avg_game_length"],
-        }
-    )
-    mock_wandb_active["finish"].assert_called_once()
+        # Create a mock evaluator that returns expected results
+        mock_evaluator = MagicMock()
 
-    # Verify seeding not called when seed=None
-    mock_random_seed.assert_not_called()
-    mock_np_seed.assert_not_called()
-    mock_torch_seed.assert_not_called()
-
-    assert results == expected_run_loop_results
-
-
-@apply_mocks(COMMON_MAIN_MOCKS)
-def test_execute_full_evaluation_run_ppo_vs_ppo_with_wandb(
-    mock_torch_seed,
-    mock_np_seed,
-    mock_random_seed,
-    mock_policy_output_mapper_class,
-    mock_load_agent,
-    mock_init_opponent,
-    mock_run_loop,
-    mock_eval_logger_class,
-    mock_load_config,
-    mock_wandb_active,
-    tmp_path,
-):
-    """
-    Test execute_full_evaluation_run with PPO vs PPO evaluation and W&B.
-
-    This is a complex integration test that verifies:
-    - Loading two separate PPO agents (one for evaluation, one as opponent)
-    - Complex mock side effects for different checkpoint paths
-    - PPO opponent initialization through the opponent system
-    - W&B logging for agent vs agent battles
-    """
-    # Set up mock_load_config
-    mock_config = MagicMock()
-    mock_config.env.input_channels = 46
-    mock_load_config.return_value = mock_config
-
-    policy_mapper_instance = PolicyOutputMapper()
-
-    # Create separate mock agents for evaluation and opponent
-    mock_agent_to_eval = MagicMock(spec=PPOAgent)
-    mock_agent_to_eval.name = "PPOAgentToEvaluate"
-    mock_opponent_agent = MagicMock(spec=PPOAgent)
-    mock_opponent_agent.name = "PPOAgentOpponent"
-
-    agent_eval_path = "./agent_to_eval.pth"
-    agent_opponent_path = "./agent_opponent.pth"
-
-    # Set up side effects for loading different agents
-    def load_agent_side_effect(
-        checkpoint_path, device, pol_mapper, in_channels
-    ):  # pylint: disable=unused-argument
-        if checkpoint_path == agent_eval_path:
-            return mock_agent_to_eval
-        if checkpoint_path == agent_opponent_path:
-            return mock_opponent_agent
-        pytest.fail(f"Unexpected call to load_evaluation_agent with {checkpoint_path}")
-        return None
-
-    mock_load_agent.side_effect = load_agent_side_effect
-
-    # Set up opponent initialization side effect
-    def init_opponent_side_effect(
-        opponent_type,
-        opponent_path,
-        device,
-        pol_mapper,
-        in_channels,  # pylint: disable=unused-argument
-    ):
-        if opponent_type == "ppo" and opponent_path == agent_opponent_path:
-            return mock_opponent_agent
-        if opponent_type == "random":
-            return SimpleRandomOpponent()
-        if opponent_type == "heuristic":
-            return SimpleHeuristicOpponent()
-        pytest.fail(
-            f"Unexpected call to initialize_opponent with {opponent_type}, {opponent_path}"
+        # Mock evaluation result
+        from keisei.evaluation.core.evaluation_context import EvaluationContext
+        from keisei.evaluation.core.evaluation_result import (
+            EvaluationResult,
+            SummaryStats,
         )
-        return None
 
-    mock_init_opponent.side_effect = init_opponent_side_effect
+        # Create proper context and summary stats
+        mock_context = MagicMock(spec=EvaluationContext)
+        mock_summary = SummaryStats(
+            total_games=2,
+            agent_wins=1,
+            opponent_wins=1,
+            draws=0,
+            win_rate=0.5,
+            loss_rate=0.5,
+            draw_rate=0.0,
+            avg_game_length=25.0,
+            total_moves=50,
+            avg_duration_seconds=120.0,
+        )
 
-    mock_logger_instance = MagicMock(spec=EvaluationLogger)
-    mock_eval_logger_class.return_value.__enter__.return_value = mock_logger_instance
+        # Create mock evaluation result
+        mock_result = EvaluationResult(
+            context=mock_context,
+            games=[],  # Empty games list for simplicity
+            summary_stats=mock_summary,
+        )
 
-    expected_results = {
-        "games_played": 1,
-        "agent_wins": 0,
-        "opponent_wins": 1,
-        "draws": 0,
-        "game_results": [],
-        "win_rate": 0.0,
-        "loss_rate": 1.0,
-        "draw_rate": 0.0,
-        "avg_game_length": 15.0,
-    }
-    mock_run_loop.return_value = expected_results
+        # Configure mock evaluator to return this result
+        async def mock_evaluate(agent_info, context):
+            return mock_result
 
-    log_file = tmp_path / "eval_ppo_vs_ppo.log"
-    num_games_val = 1
-    max_moves_val = 200
-    wandb_project_val = "ppo_battle_project"
+        mock_evaluator.evaluate = mock_evaluate
+        mock_create_evaluator.return_value = mock_evaluator
 
-    # Configure W&B mock
-    mock_wandb_active["init"].return_value.name = "test_ppo_run"
-    mock_wandb_active["run"].name = "test_ppo_run"
+        # Create test agent
+        mock_agent = MagicMock(spec=PPOAgent)
+        mock_agent.name = "TestAgent"
+        mock_agent.model = MagicMock()
 
-    results = execute_full_evaluation_run(
-        agent_checkpoint_path=agent_eval_path,
-        opponent_type="ppo",
-        opponent_checkpoint_path=agent_opponent_path,
-        num_games=num_games_val,
-        max_moves_per_game=max_moves_val,
-        device_str="cpu",
-        log_file_path_eval=str(log_file),
-        policy_mapper=policy_mapper_instance,
-        seed=None,
-        wandb_log_eval=True,
-        wandb_project_eval=wandb_project_val,
-        wandb_entity_eval=None,
-        wandb_run_name_eval="test_ppo_run",
-        wandb_reinit=True,
-    )
+        # Test current agent evaluation (the main API)
+        result = eval_manager.evaluate_current_agent(mock_agent)
 
-    # Verify calls
-    mock_policy_output_mapper_class.assert_not_called()
+        # Verify results
+        assert result is not None
+        assert result.summary_stats.total_games == 2
+        assert abs(result.summary_stats.win_rate - 0.5) < 0.01
 
-    # Verify agent loading - called once directly for agent_to_eval
-    assert mock_load_agent.call_count == 1
-    mock_load_agent.assert_any_call(agent_eval_path, "cpu", policy_mapper_instance, 46)
-
-    # Verify opponent initialization
-    mock_init_opponent.assert_called_once_with(
-        "ppo", agent_opponent_path, "cpu", policy_mapper_instance, 46
-    )
-
-    mock_eval_logger_class.assert_called_once_with(str(log_file), also_stdout=True)
-
-    # Verify run_evaluation_loop call
-    run_loop_pos_args, run_loop_kwargs = mock_run_loop.call_args
-    assert run_loop_pos_args[0] == mock_agent_to_eval
-    assert run_loop_pos_args[1] == mock_opponent_agent
-    assert run_loop_pos_args[2] == num_games_val
-    assert run_loop_pos_args[3] == mock_logger_instance
-    assert run_loop_pos_args[4] == max_moves_val
-    assert (
-        run_loop_pos_args[5] == policy_mapper_instance
-    )  # Now includes policy_mapper parameter
-    assert not run_loop_kwargs
-
-    # Verify W&B integration
-    expected_wandb_config = {
-        "agent_checkpoint": agent_eval_path,
-        "opponent_type": "ppo",
-        "opponent_checkpoint": agent_opponent_path,
-        "num_games": num_games_val,
-        "max_moves_per_game": max_moves_val,
-        "device": "cpu",
-        "seed": None,
-    }
-    mock_wandb_active["init"].assert_called_once_with(
-        project=wandb_project_val,
-        entity=None,
-        name="test_ppo_run",
-        config=expected_wandb_config,
-        reinit=True,
-    )
-    mock_wandb_active["log"].assert_called_once_with(
-        {
-            "eval/final_win_rate": expected_results["win_rate"],
-            "eval/final_loss_rate": expected_results["loss_rate"],
-            "eval/final_draw_rate": expected_results["draw_rate"],
-            "eval/final_avg_game_length": expected_results["avg_game_length"],
-        }
-    )
-    mock_wandb_active["finish"].assert_called_once()
-
-    # Verify no seeding when seed=None
-    mock_random_seed.assert_not_called()
-    mock_np_seed.assert_not_called()
-    mock_torch_seed.assert_not_called()
-
-    assert results == expected_results
+        # Verify that the modern system created the evaluator
+        mock_create_evaluator.assert_called_once()
 
 
-@apply_mocks(COMMON_MAIN_MOCKS)
-def test_execute_full_evaluation_run_with_seed(
-    mock_torch_seed,
-    mock_np_seed,
-    mock_random_seed,
-    mock_policy_output_mapper_class,
-    mock_load_agent,
-    mock_init_opponent,
-    mock_run_loop,
-    mock_eval_logger_class,
-    mock_load_config,
-    mock_wandb_disabled,
-    tmp_path,
-):
+def test_evaluation_manager_with_checkpoint(tmp_path):
     """
-    Test execute_full_evaluation_run with explicit seeding.
+    Test EvaluationManager.evaluate_checkpoint functionality.
 
-    Verifies that when a seed is provided:
-    - All three seeding functions are called with the correct seed value
-    - Random, numpy, and torch seeds are set properly
-    - The evaluation runs correctly with seeding applied
+    Verifies that checkpoint-based evaluation works correctly.
     """
-    # Set up mock_load_config
-    mock_config = MagicMock()
-    mock_config.env.input_channels = 46
-    mock_load_config.return_value = mock_config
-
-    policy_mapper_instance = PolicyOutputMapper()
-
-    mock_agent_instance = MagicMock(spec=PPOAgent)
-    mock_agent_instance.name = "AgentForSeedTest"
-    mock_load_agent.return_value = mock_agent_instance
-
-    mock_opponent_instance = SimpleRandomOpponent(name="RandomOpponentForSeedTest")
-    mock_init_opponent.return_value = mock_opponent_instance
-
-    mock_logger_instance = MagicMock(spec=EvaluationLogger)
-    mock_eval_logger_class.return_value.__enter__.return_value = mock_logger_instance
-
-    mock_run_loop.return_value = {
-        "games_played": 1,
-        "agent_wins": 1,
-        "opponent_wins": 0,
-        "draws": 0,
-        "game_results": [],
-        "win_rate": 1.0,
-        "loss_rate": 0.0,
-        "draw_rate": 0.0,
-        "avg_game_length": 5.0,
-    }
-
-    log_file_path = tmp_path / "eval_seed_test.log"
-    agent_checkpoint_file = "./agent_seed.pth"
-    seed_value_to_test = 123
-
-    # Call the function
-    execute_full_evaluation_run(
-        agent_checkpoint_path=agent_checkpoint_file,
-        opponent_type="random",
-        opponent_checkpoint_path=None,
+    # Create evaluation configuration
+    config = create_evaluation_config(
+        strategy=EvaluationStrategy.SINGLE_OPPONENT,
         num_games=1,
-        max_moves_per_game=100,
-        device_str="cpu",
-        log_file_path_eval=str(log_file_path),
-        policy_mapper=policy_mapper_instance,
-        seed=seed_value_to_test,
-        wandb_log_eval=False,
+        wandb_logging=False,
+        opponent_name="heuristic",
     )
 
-    # Verify seeding was called correctly
-    mock_random_seed.assert_called_once_with(seed_value_to_test)
-    mock_np_seed.assert_called_once_with(seed_value_to_test)
-    mock_torch_seed.assert_called_once_with(seed_value_to_test)
+    # Create EvaluationManager
+    eval_manager = EvaluationManager(
+        config=config,
+        run_name="test_checkpoint_run",
+        pool_size=3,
+        elo_registry_path=str(tmp_path / "elo_registry.json"),
+    )
 
-    # Verify other basic functionality
-    mock_policy_output_mapper_class.assert_not_called()
-    mock_load_agent.assert_called_once()
-    mock_init_opponent.assert_called_once()
-    mock_eval_logger_class.assert_called_once()
-    mock_run_loop.assert_called_once()
-    mock_wandb_disabled["init"].assert_not_called()
-    mock_wandb_disabled["log"].assert_not_called()
-    mock_wandb_disabled["finish"].assert_not_called()
-    mock_wandb_disabled["run"].assert_not_called()
+    # Setup
+    policy_mapper = PolicyOutputMapper()
+    eval_manager.setup(
+        device="cpu",
+        policy_mapper=policy_mapper,
+        model_dir=str(tmp_path),
+        wandb_active=False,
+    )
+
+    # Create test checkpoint file (just needs to exist)
+    checkpoint_path = tmp_path / "test_checkpoint.pth"
+    checkpoint_path.write_text("dummy_checkpoint")
+
+    # Mock the evaluation strategy for checkpoint test
+    with patch(
+        "keisei.evaluation.core_manager.EvaluatorFactory.create"
+    ) as mock_create_evaluator:
+
+        # Create a mock evaluator that returns expected results
+        mock_evaluator = MagicMock()
+
+        # Mock evaluation result for checkpoint test
+        from keisei.evaluation.core.evaluation_context import EvaluationContext
+        from keisei.evaluation.core.evaluation_result import (
+            EvaluationResult,
+            SummaryStats,
+        )
+
+        # Create proper context and summary stats for checkpoint test
+        mock_context = MagicMock(spec=EvaluationContext)
+        mock_summary = SummaryStats(
+            total_games=1,
+            agent_wins=1,
+            opponent_wins=0,
+            draws=0,
+            win_rate=1.0,
+            loss_rate=0.0,
+            draw_rate=0.0,
+            avg_game_length=15.0,
+            total_moves=30,
+            avg_duration_seconds=90.0,
+        )
+
+        # Create mock evaluation result
+        mock_result = EvaluationResult(
+            context=mock_context,
+            games=[],  # Empty games list for simplicity
+            summary_stats=mock_summary,
+        )
+
+        # Configure mock evaluator to return this result
+        async def mock_evaluate(agent_info, context):
+            return mock_result
+
+        mock_evaluator.evaluate = mock_evaluate
+        mock_create_evaluator.return_value = mock_evaluator
+
+        # Test checkpoint evaluation
+        result = eval_manager.evaluate_checkpoint(str(checkpoint_path))
+
+        # Verify results
+        assert result is not None
+        assert result.summary_stats.total_games == 1
+        assert abs(result.summary_stats.win_rate - 1.0) < 0.01
+
+        # Verify that the modern system created the evaluator
+        mock_create_evaluator.assert_called_once()
+
+
+def test_evaluation_manager_current_agent_with_model_check(tmp_path):
+    """
+    Test EvaluationManager.evaluate_current_agent with model validation.
+
+    Verifies that current agent evaluation works and validates model attribute.
+    """
+    # Create evaluation configuration
+    config = create_evaluation_config(
+        strategy=EvaluationStrategy.SINGLE_OPPONENT,
+        num_games=1,
+        wandb_logging=False,
+        opponent_name="random",
+    )
+
+    # Create EvaluationManager
+    eval_manager = EvaluationManager(
+        config=config,
+        run_name="test_current_agent",
+        pool_size=3,
+        elo_registry_path=str(tmp_path / "elo_registry.json"),
+    )
+
+    # Setup
+    policy_mapper = PolicyOutputMapper()
+    eval_manager.setup(
+        device="cpu",
+        policy_mapper=policy_mapper,
+        model_dir=str(tmp_path),
+        wandb_active=False,
+    )
+
+    # Create mock current agent
+    mock_agent = MagicMock(spec=PPOAgent)
+    mock_agent.name = "CurrentAgent"
+    mock_agent.model = MagicMock()  # Important: agent must have model attribute
+
+    # Mock the evaluation strategy for current agent test
+    with patch(
+        "keisei.evaluation.core_manager.EvaluatorFactory.create"
+    ) as mock_create_evaluator:
+
+        # Create a mock evaluator that returns expected results
+        mock_evaluator = MagicMock()
+
+        # Mock evaluation result for current agent test
+        from keisei.evaluation.core.evaluation_context import EvaluationContext
+        from keisei.evaluation.core.evaluation_result import (
+            EvaluationResult,
+            SummaryStats,
+        )
+
+        # Create proper context and summary stats for current agent test
+        mock_context = MagicMock(spec=EvaluationContext)
+        mock_summary = SummaryStats(
+            total_games=1,
+            agent_wins=0,
+            opponent_wins=1,
+            draws=0,
+            win_rate=0.0,
+            loss_rate=1.0,
+            draw_rate=0.0,
+            avg_game_length=30.0,
+            total_moves=60,
+            avg_duration_seconds=180.0,
+        )
+
+        # Create mock evaluation result
+        mock_result = EvaluationResult(
+            context=mock_context,
+            games=[],  # Empty games list for simplicity
+            summary_stats=mock_summary,
+        )
+
+        # Configure mock evaluator to return this result
+        async def mock_evaluate(agent_info, context):
+            return mock_result
+
+        mock_evaluator.evaluate = mock_evaluate
+        mock_create_evaluator.return_value = mock_evaluator
+
+        # Test current agent evaluation
+        result = eval_manager.evaluate_current_agent(mock_agent)
+
+        # Verify results
+        assert result is not None
+        assert result.summary_stats.total_games == 1
+        assert abs(result.summary_stats.win_rate - 0.0) < 0.01
+
+        # Verify that the modern system created the evaluator
+        mock_create_evaluator.assert_called_once()
+
+
+def test_evaluation_manager_agent_without_model_raises_error(tmp_path):
+    """
+    Test that EvaluationManager raises error for agent without model attribute.
+    """
+    # Create evaluation configuration
+    config = create_evaluation_config(
+        strategy=EvaluationStrategy.SINGLE_OPPONENT,
+        num_games=1,
+        wandb_logging=False,
+        opponent_name="random",
+    )
+
+    # Create EvaluationManager
+    eval_manager = EvaluationManager(
+        config=config,
+        run_name="test_error_case",
+        pool_size=3,
+        elo_registry_path=str(tmp_path / "elo_registry.json"),
+    )
+
+    # Setup
+    policy_mapper = PolicyOutputMapper()
+    eval_manager.setup(
+        device="cpu",
+        policy_mapper=policy_mapper,
+        model_dir=str(tmp_path),
+        wandb_active=False,
+    )
+
+    # Create agent without model attribute
+    mock_agent = MagicMock()
+    mock_agent.name = "AgentWithoutModel"
+    # Explicitly set model to None to trigger the validation error
+    mock_agent.model = None
+
+    # Test that evaluation raises ValueError
+    with pytest.raises(ValueError, match="Agent must have a 'model' attribute"):
+        eval_manager.evaluate_current_agent(mock_agent)
+
+
+def test_evaluation_manager_tournament_strategy_with_mock(tmp_path):
+    """
+    Test EvaluationManager with tournament strategy using mocked evaluator.
+
+    Verifies the tournament evaluation strategy works correctly.
+    """
+    # Create evaluation configuration for tournament
+    config = create_evaluation_config(
+        strategy=EvaluationStrategy.TOURNAMENT,
+        num_games=2,
+        wandb_logging=False,
+        opponent_pool_config=[
+            {"name": "agent1", "type": "ppo", "checkpoint_path": "agent1.pth"},
+            {"name": "agent2", "type": "ppo", "checkpoint_path": "agent2.pth"},
+        ],
+    )
+
+    # Create EvaluationManager
+    eval_manager = EvaluationManager(
+        config=config,
+        run_name="test_tournament",
+        pool_size=5,
+        elo_registry_path=str(tmp_path / "elo_registry.json"),
+    )
+
+    # Setup
+    policy_mapper = PolicyOutputMapper()
+    eval_manager.setup(
+        device="cpu",
+        policy_mapper=policy_mapper,
+        model_dir=str(tmp_path),
+        wandb_active=False,
+    )
+
+    # Create mock current agent
+    mock_agent = MagicMock(spec=PPOAgent)
+    mock_agent.name = "TournamentAgent"
+    mock_agent.model = MagicMock()
+
+    with patch(
+        "keisei.evaluation.core.base_evaluator.EvaluatorFactory.create"
+    ) as mock_factory:
+        # Setup mock tournament evaluator
+        mock_evaluator = MagicMock()
+        mock_factory.return_value = mock_evaluator
+
+        # Setup mock tournament results
+        from keisei.evaluation.core.evaluation_context import EvaluationContext
+        from keisei.evaluation.core.evaluation_result import (
+            EvaluationResult,
+            SummaryStats,
+        )
+
+        mock_result = EvaluationResult(
+            summary_stats=SummaryStats(
+                total_games=4,  # 2 games against each of 2 opponents
+                agent_wins=2,
+                opponent_wins=2,
+                draws=0,
+                win_rate=0.5,
+                loss_rate=0.5,
+                draw_rate=0.0,
+                avg_game_length=20.0,
+                total_moves=80,
+                avg_duration_seconds=15.0,
+            ),
+            games=[],
+            context=MagicMock(spec=EvaluationContext),
+            analytics_data={"tournament_standing": 2},
+        )
+
+        # Mock the async evaluate method
+        async def mock_evaluate(_agent_info, _context):
+            return mock_result
+
+        mock_evaluator.evaluate = mock_evaluate
+
+        # Test tournament evaluation
+        result = eval_manager.evaluate_current_agent(mock_agent)
+
+        # Verify results
+        assert result is not None
+        assert result.summary_stats.total_games == 4
+        assert abs(result.summary_stats.win_rate - 0.5) < 0.01
+        assert "tournament_standing" in result.analytics_data
+
+        # Verify factory was called
+        mock_factory.assert_called_once_with(config)

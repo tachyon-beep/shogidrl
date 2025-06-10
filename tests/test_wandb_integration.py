@@ -154,21 +154,18 @@ class TestWandBArtifacts:
             model_path = tmp_path / "test_model.pth"
             model_path.write_text("dummy model content")
 
-            # Mock log function
-            log_mock = Mock()
-
             # Should return False when W&B is disabled
-            result = trainer._create_model_artifact(  # pylint: disable=protected-access
+            result = trainer.model_manager.create_model_artifact(
                 model_path=str(model_path),
                 artifact_name="test-model",
+                run_name=trainer.run_name,
+                is_wandb_active=trainer.is_train_wandb_active,
                 description="Test model",
                 metadata={"test": True},
                 aliases=["latest"],
-                log_both=log_mock,
             )
 
             assert result is False
-            log_mock.assert_not_called()
 
     def test_create_model_artifact_success(self, mock_wandb_active, tmp_path):
         """Test successful artifact creation when W&B is enabled."""
@@ -189,18 +186,16 @@ class TestWandBArtifacts:
             model_path = tmp_path / "test_model.pth"
             model_path.write_text("dummy model content")
 
-            # Mock log function
-            log_mock = Mock()
-
             # Test artifact creation
-            result = trainer._create_model_artifact(  # pylint: disable=protected-access
+            result = trainer.model_manager.create_model_artifact(
                 model_path=str(model_path),
                 artifact_name="test-model",
+                run_name=trainer.run_name,
+                is_wandb_active=trainer.is_train_wandb_active,
                 artifact_type="model",
                 description="Test model for unit testing",
                 metadata={"timesteps": 1000, "test": True},
                 aliases=["latest", "test"],
-                log_both=log_mock,
             )
 
             # Verify result
@@ -222,14 +217,6 @@ class TestWandBArtifacts:
                 mock_artifact, aliases=["latest", "test"]
             )
 
-            # Verify logging message
-            log_mock.assert_called_once()
-            log_call_args = log_mock.call_args[0][0]
-            assert "test_run_123-test-model" in log_call_args
-            assert "created and uploaded" in log_call_args
-            assert "latest" in log_call_args
-            assert "test" in log_call_args
-
     def test_create_model_artifact_missing_file(self, tmp_path):
         """Test artifact creation with missing model file."""
         config = make_test_config(wandb_enabled=True)
@@ -242,20 +229,15 @@ class TestWandBArtifacts:
             # Use non-existent file path
             missing_path = tmp_path / "missing_model.pth"
 
-            # Mock log function
-            log_mock = Mock()
-
             # Should return False for missing file
-            result = trainer._create_model_artifact(  # pylint: disable=protected-access
+            result = trainer.model_manager.create_model_artifact(
                 model_path=str(missing_path),
                 artifact_name="test-model",
-                log_both=log_mock,
+                run_name=trainer.run_name,
+                is_wandb_active=trainer.is_train_wandb_active,
             )
 
             assert result is False
-            log_mock.assert_called_once()
-            log_call_args = log_mock.call_args[0][0]
-            assert "does not exist" in log_call_args
 
     def test_create_model_artifact_wandb_error(self, mock_wandb_active, tmp_path):
         """Test artifact creation when W&B throws an error."""
@@ -276,35 +258,15 @@ class TestWandBArtifacts:
             model_path = tmp_path / "test_model.pth"
             model_path.write_text("dummy model content")
 
-            # Mock log function
-            log_mock = Mock()
-
             # Should return False when W&B throws error
-            result = trainer._create_model_artifact(  # pylint: disable=protected-access
+            result = trainer.model_manager.create_model_artifact(
                 model_path=str(model_path),
                 artifact_name="test-model",
-                log_both=log_mock,
+                run_name=trainer.run_name,
+                is_wandb_active=trainer.is_train_wandb_active,
             )
 
             assert result is False
-
-            # Verify retry attempts were logged (3 calls total: 2 retries + 1 final error)
-            assert log_mock.call_count == 3
-
-            # Check first retry attempt
-            first_call = log_mock.call_args_list[0]
-            assert "WandB artifact upload attempt 1 failed" in first_call[0][0]
-            assert "Retrying in 1.0 seconds" in first_call[0][0]
-
-            # Check second retry attempt
-            second_call = log_mock.call_args_list[1]
-            assert "WandB artifact upload attempt 2 failed" in second_call[0][0]
-            assert "Retrying in 2.0 seconds" in second_call[0][0]
-
-            # Check final error
-            final_call = log_mock.call_args_list[2]
-            assert "Error creating W&B artifact" in final_call[0][0]
-            assert final_call[1]["log_level"] == "error"
 
     def test_create_model_artifact_default_parameters(self, tmp_path):
         """Test artifact creation with default parameters."""
@@ -327,8 +289,11 @@ class TestWandBArtifacts:
             model_path.write_text("dummy model content")
 
             # Test with minimal parameters
-            result = trainer._create_model_artifact(  # pylint: disable=protected-access
-                model_path=str(model_path), artifact_name="minimal-model"
+            result = trainer.model_manager.create_model_artifact(
+                model_path=str(model_path),
+                artifact_name="minimal-model",
+                run_name=trainer.run_name,
+                is_wandb_active=trainer.is_train_wandb_active,
             )
 
             assert result is True
@@ -370,33 +335,16 @@ class TestWandBArtifacts:
             trainer.is_train_wandb_active = True
             trainer.run_name = "test_run_retry"
 
-            log_mock = Mock()
-
             # Should succeed after retry
-            result = trainer._create_model_artifact(  # pylint: disable=protected-access
+            result = trainer.model_manager.create_model_artifact(
                 model_path=str(model_path),
                 artifact_name="retry-test-model",
-                log_both=log_mock,
+                run_name=trainer.run_name,
+                is_wandb_active=trainer.is_train_wandb_active,
             )
 
             assert result is True
             assert call_count == 2  # Failed once, succeeded on retry
-
-            # Debug: Print all log calls to understand what's happening
-            print(f"Log call count: {log_mock.call_count}")
-            for i, call in enumerate(log_mock.call_args_list):
-                print(f"Call {i}: {call}")
-
-            # Verify retry message was logged
-            assert log_mock.call_count >= 1  # Temporarily allow more calls to debug
-            # Find the retry call among all calls
-            retry_found = False
-            for call in log_mock.call_args_list:
-                if "WandB artifact upload attempt 1 failed" in str(call):
-                    retry_found = True
-                    assert "Retrying in 1.0 seconds" in call[0][0]
-                    break
-            assert retry_found, "Retry message not found in log calls"
 
         # Test Case 2: All retries fail
         mock_wandb_active["log_artifact"].side_effect = RuntimeError(
@@ -409,32 +357,15 @@ class TestWandBArtifacts:
             trainer.is_train_wandb_active = True
             trainer.run_name = "test_run_retry_fail"
 
-            log_mock = Mock()
-
             # Should fail after all retries
-            result = trainer._create_model_artifact(  # pylint: disable=protected-access
+            result = trainer.model_manager.create_model_artifact(
                 model_path=str(model_path),
                 artifact_name="retry-fail-model",
-                log_both=log_mock,
+                run_name=trainer.run_name,
+                is_wandb_active=trainer.is_train_wandb_active,
             )
 
             assert result is False
-
-            # Verify 3 log calls: 2 retry attempts + 1 final error
-            assert log_mock.call_count == 3
-
-            # Check retry messages
-            first_retry = log_mock.call_args_list[0]
-            assert "WandB artifact upload attempt 1 failed" in first_retry[0][0]
-            assert "Retrying in 1.0 seconds" in first_retry[0][0]
-
-            second_retry = log_mock.call_args_list[1]
-            assert "WandB artifact upload attempt 2 failed" in second_retry[0][0]
-            assert "Retrying in 2.0 seconds" in second_retry[0][0]
-
-            final_error = log_mock.call_args_list[2]
-            assert "Error creating W&B artifact" in final_error[0][0]
-            assert final_error[1]["log_level"] == "error"
 
 
 class TestWandBSweepIntegration:
@@ -626,7 +557,10 @@ class TestWandBLoggingIntegration:
                             log_payload = {"train_message": message}
                             if wandb_data:
                                 log_payload.update(wandb_data)
-                            mock_wandb_log(log_payload, step=trainer.global_timestep)
+                            mock_wandb_log(
+                                log_payload,
+                                step=trainer.metrics_manager.global_timestep,
+                            )
 
                 # Test W&B logging when conditions are met
                 log_both_impl(
@@ -635,7 +569,7 @@ class TestWandBLoggingIntegration:
 
                 expected_payload = {"train_message": "Test message", "loss": 0.5}
                 mock_wandb_log.assert_called_once_with(
-                    expected_payload, step=trainer.global_timestep
+                    expected_payload, step=trainer.metrics_manager.global_timestep
                 )
 
     def test_log_both_impl_wandb_run_none(self, temp_base_dir):
@@ -682,7 +616,10 @@ class TestWandBLoggingIntegration:
                             log_payload = {"train_message": message}
                             if wandb_data:
                                 log_payload.update(wandb_data)
-                            wandb.log(log_payload, step=trainer.global_timestep)
+                            wandb.log(
+                                log_payload,
+                                step=trainer.metrics_manager.global_timestep,
+                            )
 
                 # Should not crash, should not call wandb.log
                 log_both_impl(
@@ -735,7 +672,10 @@ class TestWandBLoggingIntegration:
                             log_payload = {"train_message": message}
                             if wandb_data:
                                 log_payload.update(wandb_data)
-                            wandb.log(log_payload, step=trainer.global_timestep)
+                            wandb.log(
+                                log_payload,
+                                step=trainer.metrics_manager.global_timestep,
+                            )
 
                 # Should not log to W&B due to is_train_wandb_active = False
                 log_both_impl(
@@ -787,7 +727,10 @@ class TestWandBLoggingIntegration:
                             log_payload = {"train_message": message}
                             if wandb_data:
                                 log_payload.update(wandb_data)
-                            wandb.log(log_payload, step=trainer.global_timestep)
+                            wandb.log(
+                                log_payload,
+                                step=trainer.metrics_manager.global_timestep,
+                            )
 
                 # Test with also_to_wandb=False
                 log_both_impl(
