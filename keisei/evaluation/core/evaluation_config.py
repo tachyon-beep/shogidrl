@@ -224,9 +224,14 @@ def create_evaluation_config(
     config_class = config_classes.get(strategy, EvaluationConfig)
 
     try:
-        return config_class(strategy=strategy, **kwargs)
+        # Don't pass strategy to specific config classes since they have init=False
+        if config_class != EvaluationConfig:
+            return config_class(**kwargs)
+        else:
+            # Base config class can accept strategy parameter
+            return config_class(strategy=strategy, **kwargs)
     except TypeError as e:
-        logger.error(f"Invalid parameters for {strategy.value} config: {e}")
+        logger.error("Invalid parameters for %s config: %s", strategy.value, e)
         # Fall back to base config with strategy params
         strategy_params = kwargs.copy()
         base_params = {
@@ -243,56 +248,4 @@ def create_evaluation_config(
         return EvaluationConfig(strategy=strategy, **base_params)
 
 
-# Legacy compatibility
-def from_legacy_config(legacy_config: Dict[str, Any]) -> EvaluationConfig:
-    """
-    Convert legacy evaluation configuration to new format.
 
-    Args:
-        legacy_config: Dictionary with legacy configuration format
-
-    Returns:
-        New evaluation configuration object
-    """
-    # Map legacy keys to new format
-    strategy = EvaluationStrategy.SINGLE_OPPONENT  # Default
-
-    # Detect strategy from legacy config
-    if legacy_config.get("tournament_mode", False):
-        strategy = EvaluationStrategy.TOURNAMENT
-    elif legacy_config.get("benchmark_mode", False):
-        strategy = EvaluationStrategy.BENCHMARK
-    elif legacy_config.get("ladder_mode", False):
-        strategy = EvaluationStrategy.LADDER
-
-    # Map common parameters
-    new_config = {
-        "strategy": strategy,
-        "num_games": legacy_config.get("num_games", 100),
-        "max_concurrent_games": legacy_config.get("max_workers", 4),
-        "randomize_positions": legacy_config.get("randomize", True),
-        "save_games": legacy_config.get("save_games", True),
-        "wandb_logging": legacy_config.get("log_to_wandb", True),
-        "update_elo": legacy_config.get("update_elo", True),
-    }
-
-    # Add strategy-specific parameters
-    strategy_params = {}
-    for key, value in legacy_config.items():
-        if key not in {
-            "num_games",
-            "max_workers",
-            "randomize",
-            "save_games",
-            "log_to_wandb",
-            "update_elo",
-            "tournament_mode",
-            "benchmark_mode",
-            "ladder_mode",
-        }:
-            strategy_params[key] = value
-
-    if strategy_params:
-        new_config["strategy_params"] = strategy_params
-
-    return create_evaluation_config(**new_config)

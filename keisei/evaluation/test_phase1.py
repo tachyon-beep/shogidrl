@@ -217,36 +217,28 @@ async def test_legacy_compatibility():
     """Test legacy compatibility features."""
     print("\nTesting legacy compatibility...")
 
-    # Test legacy config conversion
-    legacy_config = {
-        "num_games": 20,
-        "max_workers": 4,
-        "randomize": True,
-        "save_games": True,
-        "log_to_wandb": False,
-        "opponent_name": "legacy_opponent",
-    }
-
-    from keisei.evaluation.core.evaluation_config import from_legacy_config
-
-    new_config = from_legacy_config(legacy_config)
-
-    assert new_config.num_games == 20
-    assert new_config.max_concurrent_games == 4
-    assert new_config.randomize_positions == True
-    print("✓ Legacy config conversion successful")
-
-    # Test legacy format export
-    config = SingleOpponentConfig(
-        opponent_name="test", num_games=10, max_concurrent_games=2
+    # Test direct config creation instead of legacy conversion
+    from keisei.evaluation.core import create_evaluation_config, EvaluationStrategy
+    
+    config = create_evaluation_config(
+        strategy=EvaluationStrategy.SINGLE_OPPONENT,
+        num_games=20,
+        max_concurrent_games=4,
+        randomize_positions=True,
+        save_games=True,
+        wandb_logging=False,
+        opponent_name="test_opponent",
     )
-    evaluator = EvaluatorFactory.create(config)
-    legacy_format = evaluator.to_legacy_format()
 
-    assert legacy_format["num_games"] == 10
-    assert legacy_format["max_workers"] == 2
-    assert legacy_format["strategy"] == "single_opponent"
-    print("✓ Legacy format export successful")
+    assert config.num_games == 20
+    assert config.max_concurrent_games == 4
+    assert config.randomize_positions == True
+    print("✓ Direct config creation successful")
+
+    # Test evaluator creation
+    evaluator = EvaluatorFactory.create(config)
+    assert evaluator is not None
+    print("✓ Evaluator factory works")
 
 
 async def main():

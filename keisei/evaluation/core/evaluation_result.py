@@ -44,15 +44,6 @@ class GameResult:
         """True if the game was a draw."""
         return self.winner is None
 
-    def to_legacy_format(self) -> str:
-        """Convert to legacy result format for compatibility."""
-        if self.is_agent_win:
-            return "agent_win"
-        elif self.is_opponent_win:
-            return "opponent_win"
-        else:
-            return "draw"
-
     def to_dict(self) -> Dict[str, Any]:
         """Convert GameResult to a dictionary for serialization."""
         return {

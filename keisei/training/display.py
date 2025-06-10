@@ -188,34 +188,34 @@ class TrainingDisplay:
             transient=False,
         )
         initial_black_win_rate = (
-            self.trainer.black_wins / self.trainer.total_episodes_completed
-            if self.trainer.total_episodes_completed > 0
+            self.trainer.metrics_manager.black_wins / self.trainer.metrics_manager.total_episodes_completed
+            if self.trainer.metrics_manager.total_episodes_completed > 0
             else 0.0
         )
         initial_white_win_rate = (
-            self.trainer.white_wins / self.trainer.total_episodes_completed
-            if self.trainer.total_episodes_completed > 0
+            self.trainer.metrics_manager.white_wins / self.trainer.metrics_manager.total_episodes_completed
+            if self.trainer.metrics_manager.total_episodes_completed > 0
             else 0.0
         )
         initial_draw_rate = (
-            self.trainer.draws / self.trainer.total_episodes_completed
-            if self.trainer.total_episodes_completed > 0
+            self.trainer.metrics_manager.draws / self.trainer.metrics_manager.total_episodes_completed
+            if self.trainer.metrics_manager.total_episodes_completed > 0
             else 0.0
         )
         training_task = progress_bar.add_task(
             "Training",
             total=self.config.training.total_timesteps,
-            completed=self.trainer.global_timestep,
+            completed=self.trainer.metrics_manager.global_timestep,
             ep_metrics="Ep L:0 R:0.0",
             ppo_metrics="",
-            black_wins_cum=self.trainer.black_wins,
-            white_wins_cum=self.trainer.white_wins,
-            draws_cum=self.trainer.draws,
+            black_wins_cum=self.trainer.metrics_manager.black_wins,
+            white_wins_cum=self.trainer.metrics_manager.white_wins,
+            draws_cum=self.trainer.metrics_manager.draws,
             black_win_rate=initial_black_win_rate,
             white_win_rate=initial_white_win_rate,
             draw_rate=initial_draw_rate,
             speed=0.0,
-            start=(self.trainer.global_timestep < self.config.training.total_timesteps),
+            start=(self.trainer.metrics_manager.global_timestep < self.config.training.total_timesteps),
         )
         log_panel = Panel(
             Text(""),
@@ -300,7 +300,7 @@ class TrainingDisplay:
         return [table]
 
     def update_progress(self, trainer, speed, pending_updates):
-        update_data = {"completed": trainer.global_timestep, "speed": speed}
+        update_data = {"completed": trainer.metrics_manager.global_timestep, "speed": speed}
         update_data.update(pending_updates)
         self.progress_bar.update(self.training_task, **update_data)
 

@@ -132,9 +132,9 @@ def test_trainer_instantiates_resnet_and_features():
     trainer = Trainer(config, args)
     # Check model and feature spec
     assert trainer.model is not None
-    assert trainer.feature_spec is not None
-    assert trainer.feature_spec.name == "core46+all"
-    assert trainer.obs_shape == (51, 9, 9)  # For core46+all (46 + 1 + 1 + 1 + 2 = 51)
+    assert trainer.model_manager.feature_spec is not None
+    assert trainer.model_manager.feature_spec.name == "core46+all"
+    assert trainer.model_manager.obs_shape == (51, 9, 9)  # For core46+all (46 + 1 + 1 + 1 + 2 = 51)
 
     # Check model config with explicit casting for type checker
     model = cast(ActorCriticResTower, trainer.model)
@@ -143,8 +143,8 @@ def test_trainer_instantiates_resnet_and_features():
     )  # SE block should be enabled with se_ratio > 0
 
     first_res_block = cast(ResidualBlock, model.res_blocks[0])
-    assert first_res_block.conv1.out_channels == trainer.tower_width
-    assert first_res_block.conv1.in_channels == trainer.tower_width
+    assert first_res_block.conv1.out_channels == trainer.model_manager.tower_width
+    assert first_res_block.conv1.in_channels == trainer.model_manager.tower_width
 
 
 def test_trainer_invalid_feature_raises():
@@ -175,6 +175,6 @@ def test_cli_overrides_config():
         tower_depth=5,
     )
     trainer = Trainer(config, args)
-    assert trainer.feature_spec is not None
-    assert trainer.feature_spec.name == "core46+all"
-    assert trainer.tower_depth == 5
+    assert trainer.model_manager.feature_spec is not None
+    assert trainer.model_manager.feature_spec.name == "core46+all"
+    assert trainer.model_manager.tower_depth == 5

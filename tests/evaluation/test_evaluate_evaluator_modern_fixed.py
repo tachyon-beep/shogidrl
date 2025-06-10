@@ -1,8 +1,8 @@
 """
-Tests for modern evaluation system - focused legacy compatibility tests.
+Tests for the modern evaluation system components - integration tests.
 
-This module contains focused tests that verify the modern evaluation system
-provides equivalent functionality to the legacy Evaluator class.
+This module contains integration tests for the modern evaluation system,
+replacing the legacy Evaluator class tests with EvaluationManager tests.
 """
 
 from unittest.mock import MagicMock, patch
@@ -12,27 +12,26 @@ import torch
 from keisei.core.ppo_agent import PPOAgent
 from keisei.evaluation.manager import EvaluationManager
 from keisei.evaluation.core.evaluation_config import (
-    EvaluationStrategy, 
-    SingleOpponentConfig,
+    EvaluationStrategy,
     create_evaluation_config
 )
 from keisei.utils import PolicyOutputMapper
-from keisei.utils.utils import BaseOpponent
 from tests.evaluation.conftest import make_test_config
 
 
-def test_evaluation_manager_replaces_evaluator_basic(tmp_path):
+def test_evaluation_manager_integration_basic(tmp_path):
     """
-    Test that EvaluationManager provides equivalent functionality to the legacy Evaluator.
+    Integration test for EvaluationManager: random-vs-agent, no W&B, file logging.
 
-    This test verifies that the modern evaluation system:
-    - Can replace the old Evaluator class functionality
-    - Provides equivalent results structure
-    - Handles the same configuration options
-    - Works with existing agent and opponent types
+    This test verifies that the EvaluationManager correctly:
+    - Initializes with proper configuration
+    - Executes the evaluation pipeline end-to-end
+    - Produces proper results and analytics
+    - Works without W&B integration
+    - Handles file-based logging
     """
 
-    # Create dummy agent for testing
+    # Create dummy agent for integration testing
     class DummyAgent(PPOAgent):
         def __init__(self):
             from keisei.core.neural_network import ActorCritic
@@ -57,26 +56,26 @@ def test_evaluation_manager_replaces_evaluator_basic(tmp_path):
             )
             return None, idx, 0.0, 0.0
 
-    # Create modern evaluation configuration (equivalent to legacy Evaluator params)
+    # Create evaluation configuration
     config = create_evaluation_config(
         strategy=EvaluationStrategy.SINGLE_OPPONENT,
         num_games=1,
-        wandb_logging=False,  # Equivalent to wandb_log_eval=False
+        wandb_logging=False,
         opponent_name="random"
     )
 
-    # Create EvaluationManager (replacement for Evaluator)
+    # Create EvaluationManager
     eval_manager = EvaluationManager(
         config=config,
-        run_name="legacy_compatibility_test",  # Equivalent to wandb_run_name_eval
+        run_name="integration_test",
         pool_size=3,
-        elo_registry_path=str(tmp_path / "elo.json")  # Same as legacy elo_registry_path
+        elo_registry_path=str(tmp_path / "elo_registry.json")
     )
 
-    # Setup (equivalent to legacy initialization)
+    # Setup
     policy_mapper = PolicyOutputMapper()
     eval_manager.setup(
-        device="cpu",  # Equivalent to device_str="cpu"
+        device="cpu",
         policy_mapper=policy_mapper,
         model_dir=str(tmp_path),
         wandb_active=False
@@ -124,38 +123,34 @@ def test_evaluation_manager_replaces_evaluator_basic(tmp_path):
         # Create dummy agent to evaluate
         dummy_agent = DummyAgent()
 
-        # Run evaluation using modern API
+        # Run evaluation
         result = eval_manager.evaluate_current_agent(dummy_agent)
 
-        # Verify results structure (equivalent to legacy Evaluator.evaluate() output)
+        # Verify results structure
         assert result is not None
-        
-        # Extract summary statistics (equivalent to legacy results dict)
-        summary = result.summary_stats
-        assert summary.total_games == 1  # Equivalent to results["games_played"]
-        assert summary.agent_wins == 1   # Equivalent to results["agent_wins"]
-        assert summary.opponent_wins == 0  # Equivalent to results["opponent_wins"]
-        assert summary.draws == 0        # Equivalent to results["draws"]
-        assert abs(summary.win_rate - 1.0) < 0.01
-
-        # Manually trigger ELO registry creation (since mock bypasses normal flow)
-        # This simulates what would happen in a real evaluation
-        eval_manager.opponent_pool.add_checkpoint("dummy_checkpoint.pth")
-
-        # Verify ELO registry was created (same as legacy)
-        elo_file = tmp_path / "elo.json"
-        assert elo_file.exists()
+        assert result.summary_stats.total_games == 1
+        assert result.summary_stats.agent_wins == 1
+        assert result.summary_stats.opponent_wins == 0
+        assert result.summary_stats.draws == 0
+        assert abs(result.summary_stats.win_rate - 1.0) < 0.01
 
         # Verify that the modern system created the evaluator
         mock_create_evaluator.assert_called_once()
 
+        # Manually trigger ELO registry creation (since mock bypasses normal flow)
+        eval_manager.opponent_pool.add_checkpoint("dummy_checkpoint.pth")
 
-def test_evaluation_manager_checkpoint_compatibility(tmp_path):
+        # Verify Elo registry file exists
+        elo_file = tmp_path / "elo_registry.json"
+        assert elo_file.exists()
+
+
+def test_evaluation_manager_checkpoint_integration(tmp_path):
     """
-    Test that EvaluationManager checkpoint evaluation is compatible with legacy usage.
+    Integration test for EvaluationManager checkpoint loading.
     
-    This verifies the modern system can handle checkpoint evaluation like the old
-    Evaluator class with agent_checkpoint_path parameter.
+    Tests that the evaluation system can load and evaluate a checkpoint
+    through the modern pipeline.
     """
 
     # Create evaluation configuration
@@ -163,15 +158,15 @@ def test_evaluation_manager_checkpoint_compatibility(tmp_path):
         strategy=EvaluationStrategy.SINGLE_OPPONENT,
         num_games=1,
         wandb_logging=False,
-        opponent_name="random"
+        opponent_name="heuristic"
     )
 
     # Create EvaluationManager
     eval_manager = EvaluationManager(
         config=config,
-        run_name="checkpoint_compatibility_test",
+        run_name="checkpoint_integration_test",
         pool_size=3,
-        elo_registry_path=str(tmp_path / "elo.json")
+        elo_registry_path=str(tmp_path / "elo_registry.json")
     )
 
     # Setup
@@ -183,16 +178,17 @@ def test_evaluation_manager_checkpoint_compatibility(tmp_path):
         wandb_active=False
     )
 
-    # Create test checkpoint file (equivalent to agent_checkpoint_path in legacy)
-    checkpoint_path = tmp_path / "dummy_agent.pth"
-    torch.save({"dummy": "checkpoint"}, checkpoint_path)
+    # Create test checkpoint file
+    checkpoint_path = tmp_path / "integration_test_checkpoint.pth"
+    torch.save({"model_state": "dummy_state"}, checkpoint_path)
 
+    # Mock the evaluation strategy for checkpoint test
     with patch('keisei.evaluation.manager.EvaluatorFactory.create') as mock_create_evaluator:
         
         # Create a mock evaluator that returns expected results
         mock_evaluator = MagicMock()
         
-        # Mock evaluation result for checkpoint test
+        # Mock evaluation result for checkpoint test  
         from keisei.evaluation.core.evaluation_result import EvaluationResult, SummaryStats
         from keisei.evaluation.core.evaluation_context import EvaluationContext
         
@@ -206,9 +202,9 @@ def test_evaluation_manager_checkpoint_compatibility(tmp_path):
             win_rate=0.0,
             loss_rate=1.0,
             draw_rate=0.0,
-            avg_game_length=5.0,
-            total_moves=10,
-            avg_duration_seconds=30.0
+            avg_game_length=8.0,
+            total_moves=16,
+            avg_duration_seconds=60.0
         )
         
         # Create mock evaluation result
@@ -225,16 +221,62 @@ def test_evaluation_manager_checkpoint_compatibility(tmp_path):
         mock_evaluator.evaluate = mock_evaluate
         mock_create_evaluator.return_value = mock_evaluator
 
-        # Test checkpoint evaluation (modern equivalent of legacy checkpoint loading)
+        # Run checkpoint evaluation
         result = eval_manager.evaluate_checkpoint(str(checkpoint_path))
 
-        # Verify results (equivalent to legacy format)
+        # Verify results
         assert result is not None
-        summary = result.summary_stats
-        assert summary.total_games == 1
-        assert summary.agent_wins == 0
-        assert summary.opponent_wins == 1
-        assert abs(summary.loss_rate - 1.0) < 0.01
+        assert result.summary_stats.total_games == 1
+        assert result.summary_stats.agent_wins == 0
+        assert result.summary_stats.opponent_wins == 1
+        assert abs(result.summary_stats.loss_rate - 1.0) < 0.01
 
-        # Verify the modern system created the evaluator
+        # Verify that the modern system created the evaluator
         mock_create_evaluator.assert_called_once()
+
+
+def test_evaluation_manager_error_handling_integration(tmp_path):
+    """
+    Integration test for EvaluationManager error handling.
+    
+    Tests that the evaluation system properly handles various error conditions.
+    """
+
+    # Create evaluation configuration
+    config = create_evaluation_config(
+        strategy=EvaluationStrategy.SINGLE_OPPONENT,
+        num_games=1,
+        wandb_logging=False,
+        opponent_name="random"
+    )
+
+    # Create EvaluationManager
+    eval_manager = EvaluationManager(
+        config=config,
+        run_name="error_handling_test",
+        pool_size=3,
+        elo_registry_path=str(tmp_path / "elo_registry.json")
+    )
+
+    # Setup
+    policy_mapper = PolicyOutputMapper()
+    eval_manager.setup(
+        device="cpu",
+        policy_mapper=policy_mapper,
+        model_dir=str(tmp_path),
+        wandb_active=False
+    )
+
+    # Test: Agent without model attribute should raise ValueError
+    mock_agent_no_model = MagicMock()
+    mock_agent_no_model.name = "AgentWithoutModel"
+    # Deliberately not setting mock_agent_no_model.model
+
+    try:
+        eval_manager.evaluate_current_agent(mock_agent_no_model)
+        assert False, "Should have raised ValueError"
+    except ValueError as e:
+        assert "Agent must have a 'model' attribute" in str(e)
+
+    # Test passes if error is properly handled
+    assert True

@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch, AsyncMock
 import torch
 import pytest
 
-from keisei.evaluation.core import AgentInfo, EvaluationConfig, ModelWeightManager, EvaluationStrategy
+from keisei.evaluation.core import AgentInfo, ModelWeightManager, EvaluationStrategy, create_evaluation_config
 from keisei.evaluation.manager import EvaluationManager
 # Import strategies to ensure factory registration
 from keisei.evaluation.strategies import SingleOpponentEvaluator
@@ -64,10 +64,11 @@ class TestInMemoryEvaluationIntegration:
     @async_test
     async def test_evaluation_manager_in_memory_method_exists(self):
         """Test that EvaluationManager has in-memory evaluation method."""
-        config = EvaluationConfig(
+        config = create_evaluation_config(
             strategy=EvaluationStrategy.SINGLE_OPPONENT,
             num_games=2,
-            enable_in_memory_evaluation=True
+            enable_in_memory_evaluation=True,
+            opponent_name="random"
         )
         manager = EvaluationManager(config, "test_run")
         

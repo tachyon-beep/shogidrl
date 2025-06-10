@@ -20,6 +20,9 @@ from .core import (
 )
 from .opponents import OpponentPool
 
+# Import strategies to ensure they register with the factory
+from . import strategies
+
 
 class EvaluationManager:
     """Manage evaluator creation and execution."""

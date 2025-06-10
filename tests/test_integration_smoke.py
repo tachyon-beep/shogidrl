@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from keisei.config_schema import AppConfig
-from keisei.evaluation.evaluate import Evaluator
+from keisei.evaluation.manager import EvaluationManager
 from keisei.training.trainer import Trainer
 from keisei.utils import load_config
 from keisei.utils.opponents import SimpleRandomOpponent
@@ -57,8 +57,9 @@ class TestIntegrationSmoke:
             # Verify basic initialization
             assert trainer.config == config
             assert trainer.run_name == "smoke_test"
-            assert hasattr(trainer, "global_timestep")
-            assert hasattr(trainer, "total_episodes_completed")
+            assert hasattr(trainer, "metrics_manager")
+            assert hasattr(trainer.metrics_manager, "global_timestep")
+            assert hasattr(trainer.metrics_manager, "total_episodes_completed")
 
             # Note: For actual training test, we would call trainer.run_training_loop()
             # but that's quite heavy for a smoke test, so we just verify initialization
@@ -70,7 +71,7 @@ class TestIntegrationSmoke:
         Test that evaluation components can be imported and basic classes work.
         """
         # Test that we can import these classes successfully
-        assert Evaluator is not None
+        assert EvaluationManager is not None
         assert SimpleRandomOpponent is not None
 
         # Test simple opponent creation

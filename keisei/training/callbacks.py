@@ -7,7 +7,7 @@ from abc import ABC
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from keisei.evaluation.elo_registry import EloRegistry
+from keisei.evaluation.opponents.elo_registry import EloRegistry
 
 if TYPE_CHECKING:
     from .trainer import Trainer
@@ -25,7 +25,7 @@ class CheckpointCallback(Callback):
         self.model_dir = model_dir
 
     def on_step_end(self, trainer: "Trainer"):
-        if (trainer.global_timestep + 1) % self.interval == 0:
+        if (trainer.metrics_manager.global_timestep + 1) % self.interval == 0:
             if not trainer.agent:
                 if trainer.log_both:
                     trainer.log_both(
@@ -35,17 +35,17 @@ class CheckpointCallback(Callback):
                 return
 
             game_stats = {
-                "black_wins": trainer.black_wins,
-                "white_wins": trainer.white_wins,
-                "draws": trainer.draws,
+                "black_wins": trainer.metrics_manager.black_wins,
+                "white_wins": trainer.metrics_manager.white_wins,
+                "draws": trainer.metrics_manager.draws,
             }
 
             # Use the consolidated save_checkpoint method from ModelManager
             success, ckpt_save_path = trainer.model_manager.save_checkpoint(
                 agent=trainer.agent,
                 model_dir=self.model_dir,  # model_dir is part of CheckpointCallback's state
-                timestep=trainer.global_timestep + 1,
-                episode_count=trainer.total_episodes_completed,
+                timestep=trainer.metrics_manager.global_timestep + 1,
+                episode_count=trainer.metrics_manager.total_episodes_completed,
                 stats=game_stats,
                 run_name=trainer.run_name,
                 is_wandb_active=trainer.is_train_wandb_active,
@@ -64,7 +64,7 @@ class CheckpointCallback(Callback):
             else:
                 if trainer.log_both:
                     trainer.log_both(
-                        f"[ERROR] CheckpointCallback: Failed to save checkpoint via ModelManager for timestep {trainer.global_timestep + 1}.",
+                        f"[ERROR] CheckpointCallback: Failed to save checkpoint via ModelManager for timestep {trainer.metrics_manager.global_timestep + 1}.",
                         also_to_wandb=True,
                     )
 
@@ -77,7 +77,7 @@ class EvaluationCallback(Callback):
     def on_step_end(self, trainer: "Trainer"):
         if not getattr(self.eval_cfg, "enable_periodic_evaluation", False):
             return
-        if (trainer.global_timestep + 1) % self.interval == 0:
+        if (trainer.metrics_manager.global_timestep + 1) % self.interval == 0:
             if not trainer.agent:
                 if trainer.log_both:
                     trainer.log_both(
@@ -118,7 +118,7 @@ class EvaluationCallback(Callback):
 
             if trainer.log_both is not None:
                 trainer.log_both(
-                    f"Starting periodic evaluation at timestep {trainer.global_timestep + 1}...",
+                    f"Starting periodic evaluation at timestep {trainer.metrics_manager.global_timestep + 1}...",
                     also_to_wandb=True,
                 )
 
@@ -151,13 +151,13 @@ class EvaluationCallback(Callback):
                             "last_outcome": (
                                 "win"
                                 if eval_results
-                                and eval_results.get("win_rate", 0)
-                                > eval_results.get("loss_rate", 0)
+                                and eval_results.summary_stats.win_rate
+                                > eval_results.summary_stats.loss_rate
                                 else (
                                     "loss"
                                     if eval_results
-                                    and eval_results.get("loss_rate", 0)
-                                    > eval_results.get("win_rate", 0)
+                                    and eval_results.summary_stats.loss_rate
+                                    > eval_results.summary_stats.win_rate
                                     else "draw"
                                 )
                             ),
@@ -168,7 +168,7 @@ class EvaluationCallback(Callback):
                             )[:3],
                         }
                         trainer.evaluation_elo_snapshot = snapshot
-                    except Exception as e:  # noqa: BLE001
+                    except (OSError, RuntimeError, ValueError, AttributeError) as e:
                         if trainer.log_both is not None:
                             trainer.log_both(
                                 f"[ERROR] Failed to update Elo registry: {type(e).__name__}: {e}",

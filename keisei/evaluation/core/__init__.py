@@ -19,7 +19,6 @@ from .evaluation_config import (
     SingleOpponentConfig,
     TournamentConfig,
     create_evaluation_config,
-    from_legacy_config,
 )
 from .evaluation_context import AgentInfo, EvaluationContext, OpponentInfo
 from .evaluation_result import (
@@ -50,7 +49,6 @@ __all__ = [
     "LadderConfig",
     "BenchmarkConfig",
     "create_evaluation_config",
-    "from_legacy_config",
     # Context and metadata
     "EvaluationContext",
     "AgentInfo",

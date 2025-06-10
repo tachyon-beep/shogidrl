@@ -2,7 +2,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from keisei.config_schema import AppConfig
-from keisei.evaluation.elo_registry import EloRegistry
+from keisei.evaluation.opponents.elo_registry import EloRegistry
 from keisei.training.callbacks import EvaluationCallback
 from keisei.training.metrics_manager import MetricsManager
 from keisei.evaluation.opponents import OpponentPool
@@ -30,6 +30,7 @@ class DummyTrainer:
         self.global_timestep = 0
         self.total_episodes_completed = 0
         self.agent = DummyAgent()
+        self.agent.model = MagicMock()  # Add model attribute to agent
         self.metrics_manager = MetricsManager()
         self.evaluation_manager = MagicMock()
         self.evaluation_manager.opponent_pool = OpponentPool(
@@ -43,22 +44,36 @@ class DummyTrainer:
         ck.write_text("a")
         self.evaluation_manager.opponent_pool.add_checkpoint(ck)
 
-    def fake_eval_current(self, agent, opponent_checkpoint: str | None = None):
+    def fake_eval_current(self, agent):
         """Simulate evaluation and update Elo ratings."""
         registry = EloRegistry(Path(self.config.evaluation.elo_registry_path))
-        agent_id = self.run_name
-        opponent_id = Path(opponent_checkpoint).name if opponent_checkpoint else "opponent"
+        agent_id = self.run_name or "test"  # Ensure non-None value
+        
+        # Use the opponent from the pool (simulated)
+        opponent_ckpt = self.evaluation_manager.opponent_pool.sample()
+        if opponent_ckpt:
+            opponent_id = Path(opponent_ckpt).name
+        else:
+            opponent_id = "opponent"
+        
         registry.update_ratings(agent_id, opponent_id, ["agent_win"])
         registry.save()
-        return {"win_rate": 1.0, "loss_rate": 0.0}
+        
+        # Create a mock evaluation result that matches expected interface
+        mock_result = MagicMock()
+        mock_result.summary_stats = MagicMock()
+        mock_result.summary_stats.win_rate = 1.0
+        mock_result.summary_stats.loss_rate = 0.0
+        return mock_result
 
 
 def test_evaluation_callback_updates_elo(tmp_path):
     trainer = DummyTrainer(tmp_path)
     cb = EvaluationCallback(trainer.config.evaluation, interval=1)
-    cb.on_step_end(trainer)
+    # Type ignore since DummyTrainer is a test mock
+    cb.on_step_end(trainer)  # type: ignore
     reg = EloRegistry(Path(trainer.config.evaluation.elo_registry_path))
     assert trainer.evaluation_elo_snapshot is not None
     assert trainer.evaluation_elo_snapshot["current_rating"] != 1500.0
-    assert len(reg.ratings) == 2
+    assert len(reg.ratings) == 2  # agent and opponent
 

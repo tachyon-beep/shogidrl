@@ -154,20 +154,22 @@ async def test_phase_1_implementation():
         print(f"❌ Serialization failed: {e}")
         return False
     
-    # Test 8: Legacy compatibility
-    print("\n8. Testing legacy compatibility...")
+    # Test 8: Configuration validation
+    print("\n8. Testing configuration validation...")
     try:
-        # Test legacy format conversion
-        legacy_format = evaluator.to_legacy_format()
-        print(f"✓ Legacy format conversion works")
+        # Test configuration dictionary conversion
+        config_dict = result.context.configuration.to_dict()
+        print(f"✓ Configuration to_dict works: {len(config_dict)} fields")
         
-        # Test legacy result format
-        for game in result.games[:2]:  # Test first 2 games
-            legacy_result = game.to_legacy_format()
-            print(f"  - Game result: {legacy_result}")
+        # Validate essential fields are present
+        required_fields = ['strategy', 'num_games', 'max_concurrent_games']
+        for field in required_fields:
+            if field not in config_dict:
+                raise ValueError(f"Missing required field: {field}")
+        print(f"✓ Required configuration fields present")
         
     except Exception as e:
-        print(f"❌ Legacy compatibility failed: {e}")
+        print(f"❌ Configuration validation failed: {e}")
         return False
     
     print("\n" + "=" * 50)
@@ -187,20 +189,26 @@ async def test_phase_1_implementation():
     return True
 
 
-def test_legacy_compatibility():
-    """Test that legacy imports still work."""
-    print("\n🔄 Testing Legacy Compatibility...")
+def test_modern_compatibility():
+    """Test that modern evaluation system works completely."""
+    print("\n🔄 Testing Modern System Compatibility...")
     
     try:
-        # These should work if legacy files are present
-        from keisei.evaluation.legacy import Evaluator, run_evaluation_loop, EloRegistry
-        print("✓ Legacy imports work (files present)")
+        # Test that the new system imports work
+        from keisei.evaluation.core import EvaluationStrategy, create_evaluation_config
+        from keisei.evaluation.strategies import SingleOpponentEvaluator
+        print("✓ Modern imports work")
+        
+        # Test that we can create configs without legacy conversion
+        config = create_evaluation_config(
+            strategy=EvaluationStrategy.SINGLE_OPPONENT,
+            num_games=1,
+            opponent_name="test"
+        )
+        print("✓ Modern config creation works")
         return True
-    except ImportError:
-        print("ℹ️  Legacy imports not available (files not moved yet)")
-        return True  # This is expected during transition
     except Exception as e:
-        print(f"❌ Legacy compatibility error: {e}")
+        print(f"❌ Modern system error: {e}")
         return False
 
 
@@ -212,14 +220,14 @@ if __name__ == "__main__":
         # Run the async test
         success = asyncio.run(test_phase_1_implementation())
         
-        # Test legacy compatibility
-        legacy_success = test_legacy_compatibility()
+        # Test modern compatibility
+        modern_success = test_modern_compatibility()
         
-        if success and legacy_success:
-            print(f"\n✅ ALL TESTS PASSED - Phase 1 implementation is ready!")
+        if success and modern_success:
+            print("\n✅ ALL TESTS PASSED - Phase 1 implementation is ready!")
             sys.exit(0)
         else:
-            print(f"\n❌ Some tests failed - check implementation")
+            print("\n❌ Some tests failed - check implementation")
             sys.exit(1)
             
     except KeyboardInterrupt:

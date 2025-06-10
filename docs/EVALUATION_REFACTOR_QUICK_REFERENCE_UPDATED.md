@@ -1,6 +1,6 @@
 # Evaluation System Refactor - Quick Reference
 
-**Last Updated:** June 10, 2025  
+**Last Updated:** June 2025  
 **Status:** **99.8% Complete** - **BACKWARD COMPATIBILITY REMOVAL COMPLETE** - Production Ready
 
 ## 📊 Implementation Status at a Glance
@@ -44,7 +44,7 @@ elo_rating = trainer.metrics_manager.get_elo_rating()
 ### ✅ Modern Architecture Only
 - **No Legacy Code**: All compatibility layers removed (~1,500 lines deleted) ✅
 - **Manager-Based Interfaces**: Clean `trainer.metrics_manager` pattern ✅
-- **Modern Configuration**: Direct configuration creation without legacy conversion ✅
+- **Modern Configuration**: Direct YAML configuration without conversion ✅
 - **Simplified Testing**: Clean test patterns without legacy compatibility ✅
 
 ## 🎉 **System Status: PRODUCTION READY**
@@ -100,20 +100,14 @@ manager = EvaluationManager(config, run_name="my_evaluation")
 results = manager.evaluate_current_agent_in_memory(agent)
 ```
 
-### **Configuration with YAML Defaults:**
+### **Advanced Configuration via YAML:**
 ```python
-from keisei.utils import load_config
-from keisei.evaluation.core import create_evaluation_config, EvaluationStrategy
+from keisei.config_schema import AppConfig
+from keisei.evaluation.core import from_legacy_config
 
-# Load default configuration for reference
-config = load_config()
-
-# Create evaluation config with YAML defaults
-eval_config = create_evaluation_config(
-    strategy=config.evaluation.strategy,
-    num_games=config.evaluation.num_games,
-    enable_in_memory_evaluation=True
-)
+# Load from default_config.yaml
+config = AppConfig.parse_file("default_config.yaml")
+eval_config = from_legacy_config(config.evaluation.model_dump())
 manager = EvaluationManager(eval_config, run_name="yaml_eval")
 ```
 
@@ -217,10 +211,10 @@ pytest tests/evaluation/ -v
 
 # Verify configuration
 python -c "
-from keisei.utils import load_config
-from keisei.evaluation.core import create_evaluation_config, EvaluationStrategy
-config = load_config()
-eval_config = create_evaluation_config(strategy=EvaluationStrategy.SINGLE_OPPONENT, num_games=5)
+from keisei.config_schema import AppConfig
+from keisei.evaluation.core import from_legacy_config
+config = AppConfig.parse_file('default_config.yaml')
+eval_config = from_legacy_config(config.evaluation.model_dump())
 print('✅ Configuration system working')
 "
 ```

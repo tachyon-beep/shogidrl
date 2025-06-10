@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Deque, Iterable, Optional, Sequence
 import random
 
-from ..legacy.elo_registry import EloRegistry
+from keisei.evaluation.opponents.elo_registry import EloRegistry
 
 
 @dataclass
