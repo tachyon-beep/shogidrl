@@ -10,7 +10,7 @@ from typing import Optional
 from uuid import uuid4
 
 # Import strategies to ensure they register with the factory
-from . import strategies
+from . import strategies  # pylint: disable=unused-import
 from .core import (
     AgentInfo,
     EvaluationConfig,
@@ -64,7 +64,7 @@ class EvaluationManager:
         self.wandb_active = wandb_active
 
     def evaluate_checkpoint(
-        self, agent_checkpoint: str, opponent_checkpoint: Optional[str] = None
+        self, agent_checkpoint: str, _opponent_checkpoint: Optional[str] = None
     ) -> EvaluationResult:
         """Evaluate a saved agent checkpoint."""
         agent_info = AgentInfo(name="current_agent", checkpoint_path=agent_checkpoint)

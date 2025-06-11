@@ -70,18 +70,38 @@ def mock_config():
             evaluation_interval_timesteps=1,
             weight_decay=0.0,
             normalize_advantages=True,
+            enable_value_clipping=False,  # Added
             lr_schedule_type=None,
             lr_schedule_kwargs=None,
             lr_schedule_step_on="epoch",
         ),
         evaluation=EvaluationConfig(
             enable_periodic_evaluation=True,
+            evaluation_interval_timesteps=1, # Moved up
+            strategy="single_opponent",  # Added
             num_games=1,
+            max_concurrent_games=4,  # Added
+            timeout_per_game=None,  # Added
             opponent_type="random",
-            evaluation_interval_timesteps=1,
             max_moves_per_game=500,
+            randomize_positions=True,  # Added
+            random_seed=None,  # Added
+            save_games=True,  # Added
+            save_path=None,  # Added
             log_file_path_eval="test_eval.log",
+            log_level="INFO",  # Added
             wandb_log_eval=False,
+            update_elo=True,  # Added
+            elo_registry_path="elo_ratings.json",  # Added
+            agent_id=None,  # Added
+            opponent_id=None,  # Added
+            previous_model_pool_size=5,  # Added
+            enable_in_memory_evaluation=True,  # Added
+            model_weight_cache_size=5,  # Added
+            enable_parallel_execution=True,  # Added
+            process_restart_threshold=100,  # Added
+            temp_agent_device="cpu",  # Added
+            clear_cache_after_evaluation=True,  # Added
         ),
         logging=LoggingConfig(
             log_file="test.log", model_dir=tempfile.gettempdir(), run_name=None
@@ -106,7 +126,37 @@ def mock_config():
             max_queue_size=1000,
             worker_seed_offset=1000,
         ),
-        display=DisplayConfig(display_moves=False, turn_tick=0.0),
+        display=DisplayConfig(
+            enable_board_display=True,  # Added
+            enable_trend_visualization=True,  # Added
+            enable_elo_ratings=True,  # Added
+            enable_enhanced_layout=True,  # Added
+            display_moves=False,
+            turn_tick=0.0,
+            board_unicode_pieces=True,  # Added
+            board_cell_width=5,  # Added
+            board_cell_height=3,  # Added
+            board_highlight_last_move=True,  # Added
+            sparkline_width=15,  # Added
+            trend_history_length=100,  # Added
+            elo_initial_rating=1500.0,  # Added
+            elo_k_factor=32.0,  # Added
+            dashboard_height_ratio=2,  # Added
+            progress_bar_height=4,  # Added
+            show_text_moves=True,  # Added
+            move_list_length=10,  # Added
+            moves_latest_top=True,  # Added
+            moves_flash_ms=500,  # Added
+            show_moves_trend=True,  # Added
+            show_completion_rate=True,  # Added
+            show_enhanced_win_rates=True,  # Added
+            show_turns_trend=True,  # Added
+            metrics_window_size=100,  # Added
+            trend_smoothing_factor=0.1,  # Added
+            metrics_panel_height=6,  # Added
+            enable_trendlines=True,  # Added
+            log_layer_keyword_filters=["stem", "policy_head", "value_head"],  # Added
+        ),
     )
 
 

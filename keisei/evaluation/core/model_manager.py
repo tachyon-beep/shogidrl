@@ -11,7 +11,20 @@ from typing import Any, Dict, List, Optional
 
 import torch
 
+# Top-level imports
+from keisei.config_schema import (
+    AppConfig,
+    DemoConfig,
+    EnvConfig,
+    EvaluationConfig,
+    LoggingConfig,
+    ParallelConfig,
+    TrainingConfig,
+    WandBConfig,
+)
+from keisei.core.neural_network import ActorCritic
 from keisei.core.ppo_agent import PPOAgent
+from keisei.utils import PolicyOutputMapper
 
 logger = logging.getLogger(__name__)
 
@@ -149,19 +162,6 @@ class ModelWeightManager:
             RuntimeError: If agent creation fails
         """
         try:
-            # Import required modules for agent creation
-            from keisei.config_schema import (
-                AppConfig,
-                DemoConfig,
-                EnvConfig,
-                EvaluationConfig,
-                LoggingConfig,
-                ParallelConfig,
-                TrainingConfig,
-                WandBConfig,
-            )
-            from keisei.core.neural_network import ActorCritic
-
             # Determine device
             target_device = torch.device(device or self.device)
 
@@ -235,8 +235,6 @@ class ModelWeightManager:
                     return tensor.shape[0]
 
         # Fallback to default action space from PolicyOutputMapper
-        from keisei.utils import PolicyOutputMapper
-
         policy_mapper = PolicyOutputMapper()
         logger.warning(
             "Could not infer total actions from weights, using PolicyOutputMapper default"
@@ -328,7 +326,7 @@ class ModelWeightManager:
 
     def _create_minimal_config(
         self, input_channels: int, total_actions: int, device: torch.device
-    ) -> Any:
+    ) -> AppConfig:  # Changed return type hint
         """
         Create a minimal AppConfig for agent initialization.
 
@@ -340,17 +338,6 @@ class ModelWeightManager:
         Returns:
             Minimal AppConfig instance
         """
-        from keisei.config_schema import (
-            AppConfig,
-            DemoConfig,
-            EnvConfig,
-            EvaluationConfig,
-            LoggingConfig,
-            ParallelConfig,
-            TrainingConfig,
-            WandBConfig,
-        )
-
         return AppConfig(
             parallel=ParallelConfig(
                 enabled=False,
@@ -373,7 +360,7 @@ class ModelWeightManager:
                 total_timesteps=1,
                 steps_per_epoch=1,
                 ppo_epochs=1,
-                minibatch_size=2,  # Updated from 1 to 2
+                minibatch_size=2,
                 learning_rate=1e-4,
                 gamma=0.99,
                 clip_epsilon=0.2,
@@ -395,6 +382,7 @@ class ModelWeightManager:
                 evaluation_interval_timesteps=50000,
                 weight_decay=0.0,
                 normalize_advantages=True,
+                enable_value_clipping=False,  # Added missing argument
                 lr_schedule_type=None,
                 lr_schedule_kwargs=None,
                 lr_schedule_step_on="epoch",
@@ -411,6 +399,22 @@ class ModelWeightManager:
                 agent_id=None,
                 opponent_id=None,
                 previous_model_pool_size=5,
+                # Added missing arguments with default/minimal values
+                strategy="single_opponent",
+                max_concurrent_games=1,
+                timeout_per_game=600.0,
+                randomize_positions=False,
+                random_seed=None,
+                save_games=False,
+                save_path="/tmp/eval_games",
+                log_level="INFO",
+                update_elo=False,
+                enable_in_memory_evaluation=True, # Assuming True for this context
+                model_weight_cache_size=5, # Default from ModelWeightManager
+                enable_parallel_execution=False,
+                process_restart_threshold=3,
+                temp_agent_device=str(device),
+                clear_cache_after_evaluation=True,
             ),
             logging=LoggingConfig(
                 log_file="/tmp/eval.log", model_dir="/tmp/", run_name="eval-run"
