@@ -65,8 +65,10 @@ class TestShogiGameSeeding:
             mock_logger.debug.assert_called_once()
 
             # Check that the log message contains the seed value
-            log_call = mock_logger.debug.call_args[0][0]
-            assert "42" in str(log_call)
+            format_string = mock_logger.debug.call_args[0][0]
+            logged_value = mock_logger.debug.call_args[0][1]
+            assert "ShogiGame instance seeded with value: %s" == format_string
+            assert 42 == logged_value
 
     def test_seed_returns_self(self):
         """Test that seed method returns self for method chaining."""
@@ -100,71 +102,9 @@ class TestShogiGameSeeding:
 class TestEnvManagerSeeding:
     """Test EnvManager seeding integration."""
 
-    def setup_method(self):
-        """Setup test environment."""
-        from keisei.config_schema import (
-            DisplayConfig,
-            EnvConfig,
-            EvaluationConfig,
-            LoggingConfig,
-            TrainingConfig,
-            WandBConfig,
-        )
-
-        self.config = AppConfig(
-            parallel=ParallelConfig(
-                enabled=False, start_method="fork", num_envs=1, base_port=50000
-            ),
-            env=EnvConfig(
-                device="cpu", input_channels=46, num_actions_total=13527, seed=42
-            ),
-            training=TrainingConfig(
-                total_timesteps=1000,
-                steps_per_epoch=64,
-                ppo_epochs=2,
-                minibatch_size=32,
-                learning_rate=3e-4,
-                gamma=0.99,
-                clip_epsilon=0.2,
-                value_loss_coeff=0.5,
-                entropy_coef=0.01,
-                render_every_steps=1,
-                refresh_per_second=4,
-                enable_spinner=False,
-                input_features="core46",
-                tower_depth=5,
-                tower_width=64,
-                se_ratio=0.0,
-                model_type="resnet",
-                mixed_precision=False,
-                ddp=False,
-                gradient_clip_max_norm=0.5,
-                lambda_gae=0.95,
-                checkpoint_interval_timesteps=1000,
-                evaluation_interval_timesteps=1000,
-                weight_decay=0.0,
-            ),
-            evaluation=EvaluationConfig(
-                num_games=1, opponent_type="random", evaluation_interval_timesteps=1000
-            ),
-            logging=LoggingConfig(
-                log_file="test.log", model_dir="/tmp/test_models", run_name="test_run"
-            ),
-            wandb=WandBConfig(
-                enabled=False,
-                project="test-project",
-                entity=None,
-                run_name_prefix="test",
-                watch_model=False,
-                watch_log_freq=1000,
-                watch_log_type="all",
-            ),
-            display=DisplayConfig(display_moves=False, turn_tick=0.5),
-        )
-
-    def test_env_manager_seeding_integration(self):
+    def test_env_manager_seeding_integration(self, minimal_app_config: AppConfig):  # ADDED fixture
         """Test that EnvManager properly integrates with seeding."""
-        env_manager = EnvManager(config=self.config)
+        env_manager = EnvManager(config=minimal_app_config)  # USE fixture directly
 
         # Setup the environment to initialize the game
         game, _ = env_manager.setup_environment()
@@ -174,9 +114,9 @@ class TestEnvManagerSeeding:
         assert isinstance(env_manager.game, ShogiGame)
         assert env_manager.game is game
 
-    def test_env_manager_seed_propagation(self):
+    def test_env_manager_seed_propagation(self, minimal_app_config: AppConfig):  # ADDED fixture
         """Test that seeding propagates through EnvManager."""
-        env_manager = EnvManager(config=self.config)
+        env_manager = EnvManager(config=minimal_app_config)  # USE fixture directly
 
         # Setup the environment to initialize the game
         game, _ = env_manager.setup_environment()
@@ -187,11 +127,11 @@ class TestEnvManagerSeeding:
         # Verify the seed was set
         assert game._seed_value == 42
 
-    def test_env_manager_seeding_logging(self):
+    def test_env_manager_seeding_logging(self, minimal_app_config: AppConfig):  # ADDED fixture
         """Test that EnvManager seeding operations are logged."""
         # Create a mock logger function to track calls
         mock_logger = Mock()
-        env_manager = EnvManager(config=self.config, logger_func=mock_logger)
+        env_manager = EnvManager(config=minimal_app_config, logger_func=mock_logger)  # USE fixture directly
 
         # Setup the environment to initialize the game
         _, _ = env_manager.setup_environment()
@@ -304,67 +244,9 @@ class TestSeedingEdgeCases:
 class TestSeedingIntegration:
     """Integration tests for seeding across the system."""
 
-    def test_full_system_seeding_workflow(self):
+    def test_full_system_seeding_workflow(self, minimal_app_config: AppConfig):  # MODIFIED: Inject fixture
         """Test complete seeding workflow from config to game."""
-        from keisei.config_schema import (
-            DisplayConfig,
-            EnvConfig,
-            EvaluationConfig,
-            LoggingConfig,
-            TrainingConfig,
-            WandBConfig,
-        )
-
-        config = AppConfig(
-            parallel=ParallelConfig(
-                enabled=False, start_method="fork", num_envs=1, base_port=50000
-            ),
-            env=EnvConfig(
-                device="cpu", input_channels=46, num_actions_total=13527, seed=42
-            ),
-            training=TrainingConfig(
-                total_timesteps=1000,
-                steps_per_epoch=64,
-                ppo_epochs=2,
-                minibatch_size=32,
-                learning_rate=3e-4,
-                gamma=0.99,
-                clip_epsilon=0.2,
-                value_loss_coeff=0.5,
-                entropy_coef=0.01,
-                render_every_steps=1,
-                refresh_per_second=4,
-                enable_spinner=False,
-                input_features="core46",
-                tower_depth=5,
-                tower_width=64,
-                se_ratio=0.0,
-                model_type="resnet",
-                mixed_precision=False,
-                ddp=False,
-                gradient_clip_max_norm=0.5,
-                lambda_gae=0.95,
-                checkpoint_interval_timesteps=1000,
-                evaluation_interval_timesteps=1000,
-                weight_decay=0.0,
-            ),
-            evaluation=EvaluationConfig(
-                num_games=1, opponent_type="random", evaluation_interval_timesteps=1000
-            ),
-            logging=LoggingConfig(
-                log_file="test.log", model_dir="/tmp/test_models", run_name="test_run"
-            ),
-            wandb=WandBConfig(
-                enabled=False,
-                project="test-project",
-                entity=None,
-                run_name_prefix="test",
-                watch_model=False,
-                watch_log_freq=1000,
-                watch_log_type="all",
-            ),
-            display=DisplayConfig(display_moves=False, turn_tick=0.5),
-        )
+        config = minimal_app_config  # MODIFIED: Use injected fixture
         env_manager = EnvManager(config=config)
 
         # Setup the environment to initialize the game
@@ -380,67 +262,9 @@ class TestSeedingIntegration:
         state = game.get_observation()
         assert state is not None
 
-    def test_seeding_with_real_training_components(self):
+    def test_seeding_with_real_training_components(self, minimal_app_config: AppConfig):  # MODIFIED: Inject fixture
         """Test seeding works with actual training components."""
-        from keisei.config_schema import (
-            DisplayConfig,
-            EnvConfig,
-            EvaluationConfig,
-            LoggingConfig,
-            TrainingConfig,
-            WandBConfig,
-        )
-
-        config = AppConfig(
-            parallel=ParallelConfig(
-                enabled=False, start_method="fork", num_envs=1, base_port=50000
-            ),
-            env=EnvConfig(
-                device="cpu", input_channels=46, num_actions_total=13527, seed=42
-            ),
-            training=TrainingConfig(
-                total_timesteps=1000,
-                steps_per_epoch=64,
-                ppo_epochs=2,
-                minibatch_size=32,
-                learning_rate=3e-4,
-                gamma=0.99,
-                clip_epsilon=0.2,
-                value_loss_coeff=0.5,
-                entropy_coef=0.01,
-                render_every_steps=1,
-                refresh_per_second=4,
-                enable_spinner=False,
-                input_features="core46",
-                tower_depth=5,
-                tower_width=64,
-                se_ratio=0.0,
-                model_type="resnet",
-                mixed_precision=False,
-                ddp=False,
-                gradient_clip_max_norm=0.5,
-                lambda_gae=0.95,
-                checkpoint_interval_timesteps=1000,
-                evaluation_interval_timesteps=1000,
-                weight_decay=0.0,
-            ),
-            evaluation=EvaluationConfig(
-                num_games=1, opponent_type="random", evaluation_interval_timesteps=1000
-            ),
-            logging=LoggingConfig(
-                log_file="test.log", model_dir="/tmp/test_models", run_name="test_run"
-            ),
-            wandb=WandBConfig(
-                enabled=False,
-                project="test-project",
-                entity=None,
-                run_name_prefix="test",
-                watch_model=False,
-                watch_log_freq=1000,
-                watch_log_type="all",
-            ),
-            display=DisplayConfig(display_moves=False, turn_tick=0.5),
-        )
+        config = minimal_app_config  # MODIFIED: Use injected fixture
         env_manager = EnvManager(config=config)
 
         # Setup the environment to initialize the game

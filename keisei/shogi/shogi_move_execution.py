@@ -4,220 +4,200 @@ Contains functions for applying and reverting moves in the Shogi game.
 These functions operate on a ShogiGame instance.
 """
 
-from dataclasses import dataclass
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Dict,
-    Optional,
-    cast,
-)
-
-from . import shogi_rules_logic
-from .shogi_core_definitions import PROMOTED_TO_BASE_TYPE  # Added PROMOTED_TO_BASE_TYPE
+from typing import TYPE_CHECKING, List, Dict, Optional
 from .shogi_core_definitions import (
     Color,
-    MoveTuple,
     Piece,
     PieceType,
-    get_unpromoted_types,
+    MoveTuple,
+    MoveApplicationResult,
+    BASE_TO_PROMOTED_TYPE,
+    PROMOTED_TO_BASE_TYPE,
+    TerminationReason,  # Changed from TerminationStatus
 )
 
 if TYPE_CHECKING:
     from .shogi_game import ShogiGame
 
-@dataclass
-class MoveApplicationResult:
-    """Result information from applying a move to the board."""
+
+def apply_move_to_board_state(
+    board: List[List[Optional[Piece]]],
+    hands: Dict[int, Dict[PieceType, int]], # Changed Color to int for key type
+    move: MoveTuple,
+    current_player: Color,
+) -> MoveApplicationResult:
+    """
+    Applies a validated move to the given board and hands, mutating them directly.
+    Handles piece movement, captures, and promotions.
+
+    Args:
+        board: The game board (list of lists of Optional[Piece]).
+        hands: The players' hands (dict mapping player color value to dict of PieceType to count).
+        move: The MoveTuple to apply.
+        current_player: The Color of the player making the move.
+
+    Returns:
+        MoveApplicationResult indicating what piece was captured (if any)
+        and whether a promotion occurred.
+    """
     captured_piece_type: Optional[PieceType] = None
     was_promotion: bool = False
 
+    # Unpack the move tuple. The meaning of the 5th element depends on the move type.
+    from_r_raw, from_c_raw, to_r_raw, to_c_raw, promote_or_drop_info = move
+    # Ensure to_r and to_c are integers, as they are common to both move types.
+    if not isinstance(to_r_raw, int) or not isinstance(to_c_raw, int):
+        raise ValueError("to_row and to_col must be integers in MoveTuple")
+    to_r: int = to_r_raw
+    to_c: int = to_c_raw
 
-def apply_move_to_board(
-    game: "ShogiGame",
-    is_simulation: bool = False,
-) -> None:
-    """
-    Updates the game state after a move has been applied to the board by ShogiGame.make_move.
-    Its primary roles here are:
-    1. Updating game.current_player.
-    2. Incrementing game.move_count.
-    3. Checking for game termination conditions (checkmate, stalemate, sennichite, max_moves)
-       if not a simulation.
+    if from_r_raw is None:  # Drop move (from_r_raw and from_c_raw will be None)
+        if not isinstance(promote_or_drop_info, PieceType):
+            raise ValueError("For drop moves, the 5th element of MoveTuple must be a PieceType.")
+        piece_to_drop_type: PieceType = promote_or_drop_info
+
+        # Assuming the move is validated, the piece must be in hand and its count > 0.
+        # Directly place the piece on the board and decrement hand count.
+        board[to_r][to_c] = Piece(piece_to_drop_type, current_player)
+        if piece_to_drop_type not in hands[current_player.value]: # Should not happen if validated
+            raise ValueError(f"Attempting to drop {piece_to_drop_type} which is not in hand for {current_player}")
+        hands[current_player.value][piece_to_drop_type] -= 1
+        # Do not delete the key from hands; let the count be 0, consistent with hand initialization.
+
+        # was_promotion remains False for drops
+        # captured_piece_type remains None for drops
+    else:  # Board move (from_r_raw and from_c_raw will be int)
+        if not isinstance(from_r_raw, int) or not isinstance(from_c_raw, int):
+            raise ValueError("from_row and from_col must be integers for board moves in MoveTuple")
+        from_r: int = from_r_raw
+        from_c: int = from_c_raw
+
+        if not isinstance(promote_or_drop_info, bool):
+            raise ValueError("For board moves, the 5th element of MoveTuple must be a boolean (promote_flag).")
+        promote: bool = promote_or_drop_info
+
+        moving_piece = board[from_r][from_c]
+        if not moving_piece:
+            raise ValueError(f"No piece at source square ({from_r},{from_c}) for board move.")
+        if moving_piece.color != current_player:
+            raise ValueError(
+                f"Piece at ({from_r},{from_c}) belongs to {moving_piece.color}, "
+                f"but current player is {current_player}."
+            )
+
+        target_square_piece = board[to_r][to_c]
+        if target_square_piece:
+            if target_square_piece.color == current_player:
+                raise ValueError(
+                    f"Cannot capture own piece at ({to_r},{to_c}). "
+                    f"Moving piece from ({from_r},{from_c}) for player {current_player}."
+                )
+            # Capture piece: add its base type to the current player's hand
+            captured_piece_type = PROMOTED_TO_BASE_TYPE.get(
+                target_square_piece.type, target_square_piece.type
+            )
+            hands[current_player.value][captured_piece_type] = (
+                hands[current_player.value].get(captured_piece_type, 0) + 1
+            )
+
+        # Move the piece
+        board[to_r][to_c] = moving_piece # Piece instance carries its color and current type
+        board[from_r][from_c] = None
+
+        if promote:
+            if moving_piece.type not in BASE_TO_PROMOTED_TYPE:
+                raise ValueError(
+                    f"Piece type {moving_piece.type} cannot be promoted. "
+                    f"Move: {move}, Piece: {moving_piece}"
+                )
+            promoted_type = BASE_TO_PROMOTED_TYPE[moving_piece.type]
+            # Update the piece on the board to its promoted version
+            # Create a new Piece instance for the promoted piece, maintaining its color
+            board[to_r][to_c] = Piece(promoted_type, moving_piece.color)
+            was_promotion = True
+        # If not promoting, the piece on board[to_r][to_c] (which is moving_piece)
+        # retains its original type (which could be already promoted if it moved from a promotion zone)
+
+    return MoveApplicationResult(captured_piece_type=captured_piece_type, was_promotion=was_promotion)
+
+
+def apply_move_to_game(game: "ShogiGame", is_simulation: bool = False) -> None:
+    """Updates the game state *after* a move has been applied to the board/hands.
+
+    This includes switching the current player, incrementing the move count,
+    and (temporarily) checking for game termination conditions.
 
     Args:
         game: The ShogiGame instance.
-        is_simulation: If True, indicates the move is part of a simulation
-                       and game-ending checks (checkmate, stalemate) should be skipped.
+        is_simulation: If True, this is part of a simulation (e.g., for checkmate detection)
+                       and certain side effects like history updates might be skipped
+                       or handled differently by the caller.
     """
-    player_who_made_the_move = game.current_player
-
-    game.current_player = (
-        Color.WHITE if player_who_made_the_move == Color.BLACK else Color.BLACK
-    )
-    game.move_count += 1
-
     if not is_simulation:
-        # Pass the game instance itself to shogi_rules_logic functions
-        king_of_current_player_in_check = shogi_rules_logic.is_in_check(
-            game, game.current_player
-        )
-        legal_moves_for_current_player = game.get_legal_moves()
+        game.move_count += 1
 
-        if not legal_moves_for_current_player:
-            if king_of_current_player_in_check:
-                game.game_over = True
-                game.winner = player_who_made_the_move
-                game.termination_reason = "Tsumi"
-            else:
-                game.game_over = True
-                game.winner = None
-                game.termination_reason = "Stalemate"
-        # Pass the game instance to check_for_sennichite
-        elif shogi_rules_logic.check_for_sennichite(game):
-            game.game_over = True
-            game.winner = None
-            game.termination_reason = "Sennichite"
-        elif game.move_count >= game.max_moves_per_game:
-            game.game_over = True
-            game.winner = None
-            game.termination_reason = "Max moves reached"
+    game.current_player = game.current_player.opponent()
 
+    # Termination checks (checkmate, stalemate, max_moves) are now removed from here.
+    # They will be handled by ShogiGame._check_and_update_termination_status
+    # after this function completes and after history/sennichite is processed in ShogiGame.make_move.
+
+    # The import of is_in_check and generate_all_legal_moves, and the associated logic
+    # for termination checking, are removed from this function.
+    # if not is_simulation:
+    #     from .shogi_rules_logic import (
+    #         is_in_check,
+    #         generate_all_legal_moves
+    #     )
+    #     player_to_check = game.current_player
+    #     all_opponent_moves = generate_all_legal_moves(game)
+    #     if not all_opponent_moves:
+    #         if is_in_check(game, player_to_check):
+    #             game.game_over = True
+    #             # Winner was set using player_who_just_moved, which is now out of scope here.
+    #             # This assignment is now handled in _check_and_update_termination_status.
+    #             # game.winner = player_who_just_moved 
+    #             game.termination_reason = TerminationReason.CHECKMATE.value
+    #         else:
+    #             game.game_over = True
+    #             game.winner = None
+    #             game.termination_reason = TerminationReason.STALEMATE.value # Ensure enum used
+    #     elif game.move_count >= game.max_moves_per_game:
+    #         game.game_over = True
+    #         game.winner = None
+    #         game.termination_reason = TerminationReason.MAX_MOVES_EXCEEDED.value
 
 def revert_last_applied_move(
-    game: "ShogiGame", simulation_undo_details: Optional[Dict[str, Any]] = None
+    game: "ShogiGame",
+    original_board_state: List[List[Optional[Piece]]],
+    original_hands_state: Dict[int, Dict[PieceType, int]],
+    original_current_player: Color,
+    original_move_count: int,
+    # move_made: MoveTuple, # Unused
+    # move_application_result: MoveApplicationResult # Unused
 ) -> None:
+    """Reverts the last move applied to the game state, board, and hands.
+
+    This is primarily used for simulations (e.g., checkmate detection) to undo a trial move.
+
+    Args:
+        game: The ShogiGame instance to revert.
+        original_board_state: A deep copy of the board *before* the move was made.
+        original_hands_state: A deep copy of the hands *before* the move was made.
+        original_current_player: The player whose turn it was *before* the move.
+        original_move_count: The move count *before* the move.
+        # move_made: The MoveTuple that was applied. (Unused due to direct state restoration)
+        # move_application_result: The MoveApplicationResult from applying the move. (Unused)
     """
-    Reverts the last move made in the game, completely restoring the previous state.
-    Operates on the 'game' (ShogiGame instance).
+    # Restore board and hands from the copies
+    game.board = [row[:] for row in original_board_state] 
+    game.hands = {k: v.copy() for k, v in original_hands_state.items()}
 
-    State restoration includes:
-    1. Restoring the board position
-    2. Restoring hand pieces
-    3. Switching back to previous player
-    4. Reversing move count
-    5. Clearing termination status
-
-    If simulation_undo_details is provided, it uses that to undo a simulated move
-    that wasn't added to the game's history.
-    """
-    last_move_details: Dict[str, Any]
-    player_who_made_the_undone_move: Color
-
-    if simulation_undo_details:
-        last_move_details = simulation_undo_details
-        # Restore player and move count from before the simulated move
-        game.current_player = last_move_details["player_who_made_the_move"]
-        player_who_made_the_undone_move = game.current_player  # This is correct now
-        game.move_count = last_move_details["move_count_before_move"]
-        # No board_history manipulation for simulated moves
-    else:
-        if not game.move_history:
-            raise RuntimeError("No move to undo from history")
-        last_move_details = game.move_history.pop()
-        if game.board_history:
-            game.board_history.pop()  # Pop only if not a simulation
-
-        # For historical undo, player and move count are decremented/switched
-        game.current_player = (
-            Color.WHITE if game.current_player == Color.BLACK else Color.BLACK
-        )
-        player_who_made_the_undone_move = game.current_player
-        game.move_count -= 1
-
-    move_tuple: MoveTuple = last_move_details["move"]
-
-    # Common logic for reverting the move based on last_move_details
-    if last_move_details["is_drop"]:
-        dropped_piece_type_any = last_move_details["dropped_piece_type"]
-        if not isinstance(dropped_piece_type_any, PieceType):
-            raise TypeError(
-                f"Expected PieceType for dropped_piece_type, got {type(dropped_piece_type_any)}"
-            )
-        dropped_piece_type: PieceType = dropped_piece_type_any
-
-        r_to_drop_any = move_tuple[2]
-        c_to_drop_any = move_tuple[3]
-
-        if not isinstance(r_to_drop_any, int) or not isinstance(c_to_drop_any, int):
-            raise TypeError(
-                f"Expected int for r_to_drop and c_to_drop, got {type(r_to_drop_any)} and {type(c_to_drop_any)} respectively."
-            )
-        r_to_drop: int = r_to_drop_any
-        c_to_drop: int = c_to_drop_any
-
-        game.set_piece(r_to_drop, c_to_drop, None)
-        if (
-            dropped_piece_type in get_unpromoted_types()
-            and dropped_piece_type != PieceType.KING
-        ):
-            game.hands[player_who_made_the_undone_move.value][dropped_piece_type] = (
-                game.hands[player_who_made_the_undone_move.value].get(
-                    dropped_piece_type, 0
-                )
-                + 1
-            )
-        else:
-            raise ValueError(
-                f"Attempted to return invalid piece type {dropped_piece_type} to hand during undo of drop."
-            )
-
-    else:  # Board move
-        orig_r_from: int = cast(int, move_tuple[0])
-        orig_c_from: int = cast(int, move_tuple[1])
-        orig_r_to: int = cast(int, move_tuple[2])
-        orig_c_to: int = cast(int, move_tuple[3])
-
-        original_type_before_promotion_any = last_move_details[
-            "original_type_before_promotion"
-        ]
-        original_color_of_moved_piece_any = last_move_details[
-            "original_color_of_moved_piece"
-        ]
-
-        if not isinstance(original_type_before_promotion_any, PieceType):
-            raise TypeError(
-                f"Expected PieceType for original_type_before_promotion, got {type(original_type_before_promotion_any)}"
-            )
-        current_original_type_before_promotion: PieceType = (
-            original_type_before_promotion_any
-        )
-
-        if not isinstance(original_color_of_moved_piece_any, Color):
-            raise TypeError(
-                f"Expected Color for original_color_of_moved_piece, got {type(original_color_of_moved_piece_any)}"
-            )
-        current_original_color_of_moved_piece: Color = original_color_of_moved_piece_any
-
-        piece_to_restore_at_from = Piece(
-            current_original_type_before_promotion,
-            current_original_color_of_moved_piece,
-        )
-
-        game.set_piece(orig_r_from, orig_c_from, piece_to_restore_at_from)
-
-        captured_piece_object: Optional[Piece] = last_move_details.get("captured")
-
-        if captured_piece_object:
-            game.set_piece(orig_r_to, orig_c_to, captured_piece_object)
-
-            type_to_remove_from_hand: PieceType
-            # Use PROMOTED_TO_BASE_TYPE directly from shogi_core_definitions
-            if captured_piece_object.type in PROMOTED_TO_BASE_TYPE:
-                type_to_remove_from_hand = PROMOTED_TO_BASE_TYPE[
-                    captured_piece_object.type
-                ]
-            else:
-                type_to_remove_from_hand = captured_piece_object.type
-
-            if type_to_remove_from_hand != PieceType.KING:  # Kings are not held in hand
-                game.remove_from_hand(
-                    type_to_remove_from_hand, player_who_made_the_undone_move
-                )
-        else:
-            game.set_piece(orig_r_to, orig_c_to, None)
-
-    # game.move_count -= 1 # Moved up for non-simulation case, set directly for simulation
-    game.game_over = False  # Reset game over status regardless
+    # Restore game state variables
+    game.current_player = original_current_player
+    game.move_count = original_move_count 
+    
+    # Reset game termination state
+    game.game_over = False
     game.winner = None
-    game.termination_reason = None
+    game.termination_reason = None # Use None, not TerminationReason.ACTIVE.value

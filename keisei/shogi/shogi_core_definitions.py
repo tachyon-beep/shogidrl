@@ -11,6 +11,7 @@ potential AI applications.
 
 from enum import Enum
 from typing import Dict, List, Optional, Set, Tuple, Union
+from dataclasses import dataclass  # Added import
 
 # --- Public API ---
 __all__ = [
@@ -41,6 +42,7 @@ __all__ = [
     "OBS_UNPROMOTED_ORDER",
     "OBS_PROMOTED_ORDER",
     "Piece",
+    "MoveApplicationResult",  # Added to __all__
 ]
 
 
@@ -53,6 +55,10 @@ class Color(Enum):
 
     BLACK = 0  # Sente (先手), typically moves first
     WHITE = 1  # Gote (後手)
+
+    def opponent(self) -> "Color":
+        """Returns the opposing color."""
+        return Color.WHITE if self == Color.BLACK else Color.BLACK
 
 
 class PieceType(Enum):
@@ -127,18 +133,21 @@ KIF_PIECE_SYMBOLS: Dict[PieceType, str] = {
 
 
 class TerminationReason(Enum):
-    """
-    Enumerates reasons why a Shogi game might terminate.
-    """
+    """Enumerates reasons for game termination."""
 
-    CHECKMATE = "checkmate"
+    CHECKMATE = "Tsumi"  # Player is checkmated (Matches test_shogi_game_io.py)
+    STALEMATE = "stalemate"  # Player has no legal moves but is not in check (Keep or update if test fails)
+    REPETITION = "Sennichite"  # Position repeated (Sennichite - Matches test_shogi_game_core_logic.py)
+    MAX_MOVES_EXCEEDED = "Max moves reached"  # Game exceeded maximum allowed moves (Matches test_shogi_game_core_logic.py)
     RESIGNATION = "resignation"
-    MAX_MOVES_EXCEEDED = "max_moves_exceeded"
-    REPETITION = "repetition"  # Sennichite (千日手)
-    IMPASSE = "impasse"  # Jishogi (持将棋) (by points, declaration, etc.)
-    ILLEGAL_MOVE = "illegal_move"
     TIME_FORFEIT = "time_forfeit"
-    NO_CONTEST = "no_contest"  # E.g. server error, mutual agreement for no result
+    ILLEGAL_MOVE = "illegal_move"
+    AGREEMENT = "agreement"
+    IMPASSE = "impasse"
+    NO_CONTEST = "no_contest"
+
+    def __str__(self) -> str:
+        return self.value
 
 
 # --- Custom Types for Moves ---
@@ -157,6 +166,20 @@ DropMoveTuple = Tuple[Optional[int], Optional[int], int, int, PieceType]
 
 # MoveTuple is a union of the two types of moves.
 MoveTuple = Union[BoardMoveTuple, DropMoveTuple]
+
+
+@dataclass
+class MoveApplicationResult:
+    """
+    Represents the direct results of applying a move to the board and hands.
+    This dataclass is used by shogi_move_execution.apply_move_to_board.
+    """
+
+    captured_piece_type: Optional[PieceType] = None
+    was_promotion: bool = False
+    # Add other direct results of applying the move if necessary,
+    # e.g., specific flags for game state changes directly caused by the move mechanics
+    # (not game termination, which is handled later).
 
 
 def get_unpromoted_types() -> List[PieceType]:

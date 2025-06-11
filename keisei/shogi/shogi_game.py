@@ -18,13 +18,15 @@ logger = logging.getLogger(__name__)
 from . import shogi_game_io, shogi_move_execution, shogi_rules_logic
 
 # Import types and fundamental classes from shogi_core_definitions
-from .shogi_core_definitions import PIECE_TYPE_TO_HAND_TYPE  # Used in add_to_hand
-from .shogi_core_definitions import MoveTuple  # Already imported above
 from .shogi_core_definitions import (
     Color,
     Piece,
     PieceType,
+    MoveTuple,
+    MoveApplicationResult,  # Added
     get_unpromoted_types,
+    PIECE_TYPE_TO_HAND_TYPE,  # Consolidated
+    TerminationReason,      # Added
 )
 
 
@@ -48,7 +50,27 @@ class ShogiGame:
         self.board_history: List[Tuple] = []  # Added board_history
         self._max_moves_this_game = max_moves_per_game
         self._initial_board_setup_done = False
+        self._seed_value: Optional[Any] = None # Added for seeding
         self.reset()
+
+    def seed(self, seed_value: Optional[Any] = None) -> "ShogiGame":
+        """
+        Seeds the game's random number generators if applicable.
+        Currently, this method primarily stores the seed value and logs it,
+        as Shogi itself is deterministic once moves are chosen.
+        This can be extended if stochastic elements are introduced.
+
+        Args:
+            seed_value: The value to seed with.
+
+        Returns:
+            self: The game instance for chaining.
+        """
+        self._seed_value = seed_value
+        logger.debug("ShogiGame instance seeded with value: %s", seed_value)
+        # If any RNGs were used directly by ShogiGame (e.g., for tie-breaking, though not typical),
+        # they would be seeded here. For now, it's mainly for external components or future use.
+        return self
 
     @property
     def max_moves_per_game(self) -> int:
@@ -266,7 +288,7 @@ class ShogiGame:
         # Parse SFEN string components
         board_sfen, turn_sfen, hands_sfen, move_number_sfen = shogi_game_io.parse_sfen_string_components(sfen_str)
         
-        current_player = Color.BLACK if turn_sfen == "b" else Color.WHITE
+        current_player_from_sfen = Color.BLACK if turn_sfen == "b" else Color.WHITE
 
         try:
             move_number = int(move_number_sfen)
@@ -279,50 +301,40 @@ class ShogiGame:
                 f"Invalid move number in SFEN: '{move_number_sfen}'"
             ) from e
 
-        # Create game instance and initialize
         game = cls(max_moves_per_game=max_moves_for_game_instance)
-        game.current_player = current_player
-        game.move_count = move_number - 1
+        game.current_player = current_player_from_sfen # Set current player before potential termination check
+        game.move_count = move_number - 1 # SFEN move number is 1-indexed for the *next* move
+                                          # Our move_count is 0-indexed for moves *completed*.
+                                          # So, if SFEN says move 1, 0 moves completed.
+                                          # If SFEN says move 5, 4 moves completed.
+
         game.board = [[None for _ in range(9)] for _ in range(9)]
         game.hands = {
             Color.BLACK.value: {ptype: 0 for ptype in get_unpromoted_types()},
             Color.WHITE.value: {ptype: 0 for ptype in get_unpromoted_types()},
         }
-        game.move_history = []
-        game.board_history = []
+        game.move_history = [] # SFEN does not contain history
+        game.board_history = [] # Will be initialized after board setup
 
-        # Populate board from SFEN
         shogi_game_io.populate_board_from_sfen_segment(game.board, board_sfen)
-
-        # Populate hands from SFEN
         shogi_game_io.populate_hands_from_sfen_segment(game.hands, hands_sfen)
         
-        # Finalize setup
         game._initial_board_setup_done = True
-        game.board_history.append(game._board_state_hash())
+        game.board_history.append(game._board_state_hash()) # Add current state to history
 
-        # Evaluate termination conditions for the position
-        # Similar to what's done in apply_move_to_board but without actually making a move
-        # This is needed because from_sfen doesn't call apply_move_to_board
-        king_in_check = shogi_rules_logic.is_in_check(game, game.current_player)
-        legal_moves = shogi_rules_logic.generate_all_legal_moves(game)
-
-        if not legal_moves:
-            if king_in_check:
-                game.game_over = True
-                # In checkmate (tsumi), the opponent wins
-                game.winner = (
-                    Color.WHITE if game.current_player == Color.BLACK else Color.BLACK
-                )
-                game.termination_reason = "Tsumi"
-            else:
-                game.game_over = True
-                game.winner = None  # Stalemate means no winner
-                game.termination_reason = "Stalemate"
-        elif shogi_rules_logic.check_for_sennichite(game):
-            game.game_over = True
-            game.winner = None
-            game.termination_reason = "Sennichite"
+        # Evaluate termination conditions for the loaded position.
+        # The `player_who_just_moved` for from_sfen is tricky. If the game is over,
+        # it's the opponent of `game.current_player` (if checkmate/stalemate).
+        # However, `_check_and_update_termination_status` expects the player whose turn it *would be*.
+        # For from_sfen, `game.current_player` is already set to the player whose turn it is.
+        # If this player has no moves and is in check, then the *other* player delivered checkmate.
+        # So, we need to determine who would have made the move that *led* to this state.
+        # This is complex if the SFEN represents a mid-game state where the last move isn't known.
+        # For now, if checkmate, winner is opponent of current_player. If stalemate, winner is None.
+        # The `player_who_just_moved` argument to `_check_and_update_termination_status` is primarily
+        # to assign the winner correctly in case of checkmate. 
+        # Let's pass current_player.opponent() as a placeholder, it will be used if checkmate occurs.
+        game._check_and_update_termination_status(game.current_player.opponent())
 
         return game
 
@@ -354,16 +366,193 @@ class ShogiGame:
         return (board_tuple, hands_tuple, self.current_player.value)
 
     def get_board_state_hash(self) -> tuple:
-        """
-        Public interface to access the board state hash.
-        """
+        """Public interface to access the board state hash."""
         return self._board_state_hash()
+
+    def get_reward(self, perspective_player_color: Optional[Color] = None) -> float:
+        """
+        Calculates the reward for the current game state from a given player's perspective.
+
+        Args:
+            perspective_player_color: The player for whom the reward is calculated.
+                                      This argument is mandatory.
+
+        Returns:
+            float: 1.0 for a win, -1.0 for a loss, 0.0 for a draw or ongoing game.
+
+        Raises:
+            ValueError: If perspective_player_color is None.
+        """
+        if perspective_player_color is None:
+            raise ValueError(
+                "perspective_player_color must be provided to get_reward."
+            )
+
+        if not self.game_over:
+            return 0.0
+
+        # Determine the perspective for evaluation
+        eval_perspective: Color = perspective_player_color
+
+        if self.winner is None:  # Draw
+            return 0.0
+        elif self.winner == eval_perspective:  # Perspective player won
+            return 1.0
+        else:  # Perspective player lost (or game ended with a winner not being them)
+            return -1.0
+
+    def _check_and_update_termination_status(self, player_who_just_moved: Color) -> None:
+        """
+        Checks for all game termination conditions (checkmate, stalemate, max_moves, sennichite)
+        and updates game_over, winner, and termination_reason if the game has ended.
+        This method should be called after the current player has been switched (so self.current_player
+        is the player whose turn it *would be*).
+        """
+        if self.game_over: # If already marked as over, do nothing further.
+            return
+
+        # 1. Check for Checkmate or Stalemate
+        #    These depend on the player whose turn it is now (self.current_player)
+        #    having no legal moves.
+        current_player_legal_moves = shogi_rules_logic.generate_all_legal_moves(self)
+        if not current_player_legal_moves:
+            if shogi_rules_logic.is_in_check(self, self.current_player):
+                self.game_over = True
+                self.winner = player_who_just_moved # The player who made the last move wins
+                self.termination_reason = TerminationReason.CHECKMATE.value
+            else:
+                self.game_over = True
+                self.winner = None # Stalemate is a draw
+                self.termination_reason = TerminationReason.STALEMATE.value # Use enum
+            return # Game ended by checkmate or stalemate
+
+        # 2. Check for Max Moves Exceeded
+        #    This uses self.move_count, which is the count *after* the last move.
+        if self.move_count >= self.max_moves_per_game:
+            self.game_over = True
+            self.winner = None # Typically a draw, or specific rules might apply
+            self.termination_reason = TerminationReason.MAX_MOVES_EXCEEDED.value
+            return # Game ended by max moves
+
+        # 3. Check for Sennichite (Repetition)
+        #    This should be checked after other terminating conditions.
+        if shogi_rules_logic.check_for_sennichite(self):
+            self.game_over = True
+            self.winner = None # Sennichite is a draw
+            self.termination_reason = TerminationReason.REPETITION.value
+
+        # Other termination conditions like resignation, illegal move, time forfeit
+        # are typically handled at a higher level or by external game management.
 
     def is_sennichite(self) -> bool:
         """
         Checks if the current position has occurred four times, resulting in a draw.
         """
         return shogi_rules_logic.check_for_sennichite(self)
+
+    def _validate_move_tuple_format(self, move_tuple: MoveTuple) -> None:
+        """Validates the basic structure and types of a move_tuple."""
+        if not (
+            isinstance(move_tuple, tuple)
+            and len(move_tuple) == 5
+            and (
+                (  # Board move
+                    isinstance(move_tuple[0], int)
+                    and isinstance(move_tuple[1], int)
+                    and isinstance(move_tuple[2], int)
+                    and isinstance(move_tuple[3], int)
+                    and isinstance(move_tuple[4], bool)
+                )
+                or (  # Drop move
+                    move_tuple[0] is None
+                    and move_tuple[1] is None
+                    and isinstance(move_tuple[2], int)
+                    and isinstance(move_tuple[3], int)
+                    and isinstance(move_tuple[4], PieceType)
+                )
+            )
+        ):
+            raise ValueError(f"Invalid move_tuple format: {move_tuple}")
+
+    def _prepare_move_details_for_history(
+        self, move_tuple: MoveTuple, player_who_made_the_move: Color, move_count_before_move: int
+    ) -> Dict[str, Any]:
+        """Initializes the dictionary for storing move details in history."""
+        return {
+            "move": move_tuple,
+            "is_drop": False,
+            "captured": None,
+            "was_promoted_in_move": False,
+            "original_type_before_promotion": None,
+            "dropped_piece_type": None,
+            "original_color_of_moved_piece": None,
+            "player_who_made_the_move": player_who_made_the_move,
+            "move_count_before_move": move_count_before_move,
+            "original_board_state": None,
+            "original_hands_state": None,
+            "state_hash": None, # Ensure state_hash is initialized
+        }
+
+    def _populate_drop_move_details(
+        self, move_details: Dict[str, Any], promote_or_drop_info: PieceType
+    ) -> None:
+        """Populates details specific to a drop move."""
+        move_details["is_drop"] = True
+        if not isinstance(promote_or_drop_info, PieceType):
+            raise ValueError("Internal error: Drop move info not PieceType despite validation.")
+        move_details["dropped_piece_type"] = promote_or_drop_info
+
+    def _validate_and_populate_board_move_details(
+        self,
+        move_details: Dict[str, Any],
+        from_r: int,
+        from_c: int,
+        to_r: int,
+        to_c: int,
+        player_who_made_the_move: Color,
+    ) -> None:
+        """Validates a board move and populates its specific details."""
+        piece_to_move = self.get_piece(from_r, from_c)
+        if piece_to_move is None:
+            raise ValueError(f"Invalid move: No piece at source ({from_r},{from_c})")
+        if piece_to_move.color != player_who_made_the_move:
+            raise ValueError(
+                f"Invalid move: Piece at ({from_r},{from_c}) does not belong to current player."
+            )
+
+        potential_squares = shogi_rules_logic.generate_piece_potential_moves(
+            self, piece_to_move, from_r, from_c
+        )
+        if (to_r, to_c) not in potential_squares:
+            raise ValueError(
+                f"Illegal movement pattern: {piece_to_move.type.name} at "
+                f"({from_r},{from_c}) cannot move to ({to_r},{to_c}). "
+                f"Potential squares: {potential_squares}"
+            )
+        move_details["original_type_before_promotion"] = piece_to_move.type
+        move_details["original_color_of_moved_piece"] = piece_to_move.color
+
+    def _handle_simulation_return(self, move_details_for_history: Dict[str, Any]) -> Dict[str, Any]:
+        return move_details_for_history
+
+    def _handle_real_move_return(
+        self, player_who_made_the_move: Color
+    ) -> Tuple[np.ndarray, float, bool, Dict[str, Any]]:
+        next_obs = self.get_observation()
+        reward = 0.0
+        if self.game_over:
+            if self.winner == player_who_made_the_move:
+                reward = 1.0
+            elif self.winner is None:  # Draw
+                reward = 0.0
+            else:  # Opponent won
+                reward = -1.0
+        
+        done = self.game_over
+        info: Dict[str, Any] = {"reason": self.termination_reason if self.game_over else "Game ongoing"}
+        if self.game_over and self.winner is not None:
+            info["winner"] = self.winner.name
+        return next_obs, reward, done, info
 
     def make_move(
         self, move_tuple: MoveTuple, is_simulation: bool = False
@@ -381,264 +570,155 @@ class ShogiGame:
             Otherwise: A 4-tuple (observation, reward, done, info) for RL training
         """
         if self.game_over and not is_simulation:
-            # Game is over, return the current state, reward 0, done True, and termination info
-            next_obs = self.get_observation()
-            reward = 0.0  # No reward for trying to move in a completed game
-            done = True
-            info = {
-                "reason": (
-                    self.termination_reason
-                    if self.termination_reason
-                    else "Game already over"
-                )
-            }
-            return next_obs, reward, done, info
+            # Return early if game is over and it's not a simulation
+            return self._handle_real_move_return(self.current_player.opponent()) # Pass opponent as nominal player
+
+        self._validate_move_tuple_format(move_tuple) # Ensure validation is called
 
         player_who_made_the_move = self.current_player
         move_count_before_move = self.move_count
 
-        # Validate move_tuple structure early
-        if not (
-            isinstance(move_tuple, tuple)
-            and len(move_tuple) == 5
-            and (
-                (  # Board move
-                    isinstance(move_tuple[0], int)
-                    and isinstance(move_tuple[1], int)
-                    and isinstance(move_tuple[2], int)
-                    and isinstance(move_tuple[3], int)
-                    and isinstance(move_tuple[4], bool)
-                )
-                or (  # Drop move
-                    move_tuple[0] is None  # Allow None for drop move
-                    and move_tuple[1] is None  # Allow None for drop move
-                    and isinstance(move_tuple[2], int)
-                    and isinstance(move_tuple[3], int)
-                    and isinstance(move_tuple[4], PieceType)
-                )
-            )
-        ):
-            raise ValueError(f"Invalid move_tuple format: {move_tuple}")
-
-        r_from, c_from, r_to, c_to = (
-            move_tuple[0],
-            move_tuple[1],
-            move_tuple[2],
-            move_tuple[3],
+        move_details_for_history = self._prepare_move_details_for_history(
+            move_tuple, player_who_made_the_move, move_count_before_move
         )
 
-        move_details_for_history: Dict[str, Any] = {
-            "move": move_tuple,
-            "is_drop": False,  # Default to False, override for drops
-            "captured": None,
-            "was_promoted_in_move": False,
-            "original_type_before_promotion": None,  # For board moves
-            "dropped_piece_type": None,  # For drop moves
-            "original_color_of_moved_piece": None,  # For board moves, to aid undo
-            "player_who_made_the_move": player_who_made_the_move,  # RESTORED COMMA HERE
-            "move_count_before_move": move_count_before_move,
-        }
-
-        # --- Part 1: Gather details for history & perform initial piece manipulation ---
-        # This part happens *before* calling apply_move_to_board,
-        # so we have the state *before* the piece is moved/dropped.
-
-        if r_from is None:  # Drop move
-            move_details_for_history["is_drop"] = True
-            if isinstance(move_tuple[4], PieceType):
-                drop_piece_type_for_move = move_tuple[4]
-                move_details_for_history["dropped_piece_type"] = (
-                    drop_piece_type_for_move
-                )
-                # The actual board update and hand removal will happen in Part 2 for consistency
-            else:
-                raise ValueError(
-                    f"Invalid drop move: move_tuple[4] is not a PieceType: {move_tuple[4]}"
-                )
+        if move_tuple[0] is None:  # Drop move
+            # move_tuple for drop: (None, None, to_r, to_c, piece_type: PieceType)
+            # _populate_drop_move_details expects (self, move_details, promote_or_drop_info: PieceType)
+            drop_piece_type = move_tuple[4]
+            if not isinstance(drop_piece_type, PieceType):
+                raise ValueError(f"Invalid piece type for drop in move_tuple: {drop_piece_type}")
+            self._populate_drop_move_details(move_details_for_history, drop_piece_type)
         else:  # Board move
-            if (
-                r_from is not None and c_from is not None
-            ):  # Should always be true for board move
-                piece_to_move = self.get_piece(r_from, c_from)
-            else:
-                # This case should ideally be caught by the tuple validation earlier
-                raise ValueError("Invalid board move: r_from or c_from is None")
+            # move_tuple for board: (from_r, from_c, to_r, to_c, promote_bool: bool)
+            # _validate_and_populate_board_move_details expects 
+            # (self, move_details, from_r, from_c, to_r, to_c, player_who_made_the_move)
+            from_r, from_c, to_r, to_c, _ = move_tuple 
+            # Type assertion based on _validate_move_tuple_format and the if condition
+            assert isinstance(from_r, int), "from_r must be int for a board move"
+            assert isinstance(from_c, int), "from_c must be int for a board move"
+            assert isinstance(to_r, int), "to_r must be int for a board move"
+            assert isinstance(to_c, int), "to_c must be int for a board move"
 
-            if piece_to_move is None:
-                raise ValueError(
-                    f"Invalid move: No piece at source ({r_from},{c_from})"
-                )
-            if piece_to_move.color != player_who_made_the_move:
-                raise ValueError(
-                    f"Invalid move: Piece at ({r_from},{c_from}) does not belong to current player."
-                )
-
-            # --- ADDED: Hard-fail for illegal movement pattern ---
-            potential_squares = shogi_rules_logic.generate_piece_potential_moves(
-                self, piece_to_move, r_from, c_from
-            )
-            if (r_to, c_to) not in potential_squares:
-                raise ValueError(
-                    f"Illegal movement pattern: {piece_to_move.type.name} at "
-                    f"({r_from},{c_from}) cannot move to ({r_to},{c_to}). "
-                    f"Potential squares: {potential_squares}"
-                )
-
-            # Set these fields for all board moves (simulation or not) since undo needs them
-            move_details_for_history["original_type_before_promotion"] = (
-                piece_to_move.type
-            )
-            move_details_for_history["original_color_of_moved_piece"] = (
-                piece_to_move.color
+            self._validate_and_populate_board_move_details(
+                move_details_for_history, from_r, from_c, to_r, to_c, player_who_made_the_move
             )
 
-            # Capture detection (needed for undo even in simulation)
-            if r_to is not None and c_to is not None:  # Should always be true
-                target_piece_on_board = self.get_piece(r_to, c_to)
-            else:
-                # This case should ideally be caught by the tuple validation earlier
-                raise ValueError("Invalid board move: r_to or c_to is None")
+        # --- Capture state for simulation undo if needed ---
+        if is_simulation:
+            move_details_for_history["original_board_state"] = copy.deepcopy(self.board)
+            move_details_for_history["original_hands_state"] = copy.deepcopy(self.hands)
 
-            if target_piece_on_board:
-                if target_piece_on_board.color == player_who_made_the_move:
-                    raise ValueError(
-                        f"Invalid move: Cannot capture own piece at ({r_to},{c_to})"
-                    )
-                move_details_for_history["captured"] = copy.deepcopy(
-                    target_piece_on_board
-                )
+        move_application_result = shogi_move_execution.apply_move_to_board_state(
+            self.board, self.hands, move_tuple, player_who_made_the_move
+        )
+        move_details_for_history["captured"] = move_application_result.captured_piece_type
+        move_details_for_history["was_promoted_in_move"] = move_application_result.was_promotion
 
-            # Promotion logic (needed for undo even in simulation)
-            promote_flag = move_tuple[4]
-            if (
-                isinstance(promote_flag, bool) and promote_flag
-            ):  # Ensure promote_flag is bool for board moves
-                if not shogi_rules_logic.can_promote_specific_piece(
-                    self, piece_to_move, r_from, r_to
-                ):
-                    raise ValueError("Invalid promotion.")
-                move_details_for_history["was_promoted_in_move"] = True
-            elif not isinstance(promote_flag, bool):
-                raise ValueError(
-                    f"Invalid promotion flag type for board move: {type(promote_flag)}"
-                )
-
-        # --- STEP 1 FIX: Strict legal move validation ---
-        # Only allow moves that are in the legal moves list (unless simulation)
-        if not is_simulation:
-            legal_moves = self.get_legal_moves()
-            if move_tuple not in legal_moves:
-                raise ValueError(
-                    f"Illegal move: {move_tuple} is not in the list of legal moves. "
-                    f"Legal moves: {legal_moves}"
-                )
-            # --- END ADDED ---
-
-        # --- Part 2: Execute the move on the board ---
-        if move_details_for_history["is_drop"]:
-            if isinstance(move_tuple[4], PieceType):
-                drop_piece_type = move_tuple[4]
-                if (
-                    r_to is not None and c_to is not None
-                ):  # Should always be true for drop
-                    self.set_piece(
-                        r_to, c_to, Piece(drop_piece_type, player_who_made_the_move)
-                    )
-                self.remove_from_hand(drop_piece_type, player_who_made_the_move)
-            # Error case for invalid type already handled in Part 1
-        else:  # Board move
-            # piece_to_move was fetched in Part 1 and validated
-            # r_from, c_from, r_to, c_to are validated to be not None for board moves
-            if r_from is None or c_from is None:  # Add assertion for type checker
-                raise RuntimeError(
-                    "r_from and c_from should not be None for a board move at this stage."
-                )
-            current_piece_to_move = self.get_piece(
-                r_from, c_from
-            )  # Get it again, as it might be needed for promotion logic
-            if current_piece_to_move is None:  # Should not happen due to prior checks
-                raise RuntimeError(
-                    f"Consistency check failed: piece at ({r_from},{c_from}) disappeared before move execution"
-                )
-
-            # Handle capture by adding to hand
-            if move_details_for_history["captured"]:
-                captured_p: Piece = move_details_for_history["captured"]
-                self.add_to_hand(captured_p, player_who_made_the_move)
-
-            # Move the piece
-            # Ensure r_to and c_to are not None (already validated by move_tuple structure check)
-            if r_to is None or c_to is None:  # Should ideally not be reached
-                raise ValueError(
-                    "Invalid board move: r_to or c_to is None during piece placement."
-                )
-            self.set_piece(r_to, c_to, current_piece_to_move)  # type: ignore
-
-            # Clear original square
-            # Ensure r_from and c_from are not None (already validated)
-            if r_from is None or c_from is None:  # Should ideally not be reached
-                raise ValueError(
-                    "Invalid board move: r_from or c_from is None during piece removal."
-                )
-            self.set_piece(r_from, c_from, None)
-
-            # Handle promotion
-            if move_details_for_history["was_promoted_in_move"]:
-                # r_to, c_to are known to be not None for board moves
-                piece_at_dest = self.get_piece(r_to, c_to)
-                if piece_at_dest:  # Should exist as we just placed it
-                    piece_at_dest.promote()
-                else:  # Should not happen
-                    raise RuntimeError(
-                        "Consistency check failed: piece_at_dest is None after move for promotion"
-                    )
-
-        # --- Part 3: Update history and game state (delegating parts to shogi_move_execution) ---
-        # Store state hash *after* the move is made on the board, but *before* player switch.
-        # The hash should reflect the board, hands, and the player *who just made the move*.
-        current_state_hash = self._board_state_hash()
-        move_details_for_history["state_hash"] = current_state_hash
+        shogi_move_execution.apply_move_to_game(self, is_simulation)
 
         if not is_simulation:
+            current_state_hash = self._board_state_hash()
+            move_details_for_history["state_hash"] = current_state_hash
             self.move_history.append(move_details_for_history)
-            # board_history is for sennichite and should store the hash of the state
-            # *after* the move, associated with the player who made it.
             self.board_history.append(current_state_hash)
-
-        # Store who made the move before we switch players
-        player_who_made_the_move = self.current_player
-
-        # Call apply_move_to_board to switch player, increment move count, and check game end.
-        # Pass the original move_tuple as it might be used by apply_move_to_board for its logic.
-        shogi_move_execution.apply_move_to_board(self, is_simulation)
+            self._check_and_update_termination_status(player_who_made_the_move)
 
         if is_simulation:
-            return move_details_for_history
+            return self._handle_simulation_return(move_details_for_history)
+        else:
+            return self._handle_real_move_return(player_who_made_the_move)
 
-        # For training, return a 4-tuple (observation, reward, done, info)
-        next_obs = self.get_observation()
-        reward = self.get_reward(
-            player_who_made_the_move
-        )  # Get reward from perspective of the player who moved
-        done = self.game_over
-        info = {"reason": self.termination_reason} if self.termination_reason else {}
-        if move_details_for_history.get("captured"):
-            captured_piece = move_details_for_history["captured"]
-            try:
-                info["captured_piece_type"] = captured_piece.type.name
-            except AttributeError:
-                info["captured_piece_type"] = str(captured_piece)
+    def _restore_board_and_hands_for_undo(self, last_move_details: Dict[str, Any]) -> None:
+        """Helper to restore board and hands from move details during undo."""
+        move_tuple = last_move_details["move"]
+        _, _, to_r, to_c, _ = move_tuple
 
-        return next_obs, reward, done, info
+        if last_move_details["is_drop"]:
+            dropped_piece_type = last_move_details["dropped_piece_type"]
+            assert dropped_piece_type is not None, "dropped_piece_type missing for drop"
+            
+            self.board[to_r][to_c] = None
+            self.hands[self.current_player.value][dropped_piece_type] = \
+                self.hands[self.current_player.value].get(dropped_piece_type, 0) + 1
+        else: # Board move
+            from_r, from_c, _, _, _ = move_tuple # Unpack from_r, from_c here
+            original_type_at_source = last_move_details["original_type_before_promotion"]
+            original_color_of_moved_piece = last_move_details["original_color_of_moved_piece"]
+            assert original_type_at_source is not None, "original_type_before_promotion missing"
+            assert original_color_of_moved_piece is not None, "original_color_of_moved_piece missing"
+
+            self.board[from_r][from_c] = Piece(original_type_at_source, original_color_of_moved_piece)
+
+            captured_piece_board_type = last_move_details["captured"]
+            if captured_piece_board_type:
+                captured_piece_color = self.current_player.opponent()
+                self.board[to_r][to_c] = Piece(captured_piece_board_type, captured_piece_color)
+                
+                hand_type_of_captured = PIECE_TYPE_TO_HAND_TYPE.get(captured_piece_board_type)
+                if hand_type_of_captured is None:
+                    raise ValueError(f"Cannot convert captured board type {captured_piece_board_type} to hand type during undo.")
+                
+                player_hand = self.hands[self.current_player.value]
+                if player_hand.get(hand_type_of_captured, 0) > 0:
+                    player_hand[hand_type_of_captured] -= 1
+                else:
+                    # This implies an inconsistency
+                    # Consider logging or raising a more specific error if strictness is required
+                    pass 
+            else:
+                self.board[to_r][to_c] = None
 
     def undo_move(
         self, simulation_undo_details: Optional[Dict[str, Any]] = None
-    ) -> None:  # Added return type hint & param
+    ) -> None:
         """
         Reverts the last move made, restoring the previous game state.
         Can use simulation_undo_details to undo a simulated move not in history.
         """
-        shogi_move_execution.revert_last_applied_move(self, simulation_undo_details)
+        if simulation_undo_details:
+            original_board_state = simulation_undo_details.get("original_board_state")
+            original_hands_state = simulation_undo_details.get("original_hands_state")
+            original_current_player = simulation_undo_details.get("player_who_made_the_move")
+            original_move_count = simulation_undo_details.get("move_count_before_move")
+
+            if not all(isinstance(arg, expected_type) for arg, expected_type in [
+                (original_board_state, list),
+                (original_hands_state, dict),
+                (original_current_player, Color),
+                (original_move_count, int)
+            ]):
+                # More detailed type error could be raised here if needed
+                raise TypeError("One or more arguments from simulation_undo_details have incorrect types.")
+
+            assert original_board_state is not None, "original_board_state missing"
+            assert original_hands_state is not None, "original_hands_state missing"
+            assert original_current_player is not None, "original_current_player missing"
+            assert original_move_count is not None, "original_move_count missing"
+
+            shogi_move_execution.revert_last_applied_move(
+                self,
+                original_board_state=original_board_state,
+                original_hands_state=original_hands_state,
+                original_current_player=original_current_player,
+                original_move_count=original_move_count,
+            )
+        else: # Undo from game history
+            if not self.move_history:
+                return
+
+            last_move_details = self.move_history.pop()
+            if self.board_history:
+                self.board_history.pop()
+
+            self.current_player = last_move_details["player_who_made_the_move"]
+            self.move_count = last_move_details["move_count_before_move"]
+            
+            self._restore_board_and_hands_for_undo(last_move_details)
+            
+            self.game_over = False
+            self.winner = None
+            self.termination_reason = None
 
     def add_to_hand(self, captured_piece: Piece, capturing_player_color: Color) -> None:
         """
@@ -681,69 +761,58 @@ class ShogiGame:
         return self.hands[color.value].copy()
 
     def is_in_promotion_zone(self, row: int, color: Color) -> bool:
-        """
-        Checks if the specified row is in the promotion zone for the given color.
-        """
+        """Checks if the specified row is in the promotion zone for the given color."""
         if color == Color.BLACK:
             return 0 <= row <= 2
         return 6 <= row <= 8
 
+    def _check_drop_pawn_rules(self, row: int, col: int, player_color: Color, last_rank: int) -> bool:
+        """Checks specific rules for dropping a pawn."""
+        if self.is_nifu(player_color, col):
+            return False
+        if row == last_rank:
+            return False
+        if self.is_uchi_fu_zume(row, col, player_color):
+            return False
+        return True
+
+    def _check_drop_lance_rules(self, row: int, last_rank: int) -> bool:
+        """Checks specific rules for dropping a lance."""
+        # player_color removed as it was unused
+        if row == last_rank:
+            return False
+        return True
+
+    def _check_drop_knight_rules(self, row: int, last_rank: int, second_last_rank: int) -> bool:
+        """Checks specific rules for dropping a knight."""
+        # player_color removed as it was unused
+        if row == last_rank or row == second_last_rank:
+            return False
+        return True
+
     def can_drop_piece(
-        self, piece_type: PieceType, row: int, col: int, color: Color
+        self, piece_type: PieceType, row: int, col: int, player_color: Color
     ) -> bool:
         """
-        Checks if a piece of the specified type can be legally dropped on the given square.
-        Delegates to shogi_rules_logic.can_drop_specific_piece for all rule checks.
+        Checks if a piece of the specified type can be legally dropped by the player
+        at the given board coordinates.
+        This includes checks for nifu (two pawns in the same file) and uchi_fu_zume (dropping a pawn for checkmate),
+        and that pieces are not dropped where they have no further moves.
         """
-        return shogi_rules_logic.can_drop_specific_piece(
-            self, piece_type, row, col, color, is_escape_check=False
-        )
+        if piece_type == PieceType.KING or \
+           not self.is_on_board(row, col) or \
+           self.hands[player_color.value].get(piece_type, 0) <= 0 or \
+           self.board[row][col] is not None:  # Square must be empty
+            return False
 
-    def __repr__(self):
-        return f"<ShogiGame move_count={self.move_count} current_player={self.current_player}>"
+        last_rank = 0 if player_color == Color.BLACK else 8
+        second_last_rank = 1 if player_color == Color.BLACK else 7
 
-    # --- Reward Function ---
-    def get_reward(self, player_color: Optional[Color] = None) -> float:
-        """Calculates the reward for the player_color based on the game outcome."""
-        if not self.game_over:
-            return 0.0
+        if piece_type == PieceType.PAWN:
+            return self._check_drop_pawn_rules(row, col, player_color, last_rank)
+        elif piece_type == PieceType.LANCE:
+            return self._check_drop_lance_rules(row, last_rank)
+        elif piece_type == PieceType.KNIGHT:
+            return self._check_drop_knight_rules(row, last_rank, second_last_rank)
 
-        perspective_player = player_color
-        if perspective_player is None:
-            # If no specific player perspective, use the player whose turn it would have been
-            # if the game hadn't ended, or the winner if clear.
-            # This logic might need refinement based on how rewards are assigned post-game.
-            # For now, let's assume if a winner exists, it's from their perspective.
-            # If stalemate, it's neutral.
-            if self.winner is not None:
-                perspective_player = self.winner  # Win is +1 for winner
-            else:  # Stalemate or other draw
-                return 0.0
-
-        if self.winner == perspective_player:
-            return 1.0  # Win
-        if self.winner is not None and self.winner != perspective_player:
-            return -1.0  # Loss
-        return 0.0  # Draw or game not over from this perspective
-
-    def seed(self, seed_value=None):
-        """Seed the game environment for reproducibility.
-
-        While standard Shogi is deterministic, this method provides:
-        - A hook for future stochastic variants
-        - Debugging support for reproducibility testing
-        - Environment interface contract completion
-
-        Args:
-            seed_value: Random seed value for reproducibility
-
-        Returns:
-            Self for method chaining
-        """
-        # Store seed value for debugging and future use
-        self._seed_value = seed_value
-
-        # Log seeding operation for debugging
-        logger.debug(f"Game seeded with value: {seed_value}")
-
-        return self
+        return True # Default for other pieces (Gold, Silver, Bishop, Rook)
