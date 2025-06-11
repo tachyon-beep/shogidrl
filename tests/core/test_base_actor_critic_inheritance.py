@@ -73,10 +73,3 @@ def test_deterministic_mode():
 
     assert torch.equal(action1_det, action1_det2)
     assert torch.equal(action2_det, action2_det2)
-
-
-if __name__ == "__main__":
-    test_both_models_inherit_from_base()
-    test_shared_methods_work_identically()
-    test_deterministic_mode()
-    print("All refactoring tests passed!")

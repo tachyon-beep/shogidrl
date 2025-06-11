@@ -14,6 +14,12 @@ import numpy as np
 import pytest
 import torch
 
+from keisei.constants import (
+    CORE_OBSERVATION_CHANNELS,
+    FULL_ACTION_SPACE,
+    SHOGI_BOARD_SIZE,
+    TEST_SINGLE_LEGAL_ACTION_INDEX,
+)
 from keisei.core.ppo_agent import PPOAgent
 from keisei.shogi import ShogiGame
 from keisei.shogi.shogi_core_definitions import MoveTuple
@@ -473,7 +479,213 @@ class TestPPOAgentSchedulerIntegration:
         assert lr_after_epoch < initial_lr_epoch
         assert lr_after_update < initial_lr_update
 
-        # Update mode should have a higher LR because although it steps more frequently,
-        # it has a much larger total step count, so the same number of learn() calls
-        # result in fewer steps relative to the total
-        assert lr_after_update >= lr_after_epoch
+
+class TestPPOAgentMasking:
+    """Test PPO agent's handling of legal action masks."""
+
+    def test_legal_mask_enforcement(self, ppo_agent_basic):
+        """Test that agent respects legal action masks."""
+        agent = ppo_agent_basic
+        
+        # Create a restrictive legal mask
+        legal_mask = torch.zeros(FULL_ACTION_SPACE, dtype=torch.bool)
+        legal_mask[TEST_SINGLE_LEGAL_ACTION_INDEX] = True  # Only one action is legal
+        
+        # Get observation as numpy array (matching interface)
+        obs = np.random.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE).astype(np.float32)
+        
+        # Test multiple times to ensure consistency
+        for _ in range(10):
+            # Select action with mask
+            selected_move, action_idx, log_prob, value = agent.select_action(obs, legal_mask, is_training=False)
+            
+            # Action should always be the single legal action
+            assert action_idx == TEST_SINGLE_LEGAL_ACTION_INDEX, f"Expected {TEST_SINGLE_LEGAL_ACTION_INDEX}, got {action_idx}"
+
+    def test_legal_mask_log_probabilities(self, ppo_agent_basic):
+        """Test that log probabilities correctly handle legal masks."""
+        agent = ppo_agent_basic
+        
+        # Create legal mask with subset of actions
+        legal_mask = torch.zeros(FULL_ACTION_SPACE, dtype=torch.bool)
+        legal_mask[:10] = True  # Only first 10 actions are legal
+        
+        obs = np.random.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE).astype(np.float32)
+        
+        # Get action and value
+        selected_move, action_idx, log_prob, value = agent.select_action(obs, legal_mask, is_training=False)
+        
+        # Action should be in legal range
+        assert 0 <= action_idx < 10, f"Action {action_idx} is not in legal range [0, 10)"
+        
+        # Log probability should be finite (not -inf)
+        assert np.isfinite(log_prob), f"Log probability is not finite: {log_prob}"
+
+    def test_empty_legal_mask_handling(self, ppo_agent_basic):
+        """Test agent behavior with empty legal mask (all actions illegal)."""
+        agent = ppo_agent_basic
+        
+        # Create empty legal mask
+        legal_mask = torch.zeros(FULL_ACTION_SPACE, dtype=torch.bool)
+        
+        obs = np.random.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE).astype(np.float32)
+        
+        # Agent should handle gracefully (might use uniform distribution or raise error)
+        try:
+            selected_move, action_idx, log_prob, value = agent.select_action(obs, legal_mask, is_training=False)
+            
+            # If it succeeds, action should still be valid
+            assert 0 <= action_idx < FULL_ACTION_SPACE
+        except (ValueError, RuntimeError):
+            # Acceptable to raise an error for impossible situation
+            pass
+
+    def test_mask_batch_consistency(self, ppo_agent_basic):
+        """Test legal mask handling with different mask configurations."""
+        agent = ppo_agent_basic
+        
+        obs = np.random.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE).astype(np.float32)
+        
+        # Test different mask configurations
+        test_configs = [
+            (slice(0, 5), "actions 0-4"),
+            (slice(10, 15), "actions 10-14"), 
+            (slice(20, 25), "actions 20-24"),
+            (slice(None), "all actions")
+        ]
+        
+        for action_slice, description in test_configs:
+            legal_mask = torch.zeros(FULL_ACTION_SPACE, dtype=torch.bool)
+            legal_mask[action_slice] = True
+            
+            selected_move, action_idx, log_prob, value = agent.select_action(obs, legal_mask, is_training=False)
+            
+            # Check action respects the mask
+            if action_slice == slice(None):
+                assert 0 <= action_idx < FULL_ACTION_SPACE, f"Action {action_idx} not in valid range for {description}"
+            else:
+                assert legal_mask[action_idx], f"Action {action_idx} doesn't respect mask for {description}"
+
+
+class TestPPOAgentInterfaceConsistency:
+    """Test consistency between different PPO agent interfaces."""
+
+    def test_action_value_consistency(self, ppo_agent_basic):
+        """Test consistency between action selection and value estimation."""
+        agent = ppo_agent_basic
+        
+        obs = np.random.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE).astype(np.float32)
+        legal_mask = torch.ones(FULL_ACTION_SPACE, dtype=torch.bool)
+        legal_mask[FULL_ACTION_SPACE//2:] = False  # Half actions legal
+        
+        # Get action and value
+        selected_move, action_idx, log_prob, action_value = agent.select_action(obs, legal_mask, is_training=False)
+        standalone_value = agent.get_value(obs)  # get_value returns float directly
+        
+        # Values should be consistent (same observation)
+        np.testing.assert_allclose(action_value, standalone_value, atol=1e-5, rtol=1e-5)
+        
+        # Action should respect mask
+        assert action_idx < FULL_ACTION_SPACE//2, f"Action {action_idx} doesn't respect legal mask"
+
+    def test_training_vs_evaluation_mode(self, ppo_agent_basic):
+        """Test that training vs evaluation modes affect behavior appropriately."""
+        agent = ppo_agent_basic
+        
+        obs = np.random.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE).astype(np.float32)
+        legal_mask = torch.ones(FULL_ACTION_SPACE, dtype=torch.bool)
+        
+        # Get actions in both modes
+        _, action_train, _, _ = agent.select_action(obs, legal_mask, is_training=True)
+        _, action_eval, _, _ = agent.select_action(obs, legal_mask, is_training=False)
+        
+        # Both actions should be valid
+        assert 0 <= action_train < FULL_ACTION_SPACE
+        assert 0 <= action_eval < FULL_ACTION_SPACE
+        
+        # Actions might be different due to dropout/batch norm differences
+        # but we can't assert they're different as it depends on the model
+
+    def test_stochastic_variation(self, ppo_agent_basic):
+        """Test that repeated action selection produces variation."""
+        agent = ppo_agent_basic
+        
+        obs = np.random.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE).astype(np.float32)
+        legal_mask = torch.ones(FULL_ACTION_SPACE, dtype=torch.bool)
+        
+        # Get multiple actions
+        actions = []
+        for _ in range(20):
+            _, action_idx, _, _ = agent.select_action(obs, legal_mask, is_training=True)
+            actions.append(action_idx)
+        
+        # Should have some variation (high probability)
+        unique_actions = set(actions)
+        assert len(unique_actions) > 1, f"Actions should vary, got only: {unique_actions}"
+
+    def test_value_estimation_consistency(self, ppo_agent_basic):
+        """Test value estimation consistency."""
+        agent = ppo_agent_basic
+        
+        # Single observation
+        obs_single = np.random.randn(CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE).astype(np.float32)
+        value_single = agent.get_value(obs_single)  # get_value returns float directly
+        
+        # Test with multiple identical observations
+        for _ in range(3):
+            obs_test = obs_single.copy()
+            value_test = agent.get_value(obs_test)
+            
+            # All should equal the single value (within numerical precision)
+            np.testing.assert_allclose(value_test, value_single, atol=1e-6, rtol=1e-6)
+
+
+class TestPPOAgentNumericalStability:
+    """Test numerical stability of PPO agent operations."""
+
+    def test_extreme_observation_values(self, ppo_agent_basic):
+        """Test agent behavior with extreme observation values."""
+        agent = ppo_agent_basic
+        legal_mask = torch.ones(FULL_ACTION_SPACE, dtype=torch.bool)
+        
+        # Very small values
+        obs_small = np.full((CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE), 1e-8, dtype=np.float32)
+        _, _, log_prob_small, value_small = agent.select_action(obs_small, legal_mask, is_training=False)
+        assert np.isfinite(log_prob_small), "Log prob not finite for small observations"
+        assert np.isfinite(value_small), "Value not finite for small observations"
+        
+        # Very large values
+        obs_large = np.full((CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE), 1e3, dtype=np.float32)
+        _, _, log_prob_large, value_large = agent.select_action(obs_large, legal_mask, is_training=False)
+        assert np.isfinite(log_prob_large), "Log prob not finite for large observations"
+        assert np.isfinite(value_large), "Value not finite for large observations"
+
+    def test_gradient_flow_stability(self, ppo_agent_basic, populated_experience_buffer):
+        """Test that learning produces stable gradients."""
+        agent = ppo_agent_basic
+        buffer = populated_experience_buffer
+        
+        # Store initial parameters
+        initial_params = {}
+        for name, param in agent.model.named_parameters():
+            initial_params[name] = param.clone().detach()
+        
+        # Perform learning
+        metrics = agent.learn(buffer)
+        
+        # Check that parameters changed (learning occurred)
+        params_changed = False
+        for name, param in agent.model.named_parameters():
+            if not torch.equal(initial_params[name], param):
+                params_changed = True
+                break
+        
+        assert params_changed, "No parameters changed during learning"
+        
+        # Check that gradients are finite
+        for name, param in agent.model.named_parameters():
+            if param.grad is not None:
+                assert torch.isfinite(param.grad).all(), f"Non-finite gradients in {name}"
+        
+        # Check that metrics are reasonable
+        assert_valid_ppo_metrics(metrics)

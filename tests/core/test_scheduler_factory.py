@@ -215,21 +215,23 @@ class TestSchedulerFactory:
         assert final_lr >= expected_min_lr * 0.9  # Allow small numerical errors
 
 
+@pytest.fixture
+def integration_optimizer():
+    """Create a dummy optimizer for integration tests."""
+    param = torch.nn.Parameter(torch.randn(1))
+    return Adam([param], lr=1e-3, weight_decay=0.0)
+
+
 class TestSchedulerFactoryIntegration:
     """Integration tests for SchedulerFactory with realistic scenarios."""
 
-    def test_scheduler_type_coverage(self):
+    def test_scheduler_type_coverage(self, integration_optimizer):
         """Test that all documented scheduler types are supported."""
-        dummy_param = torch.nn.Parameter(torch.randn(1))
-        optimizer = Adam(
-            [dummy_param], lr=1e-3, weight_decay=0.0
-        )  # Ensure weight_decay is present
-
         supported_types = ["linear", "cosine", "exponential", "step"]
 
         for schedule_type in supported_types:
             scheduler = SchedulerFactory.create_scheduler(
-                optimizer=optimizer, schedule_type=schedule_type, total_steps=100
+                optimizer=integration_optimizer, schedule_type=schedule_type, total_steps=100
             )
             assert scheduler is not None, f"Failed to create {schedule_type} scheduler"
 
@@ -238,8 +240,8 @@ class TestSchedulerFactoryIntegration:
         dummy_param1 = torch.nn.Parameter(torch.randn(1))
         dummy_param2 = torch.nn.Parameter(torch.randn(1))
 
-        optimizer1 = Adam([dummy_param1], lr=1e-3)
-        optimizer2 = Adam([dummy_param2], lr=1e-3)
+        optimizer1 = Adam([dummy_param1], lr=1e-3, weight_decay=0.0) # ADDED weight_decay
+        optimizer2 = Adam([dummy_param2], lr=1e-3, weight_decay=0.0) # ADDED weight_decay
 
         scheduler1 = SchedulerFactory.create_scheduler(
             optimizer=optimizer1, schedule_type="linear", total_steps=100
@@ -253,15 +255,12 @@ class TestSchedulerFactoryIntegration:
         assert scheduler2 is not None
         assert scheduler1 != scheduler2
 
-    def test_scheduler_kwargs_validation(self):
+    def test_scheduler_kwargs_validation(self, integration_optimizer):
         """Test that schedulers are created with default kwargs if specific ones are missing."""
-        dummy_param = torch.nn.Parameter(torch.randn(1))
-        optimizer = Adam([dummy_param], lr=1e-3, weight_decay=0.0)
-
         # Test linear scheduler: uses default final_lr_fraction if not provided
         # schedule_kwargs is omitted, factory uses default for final_lr_fraction
         scheduler_linear = SchedulerFactory.create_scheduler(
-            optimizer=optimizer, schedule_type="linear", total_steps=100
+            optimizer=integration_optimizer, schedule_type="linear", total_steps=100
         )
         assert (
             scheduler_linear is not None
@@ -270,7 +269,7 @@ class TestSchedulerFactoryIntegration:
         # Test exponential scheduler: uses default gamma if not provided
         # Empty dict for schedule_kwargs, factory uses default for gamma
         scheduler_exp = SchedulerFactory.create_scheduler(
-            optimizer=optimizer,
+            optimizer=integration_optimizer,
             schedule_type="exponential",
             total_steps=100,  # total_steps is not strictly used by exponential's core logic but factory requires it
             schedule_kwargs={},
@@ -282,7 +281,7 @@ class TestSchedulerFactoryIntegration:
         # Test step scheduler: uses default step_size and gamma if not provided
         # Empty dict for schedule_kwargs, factory uses defaults for step_size and gamma
         scheduler_step = SchedulerFactory.create_scheduler(
-            optimizer=optimizer,
+            optimizer=integration_optimizer,
             schedule_type="step",
             total_steps=100,  # total_steps is not strictly used by step's core logic but factory requires it
             schedule_kwargs={},
@@ -291,17 +290,12 @@ class TestSchedulerFactoryIntegration:
             scheduler_step is not None
         ), "Step scheduler should be created with default kwargs"
 
-    def test_scheduler_total_steps_validation(self):
+    def test_scheduler_total_steps_validation(self, integration_optimizer):
         """Test validation of total_steps for relevant schedulers."""
-        dummy_param1 = torch.nn.Parameter(torch.randn(1))
-        optimizer1 = Adam(
-            [dummy_param1], lr=1e-3, weight_decay=0.0
-        )  # Ensure weight_decay is present
-
         # Linear scheduler requires total_steps > 0
         with pytest.raises(ValueError, match="total_steps must be a positive integer"):
             SchedulerFactory.create_scheduler(
-                optimizer=optimizer1,
+                optimizer=integration_optimizer,
                 schedule_type="linear",
                 total_steps=0,
                 schedule_kwargs={"final_lr_fraction": 0.1},
@@ -309,7 +303,7 @@ class TestSchedulerFactoryIntegration:
 
         with pytest.raises(ValueError, match="total_steps must be a positive integer"):
             SchedulerFactory.create_scheduler(
-                optimizer=optimizer1,
+                optimizer=integration_optimizer,
                 schedule_type="linear",
                 total_steps=-10,
                 schedule_kwargs={"final_lr_fraction": 0.1},
@@ -321,7 +315,7 @@ class TestSchedulerFactoryIntegration:
             match="total_steps must be a positive integer for cosine scheduler",
         ):
             SchedulerFactory.create_scheduler(
-                optimizer=optimizer1,
+                optimizer=integration_optimizer,
                 schedule_type="cosine",
                 total_steps=0,
                 schedule_kwargs={"eta_min_fraction": 0.1},
@@ -332,7 +326,7 @@ class TestSchedulerFactoryIntegration:
             match="total_steps must be a positive integer for cosine scheduler",
         ):
             SchedulerFactory.create_scheduler(
-                optimizer=optimizer1,
+                optimizer=integration_optimizer,
                 schedule_type="cosine",
                 total_steps=-10,
                 schedule_kwargs={"eta_min_fraction": 0.1},

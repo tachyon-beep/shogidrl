@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from keisei.constants import SHOGI_BOARD_SIZE, SHOGI_BOARD_SQUARES
 from keisei.core.base_actor_critic import BaseActorCriticModel
 
 
@@ -64,7 +65,7 @@ class ActorCriticResTower(BaseActorCriticModel):
             nn.BatchNorm2d(2),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(2 * 9 * 9, num_actions_total),
+            nn.Linear(2 * SHOGI_BOARD_SQUARES, num_actions_total),
         )
         # Slim value head: 2 planes, then flatten, then linear
         self.value_head = nn.Sequential(
@@ -72,7 +73,7 @@ class ActorCriticResTower(BaseActorCriticModel):
             nn.BatchNorm2d(2),
             nn.ReLU(),
             nn.Flatten(),
-            nn.Linear(2 * 9 * 9, 1),
+            nn.Linear(2 * SHOGI_BOARD_SQUARES, 1),
         )
 
     def forward(self, x):

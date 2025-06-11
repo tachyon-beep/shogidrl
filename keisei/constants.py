@@ -12,6 +12,7 @@ MOVE_COUNT_NORMALIZATION_FACTOR = 512.0
 
 # Action space and observation constants
 ALTERNATIVE_ACTION_SPACE = 6480  # Alternative/reduced action space
+FULL_ACTION_SPACE = 13527  # Full Shogi action space (12960 + 567)
 CORE_OBSERVATION_CHANNELS = 46  # Standard 46-channel observation
 EXTENDED_OBSERVATION_CHANNELS = 51  # Extended observation with additional features
 

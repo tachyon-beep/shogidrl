@@ -178,6 +178,143 @@ def logger_func():
     return Mock()
 
 
+@pytest.fixture
+def minimal_model_manager_config():
+    """Create a minimal AppConfig for ModelManager testing."""
+    return AppConfig(
+        env=EnvConfig(
+            device="cpu",
+            num_actions_total=13527,
+            input_channels=46,
+            seed=42,
+            max_moves_per_game=500,
+        ),
+        training=TrainingConfig(
+            total_timesteps=1000,
+            steps_per_epoch=64,
+            ppo_epochs=2,
+            minibatch_size=32,
+            learning_rate=3e-4,
+            gamma=0.99,
+            clip_epsilon=0.2,
+            value_loss_coeff=0.5,
+            entropy_coef=0.01,
+            render_every_steps=1,
+            refresh_per_second=4,
+            enable_spinner=False,
+            input_features="core46",
+            tower_depth=9,
+            tower_width=256,
+            se_ratio=0.25,
+            model_type="resnet",
+            mixed_precision=False,
+            ddp=False,
+            gradient_clip_max_norm=0.5,
+            lambda_gae=0.95,
+            checkpoint_interval_timesteps=10000,
+            evaluation_interval_timesteps=50000,
+            weight_decay=0.0,
+            normalize_advantages=True,
+            enable_value_clipping=False,
+            lr_schedule_type=None,
+            lr_schedule_kwargs=None,
+            lr_schedule_step_on="epoch",
+        ),
+        evaluation=EvaluationConfig(
+            enable_periodic_evaluation=False,
+            strategy="single_opponent",
+            num_games=1,
+            max_concurrent_games=1,
+            timeout_per_game=None,
+            opponent_type="random",
+            evaluation_interval_timesteps=50000,
+            max_moves_per_game=500,
+            randomize_positions=False,
+            random_seed=None,
+            save_games=False,
+            save_path=None,
+            log_file_path_eval="eval_log.txt",
+            log_level="INFO",
+            wandb_log_eval=False,
+            update_elo=False,
+            elo_registry_path=None,
+            agent_id=None,
+            opponent_id=None,
+            previous_model_pool_size=1,
+            enable_in_memory_evaluation=False,
+            model_weight_cache_size=1,
+            enable_parallel_execution=False,
+            process_restart_threshold=100,
+            temp_agent_device="cpu",
+            clear_cache_after_evaluation=True,
+        ),
+        logging=LoggingConfig(
+            log_file="test.log",
+            model_dir="/tmp/test_models",
+            run_name=None,
+        ),
+        wandb=WandBConfig(
+            enabled=False,
+            project="test-project",
+            entity=None,
+            run_name_prefix="test",
+            watch_model=False,
+            watch_log_freq=1000,
+            watch_log_type="all",
+            log_model_artifact=False,
+        ),
+        parallel=ParallelConfig(
+            enabled=False,
+            num_workers=1,
+            batch_size=32,
+            sync_interval=100,
+            compression_enabled=False,
+            timeout_seconds=10.0,
+            max_queue_size=1000,
+            worker_seed_offset=1000,
+        ),
+        display=DisplayConfig(
+            enable_board_display=False,
+            enable_trend_visualization=False,
+            enable_elo_ratings=False,
+            enable_enhanced_layout=False,
+            display_moves=False,
+            turn_tick=0.0,
+            board_unicode_pieces=False,
+            board_cell_width=5,
+            board_cell_height=3,
+            board_highlight_last_move=False,
+            sparkline_width=15,
+            trend_history_length=100,
+            elo_initial_rating=1500.0,
+            elo_k_factor=32.0,
+            dashboard_height_ratio=2,
+            progress_bar_height=4,
+            show_text_moves=False,
+            move_list_length=10,
+            moves_latest_top=True,
+            moves_flash_ms=0,
+            show_moves_trend=False,
+            show_completion_rate=False,
+            show_enhanced_win_rates=False,
+            show_turns_trend=False,
+            metrics_window_size=100,
+            trend_smoothing_factor=0.1,
+            metrics_panel_height=6,
+            enable_trendlines=False,
+            log_layer_keyword_filters=["stem", "policy_head", "value_head"],
+        ),
+    )
+
+
+@pytest.fixture
+def mock_feature_spec():
+    """Create a consistent mock feature spec."""
+    mock_spec = Mock()
+    mock_spec.num_planes = 46
+    return mock_spec
+
+
 class TestModelManagerInitialization:
     """Test ModelManager initialization and configuration."""
 
@@ -187,7 +324,7 @@ class TestModelManagerInitialization:
         self,
         mock_model_factory,
         mock_feature_specs,
-        mock_config,
+        minimal_model_manager_config,
         mock_args,
         device,
         logger_func,
@@ -198,10 +335,10 @@ class TestModelManagerInitialization:
         mock_model_factory.return_value = Mock()
 
         # Create ModelManager
-        manager = ModelManager(mock_config, mock_args, device, logger_func)
+        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
 
         # Verify initialization
-        assert manager.config == mock_config
+        assert manager.config == minimal_model_manager_config
         assert manager.args == mock_args
         assert manager.device == device
         assert manager.logger_func == logger_func
@@ -210,7 +347,7 @@ class TestModelManagerInitialization:
         assert manager.checkpoint_data is None
 
         # Verify feature setup
-        assert manager.input_features == mock_config.training.input_features
+        assert manager.input_features == minimal_model_manager_config.training.input_features
         assert manager.obs_shape == (46, 9, 9)
 
         # Verify mixed precision setup for CPU
@@ -223,7 +360,7 @@ class TestModelManagerInitialization:
         self,
         mock_model_factory,
         mock_feature_specs,
-        mock_config,
+        minimal_model_manager_config,
         device,
         logger_func,
     ):
@@ -242,7 +379,7 @@ class TestModelManagerInitialization:
         )
 
         # Create ModelManager
-        manager = ModelManager(mock_config, args_with_overrides, device, logger_func)
+        manager = ModelManager(minimal_model_manager_config, args_with_overrides, device, logger_func)
 
         # Verify args override config values
         assert manager.input_features == "custom"
@@ -262,7 +399,7 @@ class TestModelManagerInitialization:
         mock_model_factory,
         mock_feature_specs,
         mock_grad_scaler,
-        mock_config,
+        minimal_model_manager_config,
         mock_args,
         logger_func,
     ):
@@ -274,13 +411,13 @@ class TestModelManagerInitialization:
         mock_grad_scaler.return_value = mock_scaler_instance
 
         # Enable mixed precision in config
-        mock_config.training.mixed_precision = True
+        minimal_model_manager_config.training.mixed_precision = True
 
         # Use CUDA device
         cuda_device = torch.device("cuda")
 
         # Create ModelManager
-        manager = ModelManager(mock_config, mock_args, cuda_device, logger_func)
+        manager = ModelManager(minimal_model_manager_config, mock_args, cuda_device, logger_func)
 
         # Verify mixed precision is enabled
         assert manager.use_mixed_precision is True
@@ -293,7 +430,7 @@ class TestModelManagerInitialization:
         self,
         mock_model_factory,
         mock_feature_specs,
-        mock_config,
+        minimal_model_manager_config,
         mock_args,
         device,
         logger_func,
@@ -302,21 +439,20 @@ class TestModelManagerInitialization:
         # Setup mocks
         mock_feature_specs.__getitem__.return_value = Mock(num_planes=46)
         mock_model_factory.return_value = Mock()
-        mock_logger = Mock()
 
         # Enable mixed precision in config (but device is CPU)
-        mock_config.training.mixed_precision = True
+        minimal_model_manager_config.training.mixed_precision = True
 
         # Create ModelManager
-        manager = ModelManager(mock_config, mock_args, device, mock_logger)
+        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
 
         # Verify mixed precision is disabled with warning
         assert manager.use_mixed_precision is False
         assert manager.scaler is None
 
         # Verify warning was logged
-        mock_logger.assert_called()
-        warning_call = mock_logger.call_args[0][0]
+        logger_func.assert_called()
+        warning_call = logger_func.call_args[0][0]
         assert (
             "Mixed precision training requested but CUDA is not available"
             in warning_call
@@ -332,7 +468,7 @@ class TestModelManagerUtilities:
         self,
         mock_model_factory,
         mock_features,
-        mock_config,
+        minimal_model_manager_config,
         mock_args,
         device,
         logger_func,
@@ -344,18 +480,18 @@ class TestModelManagerUtilities:
         mock_model_factory.return_value = Mock()
 
         # Create ModelManager
-        manager = ModelManager(mock_config, mock_args, device, logger_func)
+        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
 
         # Get model info
         info = manager.get_model_info()
 
         # Verify returned information
         expected_info = {
-            "model_type": mock_config.training.model_type,
-            "input_features": mock_config.training.input_features,
-            "tower_depth": mock_config.training.tower_depth,
-            "tower_width": mock_config.training.tower_width,
-            "se_ratio": mock_config.training.se_ratio,
+            "model_type": minimal_model_manager_config.training.model_type,
+            "input_features": minimal_model_manager_config.training.input_features,
+            "tower_depth": minimal_model_manager_config.training.tower_depth,
+            "tower_width": minimal_model_manager_config.training.tower_width,
+            "se_ratio": minimal_model_manager_config.training.se_ratio,
             "obs_shape": (46, 9, 9),
             "num_planes": 46,
             "use_mixed_precision": False,  # CPU device
@@ -370,7 +506,7 @@ class TestModelManagerUtilities:
         self,
         mock_model_factory,
         mock_features,
-        mock_config,
+        minimal_model_manager_config,
         mock_args,
         device,
         logger_func,
@@ -386,19 +522,19 @@ class TestModelManagerUtilities:
         mock_model_factory.return_value = mock_model
 
         # Create ModelManager
-        manager = ModelManager(mock_config, mock_args, device, logger_func)
+        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
 
         # Create model
         created_model = manager.create_model()
 
         # Verify model factory was called with correct parameters
         mock_model_factory.assert_called_once_with(
-            model_type=mock_config.training.model_type,
+            model_type=minimal_model_manager_config.training.model_type,
             obs_shape=(46, 9, 9),
-            num_actions=mock_config.env.num_actions_total,
-            tower_depth=mock_config.training.tower_depth,
-            tower_width=mock_config.training.tower_width,
-            se_ratio=0.1,  # se_ratio is 0.1 in mock config
+            num_actions=minimal_model_manager_config.env.num_actions_total,
+            tower_depth=minimal_model_manager_config.training.tower_depth,
+            tower_width=minimal_model_manager_config.training.tower_width,
+            se_ratio=minimal_model_manager_config.training.se_ratio,
         )
 
         # Verify model was moved to device

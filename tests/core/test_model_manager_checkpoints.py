@@ -138,6 +138,92 @@ def temp_dir():
         yield tmpdir
 
 
+@pytest.fixture
+def minimal_model_manager_config():
+    """Create a minimal AppConfig for ModelManager testing."""
+    return AppConfig(
+        env=EnvConfig(
+            device="cpu",
+            num_actions_total=13527,
+            input_channels=46,
+            seed=42,
+            max_moves_per_game=500,
+        ),
+        training=TrainingConfig(
+            total_timesteps=1000,
+            steps_per_epoch=64,
+            ppo_epochs=2,
+            minibatch_size=32,
+            learning_rate=3e-4,
+            gamma=0.99,
+            clip_epsilon=0.2,
+            value_loss_coeff=0.5,
+            entropy_coef=0.01,
+            render_every_steps=1,
+            refresh_per_second=4,
+            enable_spinner=False,
+            input_features="core46",
+            tower_depth=9,
+            tower_width=256,
+            se_ratio=0.25,
+            model_type="resnet",
+            mixed_precision=False,
+            ddp=False,
+            gradient_clip_max_norm=0.5,
+            lambda_gae=0.95,
+            checkpoint_interval_timesteps=10000,
+            evaluation_interval_timesteps=50000,
+            weight_decay=0.0,
+            normalize_advantages=True,
+            lr_schedule_type=None,
+            lr_schedule_kwargs=None,
+            lr_schedule_step_on="epoch",
+        ),
+        evaluation=EvaluationConfig(
+            enable_periodic_evaluation=False,
+            num_games=1,
+            opponent_type="random",
+            evaluation_interval_timesteps=50000,
+            max_moves_per_game=500,
+            log_file_path_eval="eval_log.txt",
+            wandb_log_eval=False,
+        ),
+        logging=LoggingConfig(
+            log_file="test.log",
+            model_dir="/tmp/test_models",
+            run_name=None,
+        ),
+        wandb=WandBConfig(
+            enabled=False,
+            project="test-project",
+            entity=None,
+            run_name_prefix="test",
+            watch_model=False,
+            watch_log_freq=1000,
+            watch_log_type="all",
+            log_model_artifact=False,
+        ),
+        parallel=ParallelConfig(
+            enabled=False,
+            num_workers=1,
+            batch_size=32,
+            sync_interval=100,
+            compression_enabled=False,
+            timeout_seconds=10.0,
+            max_queue_size=1000,
+            worker_seed_offset=1000,
+        ),
+    )
+
+
+@pytest.fixture
+def mock_feature_spec():
+    """Create a consistent mock feature spec."""
+    mock_spec = Mock()
+    mock_spec.num_planes = 46
+    return mock_spec
+
+
 class TestModelManagerCheckpointHandling:
     """Test checkpoint loading and resuming functionality."""
 
@@ -149,15 +235,14 @@ class TestModelManagerCheckpointHandling:
         mock_find_checkpoint,
         mock_model_factory,
         mock_feature_specs,
-        mock_config,
+        minimal_model_manager_config,
         device,
         logger_func,
         temp_dir,
+        mock_feature_spec,
     ):
         """Test resuming from latest checkpoint when found."""
         # Setup mocks
-        mock_feature_spec = Mock()
-        mock_feature_spec.num_planes = 46
         mock_feature_specs["core46"] = mock_feature_spec
 
         mock_model = Mock()
@@ -171,7 +256,7 @@ class TestModelManagerCheckpointHandling:
         args = MockArgs(resume="latest")
 
         # Create ModelManager
-        manager = ModelManager(mock_config, args, device, logger_func)
+        manager = ModelManager(minimal_model_manager_config, args, device, logger_func)
 
         # Create mock agent
         mock_agent = Mock()
@@ -194,17 +279,16 @@ class TestModelManagerCheckpointHandling:
         self,
         mock_find_checkpoint,
         mock_model_factory,
-        mock_features,
-        mock_config,
+        mock_feature_specs,
+        minimal_model_manager_config,
         device,
         logger_func,
         temp_dir,
+        mock_feature_spec,
     ):
         """Test resuming when no checkpoint found."""
         # Setup mocks
-        mock_feature_spec = Mock()
-        mock_feature_spec.num_planes = 46
-        mock_features.FEATURE_SPECS = {"core46": mock_feature_spec}
+        mock_feature_specs["core46"] = mock_feature_spec
 
         mock_model = Mock()
         mock_model.to.return_value = mock_model
@@ -216,7 +300,7 @@ class TestModelManagerCheckpointHandling:
         args = MockArgs(resume="latest")
 
         # Create ModelManager
-        manager = ModelManager(mock_config, args, device, logger_func)
+        manager = ModelManager(minimal_model_manager_config, args, device, logger_func)
 
         # Create mock agent
         mock_agent = Mock()
@@ -237,15 +321,14 @@ class TestModelManagerCheckpointHandling:
         mock_os_path_exists,  # Add mock for os.path.exists
         mock_model_factory,
         mock_features,
-        mock_config,
+        minimal_model_manager_config,
         device,
         logger_func,
         temp_dir,
+        mock_feature_spec,
     ):
         """Test resuming from explicit checkpoint path."""
         # Setup mocks
-        mock_feature_spec = Mock()
-        mock_feature_spec.num_planes = 46
         mock_features.FEATURE_SPECS = {"core46": mock_feature_spec}
 
         mock_model = Mock()
@@ -259,7 +342,7 @@ class TestModelManagerCheckpointHandling:
         args = MockArgs(resume=checkpoint_path)
 
         # Create ModelManager
-        manager = ModelManager(mock_config, args, device, logger_func)
+        manager = ModelManager(minimal_model_manager_config, args, device, logger_func)
 
         # Create mock agent
         mock_agent = Mock()
@@ -287,7 +370,7 @@ class TestModelManagerArtifacts:
         mock_wandb,
         mock_model_factory,
         mock_features,
-        mock_config,
+        minimal_model_manager_config,
         mock_args,
         device,
         logger_func,
@@ -314,7 +397,7 @@ class TestModelManagerArtifacts:
         mock_wandb.Artifact.return_value = mock_artifact
 
         # Create ModelManager
-        manager = ModelManager(mock_config, mock_args, device, logger_func)
+        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
 
         # Test artifact creation
         result = manager.create_model_artifact(
@@ -341,7 +424,7 @@ class TestModelManagerArtifacts:
         self,
         mock_model_factory,
         mock_features,
-        mock_config,
+        minimal_model_manager_config,
         mock_args,
         device,
         logger_func,
@@ -357,7 +440,7 @@ class TestModelManagerArtifacts:
         mock_model_factory.return_value = mock_model
 
         # Create ModelManager
-        manager = ModelManager(mock_config, mock_args, device, logger_func)
+        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
 
         # Test artifact creation with WandB inactive
         result = manager.create_model_artifact(
@@ -378,7 +461,7 @@ class TestModelManagerArtifacts:
         mock_wandb,
         mock_model_factory,
         mock_features,
-        mock_config,
+        minimal_model_manager_config,
         mock_args,
         device,
         logger_func,
@@ -397,7 +480,7 @@ class TestModelManagerArtifacts:
         mock_wandb.run = Mock()  # Mock run object to simulate active W&B
 
         # Create ModelManager
-        manager = ModelManager(mock_config, mock_args, device, logger_func)
+        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
 
         # Test artifact creation with missing file
         result = manager.create_model_artifact(
@@ -423,7 +506,7 @@ class TestModelManagerSaving:
         self,
         mock_model_factory,
         mock_features,
-        mock_config,
+        minimal_model_manager_config,
         mock_args,
         device,
         logger_func,
@@ -440,7 +523,7 @@ class TestModelManagerSaving:
         mock_model_factory.return_value = mock_model
 
         # Create ModelManager
-        manager = ModelManager(mock_config, mock_args, device, logger_func)
+        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
 
         # Create mock agent
         mock_agent = Mock()
@@ -473,7 +556,7 @@ class TestModelManagerSaving:
         self,
         mock_model_factory,
         mock_features,
-        mock_config,
+        minimal_model_manager_config,
         mock_args,
         device,
         logger_func,
@@ -490,7 +573,7 @@ class TestModelManagerSaving:
         mock_model_factory.return_value = mock_model
 
         # Create ModelManager
-        manager = ModelManager(mock_config, mock_args, device, logger_func)
+        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
 
         # Create mock agent
         mock_agent = Mock()
@@ -526,7 +609,7 @@ class TestModelManagerSaving:
         self,
         mock_model_factory,
         mock_features,
-        mock_config,
+        minimal_model_manager_config,
         mock_args,
         device,
         logger_func,
@@ -543,7 +626,7 @@ class TestModelManagerSaving:
         mock_model_factory.return_value = mock_model
 
         # Create ModelManager
-        manager = ModelManager(mock_config, mock_args, device, logger_func)
+        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
 
         # Create mock agent
         mock_agent = Mock()
@@ -578,7 +661,7 @@ class TestModelManagerEnhancedCheckpointHandling:
         mock_find_checkpoint,
         mock_model_factory,
         mock_features,
-        mock_config,
+        minimal_model_manager_config,
         device,
         logger_func,
     ):
@@ -594,7 +677,7 @@ class TestModelManagerEnhancedCheckpointHandling:
 
         # Mock find_latest_checkpoint to return the latest checkpoint
         latest_checkpoint_path = os.path.join(
-            mock_config.logging.model_dir, "checkpoint_2000.pth"
+            minimal_model_manager_config.logging.model_dir, "checkpoint_2000.pth"
         )
         mock_find_checkpoint.return_value = latest_checkpoint_path
 
@@ -611,7 +694,7 @@ class TestModelManagerEnhancedCheckpointHandling:
 
         # Create args with resume="latest"
         args_with_resume = MockArgs(resume="latest")
-        manager = ModelManager(mock_config, args_with_resume, device, logger_func)
+        manager = ModelManager(minimal_model_manager_config, args_with_resume, device, logger_func)
         manager.create_model()
 
         # Mock an agent for testing
@@ -620,7 +703,7 @@ class TestModelManagerEnhancedCheckpointHandling:
 
         # Test loading latest checkpoint
         result = manager.handle_checkpoint_resume(
-            mock_agent, mock_config.logging.model_dir
+            mock_agent, minimal_model_manager_config.logging.model_dir
         )
 
         assert result is True
@@ -636,7 +719,7 @@ class TestModelManagerEnhancedCheckpointHandling:
         mock_exists,
         mock_model_factory,
         mock_features,
-        mock_config,
+        minimal_model_manager_config,
         mock_args,
         device,
         logger_func,
@@ -654,7 +737,7 @@ class TestModelManagerEnhancedCheckpointHandling:
         # Mock specific checkpoint doesn't exist
         mock_exists.return_value = False
 
-        manager = ModelManager(mock_config, mock_args, device, logger_func)
+        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
         manager.create_model()
 
         mock_agent = Mock()
@@ -662,7 +745,7 @@ class TestModelManagerEnhancedCheckpointHandling:
         # Test loading specific non-existent checkpoint - set args to use specific path
         args_with_resume = MockArgs(resume="checkpoint_9999.pth")
         manager_with_resume = ModelManager(
-            mock_config, args_with_resume, device, logger_func
+            minimal_model_manager_config, args_with_resume, device, logger_func
         )
         manager_with_resume.create_model()
 
@@ -685,7 +768,7 @@ class TestModelManagerEnhancedCheckpointHandling:
         mock_exists,
         mock_model_factory,
         mock_features,
-        mock_config,
+        minimal_model_manager_config,
         mock_args,
         device,
         logger_func,
@@ -704,7 +787,7 @@ class TestModelManagerEnhancedCheckpointHandling:
         # Mock corrupted checkpoint (missing required keys)
         mock_torch_load.return_value = {"incomplete": "data"}
 
-        manager = ModelManager(mock_config, mock_args, device, logger_func)
+        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
         manager.create_model()
 
         mock_agent = Mock()
@@ -713,7 +796,7 @@ class TestModelManagerEnhancedCheckpointHandling:
         # Test loading corrupted checkpoint
         args_with_resume = MockArgs(resume="latest")
         manager_with_resume = ModelManager(
-            mock_config, args_with_resume, device, logger_func
+            minimal_model_manager_config, args_with_resume, device, logger_func
         )
         manager_with_resume.create_model()
 
@@ -735,7 +818,7 @@ class TestModelManagerEnhancedCheckpointHandling:
         self,
         mock_model_factory,
         mock_features,
-        mock_config,
+        minimal_model_manager_config,
         mock_args,
         device,
         logger_func,
@@ -753,9 +836,9 @@ class TestModelManagerEnhancedCheckpointHandling:
 
         # Use a non-existent subdirectory
         nonexistent_model_dir = os.path.join(temp_dir, "models", "subdir")
-        mock_config.logging.model_dir = nonexistent_model_dir
+        minimal_model_manager_config.logging.model_dir = nonexistent_model_dir
 
-        manager = ModelManager(mock_config, mock_args, device, logger_func)
+        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
         manager.create_model()
 
         mock_agent = Mock()
@@ -805,7 +888,7 @@ class TestModelManagerWandBArtifactEnhancements:
         mock_artifact_class,
         mock_model_factory,
         mock_features,
-        mock_config,
+        minimal_model_manager_config,
         mock_args,
         device,
         logger_func,
@@ -830,7 +913,7 @@ class TestModelManagerWandBArtifactEnhancements:
         with open(model_path, "w", encoding="utf-8") as f:
             f.write("dummy model data")
 
-        manager = ModelManager(mock_config, mock_args, device, logger_func)
+        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
 
         # Test artifact creation with metadata
         result = manager.create_model_artifact(
@@ -861,7 +944,7 @@ class TestModelManagerWandBArtifactEnhancements:
         mock_artifact_class,
         mock_model_factory,
         mock_features,
-        mock_config,
+        minimal_model_manager_config,
         mock_args,
         device,
         logger_func,
@@ -886,7 +969,7 @@ class TestModelManagerWandBArtifactEnhancements:
         with open(model_path, "w", encoding="utf-8") as f:
             f.write("dummy model data")
 
-        manager = ModelManager(mock_config, mock_args, device, logger_func)
+        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
 
         # Verify the mock_log_artifact is configured to raise an error
         assert mock_log_artifact.side_effect is not None
@@ -907,7 +990,7 @@ class TestModelManagerWandBArtifactEnhancements:
 
     def test_create_model_artifact_wandb_inactive(
         self,
-        mock_config,
+        minimal_model_manager_config,
         mock_args,
         device,
         logger_func,
@@ -933,7 +1016,7 @@ class TestModelManagerWandBArtifactEnhancements:
             with open(model_path, "w", encoding="utf-8") as f:
                 f.write("dummy model data")
 
-            manager = ModelManager(mock_config, mock_args, device, logger_func)
+            manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
 
             # Test with W&B inactive
             result = manager.create_model_artifact(
