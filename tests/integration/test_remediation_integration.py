@@ -23,7 +23,7 @@ from keisei.utils.profiling import (
 )
 
 # Project root path resolution
-PROJECT_ROOT = Path(__file__).resolve().parents[1]  # Go up from tests/ to project root
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 @pytest.mark.integration

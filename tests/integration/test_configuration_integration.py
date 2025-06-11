@@ -17,7 +17,7 @@ from keisei.utils import load_config
 def test_config_schema_matches_yaml():
     """Test that all fields in default_config.yaml are defined in the schema."""
     # Load raw YAML
-    config_path = Path(__file__).parent.parent / "default_config.yaml"
+    config_path = Path(__file__).parent.parent.parent / "default_config.yaml"
     with open(config_path, "r", encoding="utf-8") as f:
         yaml_data = yaml.safe_load(f)
 

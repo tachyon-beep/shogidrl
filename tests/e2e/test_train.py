@@ -6,6 +6,7 @@ import json as pyjson
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 import torch
@@ -33,7 +34,8 @@ VALUE_LOSS_COEFF = 0.5
 ENTROPY_COEFF = 0.01
 DEVICE = "cpu"
 
-TRAIN_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "train.py"))
+ROOT_DIR = Path(__file__).parent.parent.parent  # Go up three levels for project root
+TRAIN_PATH = str(ROOT_DIR / "train.py")  # Correct path to train.py
 
 
 @pytest.mark.slow

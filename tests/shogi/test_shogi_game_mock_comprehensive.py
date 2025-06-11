@@ -13,7 +13,7 @@ import pytest
 
 from keisei.shogi import Color, PieceType, ShogiGame
 from keisei.shogi.shogi_core_definitions import Piece
-from tests.mock_utilities import setup_pytorch_mock_environment
+from tests.utils.mock_utilities import setup_pytorch_mock_environment
 
 INPUT_CHANNELS = 46  # Use the default from config_schema for tests
 

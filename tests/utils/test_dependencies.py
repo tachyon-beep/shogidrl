@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 # Project root path resolution - works from any test file
-PROJECT_ROOT = Path(__file__).resolve().parents[1]  # Go up from tests/ to project root
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 class TestDependencyStructure:

@@ -32,7 +32,7 @@ from keisei.shogi.shogi_game_io import (
     generate_neural_network_observation,
     sfen_to_move_tuple,
 )
-from tests.mock_utilities import setup_pytorch_mock_environment
+from tests.utils.mock_utilities import setup_pytorch_mock_environment
 
 INPUT_CHANNELS = 46  # Use the default from config_schema for tests
 
