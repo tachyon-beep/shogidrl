@@ -225,6 +225,7 @@ def minimal_model_manager_config():
             evaluation_interval_timesteps=50000,
             weight_decay=0.0,
             normalize_advantages=True,
+            enable_value_clipping=False,
             lr_schedule_type=None,
             lr_schedule_kwargs=None,
             lr_schedule_step_on="epoch",
