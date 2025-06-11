@@ -712,6 +712,7 @@ class TestPPOAgentSchedulerEdgeCases:
         # Step scheduler many times to reach very small LR
         if agent.scheduler is not None:
             for _ in range(100):  # Many steps
+                agent.optimizer.step()  # ADDED
                 agent.scheduler.step()
 
             final_lr = agent.optimizer.param_groups[0]["lr"]
@@ -737,6 +738,7 @@ class TestPPOAgentSchedulerEdgeCases:
         # Step scheduler to change state
         if agent.scheduler is not None:
             for _ in range(5):
+                agent.optimizer.step()  # ADDED
                 agent.scheduler.step()
 
             # Save and load model
@@ -828,6 +830,7 @@ class TestPPOAgentSchedulerEdgeCases:
 
                 # Should be able to step if scheduler exists
                 if agent.scheduler is not None:
+                    agent.optimizer.step()  # ADDED
                     agent.scheduler.step()
                     new_lr = agent.optimizer.param_groups[0]["lr"]
                     assert new_lr > 0

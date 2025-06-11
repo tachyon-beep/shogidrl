@@ -56,10 +56,20 @@ class SchedulerFactory:
         optimizer: torch.optim.Optimizer, total_steps: int, kwargs: Dict[str, Any]
     ) -> LambdaLR:
         """Create linear decay scheduler."""
-        final_lr_fraction = kwargs.get("final_lr_fraction", 0.1)
+        if total_steps <= 0:
+            raise ValueError("total_steps must be a positive integer for linear scheduler")
+        # Provide default if not present, to support tests relying on defaults
+        final_lr_fraction = kwargs.get("final_lr_fraction", 0.1) 
 
         def linear_decay(step: int) -> float:
-            return max(final_lr_fraction, 1.0 - step / total_steps)
+            # step is 0-indexed by LambdaLR for the *current* epoch/step.
+            # It represents the number of times scheduler.step() has been called.
+            if step > total_steps:
+                current_step = total_steps
+            else:
+                current_step = step
+            progress = current_step / total_steps
+            return (1.0 - progress) * (1.0 - final_lr_fraction) + final_lr_fraction
 
         return LambdaLR(optimizer, lr_lambda=linear_decay)
 
@@ -68,6 +78,8 @@ class SchedulerFactory:
         optimizer: torch.optim.Optimizer, total_steps: int, kwargs: Dict[str, Any]
     ) -> CosineAnnealingLR:
         """Create cosine annealing scheduler."""
+        if total_steps <= 0:
+            raise ValueError("total_steps must be a positive integer for cosine scheduler")
         eta_min_fraction = kwargs.get("eta_min_fraction", 0.0)
         initial_lr = optimizer.param_groups[0]["lr"]
         eta_min = initial_lr * eta_min_fraction
@@ -79,7 +91,8 @@ class SchedulerFactory:
         optimizer: torch.optim.Optimizer, kwargs: Dict[str, Any]
     ) -> ExponentialLR:
         """Create exponential decay scheduler."""
-        gamma = kwargs.get("gamma", 0.995)
+        # Provide default if not present
+        gamma = kwargs.get("gamma", 0.995) 
         return ExponentialLR(optimizer, gamma=gamma)
 
     @staticmethod
@@ -87,6 +100,7 @@ class SchedulerFactory:
         optimizer: torch.optim.Optimizer, kwargs: Dict[str, Any]
     ) -> StepLR:
         """Create step decay scheduler."""
+        # Provide defaults if not present
         step_size = kwargs.get("step_size", 1000)
         gamma = kwargs.get("gamma", 0.5)
         return StepLR(optimizer, step_size=step_size, gamma=gamma)
