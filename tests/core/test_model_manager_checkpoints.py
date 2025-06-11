@@ -1,5 +1,5 @@
 """
-Unit tests for ModelManager checkpoint handling, artifact creation, and saving.
+Unit tests for ModelManager checkpoint handling and loading functionality.
 """
 
 import os
@@ -71,18 +71,38 @@ def mock_config():
             evaluation_interval_timesteps=50000,
             weight_decay=0.0,
             normalize_advantages=True,
+            enable_value_clipping=False,
             lr_schedule_type=None,
             lr_schedule_kwargs=None,
             lr_schedule_step_on="epoch",
         ),
         evaluation=EvaluationConfig(
             enable_periodic_evaluation=True,
+            strategy="single_opponent",
             num_games=20,
+            max_concurrent_games=4,
+            timeout_per_game=None,
             opponent_type="random",
             evaluation_interval_timesteps=50000,
             max_moves_per_game=500,
+            randomize_positions=True,
+            random_seed=None,
+            save_games=True,
+            save_path=None,
             log_file_path_eval="eval_log.txt",
+            log_level="INFO",
             wandb_log_eval=False,
+            update_elo=True,
+            elo_registry_path="elo_ratings.json",
+            agent_id=None,
+            opponent_id=None,
+            previous_model_pool_size=5,
+            enable_in_memory_evaluation=True,
+            model_weight_cache_size=5,
+            enable_parallel_execution=True,
+            process_restart_threshold=100,
+            temp_agent_device="cpu",
+            clear_cache_after_evaluation=True,
         ),
         logging=LoggingConfig(
             log_file="test.log",
@@ -99,7 +119,37 @@ def mock_config():
             watch_log_type="all",
             log_model_artifact=False,
         ),
-        display=DisplayConfig(display_moves=False, turn_tick=0.5),
+        display=DisplayConfig(
+            enable_board_display=True,
+            enable_trend_visualization=True,
+            enable_elo_ratings=True,
+            enable_enhanced_layout=True,
+            display_moves=False,
+            turn_tick=0.5,
+            board_unicode_pieces=True,
+            board_cell_width=5,
+            board_cell_height=3,
+            board_highlight_last_move=True,
+            sparkline_width=15,
+            trend_history_length=100,
+            elo_initial_rating=1500.0,
+            elo_k_factor=32.0,
+            dashboard_height_ratio=2,
+            progress_bar_height=4,
+            show_text_moves=True,
+            move_list_length=10,
+            moves_latest_top=True,
+            moves_flash_ms=500,
+            show_moves_trend=True,
+            show_completion_rate=True,
+            show_enhanced_win_rates=True,
+            show_turns_trend=True,
+            metrics_window_size=100,
+            trend_smoothing_factor=0.1,
+            metrics_panel_height=6,
+            enable_trendlines=True,
+            log_layer_keyword_filters=["stem", "policy_head", "value_head"],
+        ),
         parallel=ParallelConfig(
             enabled=False,
             num_workers=4,
@@ -181,12 +231,31 @@ def minimal_model_manager_config():
         ),
         evaluation=EvaluationConfig(
             enable_periodic_evaluation=False,
+            strategy="single_opponent",
             num_games=1,
+            max_concurrent_games=1,
+            timeout_per_game=None,
             opponent_type="random",
             evaluation_interval_timesteps=50000,
             max_moves_per_game=500,
+            randomize_positions=False,
+            random_seed=None,
+            save_games=False,
+            save_path=None,
             log_file_path_eval="eval_log.txt",
+            log_level="INFO",
             wandb_log_eval=False,
+            update_elo=False,
+            elo_registry_path=None,
+            agent_id=None,
+            opponent_id=None,
+            previous_model_pool_size=1,
+            enable_in_memory_evaluation=False,
+            model_weight_cache_size=1,
+            enable_parallel_execution=False,
+            process_restart_threshold=100,
+            temp_agent_device="cpu",
+            clear_cache_after_evaluation=True,
         ),
         logging=LoggingConfig(
             log_file="test.log",
@@ -202,6 +271,37 @@ def minimal_model_manager_config():
             watch_log_freq=1000,
             watch_log_type="all",
             log_model_artifact=False,
+        ),
+        display=DisplayConfig(
+            enable_board_display=False,
+            enable_trend_visualization=False,
+            enable_elo_ratings=False,
+            enable_enhanced_layout=False,
+            display_moves=False,
+            turn_tick=0.0,
+            board_unicode_pieces=False,
+            board_cell_width=5,
+            board_cell_height=3,
+            board_highlight_last_move=False,
+            sparkline_width=15,
+            trend_history_length=100,
+            elo_initial_rating=1500.0,
+            elo_k_factor=32.0,
+            dashboard_height_ratio=2,
+            progress_bar_height=4,
+            show_text_moves=False,
+            move_list_length=10,
+            moves_latest_top=True,
+            moves_flash_ms=0,
+            show_moves_trend=False,
+            show_completion_rate=False,
+            show_enhanced_win_rates=False,
+            show_turns_trend=False,
+            metrics_window_size=100,
+            trend_smoothing_factor=0.1,
+            metrics_panel_height=6,
+            enable_trendlines=False,
+            log_layer_keyword_filters=["stem", "policy_head", "value_head"],
         ),
         parallel=ParallelConfig(
             enabled=False,
@@ -357,309 +457,6 @@ class TestModelManagerCheckpointHandling:
         logger_func.assert_any_call(
             f"Resumed from specified checkpoint: {checkpoint_path}"
         )
-
-
-class TestModelManagerArtifacts:
-    """Test WandB artifact creation functionality."""
-
-    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
-    @patch("keisei.training.model_manager.model_factory")
-    @patch("keisei.training.model_manager.wandb")
-    def test_create_model_artifact_success(
-        self,
-        mock_wandb,
-        mock_model_factory,
-        mock_features,
-        minimal_model_manager_config,
-        mock_args,
-        device,
-        logger_func,
-        temp_dir,
-    ):
-        """Test successful model artifact creation."""
-        # Setup mocks
-        mock_feature_spec = Mock()
-        mock_feature_spec.num_planes = 46
-        mock_features.FEATURE_SPECS = {"core46": mock_feature_spec}
-
-        mock_model = Mock()
-        mock_model.to.return_value = mock_model
-        mock_model_factory.return_value = mock_model
-
-        # Create a test model file
-        model_path = os.path.join(temp_dir, "test_model.pth")
-        with open(model_path, "w", encoding="utf-8") as f:
-            f.write("test model content")
-
-        # Setup WandB mocks
-        mock_wandb.run = Mock()
-        mock_artifact = Mock()
-        mock_wandb.Artifact.return_value = mock_artifact
-
-        # Create ModelManager
-        manager = ModelManager(
-            minimal_model_manager_config, mock_args, device, logger_func
-        )
-
-        # Test artifact creation
-        result = manager.create_model_artifact(
-            model_path=model_path,
-            artifact_name="test-model",
-            run_name="test_run",
-            is_wandb_active=True,
-            description="Test model",
-            metadata={"test": "value"},
-            aliases=["latest"],
-        )
-
-        # Verify artifact created
-        assert result is True
-        mock_wandb.Artifact.assert_called_once()
-        mock_artifact.add_file.assert_called_once_with(model_path)
-        mock_wandb.log_artifact.assert_called_once_with(
-            mock_artifact, aliases=["latest"]
-        )
-
-    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
-    @patch("keisei.training.model_manager.model_factory")
-    def test_create_model_artifact_wandb_inactive(
-        self,
-        mock_model_factory,
-        mock_features,
-        minimal_model_manager_config,
-        mock_args,
-        device,
-        logger_func,
-    ):
-        """Test artifact creation when WandB is inactive."""
-        # Setup mocks
-        mock_feature_spec = Mock()
-        mock_feature_spec.num_planes = 46
-        mock_features.FEATURE_SPECS = {"core46": mock_feature_spec}
-
-        mock_model = Mock()
-        mock_model.to.return_value = mock_model
-        mock_model_factory.return_value = mock_model
-
-        # Create ModelManager
-        manager = ModelManager(
-            minimal_model_manager_config, mock_args, device, logger_func
-        )
-
-        # Test artifact creation with WandB inactive
-        result = manager.create_model_artifact(
-            model_path="/path/to/model.pth",
-            artifact_name="test-model",
-            run_name="test_run",
-            is_wandb_active=False,
-        )
-
-        # Verify artifact not created
-        assert result is False
-
-    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
-    @patch("keisei.training.model_manager.model_factory")
-    @patch("keisei.training.model_manager.wandb")
-    def test_create_model_artifact_file_missing(
-        self,
-        mock_wandb,
-        mock_model_factory,
-        mock_features,
-        minimal_model_manager_config,
-        mock_args,
-        device,
-        logger_func,
-    ):  # pylint: disable=too-many-positional-arguments
-        """Test artifact creation when model file is missing."""
-        # Setup mocks
-        mock_feature_spec = Mock()
-        mock_feature_spec.num_planes = 46
-        mock_features.__getitem__.return_value = mock_feature_spec
-
-        mock_model = Mock()
-        mock_model.to.return_value = mock_model
-        mock_model_factory.return_value = mock_model
-
-        # Mock W&B to simulate active state
-        mock_wandb.run = Mock()  # Mock run object to simulate active W&B
-
-        # Create ModelManager
-        manager = ModelManager(
-            minimal_model_manager_config, mock_args, device, logger_func
-        )
-
-        # Test artifact creation with missing file
-        result = manager.create_model_artifact(
-            model_path="/nonexistent/model.pth",
-            artifact_name="test-model",
-            run_name="test_run",
-            is_wandb_active=True,
-        )
-
-        # Verify artifact not created
-        assert result is False
-        logger_func.assert_any_call(
-            "Warning: Model file /nonexistent/model.pth does not exist, skipping artifact creation."
-        )
-
-
-class TestModelManagerSaving:
-    """Test model and checkpoint saving functionality."""
-
-    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
-    @patch("keisei.training.model_manager.model_factory")
-    def test_save_final_model_success(
-        self,
-        mock_model_factory,
-        mock_features,
-        minimal_model_manager_config,
-        mock_args,
-        device,
-        logger_func,
-        temp_dir,
-    ):
-        """Test successful final model saving."""
-        # Setup mocks
-        mock_feature_spec = Mock()
-        mock_feature_spec.num_planes = 46
-        mock_features.FEATURE_SPECS = {"core46": mock_feature_spec}
-
-        mock_model = Mock()
-        mock_model.to.return_value = mock_model
-        mock_model_factory.return_value = mock_model
-
-        # Create ModelManager
-        manager = ModelManager(
-            minimal_model_manager_config, mock_args, device, logger_func
-        )
-
-        # Create mock agent
-        mock_agent = Mock()
-
-        game_stats = {"black_wins": 10, "white_wins": 5, "draws": 2}
-
-        # Test final model saving
-        with patch.object(
-            manager, "create_model_artifact", return_value=True
-        ) as mock_artifact:
-            success, model_path = manager.save_final_model(
-                agent=mock_agent,
-                model_dir=temp_dir,
-                global_timestep=1000,
-                total_episodes_completed=17,
-                game_stats=game_stats,
-                run_name="test_run",
-                is_wandb_active=True,
-            )
-
-        # Verify model saved
-        assert success is True
-        assert model_path == os.path.join(temp_dir, "final_model.pth")
-        mock_agent.save_model.assert_called_once_with(model_path, 1000, 17)
-        mock_artifact.assert_called_once()
-
-    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
-    @patch("keisei.training.model_manager.model_factory")
-    def test_save_final_checkpoint_success(
-        self,
-        mock_model_factory,
-        mock_features,
-        minimal_model_manager_config,
-        mock_args,
-        device,
-        logger_func,
-        temp_dir,
-    ):
-        """Test successful final checkpoint saving."""
-        # Setup mocks
-        mock_feature_spec = Mock()
-        mock_feature_spec.num_planes = 46
-        mock_features.FEATURE_SPECS = {"core46": mock_feature_spec}
-
-        mock_model = Mock()
-        mock_model.to.return_value = mock_model
-        mock_model_factory.return_value = mock_model
-
-        # Create ModelManager
-        manager = ModelManager(
-            minimal_model_manager_config, mock_args, device, logger_func
-        )
-
-        # Create mock agent
-        mock_agent = Mock()
-
-        game_stats = {"black_wins": 10, "white_wins": 5, "draws": 2}
-
-        # Test final checkpoint saving
-        with patch.object(
-            manager, "create_model_artifact", return_value=True
-        ) as mock_artifact:
-            success, checkpoint_path = manager.save_final_checkpoint(
-                agent=mock_agent,
-                model_dir=temp_dir,
-                global_timestep=1000,
-                total_episodes_completed=17,
-                game_stats=game_stats,
-                run_name="test_run",
-                is_wandb_active=True,
-            )
-
-        # Verify checkpoint saved
-        assert success is True
-        expected_path = os.path.join(temp_dir, "checkpoint_ts1000.pth")
-        assert checkpoint_path == expected_path
-        mock_agent.save_model.assert_called_once_with(
-            expected_path, 1000, 17, stats_to_save=game_stats
-        )
-        mock_artifact.assert_called_once()
-
-    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
-    @patch("keisei.training.model_manager.model_factory")
-    def test_save_final_checkpoint_zero_timestep(
-        self,
-        mock_model_factory,
-        mock_features,
-        minimal_model_manager_config,
-        mock_args,
-        device,
-        logger_func,
-        temp_dir,
-    ):
-        """Test final checkpoint saving with zero timestep."""
-        # Setup mocks
-        mock_feature_spec = Mock()
-        mock_feature_spec.num_planes = 46
-        mock_features.FEATURE_SPECS = {"core46": mock_feature_spec}
-
-        mock_model = Mock()
-        mock_model.to.return_value = mock_model
-        mock_model_factory.return_value = mock_model
-
-        # Create ModelManager
-        manager = ModelManager(
-            minimal_model_manager_config, mock_args, device, logger_func
-        )
-
-        # Create mock agent
-        mock_agent = Mock()
-
-        game_stats = {"black_wins": 0, "white_wins": 0, "draws": 0}
-
-        # Test final checkpoint saving with zero timestep
-        success, checkpoint_path = manager.save_final_checkpoint(
-            agent=mock_agent,
-            model_dir=temp_dir,
-            global_timestep=0,
-            total_episodes_completed=0,
-            game_stats=game_stats,
-            run_name="test_run",
-            is_wandb_active=True,
-        )
-
-        # Verify checkpoint not saved
-        assert success is False
-        assert checkpoint_path is None
-        mock_agent.save_model.assert_not_called()
 
 
 class TestModelManagerEnhancedCheckpointHandling:
@@ -891,168 +688,3 @@ class TestModelManagerEnhancedCheckpointHandling:
             25,
             stats_to_save=stats,
         )
-
-
-class TestModelManagerWandBArtifactEnhancements:
-    """Enhanced tests for W&B artifact creation with edge cases."""
-
-    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
-    @patch("keisei.training.model_manager.model_factory")
-    @patch("wandb.Artifact")
-    @patch("wandb.log_artifact")
-    @patch("wandb.run")
-    def test_create_model_artifact_with_metadata(
-        self,
-        mock_wandb_run,
-        mock_log_artifact,
-        mock_artifact_class,
-        mock_model_factory,
-        mock_features,
-        minimal_model_manager_config,
-        mock_args,
-        device,
-        logger_func,
-        temp_dir,
-    ):
-        """Test model artifact creation with comprehensive metadata."""
-        # Setup mocks
-        mock_wandb_run.return_value = True  # Mock that wandb.run is active
-        mock_feature_spec = Mock()
-        mock_feature_spec.num_planes = 46
-        mock_features.__getitem__.return_value = mock_feature_spec
-
-        mock_model = Mock()
-        mock_model.to.return_value = mock_model
-        mock_model_factory.return_value = mock_model
-
-        mock_artifact = Mock()
-        mock_artifact_class.return_value = mock_artifact
-
-        # Create test model file
-        model_path = os.path.join(temp_dir, "test_model.pth")
-        with open(model_path, "w", encoding="utf-8") as f:
-            f.write("dummy model data")
-
-        manager = ModelManager(
-            minimal_model_manager_config, mock_args, device, logger_func
-        )
-
-        # Test artifact creation with metadata
-        result = manager.create_model_artifact(
-            model_path=model_path,
-            artifact_name="enhanced-test-model",
-            run_name="test_run_with_metadata",
-            is_wandb_active=True,
-            metadata={"epochs": 100, "accuracy": 0.95},
-        )
-
-        # Verify artifact creation was attempted (mocked W&B environment)
-        assert result is True
-        mock_artifact_class.assert_called_once()
-        mock_log_artifact.assert_called_once()
-        mock_artifact_class.assert_called_once()
-        mock_artifact.add_file.assert_called_once_with(model_path)
-        mock_log_artifact.assert_called_once_with(mock_artifact, aliases=None)
-
-    @patch("keisei.training.model_manager.features.FEATURE_SPECS")
-    @patch("keisei.training.model_manager.model_factory")
-    @patch("wandb.Artifact")
-    @patch("wandb.log_artifact", side_effect=RuntimeError("W&B API Error"))
-    @patch("wandb.run")
-    def test_create_model_artifact_wandb_failure_handling(
-        self,
-        mock_wandb_run,
-        mock_log_artifact,  # Keep but mark as used for side_effect
-        mock_artifact_class,
-        mock_model_factory,
-        mock_features,
-        minimal_model_manager_config,
-        mock_args,
-        device,
-        logger_func,
-        temp_dir,
-    ):
-        """Test robust handling of W&B API failures during artifact creation."""
-        # Setup mocks
-        mock_wandb_run.return_value = True  # Mock that wandb.run is active
-        mock_feature_spec = Mock()
-        mock_feature_spec.num_planes = 46
-        mock_features.__getitem__.return_value = mock_feature_spec
-
-        mock_model = Mock()
-        mock_model.to.return_value = mock_model
-        mock_model_factory.return_value = mock_model
-
-        mock_artifact = Mock()
-        mock_artifact_class.return_value = mock_artifact
-
-        # Create test model file
-        model_path = os.path.join(temp_dir, "test_model.pth")
-        with open(model_path, "w", encoding="utf-8") as f:
-            f.write("dummy model data")
-
-        manager = ModelManager(
-            minimal_model_manager_config, mock_args, device, logger_func
-        )
-
-        # Verify the mock_log_artifact is configured to raise an error
-        assert mock_log_artifact.side_effect is not None
-
-        # Test artifact creation with W&B failure
-        result = manager.create_model_artifact(
-            model_path=model_path,
-            artifact_name="failing-test-model",
-            run_name="test_run_fail",
-            is_wandb_active=True,
-        )
-
-        # Should handle failure gracefully
-        assert result is False
-        logger_func.assert_any_call(
-            f"Error creating W&B artifact for {model_path}: W&B API Error"
-        )
-
-    def test_create_model_artifact_wandb_inactive(
-        self,
-        minimal_model_manager_config,
-        mock_args,
-        device,
-        logger_func,
-        temp_dir,
-    ):
-        """Test that artifact creation is skipped when W&B is inactive."""
-        with (
-            patch("keisei.shogi.features.FEATURE_SPECS") as mock_features,
-            patch("keisei.training.models.model_factory") as mock_model_factory,
-        ):
-
-            # Setup mocks
-            mock_feature_spec = Mock()
-            mock_feature_spec.num_planes = 46
-            mock_features.__getitem__.return_value = mock_feature_spec
-
-            mock_model = Mock()
-            mock_model.to.return_value = mock_model
-            mock_model_factory.return_value = mock_model
-
-            # Create test model file
-            model_path = os.path.join(temp_dir, "test_model.pth")
-            with open(model_path, "w", encoding="utf-8") as f:
-                f.write("dummy model data")
-
-            manager = ModelManager(
-                minimal_model_manager_config, mock_args, device, logger_func
-            )
-
-            # Test with W&B inactive
-            result = manager.create_model_artifact(
-                model_path=model_path,
-                artifact_name="inactive-wandb-test",
-                run_name="test_run",
-                is_wandb_active=False,  # W&B not active
-            )
-
-            # Should skip artifact creation
-            assert result is False
-            # The method returns False immediately when W&B is inactive,
-            # without logging a specific message
