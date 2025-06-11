@@ -10,11 +10,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 import torch
 
-from keisei.config_schema import (
+from keisei.config_schema import (  # Corrected: TrainingConfig is directly in config_schema
     AppConfig,
     EvaluationConfig,
     TrainingConfig,
-)  # Corrected: TrainingConfig is directly in config_schema
+)
 from keisei.evaluation.core.model_manager import ModelWeightManager
 from keisei.utils.agent_loading import load_evaluation_agent
 from tests.evaluation.conftest import INPUT_CHANNELS

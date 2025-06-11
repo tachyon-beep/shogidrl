@@ -56,7 +56,9 @@ def test_experience_buffer_compute_advantages_and_returns():
     lambda_gae = 0.95
     buf = ExperienceBuffer(buffer_size=3, gamma=gamma, lambda_gae=lambda_gae)
     mapper = PolicyOutputMapper()
-    dummy_legal_mask = torch.zeros(mapper.get_total_actions(), dtype=torch.bool, device=buf.device)
+    dummy_legal_mask = torch.zeros(
+        mapper.get_total_actions(), dtype=torch.bool, device=buf.device
+    )
 
     # Add test data: simple sequence with known rewards and values
     rewards = [1.0, 2.0, 3.0]
@@ -66,7 +68,10 @@ def test_experience_buffer_compute_advantages_and_returns():
     for i in range(3):
         buf.add(
             obs=torch.randn(
-                CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device=buf.device
+                CORE_OBSERVATION_CHANNELS,
+                SHOGI_BOARD_SIZE,
+                SHOGI_BOARD_SIZE,
+                device=buf.device,
             ),  # Dummy observation
             action=i,
             reward=rewards[i],

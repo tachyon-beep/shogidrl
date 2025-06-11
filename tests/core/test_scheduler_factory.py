@@ -231,7 +231,9 @@ class TestSchedulerFactoryIntegration:
 
         for schedule_type in supported_types:
             scheduler = SchedulerFactory.create_scheduler(
-                optimizer=integration_optimizer, schedule_type=schedule_type, total_steps=100
+                optimizer=integration_optimizer,
+                schedule_type=schedule_type,
+                total_steps=100,
             )
             assert scheduler is not None, f"Failed to create {schedule_type} scheduler"
 
@@ -240,8 +242,12 @@ class TestSchedulerFactoryIntegration:
         dummy_param1 = torch.nn.Parameter(torch.randn(1))
         dummy_param2 = torch.nn.Parameter(torch.randn(1))
 
-        optimizer1 = Adam([dummy_param1], lr=1e-3, weight_decay=0.0) # ADDED weight_decay
-        optimizer2 = Adam([dummy_param2], lr=1e-3, weight_decay=0.0) # ADDED weight_decay
+        optimizer1 = Adam(
+            [dummy_param1], lr=1e-3, weight_decay=0.0
+        )  # ADDED weight_decay
+        optimizer2 = Adam(
+            [dummy_param2], lr=1e-3, weight_decay=0.0
+        )  # ADDED weight_decay
 
         scheduler1 = SchedulerFactory.create_scheduler(
             optimizer=optimizer1, schedule_type="linear", total_steps=100

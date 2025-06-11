@@ -2,18 +2,20 @@
 Tests for reward functionality in ShogiGame, especially in terminal states.
 """
 
-from unittest.mock import patch  # Moved import to top level
 from typing import Optional  # Added Optional for type hinting
+from unittest.mock import patch  # Moved import to top level
 
 import pytest  # Fixed import order
 
+from keisei.shogi.shogi_core_definitions import (
+    get_unpromoted_types,
+)  # Added this import
 from keisei.shogi.shogi_core_definitions import (
     Color,
     MoveTuple,
     Piece,
     PieceType,
     TerminationReason,
-    get_unpromoted_types,  # Added this import
 )
 from keisei.shogi.shogi_game import ShogiGame
 

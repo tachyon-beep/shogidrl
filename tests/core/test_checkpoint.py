@@ -41,8 +41,16 @@ def test_load_checkpoint_with_padding_scenarios(old_channels, new_channels, scen
     original_stem_weight = old_sd["stem.weight"].clone()
     original_bn_weight = old_sd["bn.weight"].clone()
     original_bn_bias = old_sd["bn.bias"].clone()
-    original_bn_running_mean = old_sd["bn.running_mean"].clone() if old_sd["bn.running_mean"] is not None else None
-    original_bn_running_var = old_sd["bn.running_var"].clone() if old_sd["bn.running_var"] is not None else None
+    original_bn_running_mean = (
+        old_sd["bn.running_mean"].clone()
+        if old_sd["bn.running_mean"] is not None
+        else None
+    )
+    original_bn_running_var = (
+        old_sd["bn.running_var"].clone()
+        if old_sd["bn.running_var"] is not None
+        else None
+    )
 
     model = DummyModel(new_channels)
     checkpoint = {"model_state_dict": old_sd}
@@ -64,13 +72,17 @@ def test_load_checkpoint_with_padding_scenarios(old_channels, new_channels, scen
     # Verify stem weight values
     if scenario == "pad":
         # First old_channels should match original weights
-        assert torch.equal(model.stem.weight[:, :old_channels, :, :], original_stem_weight)
+        assert torch.equal(
+            model.stem.weight[:, :old_channels, :, :], original_stem_weight
+        )
         # Padded channels should be zero (or whatever padding value is expected)
         # Assuming padding with zeros for this test
         assert torch.all(model.stem.weight[:, old_channels:, :, :] == 0)
     elif scenario == "truncate":
         # Loaded weights should match the truncated part of original weights
-        assert torch.equal(model.stem.weight, original_stem_weight[:, :new_channels, :, :])
+        assert torch.equal(
+            model.stem.weight, original_stem_weight[:, :new_channels, :, :]
+        )
     elif scenario == "noop":
         # All weights should match original weights
         assert torch.equal(model.stem.weight, original_stem_weight)

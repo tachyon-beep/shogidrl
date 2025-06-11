@@ -10,13 +10,29 @@ This module tests PPOAgent behavior in unusual scenarios including:
 - Boundary conditions and error recovery
 """
 
+import math  # Added for isclose
 import os
 import tempfile
+
+import numpy as np
 import pytest
 import torch
-import numpy as np
-import math  # Added for isclose
 
+from keisei.config_schema import (
+    _create_display_config,
+)  # Keep if used by AppConfig default factory directly in tests
+from keisei.config_schema import (
+    AppConfig,
+    DemoConfig,
+    DisplayConfig,
+    EnvConfig,
+    EvaluationConfig,
+    LoggingConfig,
+    ParallelConfig,
+    TrainingConfig,
+    WandBConfig,
+)
+from keisei.constants import TEST_VALUE_HALF  # Added back TEST_VALUE_HALF
 from keisei.constants import (
     CORE_OBSERVATION_CHANNELS,
     EPSILON_MEDIUM,
@@ -51,7 +67,6 @@ from keisei.constants import (
     TEST_STEP_THREE_DONE,
     TEST_SYNC_INTERVAL,
     TEST_TIMEOUT_SECONDS,
-    TEST_VALUE_HALF,  # Added back TEST_VALUE_HALF
     TEST_VERY_SMALL_LEARNING_RATE,
     TEST_WATCH_LOG_FREQ,
     TEST_WEIGHT_DECAY_ZERO,
@@ -60,22 +75,10 @@ from keisei.constants import (
 )
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.ppo_agent import PPOAgent
-from keisei.config_schema import (
-    AppConfig,
-    TrainingConfig,
-    EnvConfig,
-    EvaluationConfig,
-    LoggingConfig,
-    WandBConfig,
-    ParallelConfig,
-    DemoConfig,
-    DisplayConfig,
-    _create_display_config,  # Keep if used by AppConfig default factory directly in tests
-)
-from tests.conftest import (
+from tests.conftest import (  # Removed ENV_DEFAULTS
     TRAIN_DEFAULTS,
     assert_valid_ppo_metrics,
-)  # Removed ENV_DEFAULTS
+)
 
 
 class TestPPOAgentErrorHandling:

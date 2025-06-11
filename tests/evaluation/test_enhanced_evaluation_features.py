@@ -268,7 +268,8 @@ class TestBackgroundTournamentManager:
 
                 assert len(progress_updates) > 0
                 assert any(
-                    update["tournament_id"] == tournament_id for update in progress_updates
+                    update["tournament_id"] == tournament_id
+                    for update in progress_updates
                 )
         finally:
             await manager.shutdown()
@@ -306,6 +307,7 @@ class TestBackgroundTournamentManager:
                 # If progress is None, it means the tournament was cleaned up, which is also acceptable after cancellation.
         finally:
             await manager.shutdown()
+
 
 class TestAdvancedAnalytics:
     """Test advanced analytics functionality."""

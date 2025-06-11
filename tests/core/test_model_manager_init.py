@@ -77,7 +77,7 @@ def mock_config():
         ),
         evaluation=EvaluationConfig(
             enable_periodic_evaluation=True,
-            evaluation_interval_timesteps=1, # Moved up
+            evaluation_interval_timesteps=1,  # Moved up
             strategy="single_opponent",  # Added
             num_games=1,
             max_concurrent_games=4,  # Added
@@ -335,7 +335,9 @@ class TestModelManagerInitialization:
         mock_model_factory.return_value = Mock()
 
         # Create ModelManager
-        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
+        manager = ModelManager(
+            minimal_model_manager_config, mock_args, device, logger_func
+        )
 
         # Verify initialization
         assert manager.config == minimal_model_manager_config
@@ -347,7 +349,10 @@ class TestModelManagerInitialization:
         assert manager.checkpoint_data is None
 
         # Verify feature setup
-        assert manager.input_features == minimal_model_manager_config.training.input_features
+        assert (
+            manager.input_features
+            == minimal_model_manager_config.training.input_features
+        )
         assert manager.obs_shape == (46, 9, 9)
 
         # Verify mixed precision setup for CPU
@@ -379,7 +384,9 @@ class TestModelManagerInitialization:
         )
 
         # Create ModelManager
-        manager = ModelManager(minimal_model_manager_config, args_with_overrides, device, logger_func)
+        manager = ModelManager(
+            minimal_model_manager_config, args_with_overrides, device, logger_func
+        )
 
         # Verify args override config values
         assert manager.input_features == "custom"
@@ -417,7 +424,9 @@ class TestModelManagerInitialization:
         cuda_device = torch.device("cuda")
 
         # Create ModelManager
-        manager = ModelManager(minimal_model_manager_config, mock_args, cuda_device, logger_func)
+        manager = ModelManager(
+            minimal_model_manager_config, mock_args, cuda_device, logger_func
+        )
 
         # Verify mixed precision is enabled
         assert manager.use_mixed_precision is True
@@ -444,7 +453,9 @@ class TestModelManagerInitialization:
         minimal_model_manager_config.training.mixed_precision = True
 
         # Create ModelManager
-        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
+        manager = ModelManager(
+            minimal_model_manager_config, mock_args, device, logger_func
+        )
 
         # Verify mixed precision is disabled with warning
         assert manager.use_mixed_precision is False
@@ -480,7 +491,9 @@ class TestModelManagerUtilities:
         mock_model_factory.return_value = Mock()
 
         # Create ModelManager
-        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
+        manager = ModelManager(
+            minimal_model_manager_config, mock_args, device, logger_func
+        )
 
         # Get model info
         info = manager.get_model_info()
@@ -522,7 +535,9 @@ class TestModelManagerUtilities:
         mock_model_factory.return_value = mock_model
 
         # Create ModelManager
-        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
+        manager = ModelManager(
+            minimal_model_manager_config, mock_args, device, logger_func
+        )
 
         # Create model
         created_model = manager.create_model()

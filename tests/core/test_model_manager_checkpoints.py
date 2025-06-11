@@ -397,7 +397,9 @@ class TestModelManagerArtifacts:
         mock_wandb.Artifact.return_value = mock_artifact
 
         # Create ModelManager
-        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
+        manager = ModelManager(
+            minimal_model_manager_config, mock_args, device, logger_func
+        )
 
         # Test artifact creation
         result = manager.create_model_artifact(
@@ -440,7 +442,9 @@ class TestModelManagerArtifacts:
         mock_model_factory.return_value = mock_model
 
         # Create ModelManager
-        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
+        manager = ModelManager(
+            minimal_model_manager_config, mock_args, device, logger_func
+        )
 
         # Test artifact creation with WandB inactive
         result = manager.create_model_artifact(
@@ -480,7 +484,9 @@ class TestModelManagerArtifacts:
         mock_wandb.run = Mock()  # Mock run object to simulate active W&B
 
         # Create ModelManager
-        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
+        manager = ModelManager(
+            minimal_model_manager_config, mock_args, device, logger_func
+        )
 
         # Test artifact creation with missing file
         result = manager.create_model_artifact(
@@ -523,7 +529,9 @@ class TestModelManagerSaving:
         mock_model_factory.return_value = mock_model
 
         # Create ModelManager
-        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
+        manager = ModelManager(
+            minimal_model_manager_config, mock_args, device, logger_func
+        )
 
         # Create mock agent
         mock_agent = Mock()
@@ -573,7 +581,9 @@ class TestModelManagerSaving:
         mock_model_factory.return_value = mock_model
 
         # Create ModelManager
-        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
+        manager = ModelManager(
+            minimal_model_manager_config, mock_args, device, logger_func
+        )
 
         # Create mock agent
         mock_agent = Mock()
@@ -626,7 +636,9 @@ class TestModelManagerSaving:
         mock_model_factory.return_value = mock_model
 
         # Create ModelManager
-        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
+        manager = ModelManager(
+            minimal_model_manager_config, mock_args, device, logger_func
+        )
 
         # Create mock agent
         mock_agent = Mock()
@@ -694,7 +706,9 @@ class TestModelManagerEnhancedCheckpointHandling:
 
         # Create args with resume="latest"
         args_with_resume = MockArgs(resume="latest")
-        manager = ModelManager(minimal_model_manager_config, args_with_resume, device, logger_func)
+        manager = ModelManager(
+            minimal_model_manager_config, args_with_resume, device, logger_func
+        )
         manager.create_model()
 
         # Mock an agent for testing
@@ -737,7 +751,9 @@ class TestModelManagerEnhancedCheckpointHandling:
         # Mock specific checkpoint doesn't exist
         mock_exists.return_value = False
 
-        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
+        manager = ModelManager(
+            minimal_model_manager_config, mock_args, device, logger_func
+        )
         manager.create_model()
 
         mock_agent = Mock()
@@ -787,7 +803,9 @@ class TestModelManagerEnhancedCheckpointHandling:
         # Mock corrupted checkpoint (missing required keys)
         mock_torch_load.return_value = {"incomplete": "data"}
 
-        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
+        manager = ModelManager(
+            minimal_model_manager_config, mock_args, device, logger_func
+        )
         manager.create_model()
 
         mock_agent = Mock()
@@ -838,7 +856,9 @@ class TestModelManagerEnhancedCheckpointHandling:
         nonexistent_model_dir = os.path.join(temp_dir, "models", "subdir")
         minimal_model_manager_config.logging.model_dir = nonexistent_model_dir
 
-        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
+        manager = ModelManager(
+            minimal_model_manager_config, mock_args, device, logger_func
+        )
         manager.create_model()
 
         mock_agent = Mock()
@@ -913,7 +933,9 @@ class TestModelManagerWandBArtifactEnhancements:
         with open(model_path, "w", encoding="utf-8") as f:
             f.write("dummy model data")
 
-        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
+        manager = ModelManager(
+            minimal_model_manager_config, mock_args, device, logger_func
+        )
 
         # Test artifact creation with metadata
         result = manager.create_model_artifact(
@@ -969,7 +991,9 @@ class TestModelManagerWandBArtifactEnhancements:
         with open(model_path, "w", encoding="utf-8") as f:
             f.write("dummy model data")
 
-        manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
+        manager = ModelManager(
+            minimal_model_manager_config, mock_args, device, logger_func
+        )
 
         # Verify the mock_log_artifact is configured to raise an error
         assert mock_log_artifact.side_effect is not None
@@ -1016,7 +1040,9 @@ class TestModelManagerWandBArtifactEnhancements:
             with open(model_path, "w", encoding="utf-8") as f:
                 f.write("dummy model data")
 
-            manager = ModelManager(minimal_model_manager_config, mock_args, device, logger_func)
+            manager = ModelManager(
+                minimal_model_manager_config, mock_args, device, logger_func
+            )
 
             # Test with W&B inactive
             result = manager.create_model_artifact(

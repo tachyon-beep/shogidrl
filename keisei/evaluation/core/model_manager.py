@@ -409,8 +409,8 @@ class ModelWeightManager:
                 save_path="/tmp/eval_games",
                 log_level="INFO",
                 update_elo=False,
-                enable_in_memory_evaluation=True, # Assuming True for this context
-                model_weight_cache_size=5, # Default from ModelWeightManager
+                enable_in_memory_evaluation=True,  # Assuming True for this context
+                model_weight_cache_size=5,  # Default from ModelWeightManager
                 enable_parallel_execution=False,
                 process_restart_threshold=3,
                 temp_agent_device=str(device),

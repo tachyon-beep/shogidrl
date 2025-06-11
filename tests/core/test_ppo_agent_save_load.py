@@ -227,9 +227,7 @@ def test_agent_checkpoint_save_and_load(tmp_path):
             wandb_log_eval=False,
         ),
         logging=LoggingConfig(
-            log_file="test.log", 
-            model_dir=str(tmp_path), 
-            run_name="checkpoint_test"
+            log_file="test.log", model_dir=str(tmp_path), run_name="checkpoint_test"
         ),
         wandb=WandBConfig(
             enabled=False,
@@ -286,7 +284,11 @@ def test_agent_checkpoint_save_and_load(tmp_path):
     model_path = tmp_path / "test_model_with_metadata.pth"
     test_timestep = 100
     test_episodes = 10
-    agent.save_model(str(model_path), global_timestep=test_timestep, total_episodes_completed=test_episodes)
+    agent.save_model(
+        str(model_path),
+        global_timestep=test_timestep,
+        total_episodes_completed=test_episodes,
+    )
 
     # Verify model file exists
     assert model_path.exists()
@@ -294,7 +296,7 @@ def test_agent_checkpoint_save_and_load(tmp_path):
     # Create new agent and load model
     new_model = _create_test_model(config)
     new_agent = PPOAgent(new_model, config, torch.device("cpu"))
-    
+
     # Modify new agent's parameters to ensure loading actually changes them
     for param in new_agent.model.parameters():
         param.data.fill_(0.99999)
@@ -306,16 +308,19 @@ def test_agent_checkpoint_save_and_load(tmp_path):
     # Verify model parameters are restored
     for key in original_model_state:
         assert torch.allclose(
-            new_agent.model.state_dict()[key], 
-            original_model_state[key],
-            atol=1e-6
+            new_agent.model.state_dict()[key], original_model_state[key], atol=1e-6
         ), f"Model parameter mismatch for key: {key}"
 
     # Note: PPOAgent.save_model/load_model includes optimizer and scheduler state,
     # so we can also verify optimizer state is preserved
     loaded_optimizer_state = new_agent.optimizer.state_dict()
-    assert len(loaded_optimizer_state['param_groups']) == len(original_optimizer_state['param_groups'])
-    assert loaded_optimizer_state['param_groups'][0]['lr'] == original_optimizer_state['param_groups'][0]['lr']
+    assert len(loaded_optimizer_state["param_groups"]) == len(
+        original_optimizer_state["param_groups"]
+    )
+    assert (
+        loaded_optimizer_state["param_groups"][0]["lr"]
+        == original_optimizer_state["param_groups"][0]["lr"]
+    )
 
 
 def test_agent_model_metadata_saving(tmp_path):
@@ -380,9 +385,7 @@ def test_agent_model_metadata_saving(tmp_path):
             wandb_log_eval=False,
         ),
         logging=LoggingConfig(
-            log_file="test.log", 
-            model_dir=str(tmp_path), 
-            run_name="metadata_test"
+            log_file="test.log", model_dir=str(tmp_path), run_name="metadata_test"
         ),
         wandb=WandBConfig(
             enabled=False,
@@ -435,14 +438,18 @@ def test_agent_model_metadata_saving(tmp_path):
     test_episodes = 67
 
     model_path = tmp_path / "metadata_model.pth"
-    agent.save_model(str(model_path), global_timestep=test_timestep, total_episodes_completed=test_episodes)
+    agent.save_model(
+        str(model_path),
+        global_timestep=test_timestep,
+        total_episodes_completed=test_episodes,
+    )
 
     # Verify that the model file contains the metadata
     # Note: PPOAgent.save_model includes metadata in the saved dictionary
     loaded_data = torch.load(str(model_path))
     assert loaded_data["global_timestep"] == test_timestep
     assert loaded_data["total_episodes_completed"] == test_episodes
-    
+
     # Verify that model state is also present
     assert "model_state_dict" in loaded_data
     assert "optimizer_state_dict" in loaded_data
@@ -510,9 +517,7 @@ def test_checkpoint_with_lr_scheduler(tmp_path):
             wandb_log_eval=False,
         ),
         logging=LoggingConfig(
-            log_file="test.log", 
-            model_dir=str(tmp_path), 
-            run_name="scheduler_test"
+            log_file="test.log", model_dir=str(tmp_path), run_name="scheduler_test"
         ),
         wandb=WandBConfig(
             enabled=False,
@@ -567,7 +572,7 @@ def test_checkpoint_with_lr_scheduler(tmp_path):
             agent.scheduler.step()
 
     # Save original learning rate
-    original_lr = agent.optimizer.param_groups[0]['lr']
+    original_lr = agent.optimizer.param_groups[0]["lr"]
 
     # Save model using save_model (PPOAgent doesn't have save_checkpoint)
     model_path = tmp_path / "scheduler_model.pth"
@@ -579,5 +584,7 @@ def test_checkpoint_with_lr_scheduler(tmp_path):
     new_agent.load_model(str(model_path))
 
     # Verify learning rate is restored
-    restored_lr = new_agent.optimizer.param_groups[0]['lr']
-    assert abs(restored_lr - original_lr) < 1e-8, f"Learning rate not restored correctly: {restored_lr} vs {original_lr}"
+    restored_lr = new_agent.optimizer.param_groups[0]["lr"]
+    assert (
+        abs(restored_lr - original_lr) < 1e-8
+    ), f"Learning rate not restored correctly: {restored_lr} vs {original_lr}"

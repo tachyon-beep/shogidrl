@@ -5,7 +5,7 @@ agent_loading.py: Utilities for loading PPO agents and initializing opponents.
 import os
 from typing import Any, Optional
 
-from keisei.utils.opponents import (  
+from keisei.utils.opponents import (
     SimpleHeuristicOpponent,
     SimpleRandomOpponent,
 )
@@ -20,10 +20,11 @@ def load_evaluation_agent(
     input_features: Optional[str] = "core46",
 ) -> Any:
     import torch  # pylint: disable=import-outside-toplevel
+
     from keisei.config_schema import (  # pylint: disable=import-outside-toplevel
         AppConfig,
         DemoConfig,
-        DisplayConfig,  
+        DisplayConfig,
         EnvConfig,
         EvaluationConfig,
         LoggingConfig,
@@ -31,8 +32,12 @@ def load_evaluation_agent(
         TrainingConfig,
         WandBConfig,
     )
-    from keisei.core.neural_network import ActorCritic  # pylint: disable=import-outside-toplevel
-    from keisei.core.ppo_agent import PPOAgent  # pylint: disable=import-outside-toplevel
+    from keisei.core.neural_network import (
+        ActorCritic,
+    )  # pylint: disable=import-outside-toplevel
+    from keisei.core.ppo_agent import (
+        PPOAgent,
+    )  # pylint: disable=import-outside-toplevel
 
     if not os.path.isfile(checkpoint_path):
         log_error_to_stderr(
@@ -90,7 +95,7 @@ def load_evaluation_agent(
             lr_schedule_step_on="epoch",
         ),
         evaluation=EvaluationConfig(
-            enable_periodic_evaluation=False, # Moved up
+            enable_periodic_evaluation=False,  # Moved up
             evaluation_interval_timesteps=50000,
             strategy="single_opponent",  # Added
             num_games=1,

@@ -8,17 +8,18 @@ These tests validate the key performance claims:
 4. Background processing efficiency
 """
 
-import pytest
-import time
-import tempfile
 import os
-import torch
+import tempfile
+import time
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from keisei.evaluation.core import create_evaluation_config, EvaluationStrategy
-from keisei.evaluation.core_manager import EvaluationManager
+import pytest
+import torch
+
+from keisei.evaluation.core import EvaluationStrategy, create_evaluation_config
 from keisei.evaluation.core.model_manager import ModelWeightManager
+from keisei.evaluation.core_manager import EvaluationManager
 
 
 @pytest.mark.slow
