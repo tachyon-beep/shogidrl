@@ -2,7 +2,6 @@
 Test to verify the base actor-critic refactoring works correctly.
 """
 
-import pytest
 import torch
 
 from keisei.core.base_actor_critic import BaseActorCriticModel

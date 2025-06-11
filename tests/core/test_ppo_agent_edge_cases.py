@@ -19,9 +19,6 @@ import pytest
 import torch
 
 from keisei.config_schema import (
-    _create_display_config,
-)  # Keep if used by AppConfig default factory directly in tests
-from keisei.config_schema import (
     AppConfig,
     DemoConfig,
     DisplayConfig,

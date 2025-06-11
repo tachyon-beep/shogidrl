@@ -2,7 +2,9 @@
 test_resnet_tower.py: Unit tests for keisei/training/models/resnet_tower.py
 """
 
+import gc
 import io
+import tracemalloc
 from unittest.mock import patch
 
 import pytest
@@ -171,7 +173,7 @@ class TestGetActionAndValue:
         legal_mask[2, 30:] = False  # Third obs: only actions 0-29 legal
         legal_mask[3, 40:] = False  # Fourth obs: only actions 0-39 legal
 
-        action, log_prob, value = model.get_action_and_value(
+        action, _, _ = model.get_action_and_value(
             obs_batch, legal_mask=legal_mask, deterministic=True
         )
 
@@ -813,9 +815,6 @@ def test_resnet_tower_batch_size_compatibility(batch_size):
 # Performance and Memory Tests
 def test_resnet_tower_memory_efficiency():
     """Test that the model doesn't use excessive memory."""
-    import gc
-    import tracemalloc
-
     # Start tracing memory
     tracemalloc.start()
 

@@ -2,7 +2,6 @@
 Unit tests for ExperienceBuffer in experience_buffer.py
 """
 
-import numpy as np
 import pytest
 import torch
 
@@ -118,7 +117,7 @@ def test_experience_buffer_compute_advantages_empty_buffer():
     assert buf.ptr == 0  # Pointer should be at start
     # Test that get_batch returns empty when no experiences added
     empty_batch = buf.get_batch()
-    assert empty_batch == {}  # Should return empty dict when no data
+    assert not empty_batch  # Should return empty dict when no data
 
 
 def test_experience_buffer_get_batch():
@@ -189,7 +188,7 @@ def test_experience_buffer_get_batch_empty():
     buf = ExperienceBuffer(buffer_size=5, gamma=0.99, lambda_gae=0.95)
 
     batch = buf.get_batch()
-    assert batch == {}
+    assert not batch
 
 
 def test_experience_buffer_get_batch_stack_error():
@@ -255,7 +254,7 @@ def test_experience_buffer_clear():
     # With tensor pre-allocation, tensors still exist but pointer is reset
     # Test that get_batch returns empty when ptr == 0
     empty_batch = buf.get_batch()
-    assert empty_batch == {}  # Should return empty dict when no data
+    assert not empty_batch  # Should return empty dict when no data
 
 
 def test_experience_buffer_full_buffer_warning(capsys):

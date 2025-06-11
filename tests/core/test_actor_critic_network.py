@@ -2,16 +2,15 @@
 Unit tests for ActorCritic in neural_network.py
 """
 
+import gc
+import os
+import tempfile
+
 import pytest
 import torch
 
 from keisei.constants import (
-    ALTERNATIVE_ACTION_SPACE,
-    CORE_OBSERVATION_CHANNELS,
-    EXTENDED_OBSERVATION_CHANNELS,
-    FULL_ACTION_SPACE,
     SHOGI_BOARD_SIZE,
-    SHOGI_BOARD_SQUARES,
 )
 from keisei.core.neural_network import ActorCritic
 
@@ -445,9 +444,6 @@ class TestActorCriticSerialization:
 
     def test_torch_save_load(self, minimal_app_config):
         """Test saving and loading entire model with torch.save/load."""
-        import os
-        import tempfile
-
         config = minimal_app_config
         input_channels = config.env.input_channels
         num_actions = config.env.num_actions_total
@@ -636,8 +632,6 @@ class TestActorCriticMemoryEfficiency:
         model = ActorCritic(
             input_channels=input_channels, num_actions_total=num_actions
         )
-
-        import gc
 
         # Perform multiple forward passes
         for _ in range(10):

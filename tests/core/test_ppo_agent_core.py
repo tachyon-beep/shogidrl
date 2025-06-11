@@ -20,11 +20,13 @@ from keisei.constants import (
     SHOGI_BOARD_SIZE,
     TEST_SINGLE_LEGAL_ACTION_INDEX,
 )
+from keisei.core.experience_buffer import ExperienceBuffer
+from keisei.core.neural_network import ActorCritic
 from keisei.core.ppo_agent import PPOAgent
 from keisei.shogi import ShogiGame
 from keisei.shogi.shogi_core_definitions import MoveTuple
 from keisei.utils import PolicyOutputMapper
-from tests.conftest import assert_valid_ppo_metrics
+from tests.conftest import assert_valid_ppo_metrics, create_test_experience_data
 
 
 class TestPPOAgentInitialization:
@@ -227,9 +229,6 @@ class TestPPOAgentBasicLearning:
 
     def test_learn_multiple_calls(self, ppo_agent_basic):
         """Test that multiple learn calls work correctly."""
-        from keisei.core.experience_buffer import ExperienceBuffer
-        from tests.conftest import create_test_experience_data
-
         # Create two separate experience buffers
         buffer1 = ExperienceBuffer(
             buffer_size=4, gamma=0.99, lambda_gae=0.95, device="cpu"
@@ -393,9 +392,6 @@ class TestPPOAgentSchedulerIntegration:
         initial_lr = agent.optimizer.param_groups[0]["lr"]
 
         # Create simple experience buffer
-        from keisei.core.experience_buffer import ExperienceBuffer
-        from tests.conftest import create_test_experience_data
-
         buffer = ExperienceBuffer(
             buffer_size=4, gamma=0.99, lambda_gae=0.95, device="cpu"
         )
@@ -435,8 +431,6 @@ class TestPPOAgentSchedulerIntegration:
         config_update = base_config.model_copy()
         config_update.training.lr_schedule_step_on = "update"
         # Need a fresh model for the second agent
-        from keisei.core.neural_network import ActorCritic
-
         mapper = PolicyOutputMapper()
         model_update = ActorCritic(
             input_channels=46, num_actions_total=mapper.get_total_actions()
@@ -449,9 +443,6 @@ class TestPPOAgentSchedulerIntegration:
         initial_lr_update = agent_update.optimizer.param_groups[0]["lr"]
 
         # Create experience buffer for testing
-        from keisei.core.experience_buffer import ExperienceBuffer
-        from tests.conftest import create_test_experience_data
-
         buffer_epoch = ExperienceBuffer(
             buffer_size=4, gamma=0.99, lambda_gae=0.95, device="cpu"
         )
@@ -499,7 +490,7 @@ class TestPPOAgentMasking:
         # Test multiple times to ensure consistency
         for _ in range(10):
             # Select action with mask
-            selected_move, action_idx, log_prob, value = agent.select_action(
+            _, action_idx, _, _ = agent.select_action(
                 obs, legal_mask, is_training=False
             )
 
@@ -521,7 +512,7 @@ class TestPPOAgentMasking:
         ).astype(np.float32)
 
         # Get action and value
-        selected_move, action_idx, log_prob, value = agent.select_action(
+        _, action_idx, log_prob, _ = agent.select_action(
             obs, legal_mask, is_training=False
         )
 
@@ -546,7 +537,7 @@ class TestPPOAgentMasking:
 
         # Agent should handle gracefully (might use uniform distribution or raise error)
         try:
-            selected_move, action_idx, log_prob, value = agent.select_action(
+            _, action_idx, _, _ = agent.select_action(
                 obs, legal_mask, is_training=False
             )
 
@@ -576,7 +567,7 @@ class TestPPOAgentMasking:
             legal_mask = torch.zeros(FULL_ACTION_SPACE, dtype=torch.bool)
             legal_mask[action_slice] = True
 
-            selected_move, action_idx, log_prob, value = agent.select_action(
+            _, action_idx, _, _ = agent.select_action(
                 obs, legal_mask, is_training=False
             )
 
@@ -605,7 +596,7 @@ class TestPPOAgentInterfaceConsistency:
         legal_mask[FULL_ACTION_SPACE // 2 :] = False  # Half actions legal
 
         # Get action and value
-        selected_move, action_idx, log_prob, action_value = agent.select_action(
+        _, action_idx, _, action_value = agent.select_action(
             obs, legal_mask, is_training=False
         )
         standalone_value = agent.get_value(obs)  # get_value returns float directly

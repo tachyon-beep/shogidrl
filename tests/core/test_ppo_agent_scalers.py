@@ -39,6 +39,8 @@ def _make_dummy_model(return_value: float) -> ActorCriticProtocol:
             return _logits, value
 
         def get_action_and_value(self, obs, legal_mask=None, deterministic=False):
+            # Acknowledge unused parameters to avoid pylint warnings
+            _ = legal_mask, deterministic
             self.grad_enabled = torch.is_grad_enabled()
             _logits, value = self.forward(obs)  # Renamed logits to _logits
             action = torch.zeros(obs.shape[0], dtype=torch.long, device=obs.device)
@@ -46,6 +48,8 @@ def _make_dummy_model(return_value: float) -> ActorCriticProtocol:
             return action, log_prob, value
 
         def evaluate_actions(self, obs, actions, legal_mask=None):
+            # Acknowledge unused parameters to avoid pylint warnings
+            _ = actions, legal_mask
             self.last_obs_eval = obs.detach().clone()
             _logits, value = self.forward(obs)  # Renamed logits to _logits
             log_probs = torch.zeros(obs.shape[0], device=obs.device)
