@@ -470,8 +470,13 @@ class TestPPOAgentRobustness:
 
     def test_single_experience_learning(self, minimal_app_config, ppo_test_model):
         """Test learning with minimal experience buffer (single experience)."""
+        # Modify config for single experience learning to prevent std() warning
+        config = minimal_app_config.model_copy()
+        config.training.minibatch_size = 1 # Keep as 1 for this specific test
+        config.training.normalize_advantages = False # Disable normalization for single experience
+
         agent = PPOAgent(
-            model=ppo_test_model, config=minimal_app_config, device=torch.device("cpu")
+            model=ppo_test_model, config=config, device=torch.device("cpu")
         )
 
         experience_buffer = ExperienceBuffer(

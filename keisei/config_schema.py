@@ -31,7 +31,7 @@ class TrainingConfig(BaseModel):
     )
     steps_per_epoch: int = Field(2048, description="Steps per PPO buffer/epoch.")
     ppo_epochs: int = Field(10, description="Number of PPO update epochs per buffer.")
-    minibatch_size: int = Field(64, description="Minibatch size for PPO updates.")
+    minibatch_size: int = Field(64, gt=1, description="Minibatch size for PPO updates. Must be > 1 to avoid issues with std calculation.")
     learning_rate: float = Field(3e-4, description="Learning rate for optimizer.")
     gamma: float = Field(0.99, description="Discount factor.")
     clip_epsilon: float = Field(0.2, description="PPO clip epsilon.")

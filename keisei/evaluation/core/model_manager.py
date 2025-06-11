@@ -373,7 +373,7 @@ class ModelWeightManager:
                 total_timesteps=1,
                 steps_per_epoch=1,
                 ppo_epochs=1,
-                minibatch_size=1,
+                minibatch_size=2,  # Updated from 1 to 2
                 learning_rate=1e-4,
                 gamma=0.99,
                 clip_epsilon=0.2,

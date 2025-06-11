@@ -643,7 +643,23 @@ class TestPPOAgentSchedulerEdgeCases:
             )
             # If creation succeeds, scheduler might be None or have minimal steps
             if agent.scheduler is not None:
-                # Should be able to step without errors
+                # Ensure optimizer.step() is called before scheduler.step()
+                if any(p.requires_grad for p in agent.model.parameters()):
+                    dummy_input_shape = (
+                        1, # Batch size
+                        minimal_app_config.env.input_channels,
+                        SHOGI_BOARD_SIZE,
+                        SHOGI_BOARD_SIZE,
+                    )
+                    dummy_input = torch.randn(dummy_input_shape, device=agent.device)
+                    _, _, dummy_value = agent.model.get_action_and_value(dummy_input)
+                    dummy_loss = dummy_value.mean() * 0.0
+
+                    if dummy_loss.requires_grad:
+                        agent.optimizer.zero_grad()
+                        dummy_loss.backward()
+                        agent.optimizer.step()
+
                 agent.scheduler.step()
                 # Learning rate might not change due to zero/minimal steps
                 current_lr = agent.optimizer.param_groups[0]["lr"]
@@ -764,31 +780,45 @@ class TestPPOAgentSchedulerEdgeCases:
     def test_scheduler_with_very_large_total_steps(
         self, minimal_app_config, ppo_test_model
     ):
-        """Test scheduler calculation with very large training configurations."""
+        """Test scheduler with a very large number of total_steps."""
         config = minimal_app_config.model_copy()
-        config.training.lr_schedule_type = "cosine"
-        config.training.total_timesteps = 1000000  # Very large
-        config.training.steps_per_epoch = 10000
-        config.training.ppo_epochs = 10
-        config.training.minibatch_size = 32
-        config.training.lr_schedule_step_on = "update"
+        config.training.lr_schedule_type = "linear"
+        # Effectively infinite steps for typical training duration
+        config.training.total_timesteps = int(1e12)
+        config.training.lr_schedule_kwargs = {
+            "final_lr_fraction": TEST_SCHEDULER_FINAL_FRACTION
+        }
 
-        # Should handle large numbers without overflow
         agent = PPOAgent(
             model=ppo_test_model, config=config, device=torch.device("cpu")
         )
 
-        # Verify scheduler was created successfully
-        assert hasattr(agent, "scheduler")
+        assert agent.scheduler is not None
+        initial_lr = agent.optimizer.param_groups[0]["lr"]
 
-        # Should be able to step scheduler
-        if agent.scheduler is not None:
+        # Step a few times
+        for _ in range(5):
+            if any(p.requires_grad for p in agent.model.parameters()):
+                dummy_input_shape = (
+                    1, # Batch size
+                    minimal_app_config.env.input_channels,
+                    SHOGI_BOARD_SIZE,
+                    SHOGI_BOARD_SIZE,
+                )
+                dummy_input = torch.randn(dummy_input_shape, device=agent.device)
+                _, _, dummy_value = agent.model.get_action_and_value(dummy_input)
+                dummy_loss = dummy_value.mean() * 0.0
+                if dummy_loss.requires_grad:
+                    agent.optimizer.zero_grad()
+                    dummy_loss.backward()
+                    agent.optimizer.step()
             agent.scheduler.step()
-            current_lr = agent.optimizer.param_groups[0]["lr"]
 
-            # LR should change (even minimally)
-            assert isinstance(current_lr, float)
-            assert current_lr > 0
+        # LR should barely change due to large total_steps
+        current_lr = agent.optimizer.param_groups[0]["lr"]
+        assert np.isclose(
+            current_lr, initial_lr, atol=TEST_VERY_SMALL_LEARNING_RATE
+        ), "LR should change very slowly with large total_steps"
 
     def test_scheduler_boundary_learning_rates(
         self, minimal_app_config, ppo_test_model
