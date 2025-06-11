@@ -4,11 +4,12 @@ import datetime  # For KIF Date header
 import os
 import re  # Import the re module
 import sys
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Set, Callable
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Set, Tuple
 
 import numpy as np
 
 from .shogi_core_definitions import (  # Observation plane constants
+    BASE_TO_PROMOTED_TYPE,
     KIF_PIECE_SYMBOLS,
     OBS_CURR_PLAYER_HAND_START,
     OBS_CURR_PLAYER_INDICATOR,
@@ -20,9 +21,8 @@ from .shogi_core_definitions import (  # Observation plane constants
     OBS_OPP_PLAYER_UNPROMOTED_START,
     OBS_PROMOTED_ORDER,
     OBS_UNPROMOTED_ORDER,
-    SYMBOL_TO_PIECE_TYPE,
-    BASE_TO_PROMOTED_TYPE,
     PROMOTED_TYPES_SET,
+    SYMBOL_TO_PIECE_TYPE,
     Color,
     MoveTuple,
     Piece,
@@ -66,6 +66,7 @@ SFEN_HAND_PIECE_CANONICAL_ORDER: List[PieceType] = [
 
 # --- SFEN Helper Functions ---
 
+
 def _sfen_sq(r: int, c: int) -> str:
     """Converts 0-indexed (row, col) to SFEN square string (e.g., (0,0) -> "9a")."""
     if not (0 <= r <= 8 and 0 <= c <= 8):
@@ -73,6 +74,7 @@ def _sfen_sq(r: int, c: int) -> str:
     file = str(9 - c)
     rank = chr(ord("a") + r)
     return file + rank
+
 
 def _get_sfen_board_char(piece: Piece) -> str:
     """Helper to get the SFEN character for a piece on the board."""
@@ -84,9 +86,7 @@ def _get_sfen_board_char(piece: Piece) -> str:
     if base_char is None:
         # This handles cases like KING which don't have a separate entry for a promoted type
         # but are in SFEN_BOARD_CHARS. It mainly catches truly unknown types.
-        raise ValueError(
-            f"Unknown piece type for SFEN board character: {piece.type}"
-        )
+        raise ValueError(f"Unknown piece type for SFEN board character: {piece.type}")
 
     sfen_char = ""
     if piece.type in PROMOTED_TYPES_SET:
@@ -96,6 +96,7 @@ def _get_sfen_board_char(piece: Piece) -> str:
     if piece.color == Color.WHITE:
         return sfen_char.lower()
     return sfen_char
+
 
 def _get_sfen_drop_char(piece_type: PieceType) -> str:
     """Helper to get the uppercase SFEN character for a droppable piece type."""
@@ -117,9 +118,9 @@ def _get_sfen_drop_char(piece_type: PieceType) -> str:
         )
     return char
 
+
 def _parse_sfen_board_piece(
-    sfen_char_on_board: str, 
-    is_promoted_sfen_token: bool
+    sfen_char_on_board: str, is_promoted_sfen_token: bool
 ) -> Tuple[PieceType, Color]:
     """
     Parses an SFEN board piece character (e.g., 'P', 'l', 'R') and promotion status
@@ -161,7 +162,9 @@ def _parse_sfen_board_piece(
 
     return final_piece_type, color
 
+
 # --- SFEN String Parsing Functions ---
+
 
 def parse_sfen_string_components(sfen_str: str) -> Tuple[str, str, str, str]:
     """
@@ -176,12 +179,12 @@ def parse_sfen_string_components(sfen_str: str) -> Tuple[str, str, str, str]:
     groups = match.groups()
     if len(groups) != 4:
         raise ValueError(f"Invalid SFEN string structure: '{sfen_str}'")
-    
+
     return groups[0], groups[1], groups[2], groups[3]
 
+
 def populate_board_from_sfen_segment(
-    board_array: List[List[Optional[Piece]]], 
-    board_sfen_segment: str
+    board_array: List[List[Optional[Piece]]], board_sfen_segment: str
 ) -> None:
     """
     Populates a board array from an SFEN board segment.
@@ -238,10 +241,7 @@ def populate_board_from_sfen_segment(
                         raise ValueError(
                             f"Invalid promotion: SFEN token '+' applied to non-promotable piece type {base_piece_type.name}"
                         )
-                elif (
-                    not promoted_flag_active
-                    and base_piece_type in PROMOTED_TYPES_SET
-                ):
+                elif not promoted_flag_active and base_piece_type in PROMOTED_TYPES_SET:
                     raise ValueError(
                         f"Invalid SFEN piece character for board: {char_sfen}"
                     )
@@ -253,9 +253,9 @@ def populate_board_from_sfen_segment(
                 f"Row {r+1} ('{rows[r]}') describes {c} columns, expected 9"
             )
 
+
 def populate_hands_from_sfen_segment(
-    hands_dict: Dict[int, Dict[PieceType, int]], 
-    hands_sfen_segment: str
+    hands_dict: Dict[int, Dict[PieceType, int]], hands_sfen_segment: str
 ) -> None:
     """
     Populates a hands dictionary from an SFEN hands segment.
@@ -268,9 +268,9 @@ def populate_hands_from_sfen_segment(
         while pos < len(hands_sfen_segment):
             match_hand = hand_segment_pattern.match(hands_sfen_segment, pos)
             if not match_hand:
-                if hands_sfen_segment[pos:].startswith("K") or hands_sfen_segment[pos:].startswith(
-                    "k"
-                ):
+                if hands_sfen_segment[pos:].startswith("K") or hands_sfen_segment[
+                    pos:
+                ].startswith("k"):
                     raise ValueError(
                         "Invalid piece character 'K' or non-droppable piece type in SFEN hands"
                     )
@@ -305,7 +305,9 @@ def populate_hands_from_sfen_segment(
             )
             pos = match_hand.end()
 
+
 # --- SFEN String Generation Functions ---
+
 
 def convert_game_to_sfen_string(game: "ShogiGame") -> str:
     """
@@ -375,6 +377,7 @@ def convert_game_to_sfen_string(game: "ShogiGame") -> str:
     move_num_sfen = str(game.move_count + 1)
 
     return f"{board_sfen} {turn_sfen} {hands_sfen} {move_num_sfen}"
+
 
 def encode_move_to_sfen_string(move_tuple: MoveTuple) -> str:
     """

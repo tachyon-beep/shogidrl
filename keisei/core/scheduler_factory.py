@@ -57,9 +57,11 @@ class SchedulerFactory:
     ) -> LambdaLR:
         """Create linear decay scheduler."""
         if total_steps <= 0:
-            raise ValueError("total_steps must be a positive integer for linear scheduler")
+            raise ValueError(
+                "total_steps must be a positive integer for linear scheduler"
+            )
         # Provide default if not present, to support tests relying on defaults
-        final_lr_fraction = kwargs.get("final_lr_fraction", 0.1) 
+        final_lr_fraction = kwargs.get("final_lr_fraction", 0.1)
 
         def linear_decay(step: int) -> float:
             # step is 0-indexed by LambdaLR for the *current* epoch/step.
@@ -79,7 +81,9 @@ class SchedulerFactory:
     ) -> CosineAnnealingLR:
         """Create cosine annealing scheduler."""
         if total_steps <= 0:
-            raise ValueError("total_steps must be a positive integer for cosine scheduler")
+            raise ValueError(
+                "total_steps must be a positive integer for cosine scheduler"
+            )
         eta_min_fraction = kwargs.get("eta_min_fraction", 0.0)
         initial_lr = optimizer.param_groups[0]["lr"]
         eta_min = initial_lr * eta_min_fraction
@@ -92,7 +96,7 @@ class SchedulerFactory:
     ) -> ExponentialLR:
         """Create exponential decay scheduler."""
         # Provide default if not present
-        gamma = kwargs.get("gamma", 0.995) 
+        gamma = kwargs.get("gamma", 0.995)
         return ExponentialLR(optimizer, gamma=gamma)
 
     @staticmethod

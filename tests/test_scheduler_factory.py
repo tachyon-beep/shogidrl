@@ -23,7 +23,7 @@ class TestSchedulerFactory:
         """Create a dummy optimizer for testing."""
         # Create a simple parameter to optimize
         param = torch.nn.Parameter(torch.randn(2, 2))
-        return Adam([param], lr=1e-3, weight_decay=0.0) # ADDED weight_decay
+        return Adam([param], lr=1e-3, weight_decay=0.0)  # ADDED weight_decay
 
     def test_create_scheduler_none_type(self, dummy_optimizer):
         """Test that None schedule_type returns None."""
@@ -53,7 +53,7 @@ class TestSchedulerFactory:
         # After 50 steps (halfway), LR should be 50% of initial (linear decay from 100% to 10%)
         for _ in range(50):
             if scheduler:  # Check if scheduler exists
-                dummy_optimizer.step() 
+                dummy_optimizer.step()
                 scheduler.step()
         mid_lr = dummy_optimizer.param_groups[0]["lr"]
         # Original test expectation was 0.5 * initial_lr.
@@ -62,11 +62,11 @@ class TestSchedulerFactory:
         # lr(50) = initial_lr - (initial_lr - 0.1 * initial_lr) * (50 / 100)
         # lr(50) = initial_lr - (0.9 * initial_lr) * 0.5
         # lr(50) = initial_lr - 0.45 * initial_lr = 0.55 * initial_lr
-        expected_mid_lr = initial_lr * 0.55 
+        expected_mid_lr = initial_lr * 0.55
         assert abs(mid_lr - expected_mid_lr) < 1e-6
 
         # After 100 steps, LR should be 10% of initial
-        for _ in range(50): # remaining 50 steps
+        for _ in range(50):  # remaining 50 steps
             if scheduler:
                 dummy_optimizer.step()
                 scheduler.step()
@@ -221,7 +221,9 @@ class TestSchedulerFactoryIntegration:
     def test_scheduler_type_coverage(self):
         """Test that all documented scheduler types are supported."""
         dummy_param = torch.nn.Parameter(torch.randn(1))
-        optimizer = Adam([dummy_param], lr=1e-3, weight_decay=0.0) # Ensure weight_decay is present
+        optimizer = Adam(
+            [dummy_param], lr=1e-3, weight_decay=0.0
+        )  # Ensure weight_decay is present
 
         supported_types = ["linear", "cosine", "exponential", "step"]
 
@@ -261,32 +263,40 @@ class TestSchedulerFactoryIntegration:
         scheduler_linear = SchedulerFactory.create_scheduler(
             optimizer=optimizer, schedule_type="linear", total_steps=100
         )
-        assert scheduler_linear is not None, "Linear scheduler should be created with default kwargs"
+        assert (
+            scheduler_linear is not None
+        ), "Linear scheduler should be created with default kwargs"
 
         # Test exponential scheduler: uses default gamma if not provided
         # Empty dict for schedule_kwargs, factory uses default for gamma
         scheduler_exp = SchedulerFactory.create_scheduler(
             optimizer=optimizer,
             schedule_type="exponential",
-            total_steps=100, # total_steps is not strictly used by exponential's core logic but factory requires it
+            total_steps=100,  # total_steps is not strictly used by exponential's core logic but factory requires it
             schedule_kwargs={},
         )
-        assert scheduler_exp is not None, "Exponential scheduler should be created with default kwargs"
+        assert (
+            scheduler_exp is not None
+        ), "Exponential scheduler should be created with default kwargs"
 
         # Test step scheduler: uses default step_size and gamma if not provided
         # Empty dict for schedule_kwargs, factory uses defaults for step_size and gamma
         scheduler_step = SchedulerFactory.create_scheduler(
             optimizer=optimizer,
             schedule_type="step",
-            total_steps=100, # total_steps is not strictly used by step's core logic but factory requires it
+            total_steps=100,  # total_steps is not strictly used by step's core logic but factory requires it
             schedule_kwargs={},
         )
-        assert scheduler_step is not None, "Step scheduler should be created with default kwargs"
+        assert (
+            scheduler_step is not None
+        ), "Step scheduler should be created with default kwargs"
 
     def test_scheduler_total_steps_validation(self):
         """Test validation of total_steps for relevant schedulers."""
         dummy_param1 = torch.nn.Parameter(torch.randn(1))
-        optimizer1 = Adam([dummy_param1], lr=1e-3, weight_decay=0.0) # Ensure weight_decay is present
+        optimizer1 = Adam(
+            [dummy_param1], lr=1e-3, weight_decay=0.0
+        )  # Ensure weight_decay is present
 
         # Linear scheduler requires total_steps > 0
         with pytest.raises(ValueError, match="total_steps must be a positive integer"):
@@ -306,7 +316,10 @@ class TestSchedulerFactoryIntegration:
             )
 
         # Cosine scheduler requires total_steps > 0
-        with pytest.raises(ValueError, match="total_steps must be a positive integer for cosine scheduler"):
+        with pytest.raises(
+            ValueError,
+            match="total_steps must be a positive integer for cosine scheduler",
+        ):
             SchedulerFactory.create_scheduler(
                 optimizer=optimizer1,
                 schedule_type="cosine",
@@ -314,7 +327,10 @@ class TestSchedulerFactoryIntegration:
                 schedule_kwargs={"eta_min_fraction": 0.1},
             )
 
-        with pytest.raises(ValueError, match="total_steps must be a positive integer for cosine scheduler"):
+        with pytest.raises(
+            ValueError,
+            match="total_steps must be a positive integer for cosine scheduler",
+        ):
             SchedulerFactory.create_scheduler(
                 optimizer=optimizer1,
                 schedule_type="cosine",

@@ -37,7 +37,7 @@ class TestPPOAgentInitialization:
         assert agent.name == "TestAgent"
         assert agent.device == torch.device("cpu")
         assert agent.model is ppo_test_model
-        assert agent.config is minimal_app_config
+        assert agent.config == minimal_app_config
 
         # Verify model moved to correct device
         assert next(agent.model.parameters()).device == torch.device("cpu")

@@ -18,15 +18,15 @@ logger = logging.getLogger(__name__)
 from . import shogi_game_io, shogi_move_execution, shogi_rules_logic
 
 # Import types and fundamental classes from shogi_core_definitions
+from .shogi_core_definitions import PIECE_TYPE_TO_HAND_TYPE  # Consolidated
+from .shogi_core_definitions import MoveApplicationResult  # Added
+from .shogi_core_definitions import TerminationReason  # Added
 from .shogi_core_definitions import (
     Color,
+    MoveTuple,
     Piece,
     PieceType,
-    MoveTuple,
-    MoveApplicationResult,  # Added
     get_unpromoted_types,
-    PIECE_TYPE_TO_HAND_TYPE,  # Consolidated
-    TerminationReason,      # Added
 )
 
 
@@ -50,7 +50,7 @@ class ShogiGame:
         self.board_history: List[Tuple] = []  # Added board_history
         self._max_moves_this_game = max_moves_per_game
         self._initial_board_setup_done = False
-        self._seed_value: Optional[Any] = None # Added for seeding
+        self._seed_value: Optional[Any] = None  # Added for seeding
         self.reset()
 
     def seed(self, seed_value: Optional[Any] = None) -> "ShogiGame":
@@ -286,8 +286,10 @@ class ShogiGame:
     ) -> "ShogiGame":
         """Loads a game state from an SFEN string."""
         # Parse SFEN string components
-        board_sfen, turn_sfen, hands_sfen, move_number_sfen = shogi_game_io.parse_sfen_string_components(sfen_str)
-        
+        board_sfen, turn_sfen, hands_sfen, move_number_sfen = (
+            shogi_game_io.parse_sfen_string_components(sfen_str)
+        )
+
         current_player_from_sfen = Color.BLACK if turn_sfen == "b" else Color.WHITE
 
         try:
@@ -302,25 +304,29 @@ class ShogiGame:
             ) from e
 
         game = cls(max_moves_per_game=max_moves_for_game_instance)
-        game.current_player = current_player_from_sfen # Set current player before potential termination check
-        game.move_count = move_number - 1 # SFEN move number is 1-indexed for the *next* move
-                                          # Our move_count is 0-indexed for moves *completed*.
-                                          # So, if SFEN says move 1, 0 moves completed.
-                                          # If SFEN says move 5, 4 moves completed.
+        game.current_player = current_player_from_sfen  # Set current player before potential termination check
+        game.move_count = (
+            move_number - 1
+        )  # SFEN move number is 1-indexed for the *next* move
+        # Our move_count is 0-indexed for moves *completed*.
+        # So, if SFEN says move 1, 0 moves completed.
+        # If SFEN says move 5, 4 moves completed.
 
         game.board = [[None for _ in range(9)] for _ in range(9)]
         game.hands = {
             Color.BLACK.value: {ptype: 0 for ptype in get_unpromoted_types()},
             Color.WHITE.value: {ptype: 0 for ptype in get_unpromoted_types()},
         }
-        game.move_history = [] # SFEN does not contain history
-        game.board_history = [] # Will be initialized after board setup
+        game.move_history = []  # SFEN does not contain history
+        game.board_history = []  # Will be initialized after board setup
 
         shogi_game_io.populate_board_from_sfen_segment(game.board, board_sfen)
         shogi_game_io.populate_hands_from_sfen_segment(game.hands, hands_sfen)
-        
+
         game._initial_board_setup_done = True
-        game.board_history.append(game._board_state_hash()) # Add current state to history
+        game.board_history.append(
+            game._board_state_hash()
+        )  # Add current state to history
 
         # Evaluate termination conditions for the loaded position.
         # The `player_who_just_moved` for from_sfen is tricky. If the game is over,
@@ -332,7 +338,7 @@ class ShogiGame:
         # This is complex if the SFEN represents a mid-game state where the last move isn't known.
         # For now, if checkmate, winner is opponent of current_player. If stalemate, winner is None.
         # The `player_who_just_moved` argument to `_check_and_update_termination_status` is primarily
-        # to assign the winner correctly in case of checkmate. 
+        # to assign the winner correctly in case of checkmate.
         # Let's pass current_player.opponent() as a placeholder, it will be used if checkmate occurs.
         game._check_and_update_termination_status(game.current_player.opponent())
 
@@ -384,9 +390,7 @@ class ShogiGame:
             ValueError: If perspective_player_color is None.
         """
         if perspective_player_color is None:
-            raise ValueError(
-                "perspective_player_color must be provided to get_reward."
-            )
+            raise ValueError("perspective_player_color must be provided to get_reward.")
 
         if not self.game_over:
             return 0.0
@@ -401,14 +405,16 @@ class ShogiGame:
         else:  # Perspective player lost (or game ended with a winner not being them)
             return -1.0
 
-    def _check_and_update_termination_status(self, player_who_just_moved: Color) -> None:
+    def _check_and_update_termination_status(
+        self, player_who_just_moved: Color
+    ) -> None:
         """
         Checks for all game termination conditions (checkmate, stalemate, max_moves, sennichite)
         and updates game_over, winner, and termination_reason if the game has ended.
         This method should be called after the current player has been switched (so self.current_player
         is the player whose turn it *would be*).
         """
-        if self.game_over: # If already marked as over, do nothing further.
+        if self.game_over:  # If already marked as over, do nothing further.
             return
 
         # 1. Check for Checkmate or Stalemate
@@ -418,27 +424,29 @@ class ShogiGame:
         if not current_player_legal_moves:
             if shogi_rules_logic.is_in_check(self, self.current_player):
                 self.game_over = True
-                self.winner = player_who_just_moved # The player who made the last move wins
+                self.winner = (
+                    player_who_just_moved  # The player who made the last move wins
+                )
                 self.termination_reason = TerminationReason.CHECKMATE.value
             else:
                 self.game_over = True
-                self.winner = None # Stalemate is a draw
-                self.termination_reason = TerminationReason.STALEMATE.value # Use enum
-            return # Game ended by checkmate or stalemate
+                self.winner = None  # Stalemate is a draw
+                self.termination_reason = TerminationReason.STALEMATE.value  # Use enum
+            return  # Game ended by checkmate or stalemate
 
         # 2. Check for Max Moves Exceeded
         #    This uses self.move_count, which is the count *after* the last move.
         if self.move_count >= self.max_moves_per_game:
             self.game_over = True
-            self.winner = None # Typically a draw, or specific rules might apply
+            self.winner = None  # Typically a draw, or specific rules might apply
             self.termination_reason = TerminationReason.MAX_MOVES_EXCEEDED.value
-            return # Game ended by max moves
+            return  # Game ended by max moves
 
         # 3. Check for Sennichite (Repetition)
         #    This should be checked after other terminating conditions.
         if shogi_rules_logic.check_for_sennichite(self):
             self.game_over = True
-            self.winner = None # Sennichite is a draw
+            self.winner = None  # Sennichite is a draw
             self.termination_reason = TerminationReason.REPETITION.value
 
         # Other termination conditions like resignation, illegal move, time forfeit
@@ -475,7 +483,10 @@ class ShogiGame:
             raise ValueError(f"Invalid move_tuple format: {move_tuple}")
 
     def _prepare_move_details_for_history(
-        self, move_tuple: MoveTuple, player_who_made_the_move: Color, move_count_before_move: int
+        self,
+        move_tuple: MoveTuple,
+        player_who_made_the_move: Color,
+        move_count_before_move: int,
     ) -> Dict[str, Any]:
         """Initializes the dictionary for storing move details in history."""
         return {
@@ -490,7 +501,7 @@ class ShogiGame:
             "move_count_before_move": move_count_before_move,
             "original_board_state": None,
             "original_hands_state": None,
-            "state_hash": None, # Ensure state_hash is initialized
+            "state_hash": None,  # Ensure state_hash is initialized
         }
 
     def _populate_drop_move_details(
@@ -499,7 +510,9 @@ class ShogiGame:
         """Populates details specific to a drop move."""
         move_details["is_drop"] = True
         if not isinstance(promote_or_drop_info, PieceType):
-            raise ValueError("Internal error: Drop move info not PieceType despite validation.")
+            raise ValueError(
+                "Internal error: Drop move info not PieceType despite validation."
+            )
         move_details["dropped_piece_type"] = promote_or_drop_info
 
     def _validate_and_populate_board_move_details(
@@ -532,7 +545,9 @@ class ShogiGame:
         move_details["original_type_before_promotion"] = piece_to_move.type
         move_details["original_color_of_moved_piece"] = piece_to_move.color
 
-    def _handle_simulation_return(self, move_details_for_history: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_simulation_return(
+        self, move_details_for_history: Dict[str, Any]
+    ) -> Dict[str, Any]:
         return move_details_for_history
 
     def _handle_real_move_return(
@@ -547,9 +562,11 @@ class ShogiGame:
                 reward = 0.0
             else:  # Opponent won
                 reward = -1.0
-        
+
         done = self.game_over
-        info: Dict[str, Any] = {"reason": self.termination_reason if self.game_over else "Game ongoing"}
+        info: Dict[str, Any] = {
+            "reason": self.termination_reason if self.game_over else "Game ongoing"
+        }
         if self.game_over and self.winner is not None:
             info["winner"] = self.winner.name
         return next_obs, reward, done, info
@@ -571,9 +588,11 @@ class ShogiGame:
         """
         if self.game_over and not is_simulation:
             # Return early if game is over and it's not a simulation
-            return self._handle_real_move_return(self.current_player.opponent()) # Pass opponent as nominal player
+            return self._handle_real_move_return(
+                self.current_player.opponent()
+            )  # Pass opponent as nominal player
 
-        self._validate_move_tuple_format(move_tuple) # Ensure validation is called
+        self._validate_move_tuple_format(move_tuple)  # Ensure validation is called
 
         player_who_made_the_move = self.current_player
         move_count_before_move = self.move_count
@@ -587,13 +606,15 @@ class ShogiGame:
             # _populate_drop_move_details expects (self, move_details, promote_or_drop_info: PieceType)
             drop_piece_type = move_tuple[4]
             if not isinstance(drop_piece_type, PieceType):
-                raise ValueError(f"Invalid piece type for drop in move_tuple: {drop_piece_type}")
+                raise ValueError(
+                    f"Invalid piece type for drop in move_tuple: {drop_piece_type}"
+                )
             self._populate_drop_move_details(move_details_for_history, drop_piece_type)
         else:  # Board move
             # move_tuple for board: (from_r, from_c, to_r, to_c, promote_bool: bool)
-            # _validate_and_populate_board_move_details expects 
+            # _validate_and_populate_board_move_details expects
             # (self, move_details, from_r, from_c, to_r, to_c, player_who_made_the_move)
-            from_r, from_c, to_r, to_c, _ = move_tuple 
+            from_r, from_c, to_r, to_c, _ = move_tuple
             # Type assertion based on _validate_move_tuple_format and the if condition
             assert isinstance(from_r, int), "from_r must be int for a board move"
             assert isinstance(from_c, int), "from_c must be int for a board move"
@@ -601,7 +622,12 @@ class ShogiGame:
             assert isinstance(to_c, int), "to_c must be int for a board move"
 
             self._validate_and_populate_board_move_details(
-                move_details_for_history, from_r, from_c, to_r, to_c, player_who_made_the_move
+                move_details_for_history,
+                from_r,
+                from_c,
+                to_r,
+                to_c,
+                player_who_made_the_move,
             )
 
         # --- Capture state for simulation undo if needed ---
@@ -612,8 +638,12 @@ class ShogiGame:
         move_application_result = shogi_move_execution.apply_move_to_board_state(
             self.board, self.hands, move_tuple, player_who_made_the_move
         )
-        move_details_for_history["captured"] = move_application_result.captured_piece_type
-        move_details_for_history["was_promoted_in_move"] = move_application_result.was_promotion
+        move_details_for_history["captured"] = (
+            move_application_result.captured_piece_type
+        )
+        move_details_for_history["was_promoted_in_move"] = (
+            move_application_result.was_promotion
+        )
 
         shogi_move_execution.apply_move_to_game(self, is_simulation)
 
@@ -629,7 +659,9 @@ class ShogiGame:
         else:
             return self._handle_real_move_return(player_who_made_the_move)
 
-    def _restore_board_and_hands_for_undo(self, last_move_details: Dict[str, Any]) -> None:
+    def _restore_board_and_hands_for_undo(
+        self, last_move_details: Dict[str, Any]
+    ) -> None:
         """Helper to restore board and hands from move details during undo."""
         move_tuple = last_move_details["move"]
         _, _, to_r, to_c, _ = move_tuple
@@ -637,35 +669,52 @@ class ShogiGame:
         if last_move_details["is_drop"]:
             dropped_piece_type = last_move_details["dropped_piece_type"]
             assert dropped_piece_type is not None, "dropped_piece_type missing for drop"
-            
-            self.board[to_r][to_c] = None
-            self.hands[self.current_player.value][dropped_piece_type] = \
-                self.hands[self.current_player.value].get(dropped_piece_type, 0) + 1
-        else: # Board move
-            from_r, from_c, _, _, _ = move_tuple # Unpack from_r, from_c here
-            original_type_at_source = last_move_details["original_type_before_promotion"]
-            original_color_of_moved_piece = last_move_details["original_color_of_moved_piece"]
-            assert original_type_at_source is not None, "original_type_before_promotion missing"
-            assert original_color_of_moved_piece is not None, "original_color_of_moved_piece missing"
 
-            self.board[from_r][from_c] = Piece(original_type_at_source, original_color_of_moved_piece)
+            self.board[to_r][to_c] = None
+            self.hands[self.current_player.value][dropped_piece_type] = (
+                self.hands[self.current_player.value].get(dropped_piece_type, 0) + 1
+            )
+        else:  # Board move
+            from_r, from_c, _, _, _ = move_tuple  # Unpack from_r, from_c here
+            original_type_at_source = last_move_details[
+                "original_type_before_promotion"
+            ]
+            original_color_of_moved_piece = last_move_details[
+                "original_color_of_moved_piece"
+            ]
+            assert (
+                original_type_at_source is not None
+            ), "original_type_before_promotion missing"
+            assert (
+                original_color_of_moved_piece is not None
+            ), "original_color_of_moved_piece missing"
+
+            self.board[from_r][from_c] = Piece(
+                original_type_at_source, original_color_of_moved_piece
+            )
 
             captured_piece_board_type = last_move_details["captured"]
             if captured_piece_board_type:
                 captured_piece_color = self.current_player.opponent()
-                self.board[to_r][to_c] = Piece(captured_piece_board_type, captured_piece_color)
-                
-                hand_type_of_captured = PIECE_TYPE_TO_HAND_TYPE.get(captured_piece_board_type)
+                self.board[to_r][to_c] = Piece(
+                    captured_piece_board_type, captured_piece_color
+                )
+
+                hand_type_of_captured = PIECE_TYPE_TO_HAND_TYPE.get(
+                    captured_piece_board_type
+                )
                 if hand_type_of_captured is None:
-                    raise ValueError(f"Cannot convert captured board type {captured_piece_board_type} to hand type during undo.")
-                
+                    raise ValueError(
+                        f"Cannot convert captured board type {captured_piece_board_type} to hand type during undo."
+                    )
+
                 player_hand = self.hands[self.current_player.value]
                 if player_hand.get(hand_type_of_captured, 0) > 0:
                     player_hand[hand_type_of_captured] -= 1
                 else:
                     # This implies an inconsistency
                     # Consider logging or raising a more specific error if strictness is required
-                    pass 
+                    pass
             else:
                 self.board[to_r][to_c] = None
 
@@ -679,21 +728,30 @@ class ShogiGame:
         if simulation_undo_details:
             original_board_state = simulation_undo_details.get("original_board_state")
             original_hands_state = simulation_undo_details.get("original_hands_state")
-            original_current_player = simulation_undo_details.get("player_who_made_the_move")
+            original_current_player = simulation_undo_details.get(
+                "player_who_made_the_move"
+            )
             original_move_count = simulation_undo_details.get("move_count_before_move")
 
-            if not all(isinstance(arg, expected_type) for arg, expected_type in [
-                (original_board_state, list),
-                (original_hands_state, dict),
-                (original_current_player, Color),
-                (original_move_count, int)
-            ]):
+            if not all(
+                isinstance(arg, expected_type)
+                for arg, expected_type in [
+                    (original_board_state, list),
+                    (original_hands_state, dict),
+                    (original_current_player, Color),
+                    (original_move_count, int),
+                ]
+            ):
                 # More detailed type error could be raised here if needed
-                raise TypeError("One or more arguments from simulation_undo_details have incorrect types.")
+                raise TypeError(
+                    "One or more arguments from simulation_undo_details have incorrect types."
+                )
 
             assert original_board_state is not None, "original_board_state missing"
             assert original_hands_state is not None, "original_hands_state missing"
-            assert original_current_player is not None, "original_current_player missing"
+            assert (
+                original_current_player is not None
+            ), "original_current_player missing"
             assert original_move_count is not None, "original_move_count missing"
 
             shogi_move_execution.revert_last_applied_move(
@@ -703,7 +761,7 @@ class ShogiGame:
                 original_current_player=original_current_player,
                 original_move_count=original_move_count,
             )
-        else: # Undo from game history
+        else:  # Undo from game history
             if not self.move_history:
                 return
 
@@ -713,9 +771,9 @@ class ShogiGame:
 
             self.current_player = last_move_details["player_who_made_the_move"]
             self.move_count = last_move_details["move_count_before_move"]
-            
+
             self._restore_board_and_hands_for_undo(last_move_details)
-            
+
             self.game_over = False
             self.winner = None
             self.termination_reason = None
@@ -766,7 +824,9 @@ class ShogiGame:
             return 0 <= row <= 2
         return 6 <= row <= 8
 
-    def _check_drop_pawn_rules(self, row: int, col: int, player_color: Color, last_rank: int) -> bool:
+    def _check_drop_pawn_rules(
+        self, row: int, col: int, player_color: Color, last_rank: int
+    ) -> bool:
         """Checks specific rules for dropping a pawn."""
         if self.is_nifu(player_color, col):
             return False
@@ -783,7 +843,9 @@ class ShogiGame:
             return False
         return True
 
-    def _check_drop_knight_rules(self, row: int, last_rank: int, second_last_rank: int) -> bool:
+    def _check_drop_knight_rules(
+        self, row: int, last_rank: int, second_last_rank: int
+    ) -> bool:
         """Checks specific rules for dropping a knight."""
         # player_color removed as it was unused
         if row == last_rank or row == second_last_rank:
@@ -799,10 +861,12 @@ class ShogiGame:
         This includes checks for nifu (two pawns in the same file) and uchi_fu_zume (dropping a pawn for checkmate),
         and that pieces are not dropped where they have no further moves.
         """
-        if piece_type == PieceType.KING or \
-           not self.is_on_board(row, col) or \
-           self.hands[player_color.value].get(piece_type, 0) <= 0 or \
-           self.board[row][col] is not None:  # Square must be empty
+        if (
+            piece_type == PieceType.KING
+            or not self.is_on_board(row, col)
+            or self.hands[player_color.value].get(piece_type, 0) <= 0
+            or self.board[row][col] is not None
+        ):  # Square must be empty
             return False
 
         last_rank = 0 if player_color == Color.BLACK else 8
@@ -815,4 +879,4 @@ class ShogiGame:
         elif piece_type == PieceType.KNIGHT:
             return self._check_drop_knight_rules(row, last_rank, second_last_rank)
 
-        return True # Default for other pieces (Gold, Silver, Bishop, Rook)
+        return True  # Default for other pieces (Gold, Silver, Bishop, Rook)

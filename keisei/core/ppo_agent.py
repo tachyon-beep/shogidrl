@@ -43,7 +43,9 @@ class PPOAgent:
             device: PyTorch device for training
             name: Agent name for identification
         """
-        self.config = config.model_copy(deep=True) # Ensure the agent stores a deep copy
+        self.config = config.model_copy(
+            deep=True
+        )  # Ensure the agent stores a deep copy
         self.device = device
         self.name = name
 

@@ -102,7 +102,9 @@ class TestShogiGameSeeding:
 class TestEnvManagerSeeding:
     """Test EnvManager seeding integration."""
 
-    def test_env_manager_seeding_integration(self, minimal_app_config: AppConfig):  # ADDED fixture
+    def test_env_manager_seeding_integration(
+        self, minimal_app_config: AppConfig
+    ):  # ADDED fixture
         """Test that EnvManager properly integrates with seeding."""
         env_manager = EnvManager(config=minimal_app_config)  # USE fixture directly
 
@@ -114,7 +116,9 @@ class TestEnvManagerSeeding:
         assert isinstance(env_manager.game, ShogiGame)
         assert env_manager.game is game
 
-    def test_env_manager_seed_propagation(self, minimal_app_config: AppConfig):  # ADDED fixture
+    def test_env_manager_seed_propagation(
+        self, minimal_app_config: AppConfig
+    ):  # ADDED fixture
         """Test that seeding propagates through EnvManager."""
         env_manager = EnvManager(config=minimal_app_config)  # USE fixture directly
 
@@ -127,11 +131,15 @@ class TestEnvManagerSeeding:
         # Verify the seed was set
         assert game._seed_value == 42
 
-    def test_env_manager_seeding_logging(self, minimal_app_config: AppConfig):  # ADDED fixture
+    def test_env_manager_seeding_logging(
+        self, minimal_app_config: AppConfig
+    ):  # ADDED fixture
         """Test that EnvManager seeding operations are logged."""
         # Create a mock logger function to track calls
         mock_logger = Mock()
-        env_manager = EnvManager(config=minimal_app_config, logger_func=mock_logger)  # USE fixture directly
+        env_manager = EnvManager(
+            config=minimal_app_config, logger_func=mock_logger
+        )  # USE fixture directly
 
         # Setup the environment to initialize the game
         _, _ = env_manager.setup_environment()
@@ -244,7 +252,9 @@ class TestSeedingEdgeCases:
 class TestSeedingIntegration:
     """Integration tests for seeding across the system."""
 
-    def test_full_system_seeding_workflow(self, minimal_app_config: AppConfig):  # MODIFIED: Inject fixture
+    def test_full_system_seeding_workflow(
+        self, minimal_app_config: AppConfig
+    ):  # MODIFIED: Inject fixture
         """Test complete seeding workflow from config to game."""
         config = minimal_app_config  # MODIFIED: Use injected fixture
         env_manager = EnvManager(config=config)
@@ -262,7 +272,9 @@ class TestSeedingIntegration:
         state = game.get_observation()
         assert state is not None
 
-    def test_seeding_with_real_training_components(self, minimal_app_config: AppConfig):  # MODIFIED: Inject fixture
+    def test_seeding_with_real_training_components(
+        self, minimal_app_config: AppConfig
+    ):  # MODIFIED: Inject fixture
         """Test seeding works with actual training components."""
         config = minimal_app_config  # MODIFIED: Use injected fixture
         env_manager = EnvManager(config=config)

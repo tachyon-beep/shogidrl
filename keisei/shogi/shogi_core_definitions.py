@@ -9,9 +9,9 @@ constants related to game notation (KIF) and observation tensors for
 potential AI applications.
 """
 
+from dataclasses import dataclass  # Added import
 from enum import Enum
 from typing import Dict, List, Optional, Set, Tuple, Union
-from dataclasses import dataclass  # Added import
 
 # --- Public API ---
 __all__ = [

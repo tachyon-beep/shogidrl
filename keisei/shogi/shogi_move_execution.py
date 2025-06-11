@@ -4,16 +4,17 @@ Contains functions for applying and reverting moves in the Shogi game.
 These functions operate on a ShogiGame instance.
 """
 
-from typing import TYPE_CHECKING, List, Dict, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
+
+from .shogi_core_definitions import TerminationReason  # Changed from TerminationStatus
 from .shogi_core_definitions import (
-    Color,
-    Piece,
-    PieceType,
-    MoveTuple,
-    MoveApplicationResult,
     BASE_TO_PROMOTED_TYPE,
     PROMOTED_TO_BASE_TYPE,
-    TerminationReason,  # Changed from TerminationStatus
+    Color,
+    MoveApplicationResult,
+    MoveTuple,
+    Piece,
+    PieceType,
 )
 
 if TYPE_CHECKING:
@@ -22,7 +23,7 @@ if TYPE_CHECKING:
 
 def apply_move_to_board_state(
     board: List[List[Optional[Piece]]],
-    hands: Dict[int, Dict[PieceType, int]], # Changed Color to int for key type
+    hands: Dict[int, Dict[PieceType, int]],  # Changed Color to int for key type
     move: MoveTuple,
     current_player: Color,
 ) -> MoveApplicationResult:
@@ -53,14 +54,20 @@ def apply_move_to_board_state(
 
     if from_r_raw is None:  # Drop move (from_r_raw and from_c_raw will be None)
         if not isinstance(promote_or_drop_info, PieceType):
-            raise ValueError("For drop moves, the 5th element of MoveTuple must be a PieceType.")
+            raise ValueError(
+                "For drop moves, the 5th element of MoveTuple must be a PieceType."
+            )
         piece_to_drop_type: PieceType = promote_or_drop_info
 
         # Assuming the move is validated, the piece must be in hand and its count > 0.
         # Directly place the piece on the board and decrement hand count.
         board[to_r][to_c] = Piece(piece_to_drop_type, current_player)
-        if piece_to_drop_type not in hands[current_player.value]: # Should not happen if validated
-            raise ValueError(f"Attempting to drop {piece_to_drop_type} which is not in hand for {current_player}")
+        if (
+            piece_to_drop_type not in hands[current_player.value]
+        ):  # Should not happen if validated
+            raise ValueError(
+                f"Attempting to drop {piece_to_drop_type} which is not in hand for {current_player}"
+            )
         hands[current_player.value][piece_to_drop_type] -= 1
         # Do not delete the key from hands; let the count be 0, consistent with hand initialization.
 
@@ -68,17 +75,23 @@ def apply_move_to_board_state(
         # captured_piece_type remains None for drops
     else:  # Board move (from_r_raw and from_c_raw will be int)
         if not isinstance(from_r_raw, int) or not isinstance(from_c_raw, int):
-            raise ValueError("from_row and from_col must be integers for board moves in MoveTuple")
+            raise ValueError(
+                "from_row and from_col must be integers for board moves in MoveTuple"
+            )
         from_r: int = from_r_raw
         from_c: int = from_c_raw
 
         if not isinstance(promote_or_drop_info, bool):
-            raise ValueError("For board moves, the 5th element of MoveTuple must be a boolean (promote_flag).")
+            raise ValueError(
+                "For board moves, the 5th element of MoveTuple must be a boolean (promote_flag)."
+            )
         promote: bool = promote_or_drop_info
 
         moving_piece = board[from_r][from_c]
         if not moving_piece:
-            raise ValueError(f"No piece at source square ({from_r},{from_c}) for board move.")
+            raise ValueError(
+                f"No piece at source square ({from_r},{from_c}) for board move."
+            )
         if moving_piece.color != current_player:
             raise ValueError(
                 f"Piece at ({from_r},{from_c}) belongs to {moving_piece.color}, "
@@ -101,7 +114,9 @@ def apply_move_to_board_state(
             )
 
         # Move the piece
-        board[to_r][to_c] = moving_piece # Piece instance carries its color and current type
+        board[to_r][
+            to_c
+        ] = moving_piece  # Piece instance carries its color and current type
         board[from_r][from_c] = None
 
         if promote:
@@ -118,7 +133,9 @@ def apply_move_to_board_state(
         # If not promoting, the piece on board[to_r][to_c] (which is moving_piece)
         # retains its original type (which could be already promoted if it moved from a promotion zone)
 
-    return MoveApplicationResult(captured_piece_type=captured_piece_type, was_promotion=was_promotion)
+    return MoveApplicationResult(
+        captured_piece_type=captured_piece_type, was_promotion=was_promotion
+    )
 
 
 def apply_move_to_game(game: "ShogiGame", is_simulation: bool = False) -> None:
@@ -156,7 +173,7 @@ def apply_move_to_game(game: "ShogiGame", is_simulation: bool = False) -> None:
     #             game.game_over = True
     #             # Winner was set using player_who_just_moved, which is now out of scope here.
     #             # This assignment is now handled in _check_and_update_termination_status.
-    #             # game.winner = player_who_just_moved 
+    #             # game.winner = player_who_just_moved
     #             game.termination_reason = TerminationReason.CHECKMATE.value
     #         else:
     #             game.game_over = True
@@ -166,6 +183,7 @@ def apply_move_to_game(game: "ShogiGame", is_simulation: bool = False) -> None:
     #         game.game_over = True
     #         game.winner = None
     #         game.termination_reason = TerminationReason.MAX_MOVES_EXCEEDED.value
+
 
 def revert_last_applied_move(
     game: "ShogiGame",
@@ -190,14 +208,14 @@ def revert_last_applied_move(
         # move_application_result: The MoveApplicationResult from applying the move. (Unused)
     """
     # Restore board and hands from the copies
-    game.board = [row[:] for row in original_board_state] 
+    game.board = [row[:] for row in original_board_state]
     game.hands = {k: v.copy() for k, v in original_hands_state.items()}
 
     # Restore game state variables
     game.current_player = original_current_player
-    game.move_count = original_move_count 
-    
+    game.move_count = original_move_count
+
     # Reset game termination state
     game.game_over = False
     game.winner = None
-    game.termination_reason = None # Use None, not TerminationReason.ACTIVE.value
+    game.termination_reason = None  # Use None, not TerminationReason.ACTIVE.value

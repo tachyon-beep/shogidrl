@@ -72,7 +72,10 @@ from keisei.config_schema import (
     DisplayConfig,
     _create_display_config,  # Keep if used by AppConfig default factory directly in tests
 )
-from tests.conftest import TRAIN_DEFAULTS, assert_valid_ppo_metrics  # Removed ENV_DEFAULTS
+from tests.conftest import (
+    TRAIN_DEFAULTS,
+    assert_valid_ppo_metrics,
+)  # Removed ENV_DEFAULTS
 
 
 class TestPPOAgentErrorHandling:
@@ -453,7 +456,9 @@ class TestPPOAgentConfigurationValidation:
                     max_queue_size=1000,
                     worker_seed_offset=1000,
                 ),
-                demo=DemoConfig(enable_demo_mode=False, demo_mode_delay=0.5)  # Added missing arguments
+                demo=DemoConfig(
+                    enable_demo_mode=False, demo_mode_delay=0.5
+                ),  # Added missing arguments
             )
 
             # Instantiate PPOAgent to test config integration
@@ -463,7 +468,9 @@ class TestPPOAgentConfigurationValidation:
             # If creation succeeds, agent should still function
             assert hasattr(agent, "config")
             assert hasattr(agent, "model")
-            assert math.isclose(agent.config.training.learning_rate, invalid_config_item.learning_rate)
+            assert math.isclose(
+                agent.config.training.learning_rate, invalid_config_item.learning_rate
+            )
 
 
 class TestPPOAgentDevicePlacement:
@@ -733,11 +740,11 @@ class TestPPOAgentSchedulerEdgeCases:
             # Create a dummy optimizer if one doesn't exist for the test
             if agent.optimizer is None:
                 agent.optimizer = torch.optim.Adam(
-                    agent.model.parameters(), 
+                    agent.model.parameters(),
                     lr=agent.config.training.learning_rate,
-                    weight_decay=agent.config.training.weight_decay # Added weight_decay
+                    weight_decay=agent.config.training.weight_decay,  # Added weight_decay
                 )
-            agent.optimizer.step() 
+            agent.optimizer.step()
             agent.optimizer.zero_grad()
 
         metrics = agent.learn(buffer)
@@ -748,24 +755,24 @@ class TestPPOAgentSchedulerEdgeCases:
         # Test with zero learning rate
         config_zero_lr = minimal_app_config.model_copy()
         config_zero_lr.training.learning_rate = TEST_ZERO_LEARNING_RATE
-        config_zero_lr.training.lr_schedule_type = "linear" # Enable scheduler
+        config_zero_lr.training.lr_schedule_type = "linear"  # Enable scheduler
 
         agent_zero_lr = PPOAgent(
             model=ppo_test_model, config=config_zero_lr, device=torch.device("cpu")
         )
         if agent_zero_lr.scheduler is not None:
-             assert math.isclose(agent_zero_lr.scheduler.get_last_lr()[0], TEST_ZERO_LEARNING_RATE) # type: ignore
+            assert math.isclose(agent_zero_lr.scheduler.get_last_lr()[0], TEST_ZERO_LEARNING_RATE)  # type: ignore
 
         # Test with very large learning rate
         config_large_lr = minimal_app_config.model_copy()
         config_large_lr.training.learning_rate = 100.0  # Arbitrary large LR
-        config_large_lr.training.lr_schedule_type = "linear" # Enable scheduler
+        config_large_lr.training.lr_schedule_type = "linear"  # Enable scheduler
 
         agent_large_lr = PPOAgent(
             model=ppo_test_model, config=config_large_lr, device=torch.device("cpu")
         )
         if agent_large_lr.scheduler is not None:
-            assert math.isclose(agent_large_lr.scheduler.get_last_lr()[0], 100.0) # type: ignore
+            assert math.isclose(agent_large_lr.scheduler.get_last_lr()[0], 100.0)  # type: ignore
 
         # Example of a learn call to ensure it doesn't crash (optional)
         buffer = ExperienceBuffer(
@@ -777,7 +784,9 @@ class TestPPOAgentSchedulerEdgeCases:
         dummy_obs = torch.randn(
             CORE_OBSERVATION_CHANNELS, SHOGI_BOARD_SIZE, SHOGI_BOARD_SIZE, device="cpu"
         )
-        dummy_mask = torch.ones(agent_large_lr.num_actions_total, dtype=torch.bool, device="cpu")
+        dummy_mask = torch.ones(
+            agent_large_lr.num_actions_total, dtype=torch.bool, device="cpu"
+        )
         for i in range(TEST_BUFFER_SIZE):
             buffer.add(
                 obs=dummy_obs,
@@ -793,9 +802,9 @@ class TestPPOAgentSchedulerEdgeCases:
         if agent_large_lr.scheduler and agent_large_lr.lr_schedule_step_on == "update":
             if agent_large_lr.optimizer is None:
                 agent_large_lr.optimizer = torch.optim.Adam(
-                    agent_large_lr.model.parameters(), 
+                    agent_large_lr.model.parameters(),
                     lr=agent_large_lr.config.training.learning_rate,
-                    weight_decay=agent_large_lr.config.training.weight_decay # Added weight_decay
+                    weight_decay=agent_large_lr.config.training.weight_decay,  # Added weight_decay
                 )
             agent_large_lr.optimizer.step()
             agent_large_lr.optimizer.zero_grad()
@@ -825,8 +834,12 @@ class TestPPOAgentMiscellaneous:
 
     def test_get_config_returns_copy(self, ppo_agent_basic):
         """Test that get_config returns a copy, not the original."""
-        config1 = ppo_agent_basic.config.model_copy(deep=True) # Changed to use .config.model_copy(deep=True)
-        config2 = ppo_agent_basic.config.model_copy(deep=True) # Changed to use .config.model_copy(deep=True)
+        config1 = ppo_agent_basic.config.model_copy(
+            deep=True
+        )  # Changed to use .config.model_copy(deep=True)
+        config2 = ppo_agent_basic.config.model_copy(
+            deep=True
+        )  # Changed to use .config.model_copy(deep=True)
 
         assert config1 is not config2
         assert config1 == config2
@@ -835,12 +848,13 @@ class TestPPOAgentMiscellaneous:
         config1.training.learning_rate = 999.0
         assert not math.isclose(ppo_agent_basic.config.training.learning_rate, 999.0)
 
-
     def test_get_model_state_dict_items(self, ppo_agent_basic):
         """Test that get_model_state_dict().items() works as expected."""
-        state_dict = ppo_agent_basic.model.state_dict() # Changed to use .model.state_dict()
+        state_dict = (
+            ppo_agent_basic.model.state_dict()
+        )  # Changed to use .model.state_dict()
         assert isinstance(state_dict, dict)
         count = 0
         for _key, _value in state_dict.items():
-            count +=1
+            count += 1
         assert count > 0

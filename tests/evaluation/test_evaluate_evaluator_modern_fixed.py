@@ -281,8 +281,9 @@ def test_evaluation_manager_error_handling_integration(tmp_path):
     class AgentWithoutModel:
         def __init__(self):
             self.name = "AgentWithoutModel"
+
         # Deliberately no model attribute
-    
+
     mock_agent_no_model = AgentWithoutModel()
 
     try:

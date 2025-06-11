@@ -22,7 +22,8 @@ def test_evaluate_checkpoint(monkeypatch, tmp_path):
 
     dummy_evaluator = DummyEvaluator(cfg)
     monkeypatch.setattr(
-        "keisei.evaluation.core_manager.EvaluatorFactory.create", lambda cfg: dummy_evaluator
+        "keisei.evaluation.core_manager.EvaluatorFactory.create",
+        lambda cfg: dummy_evaluator,
     )
 
     # Create dummy checkpoint file

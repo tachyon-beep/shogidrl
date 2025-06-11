@@ -32,20 +32,22 @@ def _make_dummy_model(return_value: float) -> ActorCriticProtocol:
         def forward(self, x: torch.Tensor):  # Changed 'obs' to 'x' to match protocol
             self.last_obs_forward = x.detach().clone()
             batch = x.shape[0]
-            _logits = torch.zeros(batch, self.num_actions, device=x.device)  # Renamed logits to _logits
+            _logits = torch.zeros(
+                batch, self.num_actions, device=x.device
+            )  # Renamed logits to _logits
             value = self.value.expand(batch) * self.param
             return _logits, value
 
         def get_action_and_value(self, obs, legal_mask=None, deterministic=False):
             self.grad_enabled = torch.is_grad_enabled()
-            _logits, value = self.forward(obs) # Renamed logits to _logits
+            _logits, value = self.forward(obs)  # Renamed logits to _logits
             action = torch.zeros(obs.shape[0], dtype=torch.long, device=obs.device)
             log_prob = torch.zeros(obs.shape[0], device=obs.device)
             return action, log_prob, value
 
         def evaluate_actions(self, obs, actions, legal_mask=None):
             self.last_obs_eval = obs.detach().clone()
-            _logits, value = self.forward(obs) # Renamed logits to _logits
+            _logits, value = self.forward(obs)  # Renamed logits to _logits
             log_probs = torch.zeros(obs.shape[0], device=obs.device)
             entropy = torch.zeros(obs.shape[0], device=obs.device)
             return log_probs, entropy, value
@@ -64,11 +66,13 @@ def test_select_action_no_grad_and_obs_norm(minimal_app_config):
         scaler=scaler,
     )
     obs = np.zeros((minimal_app_config.env.input_channels, 9, 9), dtype=np.float32)
-    legal_mask_tensor = torch.ones(agent.num_actions_total, dtype=torch.bool) # Renamed to avoid Pylint warning
+    legal_mask_tensor = torch.ones(
+        agent.num_actions_total, dtype=torch.bool
+    )  # Renamed to avoid Pylint warning
     agent.select_action(obs, legal_mask_tensor, is_training=True)
-    assert model.grad_enabled is False # type: ignore[attr-defined]
+    assert model.grad_enabled is False  # type: ignore[attr-defined]
     assert torch.allclose(
-        model.last_obs_forward, torch.from_numpy(obs).unsqueeze(0) + 1 # type: ignore[attr-defined]
+        model.last_obs_forward, torch.from_numpy(obs).unsqueeze(0) + 1  # type: ignore[attr-defined]
     )
 
 
@@ -107,7 +111,7 @@ def test_value_function_clipping_enabled(minimal_app_config):
     buffer = _create_buffer(1.0, 3.0, channels=config.env.input_channels)
     metrics = agent.learn(buffer)
     assert torch.allclose(
-        model.last_obs_eval, torch.zeros_like(model.last_obs_eval) + 1 # type: ignore[attr-defined]
+        model.last_obs_eval, torch.zeros_like(model.last_obs_eval) + 1  # type: ignore[attr-defined]
     )
     assert abs(metrics["ppo/value_loss"] - 3.24) < 1e-2
 

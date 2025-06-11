@@ -3,7 +3,7 @@ Tests for reward functionality in ShogiGame, especially in terminal states.
 """
 
 from unittest.mock import patch  # Moved import to top level
-from typing import Optional # Added Optional for type hinting
+from typing import Optional  # Added Optional for type hinting
 
 import pytest  # Fixed import order
 
@@ -34,7 +34,13 @@ def new_game() -> ShogiGame:
         (None, 0.0, 0.0, "Max moves reached"),
     ],
 )
-def test_reward_in_terminal_states(new_game: ShogiGame, winner: Optional[Color], black_reward: float, white_reward: float, reason: str):
+def test_reward_in_terminal_states(
+    new_game: ShogiGame,
+    winner: Optional[Color],
+    black_reward: float,
+    white_reward: float,
+    reason: str,
+):
     """
     Test that rewards are correctly assigned for all terminal states.
     - Winner gets +1.0, loser gets -1.0.
@@ -47,8 +53,12 @@ def test_reward_in_terminal_states(new_game: ShogiGame, winner: Optional[Color],
     game.termination_reason = reason
 
     # Act & Assert
-    assert game.get_reward(perspective_player_color=Color.BLACK) == pytest.approx(black_reward)
-    assert game.get_reward(perspective_player_color=Color.WHITE) == pytest.approx(white_reward)
+    assert game.get_reward(perspective_player_color=Color.BLACK) == pytest.approx(
+        black_reward
+    )
+    assert game.get_reward(perspective_player_color=Color.WHITE) == pytest.approx(
+        white_reward
+    )
 
 
 def test_reward_ongoing_game(new_game: ShogiGame):
@@ -59,13 +69,17 @@ def test_reward_ongoing_game(new_game: ShogiGame):
 
     # Check reward before game over
     assert new_game.game_over is False  # Changed == to is
-    assert new_game.get_reward(perspective_player_color=Color.BLACK) == pytest.approx(0.0)
-    assert new_game.get_reward(perspective_player_color=Color.WHITE) == pytest.approx(0.0)
+    assert new_game.get_reward(perspective_player_color=Color.BLACK) == pytest.approx(
+        0.0
+    )
+    assert new_game.get_reward(perspective_player_color=Color.WHITE) == pytest.approx(
+        0.0
+    )
 
 
-def test_make_move_returns_reward_in_tuple(new_game: ShogiGame): # Use new_game fixture
+def test_make_move_returns_reward_in_tuple(new_game: ShogiGame):  # Use new_game fixture
     """Test that make_move returns reward as part of its return tuple in normal play."""
-    game = new_game # Use the fixture
+    game = new_game  # Use the fixture
 
     # Make a move and check the return value format
     move_outcome = game.make_move((6, 6, 5, 6, False))  # Black pawn
@@ -97,13 +111,17 @@ def test_make_move_returns_correct_reward_on_checkmate(
     }
     game.set_piece(0, 0, Piece(PieceType.KING, Color.WHITE))  # White King
     game.set_piece(2, 0, Piece(PieceType.GOLD, Color.BLACK))  # Black Gold 1 (to move)
-    game.set_piece(1, 1, Piece(PieceType.GOLD, Color.BLACK))  # Black Gold 2 (stationary)
-    game.set_piece(8, 8, Piece(PieceType.KING, Color.BLACK))  # Black King (out of the way)
+    game.set_piece(
+        1, 1, Piece(PieceType.GOLD, Color.BLACK)
+    )  # Black Gold 2 (stationary)
+    game.set_piece(
+        8, 8, Piece(PieceType.KING, Color.BLACK)
+    )  # Black King (out of the way)
     game.current_player = Color.BLACK
     game.game_over = False
     game.winner = None
-    game.move_count = 10 # Arbitrary move count
-    game.board_history = [game._board_state_hash()] # Initialize board history
+    game.move_count = 10  # Arbitrary move count
+    game.board_history = [game._board_state_hash()]  # Initialize board history
 
     # Move: Black Gold (2,0) -> (1,0) delivering checkmate
     checkmating_move: MoveTuple = (2, 0, 1, 0, False)
@@ -138,15 +156,19 @@ def test_make_move_returns_perspective_specific_reward(
         Color.BLACK.value: {ptype: 0 for ptype in get_unpromoted_types()},
         Color.WHITE.value: {ptype: 0 for ptype in get_unpromoted_types()},
     }
-    game.set_piece(8, 0, Piece(PieceType.KING, Color.BLACK))    # Black King
-    game.set_piece(6, 0, Piece(PieceType.GOLD, Color.WHITE))    # White Gold 1 (to move)
-    game.set_piece(7, 1, Piece(PieceType.GOLD, Color.WHITE))    # White Gold 2 (stationary)
-    game.set_piece(0, 8, Piece(PieceType.KING, Color.WHITE))    # White King (out of the way)
+    game.set_piece(8, 0, Piece(PieceType.KING, Color.BLACK))  # Black King
+    game.set_piece(6, 0, Piece(PieceType.GOLD, Color.WHITE))  # White Gold 1 (to move)
+    game.set_piece(
+        7, 1, Piece(PieceType.GOLD, Color.WHITE)
+    )  # White Gold 2 (stationary)
+    game.set_piece(
+        0, 8, Piece(PieceType.KING, Color.WHITE)
+    )  # White King (out of the way)
     game.current_player = Color.WHITE
     game.game_over = False
     game.winner = None
-    game.move_count = 10 # Arbitrary move count
-    game.board_history = [game._board_state_hash()] # Initialize board history
+    game.move_count = 10  # Arbitrary move count
+    game.board_history = [game._board_state_hash()]  # Initialize board history
 
     # Move: White Gold (6,0) -> (7,0) delivering checkmate
     checkmating_move: MoveTuple = (6, 0, 7, 0, False)
@@ -158,7 +180,9 @@ def test_make_move_returns_perspective_specific_reward(
     assert game.game_over is True, "Game should be over after checkmate by White"
     assert game.winner == Color.WHITE, "White should be the winner"
     assert game.termination_reason == TerminationReason.CHECKMATE.value
-    assert reward_for_white == pytest.approx(1.0), "Reward for White (checkmating player) should be 1.0"
+    assert reward_for_white == pytest.approx(
+        1.0
+    ), "Reward for White (checkmating player) should be 1.0"
 
     # Assert get_reward from the perspective_player's point of view
     actual_reward_perspective = game.get_reward(
@@ -167,25 +191,31 @@ def test_make_move_returns_perspective_specific_reward(
     assert actual_reward_perspective == pytest.approx(expected_reward)
 
 
-def test_get_reward_ongoing_game(new_game: ShogiGame): # Use new_game fixture
+def test_get_reward_ongoing_game(new_game: ShogiGame):  # Use new_game fixture
     """Test get_reward for an ongoing game."""
-    game = new_game # Use the fixture
+    game = new_game  # Use the fixture
     # Make a couple of moves to ensure it's not pristine start, but still ongoing
     game.make_move((6, 6, 5, 6, False))  # Black pawn
     game.make_move((2, 2, 3, 2, False))  # White pawn
-    
+
     # Test for Black's perspective
     reward_black = game.get_reward(perspective_player_color=Color.BLACK)
-    assert reward_black == pytest.approx(0.0), "Reward for ongoing game (Black) should be 0.0"
+    assert reward_black == pytest.approx(
+        0.0
+    ), "Reward for ongoing game (Black) should be 0.0"
 
     # Test for White's perspective
     reward_white = game.get_reward(perspective_player_color=Color.WHITE)
-    assert reward_white == pytest.approx(0.0), "Reward for ongoing game (White) should be 0.0"
+    assert reward_white == pytest.approx(
+        0.0
+    ), "Reward for ongoing game (White) should be 0.0"
 
 
-def test_get_reward_no_perspective_raises_error(new_game: ShogiGame): # Use new_game fixture
+def test_get_reward_no_perspective_raises_error(
+    new_game: ShogiGame,
+):  # Use new_game fixture
     """Test that get_reward raises ValueError if perspective_player_color is None."""
-    game = new_game # Use the fixture
+    game = new_game  # Use the fixture
     with pytest.raises(ValueError) as excinfo:
-        game.get_reward() # Call without perspective_player_color
+        game.get_reward()  # Call without perspective_player_color
     assert "perspective_player_color must be provided" in str(excinfo.value)

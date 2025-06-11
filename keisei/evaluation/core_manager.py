@@ -85,7 +85,7 @@ class EvaluationManager:
         # Ensure the agent has the expected attributes
         if not hasattr(agent, "model") or agent.model is None:
             raise ValueError("Agent must have a 'model' attribute for evaluation")
-        
+
         model = agent.model
 
         # Switch to eval mode for duration of evaluation
@@ -120,7 +120,7 @@ class EvaluationManager:
         # Ensure the agent has the expected attributes
         if not hasattr(agent, "model") or agent.model is None:
             raise ValueError("Agent must have a 'model' attribute for evaluation")
-        
+
         model = agent.model
 
         # Switch to eval mode for duration of evaluation
