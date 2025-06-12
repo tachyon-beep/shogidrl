@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections import Counter, deque
 from time import monotonic
 from typing import Dict, List, Optional, Protocol, Sequence
@@ -354,17 +355,33 @@ class Sparkline:
     ) -> str:
         if not values:
             return " " * self.width
-        if len(values) < 2:
-            return "─" * self.width
 
-        min_v = range_min if range_min is not None else min(values)
-        max_v = range_max if range_max is not None else max(values)
-        clipped = [min(max(v, min_v), max_v) for v in values]
+        # Filter out infinite and NaN values
+        finite_values = [v for v in values if not (math.isnan(v) or math.isinf(v))]
+        
+        if not finite_values:
+            return " " * self.width
+        
+        if len(finite_values) == 1:
+            # Single value should fill the width with the same character
+            return "▄" * self.width
+
+        min_v = range_min if range_min is not None else min(finite_values)
+        max_v = range_max if range_max is not None else max(finite_values)
+        
+        # Handle infinity in range bounds
+        if math.isinf(min_v) or math.isinf(max_v):
+            return " " * self.width
+            
+        clipped = [min(max(v if not (math.isnan(v) or math.isinf(v)) else min_v, min_v), max_v) for v in values]
         if max_v == min_v:
             normalized = [4] * len(clipped)
         else:
             rng = max_v - min_v
-            normalized = [int((v - min_v) / rng * 6) for v in clipped]
+            if rng == 0 or math.isnan(rng) or math.isinf(rng):
+                normalized = [4] * len(clipped)
+            else:
+                normalized = [int((v - min_v) / rng * 6) for v in clipped]
 
         recent = normalized[-self.width :]
         spark = "".join(self.chars[n] for n in recent)

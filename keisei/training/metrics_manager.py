@@ -32,6 +32,14 @@ class TrainingStats:
 class MetricsHistory:
     """Track historical metrics required for trend visualisation and Elo."""
 
+    # PPO metric key constants
+    PPO_LEARNING_RATE = "ppo/learning_rate"
+    PPO_POLICY_LOSS = "ppo/policy_loss"
+    PPO_VALUE_LOSS = "ppo/value_loss"
+    PPO_KL_DIVERGENCE = "ppo/kl_divergence_approx"
+    PPO_ENTROPY = "ppo/entropy"
+    PPO_CLIP_FRACTION = "ppo/clip_fraction"
+
     def __init__(self, max_history: int = 1000) -> None:
         self.max_history = max_history
         self.win_rates_history: List[Dict[str, float]] = []
@@ -53,23 +61,23 @@ class MetricsHistory:
         self._trim(self.win_rates_history)
 
     def add_ppo_data(self, metrics: Dict[str, float]) -> None:
-        if "ppo/learning_rate" in metrics:
-            self.learning_rates.append(metrics["ppo/learning_rate"])
+        if self.PPO_LEARNING_RATE in metrics:
+            self.learning_rates.append(metrics[self.PPO_LEARNING_RATE])
             self._trim(self.learning_rates)
-        if "ppo/policy_loss" in metrics:
-            self.policy_losses.append(metrics["ppo/policy_loss"])
+        if self.PPO_POLICY_LOSS in metrics:
+            self.policy_losses.append(metrics[self.PPO_POLICY_LOSS])
             self._trim(self.policy_losses)
-        if "ppo/value_loss" in metrics:
-            self.value_losses.append(metrics["ppo/value_loss"])
+        if self.PPO_VALUE_LOSS in metrics:
+            self.value_losses.append(metrics[self.PPO_VALUE_LOSS])
             self._trim(self.value_losses)
-        if "ppo/kl_divergence_approx" in metrics:
-            self.kl_divergences.append(metrics["ppo/kl_divergence_approx"])
+        if self.PPO_KL_DIVERGENCE in metrics:
+            self.kl_divergences.append(metrics[self.PPO_KL_DIVERGENCE])
             self._trim(self.kl_divergences)
-        if "ppo/entropy" in metrics:
-            self.entropies.append(metrics["ppo/entropy"])
+        if self.PPO_ENTROPY in metrics:
+            self.entropies.append(metrics[self.PPO_ENTROPY])
             self._trim(self.entropies)
-        if "ppo/clip_fraction" in metrics:
-            self.clip_fractions.append(metrics["ppo/clip_fraction"])
+        if self.PPO_CLIP_FRACTION in metrics:
+            self.clip_fractions.append(metrics[self.PPO_CLIP_FRACTION])
             self._trim(self.clip_fractions)
 
 
@@ -192,7 +200,7 @@ class MetricsManager:
                         move_history[1], policy_mapper, game=None
                     )
                     self.gote_opening_history.append(second)
-            except Exception:
+            except (AttributeError, IndexError, TypeError, ValueError):
                 pass
 
             try:
@@ -205,7 +213,7 @@ class MetricsManager:
                     if len(mv) >= 4:
                         to_sq = _coords_to_square_name(mv[2], mv[3])
                         self.square_usage.update([to_sq])
-            except Exception:
+            except (AttributeError, IndexError, TypeError, ValueError):
                 pass
 
     def get_moves_per_game_trend(self, window_size: int = 100) -> Sequence[int]:
@@ -268,20 +276,20 @@ class MetricsManager:
         """
         ppo_metrics_parts = []
 
-        if "ppo/learning_rate" in learn_metrics:
-            ppo_metrics_parts.append(f"LR:{learn_metrics['ppo/learning_rate']:.2e}")
-        if "ppo/kl_divergence_approx" in learn_metrics:
+        if self.history.PPO_LEARNING_RATE in learn_metrics:
+            ppo_metrics_parts.append(f"LR:{learn_metrics[self.history.PPO_LEARNING_RATE]:.2e}")
+        if self.history.PPO_KL_DIVERGENCE in learn_metrics:
             ppo_metrics_parts.append(
-                f"KL:{learn_metrics['ppo/kl_divergence_approx']:.4f}"
+                f"KL:{learn_metrics[self.history.PPO_KL_DIVERGENCE]:.4f}"
             )
-        if "ppo/policy_loss" in learn_metrics:
-            ppo_metrics_parts.append(f"PolL:{learn_metrics['ppo/policy_loss']:.4f}")
-        if "ppo/value_loss" in learn_metrics:
-            ppo_metrics_parts.append(f"ValL:{learn_metrics['ppo/value_loss']:.4f}")
-        if "ppo/entropy" in learn_metrics:
-            ppo_metrics_parts.append(f"Ent:{learn_metrics['ppo/entropy']:.4f}")
-        if "ppo/clip_fraction" in learn_metrics:
-            ppo_metrics_parts.append(f"CF:{learn_metrics['ppo/clip_fraction']:.2f}")
+        if self.history.PPO_POLICY_LOSS in learn_metrics:
+            ppo_metrics_parts.append(f"PolL:{learn_metrics[self.history.PPO_POLICY_LOSS]:.4f}")
+        if self.history.PPO_VALUE_LOSS in learn_metrics:
+            ppo_metrics_parts.append(f"ValL:{learn_metrics[self.history.PPO_VALUE_LOSS]:.4f}")
+        if self.history.PPO_ENTROPY in learn_metrics:
+            ppo_metrics_parts.append(f"Ent:{learn_metrics[self.history.PPO_ENTROPY]:.4f}")
+        if self.history.PPO_CLIP_FRACTION in learn_metrics:
+            ppo_metrics_parts.append(f"CF:{learn_metrics[self.history.PPO_CLIP_FRACTION]:.2f}")
         self.history.add_ppo_data(learn_metrics)
         return " ".join(ppo_metrics_parts)
 
