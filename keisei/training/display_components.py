@@ -358,22 +358,25 @@ class Sparkline:
 
         # Filter out infinite and NaN values
         finite_values = [v for v in values if not (math.isnan(v) or math.isinf(v))]
-        
+
         if not finite_values:
             return " " * self.width
-        
+
         if len(finite_values) == 1:
             # Single value should fill the width with the same character
             return "▄" * self.width
 
         min_v = range_min if range_min is not None else min(finite_values)
         max_v = range_max if range_max is not None else max(finite_values)
-        
+
         # Handle infinity in range bounds
         if math.isinf(min_v) or math.isinf(max_v):
             return " " * self.width
-            
-        clipped = [min(max(v if not (math.isnan(v) or math.isinf(v)) else min_v, min_v), max_v) for v in values]
+
+        clipped = [
+            min(max(v if not (math.isnan(v) or math.isinf(v)) else min_v, min_v), max_v)
+            for v in values
+        ]
         if max_v == min_v:
             normalized = [4] * len(clipped)
         else:

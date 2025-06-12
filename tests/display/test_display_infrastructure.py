@@ -16,9 +16,9 @@ import time
 
 from keisei.config_schema import DisplayConfig
 from keisei.shogi.shogi_core_definitions import Color
+from keisei.training.display_components import Sparkline
 from keisei.training.elo_rating import EloRatingSystem
 from keisei.training.metrics_manager import MetricsHistory
-from keisei.training.display_components import Sparkline
 
 # Import test utilities
 from tests.display.test_utilities import TestDataFactory
@@ -55,7 +55,7 @@ def create_test_display_config(**kwargs) -> DisplayConfig:
         "trend_smoothing_factor": 0.1,
         "metrics_panel_height": 6,
         "enable_trendlines": True,
-        "log_layer_keyword_filters": ["stem", "policy_head", "value_head"]
+        "log_layer_keyword_filters": ["stem", "policy_head", "value_head"],
     }
     defaults.update(kwargs)
     return DisplayConfig(**defaults)
@@ -94,7 +94,7 @@ class TestDisplayConfiguration:
             sparkline_width=20,
             board_cell_width=7,
             move_list_length=30,
-            elo_k_factor=16.0
+            elo_k_factor=16.0,
         )
 
         assert config.sparkline_width == 20
@@ -130,7 +130,7 @@ class TestDisplayConfiguration:
         config = create_test_display_config(
             sparkline_width=1,  # Should be at least 1
             board_cell_width=3,  # Should be at least 3
-            move_list_length=1   # Should be at least 1
+            move_list_length=1,  # Should be at least 1
         )
 
         assert config.sparkline_width >= 1
@@ -194,7 +194,9 @@ class TestEloRatingSystem:
         low_k_change = elo_low_k.black_rating - 1500
 
         assert high_k_change > low_k_change
-        assert abs(high_k_change - 4 * low_k_change) < 0.001  # Should be exactly 4x (64/16 = 4)
+        assert (
+            abs(high_k_change - 4 * low_k_change) < 0.001
+        )  # Should be exactly 4x (64/16 = 4)
 
     def test_elo_rating_draw_scenario(self):
         """Test Elo ratings for draw outcomes."""
@@ -228,7 +230,9 @@ class TestEloRatingSystem:
         # Lower rated player loses (expected outcome)
         white_loss = initial_white - elo.white_rating
         assert white_loss < 2  # Should lose less than 2 points
-        assert abs(rating_gain - white_loss) < 0.01  # Gains should approximately equal losses
+        assert (
+            abs(rating_gain - white_loss) < 0.01
+        )  # Gains should approximately equal losses
 
 
 class TestMetricsInfrastructure:
@@ -247,10 +251,12 @@ class TestMetricsInfrastructure:
 
         # Add more PPO data than max_history
         for i in range(5):
-            history.add_ppo_data({
-                "ppo/learning_rate": float(i) * 0.001,
-                "ppo/policy_loss": float(i) * 0.1,
-            })
+            history.add_ppo_data(
+                {
+                    "ppo/learning_rate": float(i) * 0.001,
+                    "ppo/policy_loss": float(i) * 0.1,
+                }
+            )
 
         # Should only keep last 3 entries for all PPO metrics
         assert len(history.learning_rates) == 3
@@ -272,15 +278,17 @@ class TestMetricsInfrastructure:
         history = MetricsHistory(max_history=5)
 
         # Test with different numeric types
-        history.add_episode_data({
-            "black_win_rate": 42,  # int
-        })
-        history.add_episode_data({
-            "black_win_rate": 3.14159,  # float
-        })
-        history.add_episode_data({
-            "black_win_rate": -10.5  # negative float
-        })
+        history.add_episode_data(
+            {
+                "black_win_rate": 42,  # int
+            }
+        )
+        history.add_episode_data(
+            {
+                "black_win_rate": 3.14159,  # float
+            }
+        )
+        history.add_episode_data({"black_win_rate": -10.5})  # negative float
 
         # Should handle all numeric types
         assert len(history.win_rates_history) == 3
@@ -294,24 +302,27 @@ class TestMetricsInfrastructure:
 
         # Add more episode data than max_history with multiple metrics
         for i in range(5):
-            history.add_episode_data({
-                "black_win_rate": float(i),
-                "average_episode_length": i * 10.0
-            })
+            history.add_episode_data(
+                {"black_win_rate": float(i), "average_episode_length": i * 10.0}
+            )
 
         # Should only keep last 3 entries
         assert len(history.win_rates_history) == 3
 
         # Should keep the most recent values
-        assert abs(history.win_rates_history[-1]["black_win_rate"] - 4.0) < 1e-6  # Last added value
+        assert (
+            abs(history.win_rates_history[-1]["black_win_rate"] - 4.0) < 1e-6
+        )  # Last added value
 
         # Add more PPO data than max_history with additional metrics
         for i in range(5):
-            history.add_ppo_data({
-                "ppo/learning_rate": float(i) * 0.001,
-                "ppo/policy_loss": float(i) * 0.1,
-                "ppo/value_loss": float(i) * 0.05,
-            })
+            history.add_ppo_data(
+                {
+                    "ppo/learning_rate": float(i) * 0.001,
+                    "ppo/policy_loss": float(i) * 0.1,
+                    "ppo/value_loss": float(i) * 0.05,
+                }
+            )
 
         # Should only keep last 3 entries for all PPO metrics
         assert len(history.learning_rates) == 3
@@ -320,8 +331,8 @@ class TestMetricsInfrastructure:
 
         # Verify most recent values
         assert abs(history.learning_rates[-1] - 0.004) < 1e-6  # 4 * 0.001
-        assert abs(history.policy_losses[-1] - 0.4) < 1e-6     # 4 * 0.1
-        assert abs(history.value_losses[-1] - 0.2) < 1e-6      # 4 * 0.05
+        assert abs(history.policy_losses[-1] - 0.4) < 1e-6  # 4 * 0.1
+        assert abs(history.value_losses[-1] - 0.2) < 1e-6  # 4 * 0.05
 
 
 class TestSparklineGeneration:
@@ -476,10 +487,12 @@ def test_metrics_history_trimming_simple():
     assert len(history.win_rates_history) == 3
 
     for i in range(5):
-        history.add_ppo_data({
-            "ppo/learning_rate": float(i),
-            "ppo/policy_loss": float(i),
-        })
+        history.add_ppo_data(
+            {
+                "ppo/learning_rate": float(i),
+                "ppo/policy_loss": float(i),
+            }
+        )
     assert len(history.learning_rates) == 3
     assert len(history.policy_losses) == 3
 
@@ -514,9 +527,7 @@ class TestDisplayConfigurationAdvanced:
         """Test DisplayConfig with extreme but valid values."""
         # Test very large values
         config = create_test_display_config(
-            sparkline_width=1000,
-            trend_history_length=50000,
-            move_list_length=500
+            sparkline_width=1000, trend_history_length=50000, move_list_length=500
         )
 
         assert config.sparkline_width == 1000
@@ -527,9 +538,7 @@ class TestDisplayConfigurationAdvanced:
         """Test DisplayConfig memory usage with large parameters."""
         # Create config with large parameters
         config = create_test_display_config(
-            trend_history_length=10000,
-            metrics_window_size=5000,
-            move_list_length=1000
+            trend_history_length=10000, metrics_window_size=5000, move_list_length=1000
         )
 
         # Should not consume excessive memory for configuration alone
@@ -544,7 +553,7 @@ class TestDisplayConfigurationAdvanced:
             board_cell_width=3,
             board_cell_height=1,
             move_list_length=1,
-            elo_k_factor=0.1
+            elo_k_factor=0.1,
         )
 
         assert config.sparkline_width == 1
@@ -569,7 +578,10 @@ class TestEloRatingSystemAdvanced:
         # Should maintain reasonable precision
         assert elo.black_rating != initial_black
         assert elo.white_rating != initial_white
-        assert abs((elo.black_rating - initial_black) - (initial_white - elo.white_rating)) < 1e-10
+        assert (
+            abs((elo.black_rating - initial_black) - (initial_white - elo.white_rating))
+            < 1e-10
+        )
 
     def test_elo_rating_overflow_protection(self):
         """Test Elo system with extreme rating values."""
@@ -580,8 +592,8 @@ class TestEloRatingSystemAdvanced:
         elo.update_ratings(Color.BLACK)
 
         # Should still produce finite values
-        assert elo.black_rating != float('inf')
-        assert elo.white_rating != float('-inf')
+        assert elo.black_rating != float("inf")
+        assert elo.white_rating != float("-inf")
         assert not math.isnan(elo.black_rating)  # Check for NaN
 
     def test_elo_rating_rapid_convergence(self):
@@ -678,7 +690,7 @@ class TestMetricsHistoryAdvanced:
             large_data = {
                 "black_win_rate": float(i % 100) / 100.0,
                 "white_win_rate": float((i + 1) % 100) / 100.0,
-                "draw_rate": float((i + 2) % 100) / 100.0
+                "draw_rate": float((i + 2) % 100) / 100.0,
             }
             history.add_episode_data(large_data)
 
@@ -693,13 +705,13 @@ class TestMetricsHistoryAdvanced:
 
         # Test with edge case values
         edge_cases = [
-            {"black_win_rate": float('inf')},
-            {"black_win_rate": float('-inf')},
+            {"black_win_rate": float("inf")},
+            {"black_win_rate": float("-inf")},
             {"black_win_rate": 0.0},
             {"black_win_rate": 1.0},
             {"black_win_rate": -1.0},
             {"black_win_rate": 1e-10},
-            {"black_win_rate": 1e10}
+            {"black_win_rate": 1e10},
         ]
 
         for case in edge_cases:
@@ -716,10 +728,12 @@ class TestMetricsHistoryAdvanced:
         def add_episode_data_worker(worker_id):
             try:
                 for i in range(20):
-                    history.add_episode_data({
-                        "black_win_rate": float(worker_id * 100 + i) / 1000.0,
-                        "worker_id": worker_id
-                    })
+                    history.add_episode_data(
+                        {
+                            "black_win_rate": float(worker_id * 100 + i) / 1000.0,
+                            "worker_id": worker_id,
+                        }
+                    )
                     time.sleep(0.001)
             except (ValueError, AttributeError, RuntimeError) as e:
                 errors.append(e)
@@ -727,18 +741,27 @@ class TestMetricsHistoryAdvanced:
         def add_ppo_data_worker(worker_id):
             try:
                 for i in range(20):
-                    history.add_ppo_data({
-                        "ppo/learning_rate": float(worker_id * 100 + i) / 10000.0,
-                        "ppo/policy_loss": float(i) / 100.0,
-                    })
+                    history.add_ppo_data(
+                        {
+                            "ppo/learning_rate": float(worker_id * 100 + i) / 10000.0,
+                            "ppo/policy_loss": float(i) / 100.0,
+                        }
+                    )
                     time.sleep(0.001)
             except (ValueError, AttributeError, RuntimeError) as e:
                 errors.append(e)
 
         # Create multiple threads for different operations
         threads = []
-        threads.extend([threading.Thread(target=add_episode_data_worker, args=(i,)) for i in range(2)])
-        threads.extend([threading.Thread(target=add_ppo_data_worker, args=(i,)) for i in range(2)])
+        threads.extend(
+            [
+                threading.Thread(target=add_episode_data_worker, args=(i,))
+                for i in range(2)
+            ]
+        )
+        threads.extend(
+            [threading.Thread(target=add_ppo_data_worker, args=(i,)) for i in range(2)]
+        )
 
         # Start all threads
         for thread in threads:
@@ -763,7 +786,7 @@ class TestSparklineAdvanced:
         spark = Sparkline(width=8)
 
         # Test with extreme values
-        extreme_data = [float('-inf'), -1e10, 0, 1e10, float('inf')]
+        extreme_data = [float("-inf"), -1e10, 0, 1e10, float("inf")]
 
         # Should handle extreme values gracefully
         result = spark.generate(extreme_data[:3])  # Use finite subset
@@ -837,14 +860,11 @@ class TestSystemIntegrationAdvanced:
         """Test complete workflow integration of all components."""
         # Initialize all components
         config = create_test_display_config(
-            sparkline_width=20,
-            trend_history_length=100,
-            elo_k_factor=32.0
+            sparkline_width=20, trend_history_length=100, elo_k_factor=32.0
         )
 
         elo = EloRatingSystem(
-            initial_rating=config.elo_initial_rating,
-            k_factor=config.elo_k_factor
+            initial_rating=config.elo_initial_rating, k_factor=config.elo_k_factor
         )
 
         history = MetricsHistory(max_history=config.trend_history_length)
@@ -858,9 +878,10 @@ class TestSystemIntegrationAdvanced:
 
             # Add episode data
             episode_data = {
-                "black_win_rate": elo.black_rating / (elo.black_rating + elo.white_rating),
+                "black_win_rate": elo.black_rating
+                / (elo.black_rating + elo.white_rating),
                 "average_episode_length": 50 + (episode % 20),
-                "episode": episode
+                "episode": episode,
             }
             history.add_episode_data(episode_data)
 
@@ -868,7 +889,7 @@ class TestSystemIntegrationAdvanced:
             ppo_data = {
                 "ppo/learning_rate": 0.001 * (0.95 ** (episode // 10)),
                 "ppo/policy_loss": 1.0 / (1 + episode * 0.1),
-                "ppo/value_loss": 0.5 / (1 + episode * 0.05)
+                "ppo/value_loss": 0.5 / (1 + episode * 0.05),
             }
             history.add_ppo_data(ppo_data)
 
@@ -923,10 +944,9 @@ class TestSystemIntegrationAdvanced:
 
             # Add history data
             history.add_episode_data({"black_win_rate": float(i % 100) / 100.0})
-            history.add_ppo_data({
-                "ppo/learning_rate": 0.001,
-                "ppo/policy_loss": float(i % 50) / 50.0
-            })
+            history.add_ppo_data(
+                {"ppo/learning_rate": 0.001, "ppo/policy_loss": float(i % 50) / 50.0}
+            )
 
             # Generate sparkline every 10 iterations
             if i % 10 == 0:

@@ -277,19 +277,29 @@ class MetricsManager:
         ppo_metrics_parts = []
 
         if self.history.PPO_LEARNING_RATE in learn_metrics:
-            ppo_metrics_parts.append(f"LR:{learn_metrics[self.history.PPO_LEARNING_RATE]:.2e}")
+            ppo_metrics_parts.append(
+                f"LR:{learn_metrics[self.history.PPO_LEARNING_RATE]:.2e}"
+            )
         if self.history.PPO_KL_DIVERGENCE in learn_metrics:
             ppo_metrics_parts.append(
                 f"KL:{learn_metrics[self.history.PPO_KL_DIVERGENCE]:.4f}"
             )
         if self.history.PPO_POLICY_LOSS in learn_metrics:
-            ppo_metrics_parts.append(f"PolL:{learn_metrics[self.history.PPO_POLICY_LOSS]:.4f}")
+            ppo_metrics_parts.append(
+                f"PolL:{learn_metrics[self.history.PPO_POLICY_LOSS]:.4f}"
+            )
         if self.history.PPO_VALUE_LOSS in learn_metrics:
-            ppo_metrics_parts.append(f"ValL:{learn_metrics[self.history.PPO_VALUE_LOSS]:.4f}")
+            ppo_metrics_parts.append(
+                f"ValL:{learn_metrics[self.history.PPO_VALUE_LOSS]:.4f}"
+            )
         if self.history.PPO_ENTROPY in learn_metrics:
-            ppo_metrics_parts.append(f"Ent:{learn_metrics[self.history.PPO_ENTROPY]:.4f}")
+            ppo_metrics_parts.append(
+                f"Ent:{learn_metrics[self.history.PPO_ENTROPY]:.4f}"
+            )
         if self.history.PPO_CLIP_FRACTION in learn_metrics:
-            ppo_metrics_parts.append(f"CF:{learn_metrics[self.history.PPO_CLIP_FRACTION]:.2f}")
+            ppo_metrics_parts.append(
+                f"CF:{learn_metrics[self.history.PPO_CLIP_FRACTION]:.2f}"
+            )
         self.history.add_ppo_data(learn_metrics)
         return " ".join(ppo_metrics_parts)
 

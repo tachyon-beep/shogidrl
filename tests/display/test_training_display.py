@@ -23,14 +23,15 @@ from rich.console import Console
 
 from keisei.config_schema import DisplayConfig
 from keisei.training.display import TrainingDisplay
-from keisei.training.display_components import ShogiBoard, RecentMovesPanel
+from keisei.training.display_components import RecentMovesPanel, ShogiBoard
 from tests.display.test_utilities import (
-    TestDataFactory,
-    training_session_in_progress,  # pylint: disable=unused-import
-    display_with_error_state,  # pylint: disable=unused-import
-    performance_helper,
-    mock_library  # pylint: disable=unused-import
-)
+    display_with_error_state,
+)  # pylint: disable=unused-import
+from tests.display.test_utilities import mock_library  # pylint: disable=unused-import
+from tests.display.test_utilities import (
+    training_session_in_progress,
+)  # pylint: disable=unused-import
+from tests.display.test_utilities import TestDataFactory, performance_helper
 
 
 class TestTrainingDisplay:
@@ -69,7 +70,7 @@ class TestTrainingDisplay:
             trend_smoothing_factor=0.1,
             metrics_panel_height=6,
             enable_trendlines=True,
-            log_layer_keyword_filters=["stem", "policy_head", "value_head"]
+            log_layer_keyword_filters=["stem", "policy_head", "value_head"],
         )
         config.training = Mock()
         config.training.total_timesteps = 10000
@@ -100,7 +101,7 @@ class TestTrainingDisplay:
         history.clip_fractions = [0.2, 0.18, 0.22]
         history.win_rates_history = [
             {"win_rate_black": 0.5, "win_rate_white": 0.4, "win_rate_draw": 0.1},
-            {"win_rate_black": 0.6, "win_rate_white": 0.3, "win_rate_draw": 0.1}
+            {"win_rate_black": 0.6, "win_rate_white": 0.3, "win_rate_draw": 0.1},
         ]
         trainer.metrics_manager.history = history
 
@@ -164,7 +165,9 @@ class TestTrainingDisplay:
         assert display.layout is not None
         assert display.log_panel is not None
 
-    def test_initialization_with_disabled_features(self, mock_config, mock_trainer, mock_console):
+    def test_initialization_with_disabled_features(
+        self, mock_config, mock_trainer, mock_console
+    ):
         """Test initialization when display features are disabled."""
         # Disable board display
         mock_config.display.enable_board_display = False
@@ -205,7 +208,9 @@ class TestTrainingDisplay:
         # Should use compact layout for small console
         assert display.using_enhanced_layout is False
 
-    def test_dashboard_refresh_cycle_enhanced_layout(self, mock_config, mock_trainer, mock_console):
+    def test_dashboard_refresh_cycle_enhanced_layout(
+        self, mock_config, mock_trainer, mock_console
+    ):
         """Test complete dashboard refresh cycle with enhanced layout."""
         mock_console.size.width = 200
         mock_console.size.height = 50
@@ -224,7 +229,9 @@ class TestTrainingDisplay:
         # Verify log panel was updated
         assert display.log_panel.renderable is not None
 
-    def test_dashboard_refresh_cycle_compact_layout(self, mock_config, mock_trainer, mock_console):
+    def test_dashboard_refresh_cycle_compact_layout(
+        self, mock_config, mock_trainer, mock_console
+    ):
         """Test dashboard refresh with compact layout (should only update log panel)."""
         mock_console.size.width = 80
         mock_console.size.height = 20
@@ -251,7 +258,7 @@ class TestTrainingDisplay:
         display = TrainingDisplay(mock_config, mock_trainer, mock_console)
 
         # Should handle errors gracefully
-        with patch.object(display.rich_console, 'log') as mock_log:
+        with patch.object(display.rich_console, "log") as mock_log:
             display.refresh_dashboard_panels(mock_trainer)
             # Verify error was logged (at least one error log call)
             assert mock_log.call_count >= 1
@@ -273,7 +280,7 @@ class TestTrainingDisplay:
         """Test starting the live display context."""
         display = TrainingDisplay(mock_config, mock_trainer, mock_console)
 
-        with patch('keisei.training.display.Live') as mock_live:
+        with patch("keisei.training.display.Live") as mock_live:
             mock_live_instance = Mock()
             mock_live.return_value = mock_live_instance
 
@@ -284,7 +291,7 @@ class TestTrainingDisplay:
                 display.layout,
                 console=display.rich_console,
                 refresh_per_second=1,
-                transient=False
+                transient=False,
             )
             assert result == mock_live_instance
 
@@ -296,8 +303,8 @@ class TestTrainingDisplay:
         mock_trainer.metrics_manager.global_timestep = 1000
         speed = 10.5
         pending_updates = {
-            'ep_metrics': 'Ep L:100 R:0.5',
-            'ppo_metrics': 'PPO Loss:0.1'
+            "ep_metrics": "Ep L:100 R:0.5",
+            "ppo_metrics": "PPO Loss:0.1",
         }
 
         display.update_progress(mock_trainer, speed, pending_updates)
@@ -346,7 +353,9 @@ class TestTrainingDisplay:
         display_small = TrainingDisplay(mock_config, mock_trainer, small_console)
         assert display_small.using_enhanced_layout is False
 
-    def test_configuration_driven_feature_toggling(self, mock_config, mock_trainer, mock_console):
+    def test_configuration_driven_feature_toggling(
+        self, mock_config, mock_trainer, mock_console
+    ):
         """Test that features are correctly enabled/disabled based on configuration."""
         # Test with all features enabled
         mock_config.display.enable_board_display = True
@@ -374,16 +383,20 @@ class TestTrainingDisplay:
     # NEW COMPREHENSIVE TESTS - ADDRESSING ANALYSIS REPORT FINDINGS
     # =============================================================================
 
-    def test_display_state_persistence_across_updates(self, mock_config, mock_trainer, mock_console, training_session_in_progress):
+    def test_display_state_persistence_across_updates(
+        self, mock_config, mock_trainer, mock_console, training_session_in_progress
+    ):
         """Test that display state persists correctly across multiple updates."""
         mock_console.size.width = 200
         mock_console.size.height = 50
 
         # Use realistic training session data
         session_data = training_session_in_progress
-        mock_trainer.game = session_data['game_state']
+        mock_trainer.game = session_data["game_state"]
         mock_trainer.step_manager = Mock()
-        mock_trainer.step_manager.move_log = [str(move) for move in session_data['game_state'].move_history[-10:]]
+        mock_trainer.step_manager.move_log = [
+            str(move) for move in session_data["game_state"].move_history[-10:]
+        ]
 
         # Add proper string values for step_manager attributes to avoid Mock rendering issues
         mock_trainer.step_manager.sente_best_capture = "Bishop on 7b"
@@ -410,14 +423,16 @@ class TestTrainingDisplay:
             assert display.log_panel is not None
             assert display.progress_bar is not None
 
-    def test_error_recovery_from_corrupt_display_states(self, mock_config, mock_trainer, mock_console, display_with_error_state):
+    def test_error_recovery_from_corrupt_display_states(
+        self, mock_config, mock_trainer, mock_console, display_with_error_state
+    ):
         """Test display recovery from various error conditions."""
         mock_console.size.width = 200
         mock_console.size.height = 50
         mock_console.log = Mock()  # Track error logging
 
         error_data = display_with_error_state
-        mock_trainer.game = error_data['corrupted_game_state']
+        mock_trainer.game = error_data["corrupted_game_state"]
 
         display = TrainingDisplay(mock_config, mock_trainer, mock_console)
 
@@ -429,7 +444,9 @@ class TestTrainingDisplay:
         except (AttributeError, RuntimeError, TypeError, ValueError):
             pytest.fail("Display should handle corrupted state gracefully")
 
-    def test_performance_under_rapid_update_scenarios(self, mock_config, mock_trainer, mock_console, performance_helper):
+    def test_performance_under_rapid_update_scenarios(
+        self, mock_config, mock_trainer, mock_console, performance_helper
+    ):
         """Test display performance under rapid successive updates."""
         mock_console.size.width = 120
         mock_console.size.height = 30
@@ -442,12 +459,16 @@ class TestTrainingDisplay:
                 mock_trainer.metrics_manager.global_timestep = i
                 display.refresh_dashboard_panels(mock_trainer)
 
-        timing_result = performance_helper.measure_display_update_time(rapid_update_test)
+        timing_result = performance_helper.measure_display_update_time(
+            rapid_update_test
+        )
 
         # Should complete rapid updates within reasonable time (< 1 second for 50 updates)
         assert timing_result < 1.0, f"Rapid updates took too long: {timing_result:.3f}s"
 
-    def test_memory_leak_detection_long_running_display(self, mock_config, mock_trainer, mock_console, performance_helper):
+    def test_memory_leak_detection_long_running_display(
+        self, mock_config, mock_trainer, mock_console, performance_helper
+    ):
         """Test for memory leaks during long-running display operations."""
         mock_console.size.width = 120
         mock_console.size.height = 30
@@ -460,7 +481,9 @@ class TestTrainingDisplay:
                 # Add log messages to simulate memory growth
                 mock_trainer.rich_log_messages.append(f"Training step {i}")
                 if len(mock_trainer.rich_log_messages) > 50:
-                    mock_trainer.rich_log_messages = mock_trainer.rich_log_messages[-50:]  # Simulate trimming
+                    mock_trainer.rich_log_messages = mock_trainer.rich_log_messages[
+                        -50:
+                    ]  # Simulate trimming
 
                 mock_trainer.metrics_manager.global_timestep = i
                 display.refresh_dashboard_panels(mock_trainer)
@@ -470,9 +493,13 @@ class TestTrainingDisplay:
         memory_result = performance_helper.memory_usage_test(long_running_test)
 
         # Memory growth should be reasonable (< 10MB for this test)
-        assert memory_result['memory_diff_mb'] < 10, f"Excessive memory usage: {memory_result['memory_diff_mb']:.2f}MB"
+        assert (
+            memory_result["memory_diff_mb"] < 10
+        ), f"Excessive memory usage: {memory_result['memory_diff_mb']:.2f}MB"
 
-    def test_terminal_resize_handling(self, mock_config, mock_trainer, extreme_dimensions):
+    def test_terminal_resize_handling(
+        self, mock_config, mock_trainer, extreme_dimensions
+    ):
         """Test display behavior with various terminal dimensions."""
         for width, height in extreme_dimensions:
             console = Mock(spec=Console)
@@ -534,7 +561,9 @@ class TestTrainingDisplay:
         # Should handle concurrent access without errors
         assert len(errors) == 0, f"Concurrent access errors: {errors}"
 
-    def test_keyboard_interrupt_handling_during_updates(self, mock_config, mock_trainer, mock_console):
+    def test_keyboard_interrupt_handling_during_updates(
+        self, mock_config, mock_trainer, mock_console
+    ):
         """Test graceful handling of keyboard interrupts during display updates."""
         mock_console.size.width = 120
         mock_console.size.height = 30
@@ -545,7 +574,7 @@ class TestTrainingDisplay:
         def interrupt_side_effect(*args, **kwargs):
             raise KeyboardInterrupt("User interrupt")
 
-        with patch.object(display, 'board_component') as mock_board:
+        with patch.object(display, "board_component") as mock_board:
             mock_board.render = Mock(side_effect=interrupt_side_effect)
 
             # Should handle keyboard interrupt gracefully
@@ -557,7 +586,9 @@ class TestTrainingDisplay:
             except (AttributeError, RuntimeError, TypeError, ValueError) as e:
                 pytest.fail(f"Unexpected exception during interrupt: {e}")
 
-    def test_unicode_rendering_edge_cases(self, mock_config, mock_trainer, mock_console, unicode_test_data):
+    def test_unicode_rendering_edge_cases(
+        self, mock_config, mock_trainer, mock_console, unicode_test_data
+    ):
         """Test display rendering with various Unicode characters."""
         mock_console.size.width = 120
         mock_console.size.height = 30
@@ -578,16 +609,20 @@ class TestTrainingDisplay:
                 # Catch other potential encoding/rendering errors
                 pytest.fail(f"Rendering failed for {test_name}: {e}")
 
-    def test_display_component_integration_realistic_data(self, mock_config, mock_trainer, mock_console, training_session_in_progress):
+    def test_display_component_integration_realistic_data(
+        self, mock_config, mock_trainer, mock_console, training_session_in_progress
+    ):
         """Test integration of all display components with realistic data."""
         mock_console.size.width = 200
         mock_console.size.height = 50
 
         # Setup realistic training data
         session_data = training_session_in_progress
-        mock_trainer.game = session_data['game_state']
+        mock_trainer.game = session_data["game_state"]
         mock_trainer.step_manager = Mock()
-        mock_trainer.step_manager.move_log = [str(move) for move in session_data['game_state'].move_history]
+        mock_trainer.step_manager.move_log = [
+            str(move) for move in session_data["game_state"].move_history
+        ]
 
         # Add proper string values for step_manager attributes to avoid Mock rendering issues
         mock_trainer.step_manager.sente_best_capture = "Knight on 6g"
@@ -600,8 +635,10 @@ class TestTrainingDisplay:
         mock_trainer.step_manager.gote_promo_count = 2
 
         # Setup realistic metrics progression
-        mock_trainer.metrics_manager.global_timestep = session_data['total_moves']
-        mock_trainer.metrics_manager.total_episodes_completed = session_data['total_moves'] // 10
+        mock_trainer.metrics_manager.global_timestep = session_data["total_moves"]
+        mock_trainer.metrics_manager.total_episodes_completed = (
+            session_data["total_moves"] // 10
+        )
 
         display = TrainingDisplay(mock_config, mock_trainer, mock_console)
 
@@ -613,19 +650,21 @@ class TestTrainingDisplay:
         assert display.log_panel.renderable is not None
 
         # Test progress updates with realistic speed
-        speed = session_data['average_move_time']
+        speed = session_data["average_move_time"]
         pending_updates = {
-            'ep_metrics': f"Ep L:{session_data['total_moves']} R:0.75",
-            'ppo_metrics': 'Loss: 0.045'
+            "ep_metrics": f"Ep L:{session_data['total_moves']} R:0.75",
+            "ppo_metrics": "Loss: 0.045",
         }
 
         display.update_progress(mock_trainer, speed, pending_updates)
 
         # Verify progress was updated
         task = display.progress_bar.tasks[0]
-        assert task.completed == session_data['total_moves']
+        assert task.completed == session_data["total_moves"]
 
-    def test_configuration_validation_and_error_handling(self, mock_trainer, mock_console, display_with_error_state):  # pylint: disable=unused-argument
+    def test_configuration_validation_and_error_handling(
+        self, mock_trainer, mock_console, display_with_error_state
+    ):  # pylint: disable=unused-argument
         """Test display behavior with malformed configuration."""
         mock_console.size.width = 120
         mock_console.size.height = 30
@@ -641,9 +680,9 @@ class TestTrainingDisplay:
             turn_tick=0.0,
             board_unicode_pieces=True,
             board_cell_width=-5,  # Invalid negative value
-            board_cell_height=0,   # Invalid zero value
+            board_cell_height=0,  # Invalid zero value
             board_highlight_last_move=True,
-            sparkline_width=0,     # Invalid zero value
+            sparkline_width=0,  # Invalid zero value
             trend_history_length=-10,  # Invalid negative value
             elo_initial_rating=1500.0,
             elo_k_factor=32.0,
@@ -661,7 +700,7 @@ class TestTrainingDisplay:
             trend_smoothing_factor=0.1,
             metrics_panel_height=6,
             enable_trendlines=True,
-            log_layer_keyword_filters=["stem", "policy_head", "value_head"]
+            log_layer_keyword_filters=["stem", "policy_head", "value_head"],
         )
         config.training = Mock()
         config.training.total_timesteps = 10000
@@ -680,7 +719,9 @@ class TestTrainingDisplay:
         except (AttributeError, RuntimeError, TypeError) as e:
             pytest.fail(f"Unexpected error with invalid config: {e}")
 
-    def test_display_consistency_across_complex_scenarios(self, mock_config, mock_trainer, mock_console, large_metrics_dataset):
+    def test_display_consistency_across_complex_scenarios(
+        self, mock_config, mock_trainer, mock_console, large_metrics_dataset
+    ):
         """Test display consistency with large datasets and complex scenarios."""
         mock_console.size.width = 200
         mock_console.size.height = 50
@@ -710,7 +751,9 @@ class TestTrainingDisplay:
             mock_trainer.metrics_manager.total_episodes_completed = i * 50
 
             # Add some log messages
-            mock_trainer.rich_log_messages = [f"Log message {j}" for j in range(i, i + 20)]
+            mock_trainer.rich_log_messages = [
+                f"Log message {j}" for j in range(i, i + 20)
+            ]
 
             # Should maintain consistency
             display.refresh_dashboard_panels(mock_trainer)
@@ -720,7 +763,9 @@ class TestTrainingDisplay:
             assert display.log_panel.renderable is not None
             assert display.progress_bar is not None
 
-    def test_enhanced_mock_behavior_validation(self, mock_config, mock_trainer, mock_library):
+    def test_enhanced_mock_behavior_validation(
+        self, mock_config, mock_trainer, mock_library
+    ):
         """Test enhanced mock validation for better behavior verification."""
         # Use enhanced mock console with behavior tracking
         console_mock = mock_library.mock_console_with_dimensions(120, 30)
@@ -735,7 +780,7 @@ class TestTrainingDisplay:
 
         # Verify actual console interaction behavior
         # (The mock tracks what was printed for validation)
-        assert hasattr(console_mock, 'printed_content')
+        assert hasattr(console_mock, "printed_content")
         # Console.log might be called for error logging, which is acceptable
 
     def test_component_failure_isolation(self, mock_config, mock_trainer, mock_console):
@@ -747,7 +792,11 @@ class TestTrainingDisplay:
 
         # Make one component fail
         if display.board_component:
-            with patch.object(display.board_component, 'render', side_effect=RuntimeError("Board error")):
+            with patch.object(
+                display.board_component,
+                "render",
+                side_effect=RuntimeError("Board error"),
+            ):
                 # Should continue to update other components
                 display.refresh_dashboard_panels(mock_trainer)
 
@@ -755,7 +804,9 @@ class TestTrainingDisplay:
         assert display.layout is not None
         assert display.log_panel is not None
 
-    def test_resource_cleanup_and_management(self, mock_config, mock_trainer, mock_console):
+    def test_resource_cleanup_and_management(
+        self, mock_config, mock_trainer, mock_console
+    ):
         """Test proper resource cleanup and management."""
         mock_console.size.width = 120
         mock_console.size.height = 30
@@ -777,26 +828,34 @@ class TestTrainingDisplay:
 class TestTrainingDisplayIntegration:
     """Integration tests for TrainingDisplay with other components."""
 
-    def test_end_to_end_display_workflow(self, mock_config, training_session_in_progress):
+    def test_end_to_end_display_workflow(
+        self, mock_config, training_session_in_progress
+    ):
         """Test complete end-to-end display workflow."""
         # Use real console for integration test
-        console = Console(file=open('/dev/null', 'w', encoding='utf-8'), width=120, height=30)
+        console = Console(
+            file=open("/dev/null", "w", encoding="utf-8"), width=120, height=30
+        )
 
         # Create realistic trainer mock
         trainer = Mock()
         session_data = training_session_in_progress
-        trainer.game = session_data['game_state']
+        trainer.game = session_data["game_state"]
         trainer.rich_log_messages = [f"Training step {i}" for i in range(10)]
         trainer.metrics_manager = Mock()
-        trainer.metrics_manager.global_timestep = session_data['total_moves']
-        trainer.metrics_manager.total_episodes_completed = session_data['total_moves'] // 10
+        trainer.metrics_manager.global_timestep = session_data["total_moves"]
+        trainer.metrics_manager.total_episodes_completed = (
+            session_data["total_moves"] // 10
+        )
         trainer.metrics_manager.black_wins = 30
         trainer.metrics_manager.white_wins = 25
         trainer.metrics_manager.draws = 5
         trainer.metrics_manager.get_hot_squares = Mock(return_value=["5e", "6f", "7g"])
 
         # Add proper history object instead of Mock
-        trainer.metrics_manager.history = TestDataFactory.create_metrics_history(length=20)
+        trainer.metrics_manager.history = TestDataFactory.create_metrics_history(
+            length=20
+        )
 
         # Add step_manager with proper values
         trainer.step_manager = Mock()
@@ -822,10 +881,11 @@ class TestTrainingDisplayIntegration:
         assert live_display is not None
 
         # Test progress updates
-        display.update_progress(trainer, 10.5, {
-            'ep_metrics': 'Ep L:150 R:0.75',
-            'ppo_metrics': 'Loss: 0.05'
-        })
+        display.update_progress(
+            trainer,
+            10.5,
+            {"ep_metrics": "Ep L:150 R:0.75", "ppo_metrics": "Loss: 0.05"},
+        )
 
         # Test dashboard refresh
         display.refresh_dashboard_panels(trainer)
@@ -850,7 +910,9 @@ class TestTrainingDisplayIntegration:
         trainer.metrics_manager.white_wins = 20
         trainer.metrics_manager.draws = 5
         trainer.metrics_manager.get_hot_squares = Mock(return_value=["4d", "5e", "6f"])
-        trainer.metrics_manager.history = TestDataFactory.create_metrics_history(length=10)
+        trainer.metrics_manager.history = TestDataFactory.create_metrics_history(
+            length=10
+        )
 
         trainer.game = TestDataFactory.create_game_state(move_count=50)
         trainer.step_manager = Mock()
@@ -877,10 +939,14 @@ class TestTrainingDisplayIntegration:
             trainer.rich_log_messages.append(f"Training step {step} completed")
 
             # Update display
-            display.update_progress(trainer, 15.0, {
-                'ep_metrics': f'Ep L:{step//20} R:{0.5 + step/2000}',
-                'ppo_metrics': f'Loss: {0.1 - step/10000}'
-            })
+            display.update_progress(
+                trainer,
+                15.0,
+                {
+                    "ep_metrics": f"Ep L:{step//20} R:{0.5 + step/2000}",
+                    "ppo_metrics": f"Loss: {0.1 - step/10000}",
+                },
+            )
             display.refresh_dashboard_panels(trainer)
 
         # Verify simulation completed without errors

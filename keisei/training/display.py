@@ -592,15 +592,16 @@ class TrainingDisplay:
             snap = getattr(trainer, "evaluation_elo_snapshot", None)
 
             # Check if snap is a proper dictionary with expected structure
-            if (snap
-                and hasattr(snap, 'get')
+            if (
+                snap
+                and hasattr(snap, "get")
                 and snap.get("top_ratings")
                 and isinstance(snap.get("top_ratings"), (list, tuple))
-                and len(snap["top_ratings"]) >= 2):
+                and len(snap["top_ratings"]) >= 2
+            ):
                 try:
                     lines = [
-                        f"{mid}: {rating:.0f}"
-                        for mid, rating in snap["top_ratings"]
+                        f"{mid}: {rating:.0f}" for mid, rating in snap["top_ratings"]
                     ]
                     content = Text("\n".join(lines), style="yellow")
                 except (TypeError, ValueError):

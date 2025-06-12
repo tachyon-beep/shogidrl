@@ -12,23 +12,24 @@ This module tests:
 - Accessibility features
 """
 
-import pytest
-from unittest.mock import Mock
-from rich.panel import Panel
-from rich.console import Console
 from io import StringIO
+from unittest.mock import Mock
 
+import pytest
+from rich.console import Console
+from rich.panel import Panel
+
+from keisei.shogi.shogi_core_definitions import Color
 from keisei.training.display_components import (
-    MultiMetricSparkline,
-    RollingAverageCalculator,
-    Sparkline,
-    ShogiBoard,
-    RecentMovesPanel,
-    PieceStandPanel,
     GameStatisticsPanel,
     HorizontalSeparator,
+    MultiMetricSparkline,
+    PieceStandPanel,
+    RecentMovesPanel,
+    RollingAverageCalculator,
+    ShogiBoard,
+    Sparkline,
 )
-from keisei.shogi.shogi_core_definitions import Color
 from tests.display.test_utilities import TestDataFactory
 
 
@@ -65,7 +66,7 @@ class TestMultiMetricSparkline:
         assert has_sparkline, "Should contain sparkline characters"
 
         # Verify two separate lines (one for each metric)
-        lines = panel_str.split('\n')
+        lines = panel_str.split("\n")
         assert len(lines) >= 2, "Should have at least 2 lines for 2 metrics"
 
     def test_multi_metric_sparkline_empty_data(self):
@@ -158,11 +159,15 @@ class TestSparkline:
 
         # Verify character progression (should increase)
         sparkline_chars = "▁▂▃▄▅▆▇█"
-        char_indices = [sparkline_chars.index(char) for char in result if char in sparkline_chars]
+        char_indices = [
+            sparkline_chars.index(char) for char in result if char in sparkline_chars
+        ]
 
         # Should have increasing indices (representing increasing values)
         if len(char_indices) >= 2:
-            assert char_indices[-1] > char_indices[0], "Last character should represent higher value"
+            assert (
+                char_indices[-1] > char_indices[0]
+            ), "Last character should represent higher value"
 
     def test_sparkline_bounded_generation_enhanced(self):
         """Enhanced test for bounded sparkline generation."""
@@ -372,7 +377,7 @@ class TestPieceStandPanel:
         game = Mock()
         game.hands = {
             Color.BLACK.value: {"PAWN": 2, "SILVER": 1},
-            Color.WHITE.value: {"PAWN": 1, "GOLD": 1, "BISHOP": 1}
+            Color.WHITE.value: {"PAWN": 1, "GOLD": 1, "BISHOP": 1},
         }
         return game
 
@@ -445,7 +450,7 @@ class TestGameStatisticsPanel:
             sente_best_capture="P*2c",
             gote_best_capture="Sx3c",
             sente_captures=2,
-            gote_captures=1
+            gote_captures=1,
         )
 
         assert isinstance(result, Panel)
@@ -477,7 +482,9 @@ class TestGameStatisticsPanel:
         mock_piece.color = Color.BLACK
         mock_game_state.board[0][0] = mock_piece
 
-        material = panel._calculate_material(mock_game_state, Color.BLACK)  # pylint: disable=protected-access
+        material = panel._calculate_material(
+            mock_game_state, Color.BLACK
+        )  # pylint: disable=protected-access
         assert material == 1  # Pawn value = 1
 
     def test_game_statistics_opening_name_formatting(self):
@@ -485,15 +492,21 @@ class TestGameStatisticsPanel:
         panel = GameStatisticsPanel()
 
         # Test drop move
-        drop_name = panel._format_opening_name("P*2c")  # pylint: disable=protected-access
+        drop_name = panel._format_opening_name(
+            "P*2c"
+        )  # pylint: disable=protected-access
         assert "drop" in drop_name.lower()
 
         # Test regular move
-        regular_name = panel._format_opening_name("7g7f")  # pylint: disable=protected-access
+        regular_name = panel._format_opening_name(
+            "7g7f"
+        )  # pylint: disable=protected-access
         assert "7g" in regular_name and "7f" in regular_name
 
         # Test promotion move
-        promo_name = panel._format_opening_name("2c3d+")  # pylint: disable=protected-access
+        promo_name = panel._format_opening_name(
+            "2c3d+"
+        )  # pylint: disable=protected-access
         assert "promotion" in promo_name.lower()
 
 
@@ -517,6 +530,7 @@ class TestHorizontalSeparator:
 # =============================================================================
 # NEW COMPREHENSIVE TESTS - ADDRESSING ANALYSIS REPORT FINDINGS
 # =============================================================================
+
 
 class TestUnicodeRenderingEdgeCases:
     """Test display components with various Unicode characters."""
@@ -544,10 +558,10 @@ class TestUnicodeRenderingEdgeCases:
 
         # Create moves with Unicode characters
         unicode_moves = [
-            unicode_test_data['japanese_pieces'],
-            unicode_test_data['chinese_numbers'],
-            unicode_test_data['special_symbols'],
-            unicode_test_data['mixed_content']
+            unicode_test_data["japanese_pieces"],
+            unicode_test_data["chinese_numbers"],
+            unicode_test_data["special_symbols"],
+            unicode_test_data["mixed_content"],
         ]
 
         try:
@@ -568,23 +582,25 @@ class TestUnicodeRenderingEdgeCases:
 
         # Mock metrics manager with Unicode content
         metrics_manager = Mock()
-        metrics_manager.sente_opening_history = [unicode_test_data['japanese_pieces']]
-        metrics_manager.gote_opening_history = [unicode_test_data['chinese_numbers']]
-        metrics_manager.get_hot_squares = Mock(return_value=["1a", "2b", "3c"])  # Return list
+        metrics_manager.sente_opening_history = [unicode_test_data["japanese_pieces"]]
+        metrics_manager.gote_opening_history = [unicode_test_data["chinese_numbers"]]
+        metrics_manager.get_hot_squares = Mock(
+            return_value=["1a", "2b", "3c"]
+        )  # Return list
 
         try:
             result = panel.render(
                 game=game_state,
                 move_history=["7g7f", "8c8d"],
                 metrics_manager=metrics_manager,
-                sente_best_capture=unicode_test_data['special_symbols'],
-                gote_best_capture=unicode_test_data['mixed_content'],
+                sente_best_capture=unicode_test_data["special_symbols"],
+                gote_best_capture=unicode_test_data["mixed_content"],
                 sente_captures=5,
                 gote_captures=3,
                 sente_drops=2,
                 gote_drops=1,
                 sente_promos=1,
-                gote_promos=0
+                gote_promos=0,
             )
             assert result is not None
 
@@ -603,7 +619,9 @@ class TestComponentLayoutExtremedimensions:
         for width, height in extreme_dimensions:
             # Create console with specific dimensions
             output = StringIO()
-            console = Console(file=output, width=width, height=height, legacy_windows=False)
+            console = Console(
+                file=output, width=width, height=height, legacy_windows=False
+            )
 
             try:
                 result = board.render(game_state)
@@ -619,7 +637,9 @@ class TestComponentLayoutExtremedimensions:
                     # Very small dimensions are acceptable to fail
                     continue
                 else:
-                    pytest.fail(f"Board rendering failed with dimensions {width}x{height}: {e}")
+                    pytest.fail(
+                        f"Board rendering failed with dimensions {width}x{height}: {e}"
+                    )
 
     def test_recent_moves_panel_extreme_dimensions(self, extreme_dimensions):
         """Test RecentMovesPanel with extreme dimensions."""
@@ -628,7 +648,9 @@ class TestComponentLayoutExtremedimensions:
 
         for width, height in extreme_dimensions:
             output = StringIO()
-            console = Console(file=output, width=width, height=height, legacy_windows=False)
+            console = Console(
+                file=output, width=width, height=height, legacy_windows=False
+            )
 
             try:
                 result = panel.render(moves)
@@ -639,7 +661,9 @@ class TestComponentLayoutExtremedimensions:
                 if width < 5 or height < 2:
                     continue  # Very small dimensions acceptable to fail
                 else:
-                    pytest.fail(f"RecentMovesPanel failed with dimensions {width}x{height}: {e}")
+                    pytest.fail(
+                        f"RecentMovesPanel failed with dimensions {width}x{height}: {e}"
+                    )
 
     def test_sparkline_extreme_widths(self):
         """Test Sparkline with extreme width values."""
@@ -682,7 +706,9 @@ class TestPerformanceWithLargeDatasets:
         execution_time = performance_helper.measure_display_update_time(render_test)
 
         # Should complete within reasonable time (< 0.1 seconds)
-        assert execution_time < 0.1, f"Large dataset rendering too slow: {execution_time:.3f}s"
+        assert (
+            execution_time < 0.1
+        ), f"Large dataset rendering too slow: {execution_time:.3f}s"
 
         # Verify result is still valid
         result = render_test()
@@ -709,7 +735,9 @@ class TestPerformanceWithLargeDatasets:
             return sparkline.render_with_trendlines()
 
         render_time = performance_helper.measure_display_update_time(render_test)
-        assert render_time < 0.1, f"Large dataset rendering too slow: {render_time:.3f}s"
+        assert (
+            render_time < 0.1
+        ), f"Large dataset rendering too slow: {render_time:.3f}s"
 
     def test_sparkline_stress_testing(self, performance_helper):
         """Stress test Sparkline with rapid data updates."""
@@ -763,7 +791,9 @@ class TestComponentInteractionPatterns:
         stats_panel = GameStatisticsPanel()
 
         # Create game state with captures
-        game_state = TestDataFactory.create_game_state(move_count=20, include_captures=True)
+        game_state = TestDataFactory.create_game_state(
+            move_count=20, include_captures=True
+        )
 
         # Mock metrics for statistics
         metrics_manager = Mock()
@@ -784,7 +814,7 @@ class TestComponentInteractionPatterns:
             sente_drops=1,
             gote_drops=1,
             sente_promos=0,
-            gote_promos=0
+            gote_promos=0,
         )
 
         # Both should render and contain capture information
@@ -853,7 +883,7 @@ class TestAccessibilityFeatures:
             sente_drops=0,
             gote_drops=0,
             sente_promos=0,
-            gote_promos=0
+            gote_promos=0,
         )
 
         assert result is not None

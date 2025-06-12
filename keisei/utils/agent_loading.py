@@ -32,12 +32,12 @@ def load_evaluation_agent(
         TrainingConfig,
         WandBConfig,
     )
-    from keisei.core.neural_network import (
+    from keisei.core.neural_network import (  # pylint: disable=import-outside-toplevel
         ActorCritic,
-    )  # pylint: disable=import-outside-toplevel
-    from keisei.core.ppo_agent import (
+    )
+    from keisei.core.ppo_agent import (  # pylint: disable=import-outside-toplevel
         PPOAgent,
-    )  # pylint: disable=import-outside-toplevel
+    )
 
     if not os.path.isfile(checkpoint_path):
         log_error_to_stderr(

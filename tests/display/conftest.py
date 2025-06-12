@@ -2,14 +2,15 @@
 Shared fixtures for display tests.
 """
 
-import pytest
 from unittest.mock import Mock
 
+import pytest
+
 from tests.display.test_utilities import (
-    TestDataFactory,
     DisplayMockLibrary,
-    PerformanceTestHelper,
     ErrorScenarioFactory,
+    PerformanceTestHelper,
+    TestDataFactory,
 )
 
 
@@ -17,13 +18,13 @@ from tests.display.test_utilities import (
 def unicode_test_data():
     """Fixture providing Unicode test data for various edge cases."""
     return {
-        'japanese_pieces': '王飛角金銀桂香歩',
-        'chinese_numbers': '一二三四五六七八九',
-        'special_symbols': '★☆◎◇◆※',
-        'mixed_content': '7g7f★王手',
-        'complex_unicode': '🏆🎯⚡🔥💫',
-        'mathematical': '∞±≤≥∈∉∩∪',
-        'arrows': '→←↑↓↗↘↙↖'
+        "japanese_pieces": "王飛角金銀桂香歩",
+        "chinese_numbers": "一二三四五六七八九",
+        "special_symbols": "★☆◎◇◆※",
+        "mixed_content": "7g7f★王手",
+        "complex_unicode": "🏆🎯⚡🔥💫",
+        "mathematical": "∞±≤≥∈∉∩∪",
+        "arrows": "→←↑↓↗↘↙↖",
     }
 
 
@@ -31,44 +32,38 @@ def unicode_test_data():
 def extreme_dimensions():
     """Fixture providing extreme terminal dimensions for testing."""
     return [
-        (1, 1),      # Minimum dimensions
-        (5, 3),      # Very small
-        (10, 5),     # Small
-        (40, 15),    # Below normal
-        (80, 24),    # Standard terminal
-        (120, 30),   # Large terminal
-        (200, 50),   # Very large
+        (1, 1),  # Minimum dimensions
+        (5, 3),  # Very small
+        (10, 5),  # Small
+        (40, 15),  # Below normal
+        (80, 24),  # Standard terminal
+        (120, 30),  # Large terminal
+        (200, 50),  # Very large
         (500, 100),  # Extreme width
-        (80, 200),   # Extreme height
-        (1000, 1000) # Maximum test case
+        (80, 200),  # Extreme height
+        (1000, 1000),  # Maximum test case
     ]
 
 
 @pytest.fixture
 def large_metrics_dataset():
     """Fixture providing large metrics dataset for performance testing."""
-    return TestDataFactory.create_metrics_history(
-        length=1000,
-        include_outliers=True
-    )
+    return TestDataFactory.create_metrics_history(length=1000, include_outliers=True)
 
 
 @pytest.fixture
 def training_session_in_progress():
     """Fixture providing a realistic mid-session state."""
-    return TestDataFactory.create_training_session(
-        duration_minutes=15,
-        move_count=75
-    )
+    return TestDataFactory.create_training_session(duration_minutes=15, move_count=75)
 
 
 @pytest.fixture
 def display_with_error_state():
     """Fixture for testing error recovery scenarios."""
     return {
-        'corrupted_game_state': ErrorScenarioFactory.create_corrupted_game_state(),
-        'malformed_config': ErrorScenarioFactory.create_malformed_config(),
-        'extreme_metrics': ErrorScenarioFactory.create_extreme_metrics()
+        "corrupted_game_state": ErrorScenarioFactory.create_corrupted_game_state(),
+        "malformed_config": ErrorScenarioFactory.create_malformed_config(),
+        "extreme_metrics": ErrorScenarioFactory.create_extreme_metrics(),
     }
 
 
@@ -119,8 +114,14 @@ def mock_trainer():
     mock_trainer.metrics_manager.black_wins = 30
     mock_trainer.metrics_manager.white_wins = 20
     mock_trainer.metrics_manager.draws = 5
-    mock_trainer.metrics_manager.sente_opening_history = ["Standard Opening", "Rapid Attack"]
-    mock_trainer.metrics_manager.gote_opening_history = ["Defense Formation", "Counter Attack"]
+    mock_trainer.metrics_manager.sente_opening_history = [
+        "Standard Opening",
+        "Rapid Attack",
+    ]
+    mock_trainer.metrics_manager.gote_opening_history = [
+        "Defense Formation",
+        "Counter Attack",
+    ]
 
     # Configure step_manager with proper string values
     mock_trainer.step_manager = Mock()
