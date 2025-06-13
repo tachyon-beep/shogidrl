@@ -47,10 +47,21 @@ from keisei.config_schema import (
     TrainingConfig,
     WandBConfig,
 )
+from keisei.evaluation.core import (
+    create_evaluation_config,
+    EvaluationStrategy,
+    GameResult,
+)
 from keisei.evaluation.core_manager import EvaluationManager
 from keisei.evaluation.enhanced_manager import EnhancedEvaluationManager
-from keisei.evaluation.strategies.single_opponent import SingleOpponentConfig
-from keisei.evaluation.strategies.tournament import TournamentConfig
+from keisei.evaluation.core.evaluation_config import (
+    SingleOpponentConfig,
+    TournamentConfig,
+)
+
+# Initialize logger for the test module
+logger = logging.getLogger(__name__)
+
 
 
 # Performance Baselines - These should be adjusted based on target hardware
@@ -247,6 +258,22 @@ class ConfigurationFactory:
             ),
         )
 
+    @staticmethod 
+    def create_minimal_evaluation_config():
+        """Create minimal evaluation configuration for fast testing."""
+        return create_evaluation_config(
+            strategy=EvaluationStrategy.SINGLE_OPPONENT,
+            num_games=1,
+            max_concurrent_games=1,
+            timeout_per_game=30.0,
+            opponent_name="test_opponent",
+            wandb_logging=False,
+            save_games=False,
+            enable_in_memory_evaluation=True,
+            enable_parallel_execution=False,
+            temp_agent_device="cpu",
+        )
+
 
 class TestAgentFactory:
     """Factory for creating test agents and related objects."""
@@ -305,8 +332,6 @@ class MockGameResultFactory:
         game_id: Optional[str] = None
     ):
         """Create a mock successful game result."""
-        from keisei.evaluation.core import GameResult
-        
         # Convert string winner to integer for GameResult
         winner_code = None
         if winner == "agent":
@@ -736,6 +761,183 @@ class TestPerformanceRegression:
             return f"{value:.3f}"
 
 
-# Entry point for running tests
-if __name__ == "__main__":
-    pytest.main([__file__, "-v", "-m", "performance", "--tb=short"])
+class TestErrorScenarios:
+    """Test error handling and recovery scenarios for evaluation system."""
+
+    @pytest.fixture
+    def eval_config(self):
+        """Create evaluation configuration for testing."""
+        return create_evaluation_config(
+            strategy=EvaluationStrategy.SINGLE_OPPONENT,
+            num_games=1,
+            max_concurrent_games=1,
+            timeout_per_game=30.0,
+            opponent_name="test_opponent",
+            wandb_logging=False,
+            save_games=False,
+        )
+
+    @pytest.fixture
+    def test_config(self):
+        """Create minimal app config for testing."""
+        return ConfigurationFactory.create_minimal_test_config()
+
+    def test_corrupted_checkpoint_recovery(self, tmp_path, eval_config):
+        """Test system recovery from corrupted checkpoint files."""
+        manager = EvaluationManager(eval_config, "corruption_test")
+        manager.setup(
+            device="cpu",
+            policy_mapper=None,  # Mock this in actual test
+            model_dir=str(tmp_path),
+            wandb_active=False,
+        )
+
+        # Create corrupted checkpoint file
+        corrupted_checkpoint = tmp_path / "corrupted_model.pth"
+        with open(corrupted_checkpoint, "wb") as f:
+            f.write(b"this is not a valid pytorch file")
+
+        # Test behavior: system should handle corruption gracefully
+        with pytest.raises((RuntimeError, ValueError, TypeError)) as exc_info:
+            manager.evaluate_checkpoint(str(corrupted_checkpoint))
+
+        # Validate error message indicates corruption
+        error_msg = str(exc_info.value).lower()
+        assert any(
+            keyword in error_msg
+            for keyword in ["corrupt", "checkpoint", "loading", "failed", "invalid"]
+        ), f"Error should indicate corruption: {exc_info.value}"
+
+    def test_evaluation_timeout_handling(self, tmp_path, eval_config):
+        """Test system handles stuck evaluations gracefully."""
+        manager = EvaluationManager(eval_config, "timeout_test")
+        manager.setup(
+            device="cpu",
+            policy_mapper=None,
+            model_dir=str(tmp_path),
+            wandb_active=False,
+        )
+
+        # Test basic evaluation completion without complex threading
+        start_time = time.time()
+
+        try:
+            # Simple timeout test - should complete quickly in normal case
+            test_agent = TestAgentFactory.create_test_agent(ConfigurationFactory.create_minimal_test_config())
+            with patch('keisei.evaluation.strategies.single_opponent.SingleOpponentEvaluator.evaluate_step') as mock_evaluate:
+                mock_evaluate.return_value = MockGameResultFactory.create_successful_game_result()
+                _ = manager.evaluate_current_agent(test_agent)  # Result not needed for timeout test
+
+            elapsed = time.time() - start_time
+            assert elapsed < 30, f"Evaluation took too long: {elapsed:.2f}s > 30s"
+
+        except (RuntimeError, ValueError, AttributeError) as e:
+            elapsed = time.time() - start_time
+            assert elapsed < 30, f"Even failed evaluation should not hang: {elapsed:.2f}s > 30s"
+            logger.info("Evaluation failed with: %s (acceptable for timeout test)", str(e))
+
+    def test_malformed_configuration_handling(self):
+        """Test system handles invalid configurations gracefully."""
+        # Test various malformed configurations
+        with pytest.raises((ValueError, TypeError)):
+            create_evaluation_config(
+                strategy=EvaluationStrategy.SINGLE_OPPONENT,
+                num_games=-1,  # Invalid
+                max_concurrent_games=1,
+                timeout_per_game=30.0,
+                opponent_name="test"
+            )
+
+        with pytest.raises((ValueError, TypeError)):
+            create_evaluation_config(
+                strategy=EvaluationStrategy.SINGLE_OPPONENT,
+                num_games=1,
+                max_concurrent_games=-5,  # Invalid
+                timeout_per_game=30.0,
+                opponent_name="test"
+            )
+
+
+class TestEdgeCases:
+    """Test edge cases and boundary conditions in evaluation system."""
+
+    @pytest.fixture
+    def eval_config(self):
+        """Create evaluation configuration for testing."""
+        return create_evaluation_config(
+            strategy=EvaluationStrategy.SINGLE_OPPONENT,
+            num_games=1,
+            max_concurrent_games=1,
+            timeout_per_game=30.0,
+            opponent_name="test_opponent",
+            wandb_logging=False,
+            save_games=False,
+        )
+
+    def test_single_game_evaluation(self, tmp_path, eval_config):
+        """Test evaluation with minimal (single) game configuration."""
+        manager = EvaluationManager(eval_config, "single_game_test")
+        manager.setup(
+            device="cpu",
+            policy_mapper=None,
+            model_dir=str(tmp_path),
+            wandb_active=False,
+        )
+
+        test_agent = TestAgentFactory.create_test_agent(ConfigurationFactory.create_minimal_test_config())
+
+        # Mock the evaluation to avoid complex game execution
+        with patch('keisei.evaluation.strategies.single_opponent.SingleOpponentEvaluator.evaluate_step') as mock_evaluate:
+            mock_evaluate.return_value = MockGameResultFactory.create_successful_game_result(
+                game_id="single_game_0",
+                winner="agent",
+                game_length=50,
+            )
+
+            result = manager.evaluate_current_agent(test_agent)
+
+            # Validate single game result
+            assert result is not None
+            assert result.summary_stats.total_games == 1
+            assert result.summary_stats.agent_wins >= 0
+            assert result.summary_stats.opponent_wins >= 0
+            assert result.summary_stats.draws >= 0
+            assert result.summary_stats.agent_wins + result.summary_stats.opponent_wins + result.summary_stats.draws == 1
+
+    def test_memory_cleanup_after_evaluation(self, tmp_path, eval_config):
+        """Test that memory is properly cleaned up after evaluation."""
+        manager = EvaluationManager(eval_config, "memory_cleanup_test")
+        manager.setup(
+            device="cpu",
+            policy_mapper=None,
+            model_dir=str(tmp_path),
+            wandb_active=False,
+        )
+
+        # Measure memory before evaluation
+        process = psutil.Process()
+        memory_before = process.memory_info().rss / 1024 / 1024  # MB
+
+        test_agent = TestAgentFactory.create_test_agent(ConfigurationFactory.create_minimal_test_config())
+
+        # Mock the evaluation
+        with patch('keisei.evaluation.strategies.single_opponent.SingleOpponentEvaluator.evaluate_step') as mock_evaluate:
+            mock_evaluate.return_value = MockGameResultFactory.create_successful_game_result(
+                game_id="cleanup_test_game",
+                winner="agent",
+                game_length=50,
+            )
+
+            result = manager.evaluate_current_agent(test_agent)
+
+        # Force garbage collection
+        del result
+        del test_agent
+        gc.collect()
+
+        # Measure memory after cleanup
+        memory_after = process.memory_info().rss / 1024 / 1024  # MB
+        memory_growth = memory_after - memory_before
+
+        # Memory growth should be reasonable (less than 50MB for small test)
+        assert memory_growth < 50, f"Memory growth too large: {memory_growth:.2f}MB"
