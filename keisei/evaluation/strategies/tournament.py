@@ -114,10 +114,10 @@ class TournamentEvaluator(BaseEvaluator):
         input_channels = 46
 
         # Load evaluation entities - use the _game_ aliased methods for test compatibility
-        agent = await self._game_load_evaluation_entity(
+        agent = self._game_load_evaluation_entity(
             agent_info, device_str, input_channels
         )
-        opponent = await self._game_load_evaluation_entity(
+        opponent = self._game_load_evaluation_entity(
             opponent_info, device_str, input_channels
         )
 
@@ -203,7 +203,13 @@ class TournamentEvaluator(BaseEvaluator):
                 break
 
             try:
-                move = await self._get_player_action(current_player, game, legal_moves)
+                # Convert legal moves to legal mask for agent action selection
+                legal_mask = None
+                if hasattr(current_player, "select_action") and hasattr(current_player, "device"):
+                    # This is an agent that needs a legal mask tensor
+                    legal_mask = self.policy_mapper.get_legal_mask(legal_moves, current_player.device)
+                
+                move = await self._get_player_action(current_player, game, legal_moves, legal_mask)
                 if move is None:
                     break
 
@@ -341,7 +347,7 @@ class TournamentEvaluator(BaseEvaluator):
 
         return True
 
-    async def _load_evaluation_entity(
+    def _load_evaluation_entity(
         self,
         entity_info: AgentInfo | OpponentInfo,
         device_str: str,
@@ -356,21 +362,21 @@ class TournamentEvaluator(BaseEvaluator):
                 and "agent_instance" in entity_info.metadata
             ):
                 return entity_info.metadata["agent_instance"]
-            return await load_evaluation_agent(
+            return load_evaluation_agent(
                 checkpoint_path=entity_info.checkpoint_path or "",
                 device_str=device_str,
                 policy_mapper=self.policy_mapper,
                 input_channels=input_channels,
             )
         if isinstance(entity_info, OpponentInfo) and entity_info.type == "ppo_agent":
-            return await load_evaluation_agent(
+            return load_evaluation_agent(
                 checkpoint_path=entity_info.checkpoint_path or "",
                 device_str=device_str,
                 policy_mapper=self.policy_mapper,
                 input_channels=input_channels,
             )
         elif isinstance(entity_info, OpponentInfo):
-            return await initialize_opponent(
+            return initialize_opponent(
                 opponent_type=entity_info.type,
                 opponent_path=entity_info.checkpoint_path,
                 device_str=device_str,
@@ -380,7 +386,7 @@ class TournamentEvaluator(BaseEvaluator):
         raise ValueError(f"Unknown entity type for loading: {type(entity_info)}")
 
     async def _get_player_action(
-        self, player_entity: Any, game: ShogiGame, legal_mask: Any
+        self, player_entity: Any, game: ShogiGame, legal_moves: List[Any], legal_mask: Any = None
     ) -> Any:
         """Gets an action from the player entity (agent or opponent)."""
         move = None
@@ -388,9 +394,11 @@ class TournamentEvaluator(BaseEvaluator):
             hasattr(player_entity, "select_action")
             and player_entity.select_action is not None
         ):  # PPOAgent-like
+            # Use legal_mask if available, otherwise pass legal_moves
+            mask_to_use = legal_mask if legal_mask is not None else legal_moves
             move_tuple = player_entity.select_action(
                 game.get_observation(),
-                legal_mask,
+                mask_to_use,
                 is_training=False,
             )
             if move_tuple is not None:
@@ -426,6 +434,7 @@ class TournamentEvaluator(BaseEvaluator):
             game.termination_reason = "Illegal/No move"
             return False
 
+        # Since move is in legal_moves, it should be valid - no need for redundant test_move check
         try:
             game.make_move(move)
             return True
@@ -587,9 +596,9 @@ class TournamentEvaluator(BaseEvaluator):
         return results, errors
 
     # Aliases for methods that tests expect with _game_ prefix
-    async def _game_load_evaluation_entity(self, *args, **kwargs):
+    def _game_load_evaluation_entity(self, *args, **kwargs):
         """Alias for _load_evaluation_entity for test compatibility."""
-        return await self._load_evaluation_entity(*args, **kwargs)
+        return self._load_evaluation_entity(*args, **kwargs)
 
     async def _game_run_game_loop(self, sente_player, gote_player, context):
         """Alias for game loop compatible with test expectations."""

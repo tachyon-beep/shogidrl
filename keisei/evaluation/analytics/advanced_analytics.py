@@ -299,7 +299,7 @@ class AdvancedAnalytics:
         # P-value (two-tailed)
         p_value = 2 * (1 - scipy_stats.norm.cdf(abs(z_stat)))
 
-        is_significant = p_value < self.significance_level
+        is_significant = bool(p_value < self.significance_level)
 
         # Effect size (Cohen's h)
         effect_size = 2 * (math.asin(math.sqrt(p2)) - math.asin(math.sqrt(p1)))
@@ -320,6 +320,16 @@ class AdvancedAnalytics:
         self, sample1: List[float], sample2: List[float], metric_name: str
     ) -> StatisticalTest:
         """Perform Mann-Whitney U test."""
+        if not SCIPY_AVAILABLE:
+            return StatisticalTest(
+                test_name=f"mann_whitney_{metric_name}",
+                statistic=0.0,
+                p_value=1.0,
+                is_significant=False,
+                confidence_level=1 - self.significance_level,
+                interpretation="Test skipped (scipy not available)",
+            )
+
         if len(sample1) < 3 or len(sample2) < 3:
             return StatisticalTest(
                 test_name=f"mann_whitney_{metric_name}",

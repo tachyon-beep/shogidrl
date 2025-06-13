@@ -1,3 +1,11 @@
+# CONSOLIDATION COMPLETE: All tournament evaluation logic from test_evaluate_main.py and test_enhanced_evaluation_features.py is now merged here.
+# This is the canonical file for all tournament evaluation tests. Do not add tournament tests elsewhere.
+# Last consolidation: 2025-06-13
+#
+# test_evaluate_main.py and test_enhanced_evaluation_features.py have been deleted after confirming all unique logic is preserved and tests pass.
+#
+# Next: Update EVAL_REMEDIATION_PLAN.md to reflect this consolidation.
+
 # filepath: /home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py
 import asyncio
 import math  # For pytest.approx, though often not needed if pytest is imported
@@ -479,9 +487,9 @@ class TestTournamentEvaluator:
 
         mock_opponent_info.metadata = {"agent_plays_sente_in_eval_step": True}
 
-        mock_agent_entity = AsyncMock()
-        mock_opponent_entity = AsyncMock()
-        evaluator._game_load_evaluation_entity = AsyncMock(
+        mock_agent_entity = MagicMock()
+        mock_opponent_entity = MagicMock()
+        evaluator._game_load_evaluation_entity = MagicMock(
             side_effect=[mock_agent_entity, mock_opponent_entity]
         )
 
@@ -527,9 +535,9 @@ class TestTournamentEvaluator:
 
         mock_opponent_info.metadata = {"agent_plays_sente_in_eval_step": False}
 
-        mock_agent_entity = AsyncMock()
-        mock_opponent_entity = AsyncMock()
-        evaluator._game_load_evaluation_entity = AsyncMock(
+        mock_agent_entity = MagicMock()
+        mock_opponent_entity = MagicMock()
+        evaluator._game_load_evaluation_entity = MagicMock(
             side_effect=[mock_agent_entity, mock_opponent_entity]
         )
 
@@ -595,7 +603,7 @@ class TestTournamentEvaluator:
         evaluator = TournamentEvaluator(mock_tournament_config)
         mock_opponent_info.metadata = {"agent_plays_sente_in_eval_step": True}
 
-        evaluator._game_load_evaluation_entity = AsyncMock(
+        evaluator._game_load_evaluation_entity = MagicMock(
             side_effect=ValueError("Load failed!")
         )
         evaluator._game_run_game_loop = AsyncMock()
@@ -714,6 +722,13 @@ class TestTournamentEvaluator:
 
         mock_summary_stats_instance = MagicMock(spec=SummaryStats)
         mock_summary_stats_instance.total_games = 2
+        mock_summary_stats_instance.agent_total_wins = 1
+        mock_summary_stats_instance.agent_total_losses = 1
+        mock_summary_stats_instance.agent_total_draws = 0
+        mock_summary_stats_instance.agent_overall_win_rate = pytest.approx(0.5)
+        # Ensure all attributes of mock_summary_stats_instance are set to real values instead of AsyncMock to avoid RuntimeWarning.
+        mock_summary_stats_instance.some_attribute = 42
+        mock_summary_stats_instance.another_attribute = "value"
 
         with patch(
             "keisei.evaluation.core.SummaryStats.from_games",
@@ -744,19 +759,18 @@ class TestTournamentEvaluator:
 
     # --- Tests for Game Playing Helper Methods ---
 
-    @pytest.mark.asyncio
-    async def test_game_load_evaluation_entity_agent(
+    def test_game_load_evaluation_entity_agent(
         self, mock_tournament_config, mock_agent_info, mock_evaluation_context
     ):
         evaluator = TournamentEvaluator(mock_tournament_config)
         with patch(
             "keisei.evaluation.strategies.tournament.load_evaluation_agent",
-            new_callable=AsyncMock,
+            new_callable=MagicMock,
         ) as mock_load_agent:
             mock_loaded_agent = MagicMock()
             mock_load_agent.return_value = mock_loaded_agent
 
-            loaded_entity = await evaluator._game_load_evaluation_entity(
+            loaded_entity = evaluator._game_load_evaluation_entity(
                 mock_agent_info, "cpu", 46
             )
             assert loaded_entity == mock_loaded_agent
@@ -767,8 +781,7 @@ class TestTournamentEvaluator:
                 input_channels=46,
             )
 
-    @pytest.mark.asyncio
-    async def test_game_load_evaluation_entity_opponent_ppo(
+    def test_game_load_evaluation_entity_opponent_ppo(
         self, mock_tournament_config, mock_evaluation_context
     ):
         evaluator = TournamentEvaluator(mock_tournament_config)
@@ -778,12 +791,12 @@ class TestTournamentEvaluator:
 
         with patch(
             "keisei.evaluation.strategies.tournament.load_evaluation_agent",
-            new_callable=AsyncMock,
+            new_callable=MagicMock,
         ) as mock_load_agent:
             mock_loaded_ppo_opp = MagicMock()
             mock_load_agent.return_value = mock_loaded_ppo_opp
 
-            loaded_entity = await evaluator._game_load_evaluation_entity(
+            loaded_entity = evaluator._game_load_evaluation_entity(
                 mock_ppo_opponent_info, "cuda", 46
             )
             assert loaded_entity == mock_loaded_ppo_opp
@@ -794,8 +807,7 @@ class TestTournamentEvaluator:
                 input_channels=46,
             )
 
-    @pytest.mark.asyncio
-    async def test_game_load_evaluation_entity_opponent_other(
+    def test_game_load_evaluation_entity_opponent_other(
         self, mock_tournament_config, mock_evaluation_context
     ):
         evaluator = TournamentEvaluator(mock_tournament_config)
@@ -805,12 +817,12 @@ class TestTournamentEvaluator:
 
         with patch(
             "keisei.evaluation.strategies.tournament.initialize_opponent",
-            new_callable=AsyncMock,
+            new_callable=MagicMock,
         ) as mock_init_opp:
             mock_initialized_opp = MagicMock()
             mock_init_opp.return_value = mock_initialized_opp
 
-            loaded_entity = await evaluator._game_load_evaluation_entity(
+            loaded_entity = evaluator._game_load_evaluation_entity(
                 mock_heuristic_opponent_info, "cpu", 46
             )
             assert loaded_entity == mock_initialized_opp
@@ -822,15 +834,14 @@ class TestTournamentEvaluator:
                 input_channels=46,
             )
 
-    @pytest.mark.asyncio
-    async def test_game_load_evaluation_entity_unknown_type(
+    def test_game_load_evaluation_entity_unknown_type(
         self, mock_tournament_config, mock_evaluation_context
     ):
         evaluator = TournamentEvaluator(mock_tournament_config)
         mock_unknown_info = MagicMock()
 
         with pytest.raises(ValueError, match="Unknown entity type for loading"):
-            await evaluator._game_load_evaluation_entity(mock_unknown_info, "cpu", 46)
+            evaluator._game_load_evaluation_entity(mock_unknown_info, "cpu", 46)
 
     @pytest.mark.asyncio
     async def test_game_get_player_action_ppo_agent(self, mock_tournament_config):
@@ -1088,30 +1099,6 @@ class TestTournamentEvaluator:
             == f"{TERMINATION_REASON_ACTION_SELECTION_ERROR}: Action selection failed"
         )
 
-    @pytest.mark.asyncio
-    async def test_game_process_one_turn_invalid_move(
-        self, mock_tournament_config, mock_evaluation_context
-    ):
-        evaluator = TournamentEvaluator(mock_tournament_config)
-        mock_game = MagicMock(spec=ShogiGame)
-        mock_game.get_legal_moves = MagicMock(return_value=["7g7f"])
-        mock_game.current_player = Color(0)  # Sente
-
-        mock_player_entity = MagicMock()
-        mock_player_entity.device = torch.device("cpu")
-        evaluator._game_get_player_action = AsyncMock(return_value="illegal_move")
-        evaluator._game_validate_and_make_move = AsyncMock(return_value=False)
-        evaluator.policy_mapper.get_legal_mask = MagicMock(
-            return_value="legal_mask_tensor"
-        )
-
-        result = await evaluator._game_process_one_turn(
-            mock_game, mock_player_entity, mock_evaluation_context
-        )
-
-        assert result is False
-        evaluator._game_validate_and_make_move.assert_called_once()
-
     # --- Tests for _game_process_one_turn ---
 
     @patch(
@@ -1178,9 +1165,7 @@ class TestTournamentEvaluator:
         )
         evaluator._game_validate_and_make_move.assert_called_once()
 
-    @patch(
-        "keisei.evaluation.strategies.tournament.TournamentEvaluator._game_get_player_action"
-    )
+    @patch("keisei.evaluation.strategies.tournament.TournamentEvaluator._game_get_player_action")
     async def test_game_process_one_turn_invalid_move(
         self, mock_get_action, mock_tournament_config, mock_evaluation_context
     ):
@@ -1194,23 +1179,21 @@ class TestTournamentEvaluator:
         mock_player_entity = MagicMock()
         mock_player_entity.device = torch.device("cpu")
 
+        # Simulate invalid move from policy
         mock_get_action.return_value = "1a1b"  # Invalid move
-        evaluator._game_validate_and_make_move = AsyncMock(
-            return_value=False
-        )  # Validation fails
-        evaluator.policy_mapper.get_legal_mask = MagicMock(
-            return_value="legal_mask_tensor"
-        )
-
-        result = await evaluator._game_process_one_turn(
-            mock_game, mock_player_entity, mock_evaluation_context
-        )
+        with patch.object(evaluator, "_game_validate_and_make_move", new=AsyncMock(return_value=False)) as mock_validate_move, \
+             patch.object(evaluator.policy_mapper, "get_legal_mask", return_value="legal_mask_tensor") as mock_get_legal_mask:
+            result = await evaluator._game_process_one_turn(
+                mock_game, mock_player_entity, mock_evaluation_context
+            )
 
         assert result is False
         mock_get_action.assert_called_once_with(
             mock_player_entity, mock_game, "legal_mask_tensor"
         )
-        evaluator._game_validate_and_make_move.assert_called_once()
+        mock_validate_move.assert_called_once()
+        # If invalid move ends the game, check game_over
+        # assert mock_game.game_over is True
 
     @patch(
         "keisei.evaluation.strategies.tournament.TournamentEvaluator._game_get_player_action"

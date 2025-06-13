@@ -191,6 +191,19 @@ class LadderEvaluator(BaseEvaluator):
             game.termination_reason = TERMINATION_REASON_ILLEGAL_MOVE
             return False
 
+        # Use test_move for validation before making the move
+        if not game.test_move(move):
+            self.logger.warning(
+                "Player %s (%s) made an invalid move (%s). Game ending due to invalid move.",
+                current_player_color_value,
+                player_entity_type_name,
+                move,
+            )
+            game.game_over = True
+            game.winner = Color(1 - current_player_color_value)
+            game.termination_reason = "Invalid move"
+            return False
+
         try:
             game.make_move(move)
             return True

@@ -135,6 +135,17 @@ class SingleOpponentEvaluator(BaseEvaluator):
             game.termination_reason = "Illegal/No move"
             return False
 
+        # Use test_move for validation before making the move
+        if not game.test_move(move):
+            logger.warning(
+                f"Player {current_player_color_value} ({player_entity_type_name}) made an invalid move ({move}). "
+                f"Game ending due to invalid move."
+            )
+            game.game_over = True
+            game.winner = Color(1 - current_player_color_value)  # Other player wins
+            game.termination_reason = "Invalid move"
+            return False
+
         try:
             game.make_move(move)
             return True
@@ -249,9 +260,18 @@ class SingleOpponentEvaluator(BaseEvaluator):
         self.log_evaluation_start(agent_info, context)
 
         # Create opponent info
+        # Map opponent name to opponent type for supported opponents
+        opponent_type_mapping = {
+            "random": "random",
+            "heuristic": "heuristic", 
+            "default_opponent": "random",  # Default fallback
+        }
+        
+        opponent_type = opponent_type_mapping.get(self.config.opponent_name, "random")
+        
         opponent_info = OpponentInfo(
             name=self.config.opponent_name,
-            type="unknown",  # Will be determined by the opponent system
+            type=opponent_type,
             checkpoint_path=self.config.opponent_path,
             metadata=self.config.opponent_params.copy(),
         )
@@ -729,10 +749,24 @@ class SingleOpponentEvaluator(BaseEvaluator):
 
     def get_opponents(self, context: EvaluationContext) -> List[OpponentInfo]:
         """Get the single opponent for this evaluation."""
+        # Map opponent names to proper types based on supported opponent types
+        opponent_type_mapping = {
+            "random": "random",
+            "heuristic": "heuristic",
+            # If opponent_path is provided, it's likely a PPO agent
+        }
+        
+        # Determine opponent type based on name and configuration
+        opponent_type = opponent_type_mapping.get(self.config.opponent_name.lower(), "unknown")
+        
+        # If we have a checkpoint path but the type is still unknown, assume it's a PPO agent
+        if opponent_type == "unknown" and self.config.opponent_path:
+            opponent_type = "ppo"
+        
         return [
             OpponentInfo(
                 name=self.config.opponent_name,
-                type="unknown",
+                type=opponent_type,
                 checkpoint_path=self.config.opponent_path,
                 metadata=self.config.opponent_params.copy(),
             )

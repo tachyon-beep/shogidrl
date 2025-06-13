@@ -1,0 +1,302 @@
+/home/john/keisei/tests/evaluation/conftest.py:8:from unittest.mock import MagicMock, Mock
+/home/john/keisei/tests/evaluation/conftest.py:28:# Mock PPO Agent class for testing
+/home/john/keisei/tests/evaluation/conftest.py:29:class MockPPOAgent:
+/home/john/keisei/tests/evaluation/conftest.py:30:    """Mock PPO Agent for testing purposes."""
+/home/john/keisei/tests/evaluation/conftest.py:34:        self.name = kwargs.get("name", "MockAgent")
+/home/john/keisei/tests/evaluation/conftest.py:37:        """Mock action selection - returns first legal action."""
+/home/john/keisei/tests/evaluation/conftest.py:45:        """Mock get_action_and_value method."""
+/home/john/keisei/tests/evaluation/conftest.py:52:        """Mock model loading."""
+/home/john/keisei/tests/evaluation/test_enhanced_evaluation_features.py:13:from unittest.mock import MagicMock, patch
+/home/john/keisei/tests/evaluation/test_enhanced_evaluation_features.py:201:        # Mock the tournament evaluator to avoid complex dependencies
+/home/john/keisei/tests/evaluation/test_enhanced_evaluation_features.py:202:        with patch(
+/home/john/keisei/tests/evaluation/test_enhanced_evaluation_features.py:205:            mock_evaluator_instance = MagicMock()
+/home/john/keisei/tests/evaluation/test_enhanced_evaluation_features.py:212:            mock_evaluator_instance._calculate_tournament_standings = MagicMock(
+/home/john/keisei/tests/evaluation/test_enhanced_evaluation_features.py:259:            with patch("keisei.evaluation.strategies.tournament.TournamentEvaluator"):
+/home/john/keisei/tests/evaluation/test_enhanced_evaluation_features.py:290:            with patch("keisei.evaluation.strategies.tournament.TournamentEvaluator"):
+/home/john/keisei/tests/evaluation/test_enhanced_evaluation_features.py:524:        with patch(
+/home/john/keisei/tests/evaluation/test_enhanced_evaluation_features.py:528:            from unittest.mock import AsyncMock
+/home/john/keisei/tests/evaluation/test_enhanced_evaluation_features.py:537:            mock_instance._play_games_against_opponent = AsyncMock(
+/home/john/keisei/tests/evaluation/test_model_manager.py:8:from unittest.mock import MagicMock, Mock, patch
+/home/john/keisei/tests/evaluation/test_model_manager.py:26:        agent = Mock(spec=PPOAgent)
+/home/john/keisei/tests/evaluation/test_model_manager.py:27:        agent.model = Mock()
+/home/john/keisei/tests/evaluation/test_model_manager.py:59:        agent = Mock()
+/home/john/keisei/tests/evaluation/test_performance_validation.py:15:from unittest.mock import Mock, patch
+/home/john/keisei/tests/evaluation/test_performance_validation.py:93:                policy_mapper=Mock(),
+/home/john/keisei/tests/evaluation/test_performance_validation.py:98:            # Mock agent
+/home/john/keisei/tests/evaluation/test_performance_validation.py:99:            mock_agent = Mock()
+/home/john/keisei/tests/evaluation/test_performance_validation.py:101:            mock_agent.model = Mock()
+/home/john/keisei/tests/evaluation/test_performance_validation.py:110:                with patch("keisei.evaluation.strategies.single_opponent.ShogiGame"):
+/home/john/keisei/tests/evaluation/test_performance_validation_simple.py:14:from unittest.mock import Mock, patch
+/home/john/keisei/tests/evaluation/test_performance_validation_simple.py:91:                policy_mapper=Mock(),
+/home/john/keisei/tests/evaluation/test_performance_validation_simple.py:96:            # Mock agent
+/home/john/keisei/tests/evaluation/test_performance_validation_simple.py:97:            mock_agent = Mock()
+/home/john/keisei/tests/evaluation/test_performance_validation_simple.py:99:            mock_agent.model = Mock()
+/home/john/keisei/tests/evaluation/test_performance_validation_simple.py:108:                with patch("keisei.evaluation.strategies.single_opponent.ShogiGame"):
+/home/john/keisei/tests/evaluation/test_evaluate_evaluator_modern_fixed.py:8:from unittest.mock import MagicMock, patch
+/home/john/keisei/tests/evaluation/test_evaluate_evaluator_modern_fixed.py:50:            self.model = MagicMock()
+/home/john/keisei/tests/evaluation/test_evaluate_evaluator_modern_fixed.py:84:    # Mock the evaluation strategy directly instead of legacy components
+/home/john/keisei/tests/evaluation/test_evaluate_evaluator_modern_fixed.py:85:    with patch(
+/home/john/keisei/tests/evaluation/test_evaluate_evaluator_modern_fixed.py:90:        mock_evaluator = MagicMock()
+/home/john/keisei/tests/evaluation/test_evaluate_evaluator_modern_fixed.py:92:        # Mock evaluation result
+/home/john/keisei/tests/evaluation/test_evaluate_evaluator_modern_fixed.py:100:        mock_context = MagicMock(spec=EvaluationContext)
+/home/john/keisei/tests/evaluation/test_evaluate_evaluator_modern_fixed.py:190:    # Mock the evaluation strategy for checkpoint test
+/home/john/keisei/tests/evaluation/test_evaluate_evaluator_modern_fixed.py:191:    with patch(
+/home/john/keisei/tests/evaluation/test_evaluate_evaluator_modern_fixed.py:196:        mock_evaluator = MagicMock()
+/home/john/keisei/tests/evaluation/test_evaluate_evaluator_modern_fixed.py:198:        # Mock evaluation result for checkpoint test
+/home/john/keisei/tests/evaluation/test_evaluate_evaluator_modern_fixed.py:206:        mock_context = MagicMock(spec=EvaluationContext)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:4:from unittest.mock import AsyncMock, MagicMock, call, patch
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:40:    config = MagicMock(spec=TournamentConfig)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:59:    agent_info = MagicMock(spec=AgentInfo)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:63:    agent_info.to_dict = MagicMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:75:    opponent_info = MagicMock(spec=OpponentInfo)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:80:    opponent_info.to_dict = MagicMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:88:    context = MagicMock(spec=EvaluationContext)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:92:    context.timestamp = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:115:        with patch(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:116:            "keisei.evaluation.strategies.tournament.logger", MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:136:        with patch("keisei.evaluation.strategies.tournament.logger", MagicMock()):
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:158:        with patch("keisei.evaluation.strategies.tournament.logger", MagicMock()):
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:174:        with patch(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:175:            "keisei.evaluation.strategies.tournament.logger", MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:202:        with patch(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:203:            "keisei.evaluation.strategies.tournament.logger", MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:212:            with patch("keisei.evaluation.core.OpponentInfo.__init__", mock_init):
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:228:        with patch.object(BaseEvaluator, "validate_config", return_value=True):
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:235:            patch.object(BaseEvaluator, "validate_config", return_value=True),
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:236:            patch(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:237:                "keisei.evaluation.strategies.tournament.logger", MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:251:            patch.object(BaseEvaluator, "validate_config", return_value=True),
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:252:            patch(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:253:                "keisei.evaluation.strategies.tournament.logger", MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:265:        with patch.object(BaseEvaluator, "validate_config", return_value=False):
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:275:        evaluator.setup_context = MagicMock(return_value=mock_evaluation_context)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:276:        evaluator.log_evaluation_start = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:277:        evaluator.log_evaluation_complete = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:278:        evaluator._load_tournament_opponents = AsyncMock(return_value=[])
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:280:        with patch(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:282:            MagicMock(return_value=MagicMock(spec=SummaryStats)),
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:319:        opp1_info.to_dict = MagicMock(return_value={"name": "Opp1", "type": "random"})
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:321:        opp2_info.to_dict = MagicMock(return_value={"name": "Opp2", "type": "random"})
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:393:        mock_game_result_sente = MagicMock(spec=GameResult)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:394:        mock_game_result_gote = MagicMock(spec=GameResult)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:395:        evaluator.evaluate_step = AsyncMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:400:            new_mock_opp = MagicMock(spec=OpponentInfo)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:404:            new_mock_opp.to_dict = MagicMock(return_value=data_dict)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:407:        with patch(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:450:        evaluator.evaluate_step = AsyncMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:454:        with patch(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:482:        mock_agent_entity = AsyncMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:483:        mock_opponent_entity = AsyncMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:484:        evaluator._game_load_evaluation_entity = AsyncMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:493:        evaluator._game_run_game_loop = AsyncMock(return_value=game_outcome)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:495:        with patch("time.time", side_effect=[100.0, 105.0]):
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:530:        mock_agent_entity = AsyncMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:531:        mock_opponent_entity = AsyncMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:532:        evaluator._game_load_evaluation_entity = AsyncMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:541:        evaluator._game_run_game_loop = AsyncMock(return_value=game_outcome)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:543:        with patch("time.time", side_effect=[200.0, 210.0]):
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:568:        evaluator._game_load_evaluation_entity = AsyncMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:569:            side_effect=[AsyncMock(), AsyncMock()]
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:571:        evaluator._game_run_game_loop = AsyncMock(side_effect=Exception("Loop error!"))
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:573:        with patch("time.time", side_effect=[300.0, 301.0]):
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:598:        evaluator._game_load_evaluation_entity = AsyncMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:601:        evaluator._game_run_game_loop = AsyncMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:603:        with patch("time.time", side_effect=[400.0, 401.0]):
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:627:        evaluator.setup_context = MagicMock(return_value=mock_evaluation_context)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:628:        evaluator.log_evaluation_start = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:629:        evaluator.log_evaluation_complete = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:630:        evaluator._load_tournament_opponents = AsyncMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:634:        evaluator._play_games_against_opponent = AsyncMock(return_value=([], []))
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:635:        evaluator._calculate_tournament_standings = MagicMock(return_value={})
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:637:        with patch(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:639:            MagicMock(return_value=MagicMock(spec=SummaryStats)),
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:669:        opp1.to_dict = MagicMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:673:        opp2.to_dict = MagicMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:680:        evaluator.setup_context = MagicMock(return_value=mock_evaluation_context)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:681:        evaluator.log_evaluation_start = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:682:        evaluator.log_evaluation_complete = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:683:        evaluator._load_tournament_opponents = AsyncMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:706:        evaluator._play_games_against_opponent = AsyncMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:711:        evaluator._calculate_tournament_standings = MagicMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:715:        mock_summary_stats_instance = MagicMock(spec=SummaryStats)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:718:        with patch(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:720:            MagicMock(return_value=mock_summary_stats_instance),
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:752:        with patch(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:754:            new_callable=AsyncMock,
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:756:            mock_loaded_agent = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:779:        with patch(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:781:            new_callable=AsyncMock,
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:783:            mock_loaded_ppo_opp = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:806:        with patch(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:808:            new_callable=AsyncMock,
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:810:            mock_initialized_opp = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:830:        mock_unknown_info = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:838:        mock_player_entity = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:839:        mock_player_entity.select_action = MagicMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:842:        mock_game = MagicMock(spec=ShogiGame)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:843:        mock_game.get_observation = MagicMock(return_value="observation_data")
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:844:        mock_legal_mask = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:860:        mock_player_entity = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:863:        mock_player_entity.select_move = MagicMock(return_value="heuristic_move")
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:864:        mock_game = MagicMock(spec=ShogiGame)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:865:        mock_legal_mask = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:879:        mock_player_entity = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:882:        mock_game = MagicMock(spec=ShogiGame)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:883:        mock_legal_mask = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:893:        mock_game = MagicMock(spec=ShogiGame)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:894:        mock_game.make_move = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:911:        mock_game = MagicMock(spec=ShogiGame)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:928:        mock_game = MagicMock(spec=ShogiGame)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:948:        mock_game = MagicMock(spec=ShogiGame)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:949:        mock_game.make_move = MagicMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:974:        mock_game = MagicMock(spec=ShogiGame)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:990:        mock_game = MagicMock(spec=ShogiGame)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:995:        with patch(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:996:            "keisei.evaluation.strategies.tournament.logger", MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1013:        mock_game = MagicMock(spec=ShogiGame)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1014:        mock_game.get_legal_moves = MagicMock(return_value=["7g7f"])
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1017:        mock_player_entity = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1020:        evaluator._game_get_player_action = AsyncMock(return_value="7g7f")
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1021:        evaluator._game_validate_and_make_move = AsyncMock(return_value=True)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1022:        evaluator.policy_mapper.get_legal_mask = MagicMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1047:        mock_game = MagicMock(spec=ShogiGame)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1048:        mock_game.get_legal_moves = MagicMock(return_value=[])
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1050:        mock_player_entity = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1051:        evaluator._handle_no_legal_moves = AsyncMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1065:        mock_game = MagicMock(spec=ShogiGame)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1066:        mock_game.get_legal_moves = MagicMock(return_value=["7g7f"])
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1070:        mock_player_entity = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1072:        evaluator._game_get_player_action = AsyncMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1075:        evaluator.policy_mapper.get_legal_mask = MagicMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1096:        mock_game = MagicMock(spec=ShogiGame)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1097:        mock_game.get_legal_moves = MagicMock(return_value=["7g7f"])
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1100:        mock_player_entity = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1102:        evaluator._game_get_player_action = AsyncMock(return_value="illegal_move")
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1103:        evaluator._game_validate_and_make_move = AsyncMock(return_value=False)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1104:        evaluator.policy_mapper.get_legal_mask = MagicMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1117:    @patch(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1125:        mock_game = MagicMock(spec=ShogiGame)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1130:        mock_player_entity = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1134:        evaluator._game_validate_and_make_move = AsyncMock(return_value=True)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1135:        evaluator.policy_mapper.get_legal_mask = MagicMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1149:    @patch(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1157:        mock_game = MagicMock(spec=ShogiGame)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1162:        mock_player_entity = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1166:        evaluator._game_validate_and_make_move = AsyncMock(return_value=True)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1167:        evaluator.policy_mapper.get_legal_mask = MagicMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1181:    @patch(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1189:        mock_game = MagicMock(spec=ShogiGame)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1194:        mock_player_entity = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1198:        evaluator._game_validate_and_make_move = AsyncMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1201:        evaluator.policy_mapper.get_legal_mask = MagicMock(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1215:    @patch(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1223:        mock_game = MagicMock(spec=ShogiGame)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1228:        mock_player_entity = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1231:        evaluator._handle_no_legal_moves = AsyncMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1241:    @patch(
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1249:        mock_game = MagicMock(spec=ShogiGame)
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1254:        mock_player_entity = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_tournament_evaluator.py:1258:        evaluator.policy_mapper.get_legal_mask = MagicMock(
+/home/john/keisei/tests/evaluation/strategies/test_single_opponent_evaluator.py:2:from unittest.mock import AsyncMock, MagicMock, patch
+/home/john/keisei/tests/evaluation/strategies/test_single_opponent_evaluator.py:27:    dummy_agent = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_single_opponent_evaluator.py:30:    with patch(
+/home/john/keisei/tests/evaluation/strategies/test_single_opponent_evaluator.py:32:        new_callable=AsyncMock,
+/home/john/keisei/tests/evaluation/strategies/test_single_opponent_evaluator.py:54:    # Mock the internal methods
+/home/john/keisei/tests/evaluation/strategies/test_single_opponent_evaluator.py:56:        patch.object(evaluator, "validate_agent", return_value=True),
+/home/john/keisei/tests/evaluation/strategies/test_single_opponent_evaluator.py:57:        patch.object(evaluator, "validate_config", return_value=True),
+/home/john/keisei/tests/evaluation/strategies/test_single_opponent_evaluator.py:58:        patch.object(evaluator, "setup_context") as mock_setup_context,
+/home/john/keisei/tests/evaluation/strategies/test_single_opponent_evaluator.py:59:        patch.object(evaluator, "log_evaluation_start"),
+/home/john/keisei/tests/evaluation/strategies/test_single_opponent_evaluator.py:60:        patch.object(evaluator, "log_evaluation_complete"),
+/home/john/keisei/tests/evaluation/strategies/test_single_opponent_evaluator.py:61:        patch.object(
+/home/john/keisei/tests/evaluation/strategies/test_single_opponent_evaluator.py:62:            evaluator, "evaluate_step_in_memory", new_callable=AsyncMock
+/home/john/keisei/tests/evaluation/strategies/test_single_opponent_evaluator.py:64:        patch.object(evaluator, "_calculate_analytics", return_value={}),
+/home/john/keisei/tests/evaluation/strategies/test_single_opponent_evaluator.py:67:        # Mock context
+/home/john/keisei/tests/evaluation/strategies/test_single_opponent_evaluator.py:68:        mock_context = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_single_opponent_evaluator.py:72:        # Mock game results
+/home/john/keisei/tests/evaluation/strategies/test_single_opponent_evaluator.py:110:    with patch(
+/home/john/keisei/tests/evaluation/strategies/test_single_opponent_evaluator.py:113:        mock_agent = MagicMock()
+/home/john/keisei/tests/evaluation/strategies/test_ladder_evaluator.py:1:from unittest.mock import MagicMock
+/home/john/keisei/tests/evaluation/strategies/test_ladder_evaluator.py:13:    context = MagicMock(spec=EvaluationContext)
+/home/john/keisei/tests/evaluation/strategies/test_ladder_evaluator.py:26:    context = MagicMock(spec=EvaluationContext)
+/home/john/keisei/tests/evaluation/test_evaluation_callback_integration.py:2:from unittest.mock import MagicMock
+/home/john/keisei/tests/evaluation/test_evaluation_callback_integration.py:15:        self.model = MagicMock()
+/home/john/keisei/tests/evaluation/test_evaluation_callback_integration.py:33:        self.agent.model = MagicMock()  # Add model attribute to agent
+/home/john/keisei/tests/evaluation/test_evaluation_callback_integration.py:35:        self.evaluation_manager = MagicMock()
+/home/john/keisei/tests/evaluation/test_evaluation_callback_integration.py:63:        mock_result = MagicMock()
+/home/john/keisei/tests/evaluation/test_evaluation_callback_integration.py:64:        mock_result.summary_stats = MagicMock()
+/home/john/keisei/tests/evaluation/test_evaluate_opponents.py:6:from unittest.mock import MagicMock, patch
+/home/john/keisei/tests/evaluation/test_evaluate_opponents.py:15:from tests.evaluation.conftest import INPUT_CHANNELS, MockPPOAgent, make_test_config
+/home/john/keisei/tests/evaluation/test_evaluate_opponents.py:63:@patch(
+/home/john/keisei/tests/evaluation/test_evaluate_opponents.py:64:    "keisei.utils.agent_loading.load_evaluation_agent"  # Corrected patch target
+/home/john/keisei/tests/evaluation/test_evaluate_opponents.py:65:)  # Mock load_evaluation_agent within evaluate.py
+/home/john/keisei/tests/evaluation/test_evaluate_opponents.py:68:    mock_ppo_instance = MockPPOAgent(
+/home/john/keisei/tests/evaluation/test_evaluate_opponents.py:71:        name="MockPPOAgentForTest",
+/home/john/keisei/tests/evaluation/test_evaluate_evaluator.py:8:from unittest.mock import MagicMock, patch
+/home/john/keisei/tests/evaluation/test_evaluate_evaluator.py:51:            self.model = MagicMock()
+/home/john/keisei/tests/evaluation/test_evaluate_evaluator.py:87:    # Mock the evaluation strategy directly instead of legacy components
+/home/john/keisei/tests/evaluation/test_evaluate_evaluator.py:88:    with patch(
+/home/john/keisei/tests/evaluation/test_evaluate_evaluator.py:93:        mock_evaluator = MagicMock()
+/home/john/keisei/tests/evaluation/test_evaluate_evaluator.py:95:        # Mock evaluation result
+/home/john/keisei/tests/evaluation/test_evaluate_evaluator.py:103:        mock_context = MagicMock(spec=EvaluationContext)
+/home/john/keisei/tests/evaluation/test_evaluate_evaluator.py:197:    with patch(
+/home/john/keisei/tests/evaluation/test_evaluate_evaluator.py:202:        mock_evaluator = MagicMock()
+/home/john/keisei/tests/evaluation/test_evaluate_evaluator.py:204:        # Mock evaluation result for checkpoint test
+/home/john/keisei/tests/evaluation/test_evaluate_evaluator.py:212:        mock_context = MagicMock(spec=EvaluationContext)
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:8:from unittest.mock import MagicMock, patch
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:56:    # Mock the evaluation strategy directly instead of legacy components
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:57:    with patch(
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:62:        mock_evaluator = MagicMock()
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:64:        # Mock evaluation result
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:72:        mock_context = MagicMock(spec=EvaluationContext)
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:101:        mock_agent = MagicMock(spec=PPOAgent)
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:103:        mock_agent.model = MagicMock()
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:152:    # Mock the evaluation strategy for checkpoint test
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:153:    with patch(
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:158:        mock_evaluator = MagicMock()
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:160:        # Mock evaluation result for checkpoint test
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:168:        mock_context = MagicMock(spec=EvaluationContext)
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:240:    mock_agent = MagicMock(spec=PPOAgent)
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:242:    mock_agent.model = MagicMock()  # Important: agent must have model attribute
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:244:    # Mock the evaluation strategy for current agent test
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:245:    with patch(
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:250:        mock_evaluator = MagicMock()
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:252:        # Mock evaluation result for current agent test
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:260:        mock_context = MagicMock(spec=EvaluationContext)
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:330:    mock_agent = MagicMock()
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:375:    mock_agent = MagicMock(spec=PPOAgent)
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:377:    mock_agent.model = MagicMock()
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:379:    with patch(
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:383:        mock_evaluator = MagicMock()
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:407:            context=MagicMock(spec=EvaluationContext),
+/home/john/keisei/tests/evaluation/test_evaluate_main.py:411:        # Mock the async evaluate method
+/home/john/keisei/tests/evaluation/test_evaluate_agent_loading.py:8:from unittest.mock import MagicMock, patch
+/home/john/keisei/tests/evaluation/test_evaluate_agent_loading.py:23:@patch(
+/home/john/keisei/tests/evaluation/test_evaluate_agent_loading.py:24:    "keisei.core.ppo_agent.PPOAgent"  # Corrected patch target - patch at the definition site
+/home/john/keisei/tests/evaluation/test_evaluate_agent_loading.py:28:    # Mock the PPOAgent constructor to return a specific mock instance,
+/home/john/keisei/tests/evaluation/test_evaluate_agent_loading.py:30:    mock_created_agent_instance = MagicMock()  # No spec constraint
+/home/john/keisei/tests/evaluation/test_evaluate_agent_loading.py:31:    mock_created_agent_instance.load_model.return_value = {}  # Mock load_model behavior
+/home/john/keisei/tests/evaluation/test_evaluate_agent_loading.py:59:@patch("keisei.core.ppo_agent.PPOAgent")  # Ensure this patch target is correct
+/home/john/keisei/tests/evaluation/test_evaluate_agent_loading.py:64:    # Mock the PPOAgent constructor and its methods
+/home/john/keisei/tests/evaluation/test_evaluate_agent_loading.py:65:    mock_created_agent_instance = MagicMock()
+/home/john/keisei/tests/evaluation/test_evaluate_agent_loading.py:72:            mock_created_agent_instance.load_model, MagicMock
+/home/john/keisei/tests/evaluation/test_evaluate_agent_loading.py:74:            mock_created_agent_instance.load_model = MagicMock(return_value={})
+/home/john/keisei/tests/evaluation/test_in_memory_evaluation.py:10:from unittest.mock import AsyncMock, MagicMock, patch
+/home/john/keisei/tests/evaluation/test_in_memory_evaluation.py:49:        mock_agent = MagicMock()
+/home/john/keisei/tests/evaluation/test_in_memory_evaluation.py:50:        mock_model = MagicMock()
+/home/john/keisei/tests/evaluation/test_in_memory_evaluation.py:53:        # Mock state_dict
+/home/john/keisei/tests/evaluation/test_in_memory_evaluation.py:101:        # Mock the opponent pool to provide an opponent
+/home/john/keisei/tests/evaluation/test_in_memory_evaluation.py:102:        with patch.object(manager.opponent_pool, "sample") as mock_sample:
+/home/john/keisei/tests/evaluation/test_in_memory_evaluation.py:112:                mock_agent = MagicMock()
+/home/john/keisei/tests/evaluation/test_in_memory_evaluation.py:114:                mock_agent.model = MagicMock()
+/home/john/keisei/tests/evaluation/test_in_memory_evaluation.py:120:                # Mock the strategy execution
+/home/john/keisei/tests/evaluation/test_in_memory_evaluation.py:121:                with patch.object(
+/home/john/keisei/tests/evaluation/test_in_memory_evaluation.py:122:                    manager, "_run_in_memory_evaluation", new_callable=AsyncMock
+/home/john/keisei/tests/evaluation/test_evaluation_manager.py:1:from unittest.mock import MagicMock
+/home/john/keisei/tests/evaluation/test_evaluation_manager.py:16:        return EvaluationResult(context=context, games=[], summary_stats=MagicMock())
+/home/john/keisei/tests/evaluation/test_evaluation_manager.py:19:def test_evaluate_checkpoint(monkeypatch, tmp_path):
+/home/john/keisei/tests/evaluation/test_evaluation_manager.py:24:    monkeypatch.setattr(
+/home/john/keisei/tests/evaluation/test_evaluation_manager.py:38:def test_evaluate_current_agent(monkeypatch):
+/home/john/keisei/tests/evaluation/test_evaluation_manager.py:42:    dummy_agent = MagicMock()
+/home/john/keisei/tests/evaluation/test_evaluation_manager.py:43:    dummy_agent.model = MagicMock()
+/home/john/keisei/tests/evaluation/test_evaluation_manager.py:54:                context=context, games=[], summary_stats=MagicMock()
+/home/john/keisei/tests/evaluation/test_evaluation_manager.py:57:    monkeypatch.setattr(

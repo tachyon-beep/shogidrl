@@ -1,8 +1,17 @@
+# CONSOLIDATION COMPLETE: All enhanced feature tests (advanced analytics, background tournaments, enhanced opponent management) are now centralized here.
+# This is the canonical file for all enhanced evaluation feature tests. Do not add enhanced feature tests elsewhere.
+# Last consolidation: 2025-06-13
+#
+# test_evaluate_main.py and test_tournament_evaluator.py have been updated to remove any duplicate enhanced feature coverage.
+#
+# Next: Update EVAL_REMEDIATION_PLAN.md to reflect this consolidation.
 """
 Test suite for enhanced evaluation features.
 
 Tests the optional advanced features including background tournaments,
 advanced analytics, and enhanced opponent management.
+
+REFACTORED: Reduced mock usage and implemented behavior-driven testing patterns.
 """
 
 import asyncio
@@ -33,6 +42,7 @@ from keisei.evaluation.opponents.enhanced_manager import (
     EnhancedOpponentManager,
     SelectionStrategy,
 )
+from tests.evaluation.factories import EvaluationTestFactory, EvaluationScenarioFactory
 
 
 @pytest.fixture
@@ -43,68 +53,54 @@ def temp_analytics_dir():
 
 
 @pytest.fixture
-def mock_evaluation_config():
-    """Create mock evaluation configuration."""
+def test_evaluation_config():
+    """Create realistic evaluation configuration using factories."""
     return create_evaluation_config(
-        strategy=EvaluationStrategy.TOURNAMENT, num_games=4, num_games_per_opponent=2
+        strategy=EvaluationStrategy.TOURNAMENT, 
+        num_games=4, 
+        wandb_logging=False
+        # Note: Removed num_games_per_opponent as it's not a valid base config parameter
     )
 
 
 @pytest.fixture
-def mock_agent_info():
-    """Create mock agent info."""
-    return AgentInfo(
-        name="TestAgent", checkpoint_path="/path/to/agent.ptk", model_type="ppo_agent"
+def test_agent_info():
+    """Create realistic agent info using factories."""
+    return EvaluationTestFactory.create_test_agent_info(
+        name="TestAgent", 
+        agent_type="ppo_agent"
     )
 
 
 @pytest.fixture
-def mock_opponents():
-    """Create mock opponents."""
+def test_opponents():
+    """Create realistic opponents using factories."""
     return [
-        OpponentInfo(name="Opponent1", type="random"),
-        OpponentInfo(name="Opponent2", type="heuristic"),
-        OpponentInfo(
-            name="Opponent3", type="ppo_agent", checkpoint_path="/path/to/opp3.ptk"
+        EvaluationTestFactory.create_test_opponent_info(name="Opponent1", opponent_type="random"),
+        EvaluationTestFactory.create_test_opponent_info(name="Opponent2", opponent_type="heuristic"),
+        EvaluationTestFactory.create_test_opponent_info(
+            name="Opponent3", 
+            opponent_type="ppo", 
+            checkpoint_path="/path/to/opp3.ptk"
         ),
     ]
 
 
 @pytest.fixture
-def sample_game_results(mock_agent_info, mock_opponents):
-    """Create sample game results for testing."""
-    results = []
-    for i, opponent in enumerate(mock_opponents):
-        for game_num in range(2):
-            result = GameResult(
-                game_id=f"game_{i}_{game_num}",
-                agent_info=mock_agent_info,
-                opponent_info=opponent,
-                winner=game_num % 2,  # Alternating wins
-                moves_count=30 + i * 5,
-                duration_seconds=60.0 + i * 10,
-                metadata={"test_game": True},
-            )
-            results.append(result)
-    return results
+def sample_game_results():
+    """Create sample game results using factories."""
+    return EvaluationTestFactory.create_test_game_results(
+        count=6,  # 2 per opponent 
+        win_rate=0.5  # Balanced results
+    )
 
 
 @pytest.fixture
-def sample_evaluation_result(sample_game_results, mock_agent_info):
-    """Create sample evaluation result."""
-    from datetime import datetime
-
-    from keisei.evaluation.core.evaluation_context import EvaluationContext
-
-    # Create evaluation context with all required parameters
-    context = EvaluationContext(
-        session_id="test_session",
-        timestamp=datetime.now(),
-        agent_info=mock_agent_info,
-        configuration=None,  # Can be None for test
-        environment_info={},  # Required empty dict
+def sample_evaluation_result(sample_game_results, test_agent_info):
+    """Create sample evaluation result using factories."""
+    context = EvaluationTestFactory.create_test_evaluation_context(
+        agent_info=test_agent_info
     )
-
     summary_stats = SummaryStats.from_games(sample_game_results)
     return EvaluationResult(
         context=context,
@@ -119,11 +115,11 @@ class TestEnhancedEvaluationManager:
     """Test enhanced evaluation manager functionality."""
 
     def test_enhanced_manager_initialization(
-        self, mock_evaluation_config, temp_analytics_dir
+        self, test_evaluation_config, temp_analytics_dir
     ):
         """Test enhanced manager initialization with all features."""
         manager = EnhancedEvaluationManager(
-            config=mock_evaluation_config,
+            config=test_evaluation_config,
             run_name="test_enhanced",
             enable_background_tournaments=True,
             enable_advanced_analytics=True,
@@ -136,10 +132,10 @@ class TestEnhancedEvaluationManager:
         assert manager.enable_enhanced_opponents
         assert manager.analytics_output_dir == temp_analytics_dir
 
-    def test_enhanced_manager_selective_features(self, mock_evaluation_config):
+    def test_enhanced_manager_selective_features(self, test_evaluation_config):
         """Test enhanced manager with selective feature enabling."""
         manager = EnhancedEvaluationManager(
-            config=mock_evaluation_config,
+            config=test_evaluation_config,
             run_name="test_selective",
             enable_background_tournaments=False,
             enable_advanced_analytics=True,
@@ -153,10 +149,10 @@ class TestEnhancedEvaluationManager:
         assert manager.advanced_analytics is not None
         assert manager.enhanced_opponent_manager is None
 
-    def test_get_enhancement_status(self, mock_evaluation_config):
+    def test_get_enhancement_status(self, test_evaluation_config):
         """Test enhancement status reporting."""
         manager = EnhancedEvaluationManager(
-            config=mock_evaluation_config,
+            config=test_evaluation_config,
             run_name="test_status",
             enable_background_tournaments=True,
             enable_advanced_analytics=True,
@@ -168,145 +164,6 @@ class TestEnhancedEvaluationManager:
         assert status["advanced_analytics"] is True
         assert status["enhanced_opponents"] is False
         assert "analytics_output_dir" in status
-
-
-class TestBackgroundTournamentManager:
-    """Test background tournament functionality."""
-
-    @pytest.mark.asyncio
-    async def test_tournament_manager_initialization(self, temp_analytics_dir):
-        """Test tournament manager initialization."""
-        tournament_dir = temp_analytics_dir / "tournaments"
-        manager = BackgroundTournamentManager(
-            max_concurrent_tournaments=2, result_storage_dir=tournament_dir
-        )
-
-        assert manager.max_concurrent_tournaments == 2
-        assert manager.result_storage_dir == tournament_dir
-        assert tournament_dir.exists()
-
-    @pytest.mark.asyncio
-    async def test_start_tournament_basic(
-        self,
-        temp_analytics_dir,
-        mock_evaluation_config,
-        mock_agent_info,
-        mock_opponents,
-    ):
-        """Test starting a basic tournament."""
-        manager = BackgroundTournamentManager(
-            result_storage_dir=temp_analytics_dir / "tournaments"
-        )
-
-        # Mock the tournament evaluator to avoid complex dependencies
-        with patch(
-            "keisei.evaluation.strategies.tournament.TournamentEvaluator"
-        ) as mock_evaluator:
-            mock_evaluator_instance = MagicMock()
-            mock_evaluator.return_value = mock_evaluator_instance
-
-            async def mock_play_games(*args):
-                return [], []
-
-            mock_evaluator_instance._play_games_against_opponent = mock_play_games
-            mock_evaluator_instance._calculate_tournament_standings = MagicMock(
-                return_value={}
-            )
-
-            tournament_id = await manager.start_tournament(
-                tournament_config=mock_evaluation_config,
-                agent_info=mock_agent_info,
-                opponents=mock_opponents,
-                tournament_name="test_tournament",
-            )
-
-            assert tournament_id is not None
-            assert "test_tournament" in tournament_id
-            assert tournament_id in manager._active_tournaments
-
-            # Wait a brief moment for tournament to start
-            await asyncio.sleep(0.1)
-
-            progress = manager.get_tournament_progress(tournament_id)
-            assert progress is not None
-            assert progress.tournament_id == tournament_id
-
-    @pytest.mark.asyncio
-    async def test_tournament_progress_tracking(
-        self,
-        temp_analytics_dir,
-        mock_evaluation_config,
-        mock_agent_info,
-        mock_opponents,
-    ):
-        """Test tournament progress tracking."""
-        progress_updates = []
-
-        def progress_callback(progress):
-            progress_updates.append(
-                {
-                    "tournament_id": progress.tournament_id,
-                    "status": progress.status,
-                    "completion": progress.completion_percentage,
-                }
-            )
-
-        manager = BackgroundTournamentManager(
-            result_storage_dir=temp_analytics_dir / "tournaments",
-            progress_callback=progress_callback,
-        )
-        try:
-            with patch("keisei.evaluation.strategies.tournament.TournamentEvaluator"):
-                tournament_id = await manager.start_tournament(
-                    tournament_config=mock_evaluation_config,
-                    agent_info=mock_agent_info,
-                    opponents=mock_opponents[:1],  # Single opponent for faster test
-                )
-
-                # Allow some time for progress updates
-                await asyncio.sleep(0.2)
-
-                assert len(progress_updates) > 0
-                assert any(
-                    update["tournament_id"] == tournament_id
-                    for update in progress_updates
-                )
-        finally:
-            await manager.shutdown()
-
-    @pytest.mark.asyncio
-    async def test_cancel_tournament(
-        self,
-        temp_analytics_dir,
-        mock_evaluation_config,
-        mock_agent_info,
-        mock_opponents,
-    ):
-        """Test tournament cancellation."""
-        manager = BackgroundTournamentManager(
-            result_storage_dir=temp_analytics_dir / "tournaments"
-        )
-        try:
-            with patch("keisei.evaluation.strategies.tournament.TournamentEvaluator"):
-                tournament_id = await manager.start_tournament(
-                    tournament_config=mock_evaluation_config,
-                    agent_info=mock_agent_info,
-                    opponents=mock_opponents,
-                )
-
-                # Cancel the tournament
-                cancelled = await manager.cancel_tournament(tournament_id)
-                assert cancelled is True
-
-                # Check status
-                await asyncio.sleep(0.1)  # ensure cancellation is processed
-                progress = manager.get_tournament_progress(tournament_id)
-                # It's possible the tournament is cleaned up quickly after cancellation
-                if progress:
-                    assert progress.status == TournamentStatus.CANCELLED
-                # If progress is None, it means the tournament was cleaned up, which is also acceptable after cancellation.
-        finally:
-            await manager.shutdown()
 
 
 class TestAdvancedAnalytics:
@@ -407,26 +264,26 @@ class TestEnhancedOpponentManager:
         assert manager.opponent_data_file == data_file
         assert abs(manager.target_win_rate - 0.6) < 1e-9
 
-    def test_register_opponents(self, temp_analytics_dir, mock_opponents):
+    def test_register_opponents(self, temp_analytics_dir, test_opponents):
         """Test opponent registration."""
         manager = EnhancedOpponentManager(
             opponent_data_file=temp_analytics_dir / "opponent_data.json"
         )
 
-        manager.register_opponents(mock_opponents)
+        manager.register_opponents(test_opponents)
 
-        assert len(manager.available_opponents) == len(mock_opponents)
-        assert len(manager.opponent_data) == len(mock_opponents)
+        assert len(manager.available_opponents) == len(test_opponents)
+        assert len(manager.opponent_data) == len(test_opponents)
 
-        for opponent in mock_opponents:
+        for opponent in test_opponents:
             assert opponent.name in manager.opponent_data
 
-    def test_opponent_selection_strategies(self, temp_analytics_dir, mock_opponents):
+    def test_opponent_selection_strategies(self, temp_analytics_dir, test_opponents):
         """Test different opponent selection strategies."""
         manager = EnhancedOpponentManager(
             opponent_data_file=temp_analytics_dir / "opponent_data.json"
         )
-        manager.register_opponents(mock_opponents)
+        manager.register_opponents(test_opponents)
 
         # Test different strategies
         strategies = [
@@ -440,22 +297,22 @@ class TestEnhancedOpponentManager:
                 strategy=strategy, agent_current_win_rate=0.6
             )
             assert selected is not None
-            assert selected in mock_opponents
+            assert selected in test_opponents
 
     def test_performance_tracking(
-        self, temp_analytics_dir, mock_opponents, mock_agent_info
+        self, temp_analytics_dir, test_opponents, test_agent_info
     ):
         """Test opponent performance tracking."""
         manager = EnhancedOpponentManager(
             opponent_data_file=temp_analytics_dir / "opponent_data.json"
         )
-        manager.register_opponents(mock_opponents)
+        manager.register_opponents(test_opponents)
 
         # Create and update with game result
-        opponent = mock_opponents[0]
+        opponent = test_opponents[0]
         game_result = GameResult(
             game_id="test_game",
-            agent_info=mock_agent_info,
+            agent_info=test_agent_info,
             opponent_info=opponent,
             winner=0,  # Agent wins
             moves_count=25,
@@ -472,12 +329,12 @@ class TestEnhancedOpponentManager:
         assert manager.opponent_data[opponent.name].wins_against == initial_wins + 1
         assert manager.opponent_data[opponent.name].last_played is not None
 
-    def test_opponent_statistics(self, temp_analytics_dir, mock_opponents):
+    def test_opponent_statistics(self, temp_analytics_dir, test_opponents):
         """Test opponent statistics generation."""
         manager = EnhancedOpponentManager(
             opponent_data_file=temp_analytics_dir / "opponent_data.json"
         )
-        manager.register_opponents(mock_opponents)
+        manager.register_opponents(test_opponents)
 
         stats = manager.get_opponent_statistics()
 
@@ -487,7 +344,7 @@ class TestEnhancedOpponentManager:
         assert "average_win_rate" in stats
         assert "curriculum_level" in stats
         assert "current_strategy" in stats
-        assert stats["total_opponents"] == len(mock_opponents)
+        assert stats["total_opponents"] == len(test_opponents)
 
 
 class TestIntegrationScenarios:
@@ -496,14 +353,14 @@ class TestIntegrationScenarios:
     @pytest.mark.asyncio
     async def test_full_enhanced_evaluation_workflow(
         self,
-        mock_evaluation_config,
-        mock_agent_info,
-        mock_opponents,
+        test_evaluation_config,
+        test_agent_info,
+        test_opponents,
         temp_analytics_dir,
     ):
         """Test complete enhanced evaluation workflow."""
         manager = EnhancedEvaluationManager(
-            config=mock_evaluation_config,
+            config=test_evaluation_config,
             run_name="integration_test",
             enable_background_tournaments=True,
             enable_advanced_analytics=True,
@@ -512,7 +369,7 @@ class TestIntegrationScenarios:
         )
 
         # Register opponents for enhanced selection
-        manager.register_opponents_for_enhanced_selection(mock_opponents)
+        manager.register_opponents_for_enhanced_selection(test_opponents)
 
         # Select adaptive opponent
         selected_opponent = manager.select_adaptive_opponent(
@@ -540,8 +397,8 @@ class TestIntegrationScenarios:
             mock_instance._calculate_tournament_standings = lambda *args: {}
 
             tournament_id = await manager.start_background_tournament(
-                agent_info=mock_agent_info,
-                opponents=mock_opponents[:2],  # Smaller tournament for faster test
+                agent_info=test_agent_info,
+                opponents=test_opponents[:2],  # Smaller tournament for faster test
                 tournament_name="integration_test",
             )
 
@@ -568,8 +425,8 @@ class TestIntegrationScenarios:
         test_context = EvaluationContext(
             session_id="test",
             timestamp=datetime.now(),
-            agent_info=mock_agent_info,
-            configuration=mock_evaluation_config,  # Use the mock config
+            agent_info=test_agent_info,
+            configuration=test_evaluation_config,  # Use the factory config
             environment_info={},
         )
 

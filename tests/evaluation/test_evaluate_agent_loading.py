@@ -1,5 +1,13 @@
 """
 Tests for agent loading functionality in evaluation system.
+
+CONSOLIDATION COMPLETE: All agent loading tests from test_evaluate_main.py and test_evaluate_evaluator.py are now merged here.
+This is the canonical file for all agent loading tests. Do not add agent loading tests elsewhere.
+Last consolidation: 2025-06-13
+
+test_evaluate_main.py and test_evaluate_evaluator.py have been deleted after confirming all unique logic is preserved and tests pass.
+
+Next: Update EVAL_REMEDIATION_PLAN.md to reflect this consolidation.
 """
 
 import os

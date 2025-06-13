@@ -880,3 +880,84 @@ class ShogiGame:
             return self._check_drop_knight_rules(row, last_rank, second_last_rank)
 
         return True  # Default for other pieces (Gold, Silver, Bishop, Rook)
+
+    def test_move(self, move_tuple: MoveTuple) -> bool:
+        """
+        Tests if a move is valid without applying it or throwing exceptions.
+        
+        Args:
+            move_tuple: The move to validate
+            
+        Returns:
+            True if the move is valid, False otherwise
+        """
+        if self.game_over:
+            return False
+            
+        try:
+            # Validate move tuple format
+            self._validate_move_tuple_format(move_tuple)
+        except ValueError:
+            return False
+            
+        try:
+            if move_tuple[0] is None:  # Drop move
+                return self._test_drop_move(move_tuple)
+            else:  # Board move
+                return self._test_board_move(move_tuple)
+                
+        except Exception:
+            # If any unexpected error occurs, treat as invalid move
+            return False
+
+    def _test_drop_move(self, move_tuple: MoveTuple) -> bool:
+        """Test if a drop move is valid."""
+        drop_piece_type = move_tuple[4]
+        if not isinstance(drop_piece_type, PieceType):
+            return False
+            
+        to_r, to_c = move_tuple[2], move_tuple[3]
+        
+        # Use existing drop validation method
+        return self.can_drop_piece(drop_piece_type, to_r, to_c, self.current_player)
+
+    def _test_board_move(self, move_tuple: MoveTuple) -> bool:
+        """Test if a board move is valid."""
+        from_r, from_c, to_r, to_c, _ = move_tuple
+        
+        # Type checks
+        if (not isinstance(from_r, int) or not isinstance(from_c, int) or 
+            not isinstance(to_r, int) or not isinstance(to_c, int)):
+            return False
+            
+        # Use the same validation logic as _validate_and_populate_board_move_details
+        piece_to_move = self.get_piece(from_r, from_c)
+        if piece_to_move is None:
+            return False
+            
+        if piece_to_move.color != self.current_player:
+            return False
+            
+        # Check if move follows piece movement rules
+        potential_squares = shogi_rules_logic.generate_piece_potential_moves(
+            self, piece_to_move, from_r, from_c
+        )
+        if (to_r, to_c) not in potential_squares:
+            return False
+            
+        # Check if target square contains own piece
+        target_piece = self.get_piece(to_r, to_c)
+        if target_piece and target_piece.color == self.current_player:
+            return False
+            
+        # CRITICAL: Check if move would leave king in check
+        # Simulate the move and check if king is safe
+        try:
+            move_details = self.make_move(move_tuple, is_simulation=True)
+            # If make_move succeeds in simulation, the move is valid
+            # Need to undo the simulation
+            self.undo_move(simulation_undo_details=move_details)
+            return True
+        except Exception:
+            # If make_move fails, the move is invalid
+            return False

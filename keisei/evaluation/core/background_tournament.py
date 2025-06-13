@@ -159,9 +159,12 @@ class BackgroundTournamentManager:
             tournament_id = f"{tournament_name}_{tournament_id[:8]}"
 
         # Calculate total games
-        total_games = len(opponents) * getattr(
-            tournament_config, "num_games_per_opponent", 2
+        num_games_per_opponent = getattr(
+            tournament_config, "num_games_per_opponent", None
         )
+        if num_games_per_opponent is None:
+            num_games_per_opponent = 2
+        total_games = len(opponents) * num_games_per_opponent
 
         # Create progress tracker
         progress = TournamentProgress(
@@ -397,41 +400,73 @@ class BackgroundTournamentManager:
         self, tournament_id: str, result: EvaluationResult
     ) -> None:
         """Save tournament results to disk."""
+        result_data = {}  # Initialize to avoid unbound variable
         try:
-            result_file = self.result_storage_dir / f"{tournament_id}.json"
+            result_file = self.result_storage_dir / f"{tournament_id}_results.json"
 
             # Convert result to serializable format
+            try:
+                if hasattr(result.context, 'to_dict') and callable(getattr(result.context, 'to_dict')):
+                    context_data = result.context.to_dict()
+                else:
+                    # Handle mock or missing to_dict method
+                    context_data = {
+                        "session_id": getattr(result.context, 'session_id', tournament_id),
+                        "timestamp": getattr(result.context, 'timestamp', datetime.now()),
+                        "serialization_error": "to_dict method not available or not callable"
+                    }
+            except Exception as e:
+                context_data = {
+                    "session_id": getattr(result.context, 'session_id', tournament_id),
+                    "serialization_error": str(e)
+                }
+            
+            # Handle summary_stats robustly
+            try:
+                summary_stats_data = {
+                    "total_games": getattr(result.summary_stats, 'total_games', 0),
+                    "agent_wins": getattr(result.summary_stats, 'agent_wins', 0),
+                    "opponent_wins": getattr(result.summary_stats, 'opponent_wins', 0),
+                    "draws": getattr(result.summary_stats, 'draws', 0),
+                    "win_rate": getattr(result.summary_stats, 'win_rate', 0.0),
+                    "avg_game_length": getattr(result.summary_stats, 'avg_game_length', 0.0),
+                }
+            except Exception:
+                summary_stats_data = {"error": "Failed to serialize summary_stats"}
+            
             result_data = {
                 "tournament_id": tournament_id,
-                "context": result.context.to_dict(),
+                "context": context_data,
                 "timestamp": datetime.now().isoformat(),
-                "total_games": len(result.games),
-                "summary_stats": {
-                    "total_games": result.summary_stats.total_games,
-                    "agent_wins": result.summary_stats.agent_wins,
-                    "opponent_wins": result.summary_stats.opponent_wins,
-                    "draws": result.summary_stats.draws,
-                    "win_rate": result.summary_stats.win_rate,
-                    "avg_game_length": result.summary_stats.avg_game_length,
-                },
-                "analytics_data": result.analytics_data,
-                "errors": result.errors,
+                "total_games": len(result.games) if result.games else 0,
+                "summary_stats": summary_stats_data,
+                "analytics_data": result.analytics_data if result.analytics_data else {},
+                "errors": result.errors if result.errors else [],
             }
 
             with open(result_file, "w") as f:
-                json.dump(result_data, f, indent=2)
+                json.dump(result_data, f, indent=2, default=str)  # Add default=str to handle non-serializable objects
 
             logger.info(f"Tournament results saved to {result_file}")
 
         except Exception as e:
             logger.error(f"Failed to save tournament results for {tournament_id}: {e}")
+            # Debug: Print what we were trying to save
+            logger.debug(f"Result data that failed to save: {result_data}")
 
     async def _cleanup_tournament(self, tournament_id: str) -> None:
         """Clean up tournament resources."""
         if tournament_id in self._tournament_tasks:
             task = self._tournament_tasks.pop(tournament_id)
             if not task.done():
-                task.cancel()
+                try:
+                    task.cancel()
+                except RuntimeError as e:
+                    # Event loop may be closed during test cleanup
+                    if "Event loop is closed" in str(e):
+                        logger.debug(f"Event loop closed during cleanup of tournament {tournament_id}")
+                    else:
+                        raise
 
         if tournament_id in self._tournament_locks:
             del self._tournament_locks[tournament_id]

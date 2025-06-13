@@ -5,6 +5,12 @@ This module contains common test fixtures, constants, and mock classes
 used across all evaluation test modules.
 """
 
+# CONSOLIDATION COMPLETE: All shared fixtures, factories, and config templates are now centralized here (or in factories.py).
+# Remove any duplicate fixture logic from individual test files. This is the canonical location for shared test infrastructure.
+# Last consolidation: 2025-06-13
+#
+# Next: Update EVAL_REMEDIATION_PLAN.md to reflect this consolidation.
+
 from unittest.mock import MagicMock, Mock
 
 import pytest
@@ -118,8 +124,35 @@ def make_test_config():
             log_model_artifact=False,
         ),
         display=DisplayConfig(
+            enable_board_display=True,
+            enable_trend_visualization=True,
+            enable_elo_ratings=True,
+            enable_enhanced_layout=True,
             display_moves=False,
             turn_tick=0.0,
+            board_unicode_pieces=True,
+            board_cell_width=5,
+            board_cell_height=3,
+            board_highlight_last_move=True,
+            sparkline_width=15,
+            trend_history_length=100,
+            elo_initial_rating=1500.0,
+            elo_k_factor=32.0,
+            dashboard_height_ratio=2,
+            progress_bar_height=4,
+            show_text_moves=True,
+            move_list_length=10,
+            moves_latest_top=True,
+            moves_flash_ms=500,
+            show_moves_trend=True,
+            show_completion_rate=True,
+            show_enhanced_win_rates=True,
+            show_turns_trend=True,
+            metrics_window_size=100,
+            trend_smoothing_factor=0.1,
+            metrics_panel_height=6,
+            enable_trendlines=True,
+            log_layer_keyword_filters=["stem", "policy_head", "value_head"],
         ),
         parallel=ParallelConfig(
             enabled=False,

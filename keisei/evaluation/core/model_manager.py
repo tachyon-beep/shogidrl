@@ -44,6 +44,8 @@ class ModelWeightManager:
         self.max_cache_size = max_cache_size
         self._weight_cache: Dict[str, Dict[str, torch.Tensor]] = {}
         self._cache_order: List[str] = []  # For LRU eviction
+        self._cache_hits = 0  # Track cache hits
+        self._cache_misses = 0  # Track cache misses
 
     def extract_agent_weights(self, agent: PPOAgent) -> Dict[str, torch.Tensor]:
         """
@@ -91,6 +93,7 @@ class ModelWeightManager:
             # Move to end for LRU
             self._cache_order.remove(opponent_id)
             self._cache_order.append(opponent_id)
+            self._cache_hits += 1  # Track cache hit
             logger.debug("Using cached weights for opponent %s", opponent_id)
             return self._weight_cache[opponent_id]
 
@@ -126,6 +129,9 @@ class ModelWeightManager:
             # Cache the weights
             self._weight_cache[opponent_id] = cpu_weights
             self._cache_order.append(opponent_id)
+            
+            # Only increment miss counter on successful cache operation
+            self._cache_misses += 1
 
             logger.debug(
                 "Cached weights for opponent %s (%d tensors)",
@@ -168,6 +174,8 @@ class ModelWeightManager:
             # Infer model architecture from weights
             input_channels = self._infer_input_channels_from_weights(weights)
             total_actions = self._infer_total_actions_from_weights(weights)
+            conv_out_channels = self._infer_conv_out_channels_from_weights(weights)
+            flattened_size = self._infer_flattened_size_from_weights(weights)
 
             # Create minimal config if not provided
             if config is None:
@@ -175,8 +183,10 @@ class ModelWeightManager:
                     input_channels, total_actions, target_device
                 )
 
-            # Create ActorCritic model with inferred architecture
-            model = ActorCritic(input_channels, total_actions).to(target_device)
+            # Create a dynamic ActorCritic model that matches the weights architecture
+            model = self._create_dynamic_actor_critic(
+                input_channels, total_actions, conv_out_channels, flattened_size
+            ).to(target_device)
 
             # Create agent with model using dependency injection
             agent = agent_class(
@@ -254,12 +264,16 @@ class ModelWeightManager:
             "device": str(self.device),
             "cached_opponents": list(self._weight_cache.keys()),
             "cache_order": self._cache_order.copy(),
+            "cache_hits": self._cache_hits,
+            "cache_misses": self._cache_misses,
         }
 
     def clear_cache(self) -> None:
         """Clear the weight cache."""
         self._weight_cache.clear()
         self._cache_order.clear()
+        self._cache_hits = 0
+        self._cache_misses = 0
         logger.debug("Cleared weight cache")
 
     def get_memory_usage(self) -> Dict[str, Any]:
@@ -323,6 +337,71 @@ class ModelWeightManager:
         # Default fallback
         logger.warning("Could not infer input channels from weights, using default 46")
         return 46
+
+    def _infer_conv_out_channels_from_weights(self, weights: Dict[str, torch.Tensor]) -> int:
+        """Infer conv output channels from weights."""
+        if "conv.weight" in weights:
+            # conv.weight shape is [out_channels, in_channels, kernel_h, kernel_w]
+            return weights["conv.weight"].shape[0]
+        return 16  # Default fallback
+    
+    def _infer_flattened_size_from_weights(self, weights: Dict[str, torch.Tensor]) -> int:
+        """Infer flattened size from policy_head weight dimensions."""
+        if "policy_head.weight" in weights:
+            # policy_head.weight shape is [total_actions, flattened_size]
+            return weights["policy_head.weight"].shape[1]
+        return 1296  # Default fallback (16 * 9 * 9)
+    
+    def _create_dynamic_actor_critic(
+        self, input_channels: int, total_actions: int, conv_out_channels: int, flattened_size: int
+    ) -> torch.nn.Module:
+        """Create a dynamic ActorCritic model with inferred architecture."""
+        import torch.nn as nn
+        import torch.nn.functional as F
+        from torch.distributions import Categorical
+        
+        class DynamicActorCritic(nn.Module):
+            def __init__(self, input_channels, total_actions, conv_out_channels, flattened_size):
+                super().__init__()
+                self.conv = nn.Conv2d(input_channels, conv_out_channels, kernel_size=3, padding=1)
+                self.relu = nn.ReLU()
+                self.flatten = nn.Flatten()
+                
+                self.policy_head = nn.Linear(flattened_size, total_actions)
+                self.value_head = nn.Linear(flattened_size, 1)
+            
+            def forward(self, x):
+                x = self.conv(x)
+                x = self.relu(x)
+                x = self.flatten(x)
+                policy = self.policy_head(x)
+                value = self.value_head(x)
+                return policy, value
+            
+            def get_action_and_value(self, x, action=None, mask=None):
+                """Get action and value for compatibility with ActorCriticProtocol."""
+                logits, value = self.forward(x)
+                
+                if mask is not None:
+                    logits = logits.masked_fill(mask == 0, float('-inf'))
+                
+                probs = Categorical(logits=logits)
+                if action is None:
+                    action = probs.sample()
+                
+                return action, probs.log_prob(action), probs.entropy(), value
+            
+            def evaluate_actions(self, x, action, mask=None):
+                """Evaluate actions for compatibility with ActorCriticProtocol."""
+                logits, value = self.forward(x)
+                
+                if mask is not None:
+                    logits = logits.masked_fill(mask == 0, float('-inf'))
+                
+                probs = Categorical(logits=logits)
+                return probs.log_prob(action), probs.entropy(), value
+        
+        return DynamicActorCritic(input_channels, total_actions, conv_out_channels, flattened_size)
 
     def _create_minimal_config(
         self, input_channels: int, total_actions: int, device: torch.device
