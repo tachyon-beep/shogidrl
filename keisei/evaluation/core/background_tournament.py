@@ -406,46 +406,58 @@ class BackgroundTournamentManager:
 
             # Convert result to serializable format
             try:
-                if hasattr(result.context, 'to_dict') and callable(getattr(result.context, 'to_dict')):
+                if hasattr(result.context, "to_dict") and callable(
+                    getattr(result.context, "to_dict")
+                ):
                     context_data = result.context.to_dict()
                 else:
                     # Handle mock or missing to_dict method
                     context_data = {
-                        "session_id": getattr(result.context, 'session_id', tournament_id),
-                        "timestamp": getattr(result.context, 'timestamp', datetime.now()),
-                        "serialization_error": "to_dict method not available or not callable"
+                        "session_id": getattr(
+                            result.context, "session_id", tournament_id
+                        ),
+                        "timestamp": getattr(
+                            result.context, "timestamp", datetime.now()
+                        ),
+                        "serialization_error": "to_dict method not available or not callable",
                     }
             except Exception as e:
                 context_data = {
-                    "session_id": getattr(result.context, 'session_id', tournament_id),
-                    "serialization_error": str(e)
+                    "session_id": getattr(result.context, "session_id", tournament_id),
+                    "serialization_error": str(e),
                 }
-            
+
             # Handle summary_stats robustly
             try:
                 summary_stats_data = {
-                    "total_games": getattr(result.summary_stats, 'total_games', 0),
-                    "agent_wins": getattr(result.summary_stats, 'agent_wins', 0),
-                    "opponent_wins": getattr(result.summary_stats, 'opponent_wins', 0),
-                    "draws": getattr(result.summary_stats, 'draws', 0),
-                    "win_rate": getattr(result.summary_stats, 'win_rate', 0.0),
-                    "avg_game_length": getattr(result.summary_stats, 'avg_game_length', 0.0),
+                    "total_games": getattr(result.summary_stats, "total_games", 0),
+                    "agent_wins": getattr(result.summary_stats, "agent_wins", 0),
+                    "opponent_wins": getattr(result.summary_stats, "opponent_wins", 0),
+                    "draws": getattr(result.summary_stats, "draws", 0),
+                    "win_rate": getattr(result.summary_stats, "win_rate", 0.0),
+                    "avg_game_length": getattr(
+                        result.summary_stats, "avg_game_length", 0.0
+                    ),
                 }
             except Exception:
                 summary_stats_data = {"error": "Failed to serialize summary_stats"}
-            
+
             result_data = {
                 "tournament_id": tournament_id,
                 "context": context_data,
                 "timestamp": datetime.now().isoformat(),
                 "total_games": len(result.games) if result.games else 0,
                 "summary_stats": summary_stats_data,
-                "analytics_data": result.analytics_data if result.analytics_data else {},
+                "analytics_data": (
+                    result.analytics_data if result.analytics_data else {}
+                ),
                 "errors": result.errors if result.errors else [],
             }
 
             with open(result_file, "w") as f:
-                json.dump(result_data, f, indent=2, default=str)  # Add default=str to handle non-serializable objects
+                json.dump(
+                    result_data, f, indent=2, default=str
+                )  # Add default=str to handle non-serializable objects
 
             logger.info(f"Tournament results saved to {result_file}")
 
@@ -464,7 +476,9 @@ class BackgroundTournamentManager:
                 except RuntimeError as e:
                     # Event loop may be closed during test cleanup
                     if "Event loop is closed" in str(e):
-                        logger.debug(f"Event loop closed during cleanup of tournament {tournament_id}")
+                        logger.debug(
+                            f"Event loop closed during cleanup of tournament {tournament_id}"
+                        )
                     else:
                         raise
 

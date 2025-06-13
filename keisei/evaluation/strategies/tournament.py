@@ -205,11 +205,17 @@ class TournamentEvaluator(BaseEvaluator):
             try:
                 # Convert legal moves to legal mask for agent action selection
                 legal_mask = None
-                if hasattr(current_player, "select_action") and hasattr(current_player, "device"):
+                if hasattr(current_player, "select_action") and hasattr(
+                    current_player, "device"
+                ):
                     # This is an agent that needs a legal mask tensor
-                    legal_mask = self.policy_mapper.get_legal_mask(legal_moves, current_player.device)
-                
-                move = await self._get_player_action(current_player, game, legal_moves, legal_mask)
+                    legal_mask = self.policy_mapper.get_legal_mask(
+                        legal_moves, current_player.device
+                    )
+
+                move = await self._get_player_action(
+                    current_player, game, legal_moves, legal_mask
+                )
                 if move is None:
                     break
 
@@ -386,7 +392,11 @@ class TournamentEvaluator(BaseEvaluator):
         raise ValueError(f"Unknown entity type for loading: {type(entity_info)}")
 
     async def _get_player_action(
-        self, player_entity: Any, game: ShogiGame, legal_moves: List[Any], legal_mask: Any = None
+        self,
+        player_entity: Any,
+        game: ShogiGame,
+        legal_moves: List[Any],
+        legal_mask: Any = None,
     ) -> Any:
         """Gets an action from the player entity (agent or opponent)."""
         move = None

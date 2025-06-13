@@ -9,20 +9,20 @@ import os
 import pickle
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 import torch
 
-from keisei.evaluation.core_manager import EvaluationManager
-from keisei.evaluation.strategies.single_opponent import SingleOpponentConfig
 from keisei.evaluation.core import GameResult
 from keisei.evaluation.core.evaluation_context import AgentInfo, OpponentInfo
+from keisei.evaluation.core_manager import EvaluationManager
+from keisei.evaluation.strategies.single_opponent import SingleOpponentConfig
 
 
 class TestErrorScenarios:
     """Test error handling and recovery scenarios."""
-    
+
     @pytest.fixture
     def test_config(self):
         """Create test configuration."""
@@ -30,24 +30,29 @@ class TestErrorScenarios:
             num_games=4,
             max_concurrent_games=2,
             opponent_name="test_opponent",
-            play_as_both_colors=True
+            play_as_both_colors=True,
         )
 
-    @pytest.fixture 
+    @pytest.fixture
     def test_agent(self):
         """Create a test agent for error scenarios."""
-        from keisei.training.models.resnet_tower import ActorCriticResTower
-        from keisei.core.ppo_agent import PPOAgent
         from keisei.config_schema import (
-            AppConfig, TrainingConfig, EnvConfig, EvaluationConfig,
-            LoggingConfig, WandBConfig, ParallelConfig
+            AppConfig,
+            EnvConfig,
+            EvaluationConfig,
+            LoggingConfig,
+            ParallelConfig,
+            TrainingConfig,
+            WandBConfig,
         )
-        
+        from keisei.core.ppo_agent import PPOAgent
+        from keisei.training.models.resnet_tower import ActorCriticResTower
+
         # Create minimal config - just use device and basic model parameters
         device = torch.device("cpu")
         input_channels = 46
         num_actions = 3781
-        
+
         model = ActorCriticResTower(
             input_channels=46,
             num_actions_total=3781,
@@ -64,11 +69,12 @@ class TestErrorScenarios:
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create a corrupted checkpoint file
             corrupted_checkpoint = Path(temp_dir) / "corrupted.pth"
-            with open(corrupted_checkpoint, 'wb') as f:
+            with open(corrupted_checkpoint, "wb") as f:
                 f.write(b"corrupted data that isn't a valid checkpoint")
 
             # Test loading corrupted checkpoint
             from keisei.evaluation.core.model_manager import ModelWeightManager
+
             weight_manager = ModelWeightManager()
 
             # Should handle corruption gracefully
@@ -87,8 +93,8 @@ class TestErrorScenarios:
         with pytest.raises((ValueError, TypeError)):
             invalid_config = SingleOpponentConfig(
                 opponent_name="",  # Empty name
-                num_games=-1,      # Negative games
-                play_as_both_colors=True
+                num_games=-1,  # Negative games
+                play_as_both_colors=True,
             )
             EvaluationManager(invalid_config, "invalid_test")
 
@@ -112,7 +118,7 @@ class TestErrorScenarios:
 
 class TestEdgeCases:
     """Test edge cases and boundary conditions."""
-    
+
     @pytest.fixture
     def edge_case_config(self):
         """Configuration for edge case testing."""
@@ -120,7 +126,7 @@ class TestEdgeCases:
             num_games=1,  # Minimal games
             max_concurrent_games=1,
             opponent_name="edge_test_opponent",
-            play_as_both_colors=False
+            play_as_both_colors=False,
         )
 
     def test_single_game_evaluation(self, edge_case_config):

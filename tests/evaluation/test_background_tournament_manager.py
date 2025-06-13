@@ -15,13 +15,19 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from keisei.evaluation.core import AgentInfo, EvaluationContext, EvaluationResult, GameResult, OpponentInfo
-from keisei.evaluation.core.evaluation_result import SummaryStats
+from keisei.evaluation.core import (
+    AgentInfo,
+    EvaluationContext,
+    EvaluationResult,
+    GameResult,
+    OpponentInfo,
+)
 from keisei.evaluation.core.background_tournament import (
     BackgroundTournamentManager,
     TournamentProgress,
     TournamentStatus,
 )
+from keisei.evaluation.core.evaluation_result import SummaryStats
 
 
 @pytest.fixture
@@ -88,7 +94,7 @@ class TestBackgroundTournamentManager:
     def test_initialization(self):
         """Test BackgroundTournamentManager initialization."""
         progress_callback = Mock()
-        
+
         with tempfile.TemporaryDirectory() as temp_dir:
             result_dir = Path(temp_dir)
             manager = BackgroundTournamentManager(
@@ -107,21 +113,27 @@ class TestBackgroundTournamentManager:
     def test_initialization_default_storage_dir(self):
         """Test initialization with default storage directory."""
         manager = BackgroundTournamentManager()
-        
+
         assert manager.result_storage_dir == Path("./tournament_results")
         assert manager.max_concurrent_tournaments == 2
         assert manager.progress_callback is None
 
     @pytest.mark.asyncio
     async def test_start_tournament_success(
-        self, tournament_manager, mock_agent_info, mock_opponents, mock_tournament_config
+        self,
+        tournament_manager,
+        mock_agent_info,
+        mock_opponents,
+        mock_tournament_config,
     ):
         """Test successful tournament start."""
-        with patch('keisei.evaluation.core.background_tournament.TournamentEvaluator') as mock_evaluator_class:
+        with patch(
+            "keisei.evaluation.core.background_tournament.TournamentEvaluator"
+        ) as mock_evaluator_class:
             # Mock the evaluator instance
             mock_evaluator = AsyncMock()
             mock_evaluator_class.return_value = mock_evaluator
-            
+
             # Mock the _execute_with_progress_tracking method
             mock_result = EvaluationResult(
                 context=Mock(),
@@ -129,10 +141,14 @@ class TestBackgroundTournamentManager:
                 summary_stats=Mock(),
                 analytics_data={"tournament_specific_analytics": {}},
             )
-            mock_evaluator._execute_with_progress_tracking = AsyncMock(return_value=mock_result)
-            mock_evaluator._play_games_against_opponent = AsyncMock(return_value=([], []))
+            mock_evaluator._execute_with_progress_tracking = AsyncMock(
+                return_value=mock_result
+            )
+            mock_evaluator._play_games_against_opponent = AsyncMock(
+                return_value=([], [])
+            )
             mock_evaluator._calculate_tournament_standings = Mock(return_value={})
-            
+
             tournament_id = await tournament_manager.start_tournament(
                 tournament_config=mock_tournament_config,
                 agent_info=mock_agent_info,
@@ -144,7 +160,7 @@ class TestBackgroundTournamentManager:
             assert tournament_id.startswith("test_tournament_")
             assert len(tournament_manager._active_tournaments) == 1
             assert len(tournament_manager._tournament_tasks) == 1
-            
+
             # Verify tournament progress was created
             progress = tournament_manager.get_tournament_progress(tournament_id)
             assert progress is not None
@@ -154,10 +170,14 @@ class TestBackgroundTournamentManager:
 
     @pytest.mark.asyncio
     async def test_start_tournament_without_name(
-        self, tournament_manager, mock_agent_info, mock_opponents, mock_tournament_config
+        self,
+        tournament_manager,
+        mock_agent_info,
+        mock_opponents,
+        mock_tournament_config,
     ):
         """Test tournament start without custom name."""
-        with patch('keisei.evaluation.core.background_tournament.TournamentEvaluator'):
+        with patch("keisei.evaluation.core.background_tournament.TournamentEvaluator"):
             tournament_id = await tournament_manager.start_tournament(
                 tournament_config=mock_tournament_config,
                 agent_info=mock_agent_info,
@@ -175,25 +195,35 @@ class TestBackgroundTournamentManager:
 
     @pytest.mark.asyncio
     async def test_tournament_execution_progress_tracking(
-        self, tournament_manager, mock_agent_info, mock_opponents, mock_tournament_config
+        self,
+        tournament_manager,
+        mock_agent_info,
+        mock_opponents,
+        mock_tournament_config,
     ):
         """Test tournament execution with progress tracking."""
         progress_updates = []
-        
+
         def progress_callback(progress):
             progress_updates.append((progress.status, progress.completion_percentage))
-        
+
         tournament_manager.progress_callback = progress_callback
-        
-        with patch('keisei.evaluation.core.background_tournament.TournamentEvaluator') as mock_evaluator_class:
+
+        with patch(
+            "keisei.evaluation.core.background_tournament.TournamentEvaluator"
+        ) as mock_evaluator_class:
             mock_evaluator = AsyncMock()
             mock_evaluator_class.return_value = mock_evaluator
-            
+
             # Mock game execution
             mock_games = [Mock(), Mock()]  # 2 games
-            mock_evaluator._play_games_against_opponent = AsyncMock(return_value=(mock_games, []))
-            mock_evaluator._calculate_tournament_standings = Mock(return_value={"standings": "test"})
-            
+            mock_evaluator._play_games_against_opponent = AsyncMock(
+                return_value=(mock_games, [])
+            )
+            mock_evaluator._calculate_tournament_standings = Mock(
+                return_value={"standings": "test"}
+            )
+
             # Start tournament
             tournament_id = await tournament_manager.start_tournament(
                 tournament_config=mock_tournament_config,
@@ -203,24 +233,32 @@ class TestBackgroundTournamentManager:
 
             # Wait for tournament to complete
             await asyncio.sleep(0.5)  # Allow tournament to run
-            
+
             # Check that progress was tracked
             final_progress = tournament_manager.get_tournament_progress(tournament_id)
             assert final_progress is not None
-            
+
             # Verify progress callbacks were called
             assert len(progress_updates) > 0
-            assert any(status == TournamentStatus.RUNNING for status, _ in progress_updates)
+            assert any(
+                status == TournamentStatus.RUNNING for status, _ in progress_updates
+            )
 
     @pytest.mark.asyncio
     async def test_tournament_error_handling(
-        self, tournament_manager, mock_agent_info, mock_opponents, mock_tournament_config
+        self,
+        tournament_manager,
+        mock_agent_info,
+        mock_opponents,
+        mock_tournament_config,
     ):
         """Test tournament error handling."""
-        with patch('keisei.evaluation.core.background_tournament.TournamentEvaluator') as mock_evaluator_class:
+        with patch(
+            "keisei.evaluation.core.background_tournament.TournamentEvaluator"
+        ) as mock_evaluator_class:
             # Mock evaluator to raise an exception
             mock_evaluator_class.side_effect = Exception("Tournament execution failed")
-            
+
             tournament_id = await tournament_manager.start_tournament(
                 tournament_config=mock_tournament_config,
                 agent_info=mock_agent_info,
@@ -229,7 +267,7 @@ class TestBackgroundTournamentManager:
 
             # Wait for tournament to fail
             await asyncio.sleep(0.5)
-            
+
             # Check that tournament failed
             progress = tournament_manager.get_tournament_progress(tournament_id)
             assert progress.status == TournamentStatus.FAILED
@@ -237,20 +275,26 @@ class TestBackgroundTournamentManager:
 
     @pytest.mark.asyncio
     async def test_cancel_tournament(
-        self, tournament_manager, mock_agent_info, mock_opponents, mock_tournament_config
+        self,
+        tournament_manager,
+        mock_agent_info,
+        mock_opponents,
+        mock_tournament_config,
     ):
         """Test tournament cancellation."""
-        with patch('keisei.evaluation.core.background_tournament.TournamentEvaluator') as mock_evaluator_class:
+        with patch(
+            "keisei.evaluation.core.background_tournament.TournamentEvaluator"
+        ) as mock_evaluator_class:
             mock_evaluator = AsyncMock()
             mock_evaluator_class.return_value = mock_evaluator
-            
+
             # Make tournament execution take a while
             async def slow_execution(*args, **kwargs):
                 await asyncio.sleep(2.0)
                 return Mock()
-            
+
             mock_evaluator._execute_with_progress_tracking = slow_execution
-            
+
             tournament_id = await tournament_manager.start_tournament(
                 tournament_config=mock_tournament_config,
                 agent_info=mock_agent_info,
@@ -259,11 +303,11 @@ class TestBackgroundTournamentManager:
 
             # Let tournament start
             await asyncio.sleep(0.1)
-            
+
             # Cancel tournament
             result = await tournament_manager.cancel_tournament(tournament_id)
             assert result is True
-            
+
             # Check status
             progress = tournament_manager.get_tournament_progress(tournament_id)
             assert progress.status == TournamentStatus.CANCELLED
@@ -275,13 +319,17 @@ class TestBackgroundTournamentManager:
         assert result is False
 
     def test_list_active_tournaments(
-        self, tournament_manager, mock_agent_info, mock_opponents, mock_tournament_config
+        self,
+        tournament_manager,
+        mock_agent_info,
+        mock_opponents,
+        mock_tournament_config,
     ):
         """Test listing active tournaments."""
         # Initially no tournaments
         active = tournament_manager.list_active_tournaments()
         assert len(active) == 0
-        
+
         # Add some tournament progress manually for testing
         progress1 = TournamentProgress(
             tournament_id="test1",
@@ -298,13 +346,13 @@ class TestBackgroundTournamentManager:
             status=TournamentStatus.PAUSED,
             total_games=8,
         )
-        
+
         tournament_manager._active_tournaments = {
             "test1": progress1,
             "test2": progress2,
             "test3": progress3,
         }
-        
+
         active = tournament_manager.list_active_tournaments()
         assert len(active) == 2  # Only RUNNING and PAUSED
         assert any(t.tournament_id == "test1" for t in active)
@@ -314,14 +362,18 @@ class TestBackgroundTournamentManager:
     def test_list_all_tournaments(self, tournament_manager):
         """Test listing all tournaments."""
         # Add some tournament progress
-        progress1 = TournamentProgress(tournament_id="test1", status=TournamentStatus.RUNNING)
-        progress2 = TournamentProgress(tournament_id="test2", status=TournamentStatus.COMPLETED)
-        
+        progress1 = TournamentProgress(
+            tournament_id="test1", status=TournamentStatus.RUNNING
+        )
+        progress2 = TournamentProgress(
+            tournament_id="test2", status=TournamentStatus.COMPLETED
+        )
+
         tournament_manager._active_tournaments = {
             "test1": progress1,
             "test2": progress2,
         }
-        
+
         all_tournaments = tournament_manager.list_all_tournaments()
         assert len(all_tournaments) == 2
         assert any(t.tournament_id == "test1" for t in all_tournaments)
@@ -329,30 +381,40 @@ class TestBackgroundTournamentManager:
 
     def test_get_tournament_progress(self, tournament_manager):
         """Test getting tournament progress."""
-        progress = TournamentProgress(tournament_id="test123", status=TournamentStatus.RUNNING)
+        progress = TournamentProgress(
+            tournament_id="test123", status=TournamentStatus.RUNNING
+        )
         tournament_manager._active_tournaments["test123"] = progress
-        
+
         retrieved = tournament_manager.get_tournament_progress("test123")
         assert retrieved == progress
-        
+
         # Test nonexistent tournament
         none_retrieved = tournament_manager.get_tournament_progress("nonexistent")
         assert none_retrieved is None
 
     @pytest.mark.asyncio
-    async def test_shutdown(self, tournament_manager, mock_agent_info, mock_opponents, mock_tournament_config):
+    async def test_shutdown(
+        self,
+        tournament_manager,
+        mock_agent_info,
+        mock_opponents,
+        mock_tournament_config,
+    ):
         """Test manager shutdown with running tournaments."""
-        with patch('keisei.evaluation.core.background_tournament.TournamentEvaluator') as mock_evaluator_class:
+        with patch(
+            "keisei.evaluation.core.background_tournament.TournamentEvaluator"
+        ) as mock_evaluator_class:
             mock_evaluator = AsyncMock()
             mock_evaluator_class.return_value = mock_evaluator
-            
+
             # Make tournament execution take a while
             async def slow_execution(*args, **kwargs):
                 await asyncio.sleep(1.0)
                 return Mock()
-            
+
             mock_evaluator._execute_with_progress_tracking = slow_execution
-            
+
             # Start a tournament
             tournament_id = await tournament_manager.start_tournament(
                 tournament_config=mock_tournament_config,
@@ -362,14 +424,14 @@ class TestBackgroundTournamentManager:
 
             # Let tournament start
             await asyncio.sleep(0.1)
-            
+
             # Shutdown manager
             await tournament_manager.shutdown()
-            
+
             # Check that tournament was cancelled
             progress = tournament_manager.get_tournament_progress(tournament_id)
             assert progress.status == TournamentStatus.CANCELLED
-            
+
             # Check that shutdown event was set
             assert tournament_manager._shutdown_event.is_set()
 
@@ -377,7 +439,7 @@ class TestBackgroundTournamentManager:
     async def test_result_saving(self, tournament_manager):
         """Test tournament result saving functionality."""
         tournament_id = "test_save_results"
-        
+
         # Create a mock result with proper game result mocks
         mock_games = [Mock(spec=GameResult)]
         mock_games[0].moves_count = 50
@@ -385,31 +447,35 @@ class TestBackgroundTournamentManager:
         mock_games[0].is_agent_win = True
         mock_games[0].is_opponent_win = False
         mock_games[0].is_draw = False
-        
+
         # Create summary stats using from_games method
         summary_stats = SummaryStats.from_games(mock_games)
-        
+
         mock_context = Mock()
         mock_context.session_id = tournament_id
-        mock_context.to_dict = Mock(return_value={"session_id": tournament_id, "test_context": "data"})
-        
+        mock_context.to_dict = Mock(
+            return_value={"session_id": tournament_id, "test_context": "data"}
+        )
+
         mock_result = EvaluationResult(
             context=mock_context,
             games=mock_games,
             summary_stats=summary_stats,
             analytics_data={"test": "data"},
         )
-        
+
         await tournament_manager._save_tournament_results(tournament_id, mock_result)
-        
+
         # Check that result file was created
-        result_file = tournament_manager.result_storage_dir / f"{tournament_id}_results.json"
+        result_file = (
+            tournament_manager.result_storage_dir / f"{tournament_id}_results.json"
+        )
         assert result_file.exists()
-        
+
         # Verify content matches our implementation's structure
-        with open(result_file, 'r') as f:
+        with open(result_file, "r") as f:
             saved_data = json.load(f)
-            
+
         # Verify the structure our implementation actually saves
         assert saved_data["tournament_id"] == tournament_id
         assert "context" in saved_data
@@ -427,21 +493,21 @@ class TestBackgroundTournamentManager:
             total_games=10,
             completed_games=3,
         )
-        
+
         # Test completion percentage
         assert progress.completion_percentage == 30.0
-        
+
         # Test is_active
         assert progress.is_active is True
-        
+
         # Test is_complete
         assert progress.is_complete is False
-        
+
         # Test with completed status
         progress.status = TournamentStatus.COMPLETED
         assert progress.is_active is False
         assert progress.is_complete is True
-        
+
         # Test with zero total games
         progress.total_games = 0
         assert progress.completion_percentage == 0.0
@@ -457,32 +523,34 @@ class TestBackgroundTournamentManager:
                 max_concurrent_tournaments=1,
                 result_storage_dir=Path(temp_dir),
             )
-            
-            with patch('keisei.evaluation.core.background_tournament.TournamentEvaluator') as mock_evaluator_class:
+
+            with patch(
+                "keisei.evaluation.core.background_tournament.TournamentEvaluator"
+            ) as mock_evaluator_class:
                 mock_evaluator = AsyncMock()
                 mock_evaluator_class.return_value = mock_evaluator
-                
+
                 # Make tournaments take time
                 async def slow_execution(*args, **kwargs):
                     await asyncio.sleep(0.5)
                     return Mock()
-                
+
                 mock_evaluator._execute_with_progress_tracking = slow_execution
-                
+
                 # Start first tournament
                 tournament_id1 = await manager.start_tournament(
                     tournament_config=mock_tournament_config,
                     agent_info=mock_agent_info,
                     opponents=mock_opponents[:1],
                 )
-                
+
                 # Start second tournament (should wait due to semaphore)
                 tournament_id2 = await manager.start_tournament(
                     tournament_config=mock_tournament_config,
                     agent_info=mock_agent_info,
                     opponents=mock_opponents[:1],
                 )
-                
+
                 # Both should be created but only one running at first
                 assert tournament_id1 != tournament_id2
                 assert len(manager._active_tournaments) == 2
@@ -492,16 +560,16 @@ class TestBackgroundTournamentManager:
     async def test_tournament_cleanup(self, tournament_manager):
         """Test tournament cleanup functionality."""
         tournament_id = "test_cleanup"
-        
+
         # Add mock task and lock
         mock_task = Mock()
         mock_task.done.return_value = False
         tournament_manager._tournament_tasks[tournament_id] = mock_task
         tournament_manager._tournament_locks[tournament_id] = asyncio.Lock()
-        
+
         # Cleanup
         await tournament_manager._cleanup_tournament(tournament_id)
-        
+
         # Verify cleanup
         assert tournament_id not in tournament_manager._tournament_tasks
         assert tournament_id not in tournament_manager._tournament_locks
@@ -520,7 +588,7 @@ class TestTournamentProgressIntegration:
             games_per_second=2.5,
             average_game_duration=0.4,
         )
-        
+
         assert progress.completion_percentage == 50.0
         assert abs(progress.games_per_second - 2.5) < 0.001
         assert abs(progress.average_game_duration - 0.4) < 0.001
@@ -528,19 +596,19 @@ class TestTournamentProgressIntegration:
     def test_progress_with_results(self):
         """Test progress tracking with game results."""
         from keisei.evaluation.core import GameResult
-        
+
         mock_results = [
             Mock(spec=GameResult),
             Mock(spec=GameResult),
         ]
-        
+
         progress = TournamentProgress(
             tournament_id="test",
             total_games=10,
             completed_games=2,
             results=mock_results,
         )
-        
+
         assert len(progress.results) == 2
         assert progress.completion_percentage == 20.0
 
@@ -550,12 +618,12 @@ class TestTournamentProgressIntegration:
             "TestAgent": {"wins": 5, "losses": 2, "elo": 1250},
             "Opponent1": {"wins": 3, "losses": 4, "elo": 1180},
         }
-        
+
         progress = TournamentProgress(
             tournament_id="test",
             standings=standings,
         )
-        
+
         assert progress.standings == standings
         assert "TestAgent" in progress.standings
         assert progress.standings["TestAgent"]["wins"] == 5

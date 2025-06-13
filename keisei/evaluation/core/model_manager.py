@@ -129,8 +129,8 @@ class ModelWeightManager:
             # Cache the weights
             self._weight_cache[opponent_id] = cpu_weights
             self._cache_order.append(opponent_id)
-            
-            # Only increment miss counter on successful cache operation
+
+            # Increment miss counter only after successful cache operation
             self._cache_misses += 1
 
             logger.debug(
@@ -338,38 +338,50 @@ class ModelWeightManager:
         logger.warning("Could not infer input channels from weights, using default 46")
         return 46
 
-    def _infer_conv_out_channels_from_weights(self, weights: Dict[str, torch.Tensor]) -> int:
+    def _infer_conv_out_channels_from_weights(
+        self, weights: Dict[str, torch.Tensor]
+    ) -> int:
         """Infer conv output channels from weights."""
         if "conv.weight" in weights:
             # conv.weight shape is [out_channels, in_channels, kernel_h, kernel_w]
             return weights["conv.weight"].shape[0]
         return 16  # Default fallback
-    
-    def _infer_flattened_size_from_weights(self, weights: Dict[str, torch.Tensor]) -> int:
+
+    def _infer_flattened_size_from_weights(
+        self, weights: Dict[str, torch.Tensor]
+    ) -> int:
         """Infer flattened size from policy_head weight dimensions."""
         if "policy_head.weight" in weights:
             # policy_head.weight shape is [total_actions, flattened_size]
             return weights["policy_head.weight"].shape[1]
         return 1296  # Default fallback (16 * 9 * 9)
-    
+
     def _create_dynamic_actor_critic(
-        self, input_channels: int, total_actions: int, conv_out_channels: int, flattened_size: int
+        self,
+        input_channels: int,
+        total_actions: int,
+        conv_out_channels: int,
+        flattened_size: int,
     ) -> torch.nn.Module:
         """Create a dynamic ActorCritic model with inferred architecture."""
         import torch.nn as nn
         import torch.nn.functional as F
         from torch.distributions import Categorical
-        
+
         class DynamicActorCritic(nn.Module):
-            def __init__(self, input_channels, total_actions, conv_out_channels, flattened_size):
+            def __init__(
+                self, input_channels, total_actions, conv_out_channels, flattened_size
+            ):
                 super().__init__()
-                self.conv = nn.Conv2d(input_channels, conv_out_channels, kernel_size=3, padding=1)
+                self.conv = nn.Conv2d(
+                    input_channels, conv_out_channels, kernel_size=3, padding=1
+                )
                 self.relu = nn.ReLU()
                 self.flatten = nn.Flatten()
-                
+
                 self.policy_head = nn.Linear(flattened_size, total_actions)
                 self.value_head = nn.Linear(flattened_size, 1)
-            
+
             def forward(self, x):
                 x = self.conv(x)
                 x = self.relu(x)
@@ -377,31 +389,33 @@ class ModelWeightManager:
                 policy = self.policy_head(x)
                 value = self.value_head(x)
                 return policy, value
-            
+
             def get_action_and_value(self, x, action=None, mask=None):
                 """Get action and value for compatibility with ActorCriticProtocol."""
                 logits, value = self.forward(x)
-                
+
                 if mask is not None:
-                    logits = logits.masked_fill(mask == 0, float('-inf'))
-                
+                    logits = logits.masked_fill(mask == 0, float("-inf"))
+
                 probs = Categorical(logits=logits)
                 if action is None:
                     action = probs.sample()
-                
+
                 return action, probs.log_prob(action), probs.entropy(), value
-            
+
             def evaluate_actions(self, x, action, mask=None):
                 """Evaluate actions for compatibility with ActorCriticProtocol."""
                 logits, value = self.forward(x)
-                
+
                 if mask is not None:
-                    logits = logits.masked_fill(mask == 0, float('-inf'))
-                
+                    logits = logits.masked_fill(mask == 0, float("-inf"))
+
                 probs = Categorical(logits=logits)
                 return probs.log_prob(action), probs.entropy(), value
-        
-        return DynamicActorCritic(input_channels, total_actions, conv_out_channels, flattened_size)
+
+        return DynamicActorCritic(
+            input_channels, total_actions, conv_out_channels, flattened_size
+        )
 
     def _create_minimal_config(
         self, input_channels: int, total_actions: int, device: torch.device

@@ -42,7 +42,7 @@ from keisei.evaluation.opponents.enhanced_manager import (
     EnhancedOpponentManager,
     SelectionStrategy,
 )
-from tests.evaluation.factories import EvaluationTestFactory, EvaluationScenarioFactory
+from tests.evaluation.factories import EvaluationScenarioFactory, EvaluationTestFactory
 
 
 @pytest.fixture
@@ -56,9 +56,9 @@ def temp_analytics_dir():
 def test_evaluation_config():
     """Create realistic evaluation configuration using factories."""
     return create_evaluation_config(
-        strategy=EvaluationStrategy.TOURNAMENT, 
-        num_games=4, 
-        wandb_logging=False
+        strategy=EvaluationStrategy.TOURNAMENT,
+        num_games=4,
+        wandb_logging=False,
         # Note: Removed num_games_per_opponent as it's not a valid base config parameter
     )
 
@@ -67,8 +67,7 @@ def test_evaluation_config():
 def test_agent_info():
     """Create realistic agent info using factories."""
     return EvaluationTestFactory.create_test_agent_info(
-        name="TestAgent", 
-        agent_type="ppo_agent"
+        name="TestAgent", agent_type="ppo_agent"
     )
 
 
@@ -76,12 +75,14 @@ def test_agent_info():
 def test_opponents():
     """Create realistic opponents using factories."""
     return [
-        EvaluationTestFactory.create_test_opponent_info(name="Opponent1", opponent_type="random"),
-        EvaluationTestFactory.create_test_opponent_info(name="Opponent2", opponent_type="heuristic"),
         EvaluationTestFactory.create_test_opponent_info(
-            name="Opponent3", 
-            opponent_type="ppo", 
-            checkpoint_path="/path/to/opp3.ptk"
+            name="Opponent1", opponent_type="random"
+        ),
+        EvaluationTestFactory.create_test_opponent_info(
+            name="Opponent2", opponent_type="heuristic"
+        ),
+        EvaluationTestFactory.create_test_opponent_info(
+            name="Opponent3", opponent_type="ppo", checkpoint_path="/path/to/opp3.ptk"
         ),
     ]
 
@@ -90,8 +91,7 @@ def test_opponents():
 def sample_game_results():
     """Create sample game results using factories."""
     return EvaluationTestFactory.create_test_game_results(
-        count=6,  # 2 per opponent 
-        win_rate=0.5  # Balanced results
+        count=6, win_rate=0.5  # 2 per opponent  # Balanced results
     )
 
 

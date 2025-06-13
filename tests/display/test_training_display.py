@@ -24,14 +24,13 @@ from rich.console import Console
 from keisei.config_schema import DisplayConfig
 from keisei.training.display import TrainingDisplay
 from keisei.training.display_components import RecentMovesPanel, ShogiBoard
-from tests.display.test_utilities import (
-    display_with_error_state,
-)  # pylint: disable=unused-import
 from tests.display.test_utilities import mock_library  # pylint: disable=unused-import
-from tests.display.test_utilities import (
+from tests.display.test_utilities import (  # pylint: disable=unused-import
+    TestDataFactory,
+    display_with_error_state,
+    performance_helper,
     training_session_in_progress,
-)  # pylint: disable=unused-import
-from tests.display.test_utilities import TestDataFactory, performance_helper
+)
 
 
 class TestTrainingDisplay:

@@ -70,18 +70,25 @@ class EvaluationManager:
         # Validate checkpoint file exists and is readable
         if not Path(agent_checkpoint).exists():
             raise FileNotFoundError(f"Checkpoint file not found: {agent_checkpoint}")
-        
+
         # Try to validate the checkpoint file format
         try:
             import torch
+
             # Use weights_only=False for evaluation checkpoint validation (trusted source)
-            checkpoint_data = torch.load(agent_checkpoint, map_location='cpu', weights_only=False)
+            checkpoint_data = torch.load(
+                agent_checkpoint, map_location="cpu", weights_only=False
+            )
             # Basic validation - should be a dictionary with expected keys
             if not isinstance(checkpoint_data, dict):
-                raise ValueError(f"Checkpoint file is not a valid PyTorch checkpoint: {agent_checkpoint}")
+                raise ValueError(
+                    f"Checkpoint file is not a valid PyTorch checkpoint: {agent_checkpoint}"
+                )
         except Exception as e:
-            raise ValueError(f"Failed to load checkpoint file {agent_checkpoint}: {str(e)}")
-        
+            raise ValueError(
+                f"Failed to load checkpoint file {agent_checkpoint}: {str(e)}"
+            )
+
         agent_info = AgentInfo(name="current_agent", checkpoint_path=agent_checkpoint)
         context = EvaluationContext(
             session_id=str(uuid4()),

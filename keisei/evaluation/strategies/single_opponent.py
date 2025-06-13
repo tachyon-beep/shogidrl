@@ -263,12 +263,12 @@ class SingleOpponentEvaluator(BaseEvaluator):
         # Map opponent name to opponent type for supported opponents
         opponent_type_mapping = {
             "random": "random",
-            "heuristic": "heuristic", 
+            "heuristic": "heuristic",
             "default_opponent": "random",  # Default fallback
         }
-        
+
         opponent_type = opponent_type_mapping.get(self.config.opponent_name, "random")
-        
+
         opponent_info = OpponentInfo(
             name=self.config.opponent_name,
             type=opponent_type,
@@ -755,14 +755,16 @@ class SingleOpponentEvaluator(BaseEvaluator):
             "heuristic": "heuristic",
             # If opponent_path is provided, it's likely a PPO agent
         }
-        
+
         # Determine opponent type based on name and configuration
-        opponent_type = opponent_type_mapping.get(self.config.opponent_name.lower(), "unknown")
-        
+        opponent_type = opponent_type_mapping.get(
+            self.config.opponent_name.lower(), "unknown"
+        )
+
         # If we have a checkpoint path but the type is still unknown, assume it's a PPO agent
         if opponent_type == "unknown" and self.config.opponent_path:
             opponent_type = "ppo"
-        
+
         return [
             OpponentInfo(
                 name=self.config.opponent_name,

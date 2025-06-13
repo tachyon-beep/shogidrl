@@ -1165,7 +1165,9 @@ class TestTournamentEvaluator:
         )
         evaluator._game_validate_and_make_move.assert_called_once()
 
-    @patch("keisei.evaluation.strategies.tournament.TournamentEvaluator._game_get_player_action")
+    @patch(
+        "keisei.evaluation.strategies.tournament.TournamentEvaluator._game_get_player_action"
+    )
     async def test_game_process_one_turn_invalid_move(
         self, mock_get_action, mock_tournament_config, mock_evaluation_context
     ):
@@ -1181,8 +1183,18 @@ class TestTournamentEvaluator:
 
         # Simulate invalid move from policy
         mock_get_action.return_value = "1a1b"  # Invalid move
-        with patch.object(evaluator, "_game_validate_and_make_move", new=AsyncMock(return_value=False)) as mock_validate_move, \
-             patch.object(evaluator.policy_mapper, "get_legal_mask", return_value="legal_mask_tensor") as mock_get_legal_mask:
+        with (
+            patch.object(
+                evaluator,
+                "_game_validate_and_make_move",
+                new=AsyncMock(return_value=False),
+            ) as mock_validate_move,
+            patch.object(
+                evaluator.policy_mapper,
+                "get_legal_mask",
+                return_value="legal_mask_tensor",
+            ) as mock_get_legal_mask,
+        ):
             result = await evaluator._game_process_one_turn(
                 mock_game, mock_player_entity, mock_evaluation_context
             )

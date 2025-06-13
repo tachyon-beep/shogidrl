@@ -207,21 +207,21 @@ class TestModelWeightManager:
         # Manually cache two dummy weight dicts using public interface
         small_weights = {"a": torch.zeros(10, 10)}
         large_weights = {"b": torch.zeros(100, 100)}
-        
+
         # Create temporary files to test realistic scenario
         with tempfile.NamedTemporaryFile(suffix=".pt", delete=False) as tmp1:
             torch.save({"model_state_dict": small_weights}, tmp1.name)
             small_path = Path(tmp1.name)
-        
+
         with tempfile.NamedTemporaryFile(suffix=".pt", delete=False) as tmp2:
             torch.save({"model_state_dict": large_weights}, tmp2.name)
             large_path = Path(tmp2.name)
-        
+
         try:
             # Cache weights through public interface
             self.manager.cache_opponent_weights("small", small_path)
             self.manager.cache_opponent_weights("large", large_path)
-            
+
             # Calculate usage
             stats = self.manager.get_memory_usage()
             # Total should equal sum of individual sizes
@@ -229,7 +229,7 @@ class TestModelWeightManager:
             by_opponent = stats["by_opponent_mb"]
             assert "small" in by_opponent and "large" in by_opponent
             assert abs(total - (by_opponent["small"] + by_opponent["large"])) < 1e-6
-            
+
         finally:
             small_path.unlink(missing_ok=True)
             large_path.unlink(missing_ok=True)
@@ -245,7 +245,7 @@ class TestModelWeightManager:
             "value_head.weight": torch.randn(1, 1296),
             "value_head.bias": torch.randn(1),
         }
-        
+
         # Recreate agent from weights
         new_agent = self.manager.create_agent_from_weights(weights)
         assert isinstance(new_agent, PPOAgent)
@@ -280,28 +280,31 @@ class TestModelWeightManager:
                 "policy_head.bias": torch.randn(2048),
                 "value_head.weight": torch.randn(1, 1296),
                 "value_head.bias": torch.randn(1),
-            }
+            },
         ]
-        
+
         for i, weights in enumerate(test_cases):
             # Should infer architecture from weights and create working agent
             agent = self.manager.create_agent_from_weights(weights)
             assert isinstance(agent, PPOAgent), f"Test case {i}: Should create PPOAgent"
-            
+
             # Verify model exists and has expected structure
-            assert hasattr(agent, 'model'), f"Test case {i}: Agent should have model"
+            assert hasattr(agent, "model"), f"Test case {i}: Agent should have model"
             model_weights = agent.model.state_dict()
             assert len(model_weights) > 0, f"Test case {i}: Model should have weights"
-            
+
             # Verify agent can be used (basic functionality test)
-            assert hasattr(agent, 'select_action'), f"Test case {i}: Agent should have select_action method"
+            assert hasattr(
+                agent, "select_action"
+            ), f"Test case {i}: Agent should have select_action method"
 
     def test_memory_usage_tracking_under_limits(self):
         """Test memory usage stays within claimed limits during operations."""
         import psutil
+
         process = psutil.Process()
         initial_memory = process.memory_info().rss / 1024 / 1024  # MB
-        
+
         # Perform operations that should stay within memory limits
         checkpoint_files = []
         try:
@@ -315,30 +318,34 @@ class TestModelWeightManager:
                     "value_head.weight": torch.randn(1, 1296),
                     "value_head.bias": torch.randn(1),
                 }
-                
+
                 with tempfile.NamedTemporaryFile(suffix=".pt", delete=False) as tmp:
                     checkpoint = {"model_state_dict": weights}
                     torch.save(checkpoint, tmp.name)
                     checkpoint_files.append(Path(tmp.name))
-                
+
                 # Cache the weights
                 self.manager.cache_opponent_weights(f"opponent_{i}", Path(tmp.name))
-                
+
                 # Create agents from weights (memory intensive operation)
                 agent = self.manager.create_agent_from_weights(weights)
                 del agent  # Cleanup
-            
+
             final_memory = process.memory_info().rss / 1024 / 1024  # MB
             memory_increase = final_memory - initial_memory
-            
+
             # Memory increase should be reasonable (under 500MB as claimed in docs)
-            assert memory_increase < 500, f"Memory increased by {memory_increase:.1f} MB, should be under 500MB"
-            
+            assert (
+                memory_increase < 500
+            ), f"Memory increased by {memory_increase:.1f} MB, should be under 500MB"
+
             # Get manager's internal memory usage tracking
             usage_stats = self.manager.get_memory_usage()
             assert usage_stats["total_mb"] > 0, "Should track some memory usage"
-            assert "by_opponent_mb" in usage_stats, "Should provide per-opponent breakdown"
-            
+            assert (
+                "by_opponent_mb" in usage_stats
+            ), "Should provide per-opponent breakdown"
+
         finally:
             # Cleanup
             for file in checkpoint_files:
@@ -347,7 +354,7 @@ class TestModelWeightManager:
     def test_cache_performance_benchmark(self):
         """Test cache operations complete within 2s as per remediation plan."""
         import time
-        
+
         # Create test weights
         weights = {
             "conv.weight": torch.randn(16, 46, 3, 3),
@@ -357,7 +364,7 @@ class TestModelWeightManager:
             "value_head.weight": torch.randn(1, 1296),
             "value_head.bias": torch.randn(1),
         }
-        
+
         checkpoint_files = []
         try:
             # Create checkpoints for performance testing
@@ -366,26 +373,28 @@ class TestModelWeightManager:
                     checkpoint = {"model_state_dict": weights}
                     torch.save(checkpoint, tmp.name)
                     checkpoint_files.append(Path(tmp.name))
-            
+
             # Benchmark cache operations
             start_time = time.perf_counter()
-            
+
             # Perform cache operations
             for i, checkpoint_file in enumerate(checkpoint_files):
                 self.manager.cache_opponent_weights(f"perf_test_{i}", checkpoint_file)
                 # Access cached weights (should be fast)
                 self.manager.cache_opponent_weights(f"perf_test_{i}", checkpoint_file)
-            
+
             # Multiple cache hits
             for _ in range(50):
                 self.manager.get_cache_stats()
                 self.manager.get_memory_usage()
-            
+
             elapsed = time.perf_counter() - start_time
-            
+
             # Should complete within 2 seconds as per remediation plan
-            assert elapsed < 2.0, f"Cache operations took {elapsed:.3f}s, should be under 2s"
-            
+            assert (
+                elapsed < 2.0
+            ), f"Cache operations took {elapsed:.3f}s, should be under 2s"
+
         finally:
             # Cleanup
             for file in checkpoint_files:
