@@ -20,7 +20,6 @@ import os
 import tempfile
 import time
 from pathlib import Path
-from unittest.mock import Mock, patch
 
 import psutil
 import pytest
@@ -29,6 +28,8 @@ import torch
 from keisei.evaluation.core import EvaluationStrategy, create_evaluation_config
 from keisei.evaluation.core.model_manager import ModelWeightManager
 from keisei.evaluation.core_manager import EvaluationManager
+from keisei.utils import PolicyOutputMapper
+from tests.evaluation.factories import EvaluationTestFactory
 
 
 class PerformanceBenchmark:
@@ -103,7 +104,7 @@ class TestPerformanceValidation:
             opponent_name="random",
         )
 
-    def test_in_memory_vs_file_based_speedup_validation(self, temporary_checkpoint):
+    def test_in_memory_vs_file_based_speedup_validation(self, temporary_checkpoint, test_isolation, performance_monitor):
         """Test and validate the claimed 10x speedup from in-memory evaluation."""
         weight_manager = ModelWeightManager(max_cache_size=5)
 
@@ -151,7 +152,7 @@ class TestPerformanceValidation:
         # Memory usage should be reasonable for in-memory approach
         assert memory_metrics["memory_delta_mb"] < 50  # Should not use excessive memory
 
-    def test_memory_usage_limits_validation(self):
+    def test_memory_usage_limits_validation(self, test_isolation, memory_monitor):
         """Test that memory usage remains within specified limits."""
         benchmark = PerformanceBenchmark()
         benchmark.start()
@@ -204,7 +205,7 @@ class TestPerformanceValidation:
             for file in checkpoint_files:
                 file.unlink(missing_ok=True)
 
-    def test_agent_creation_performance_benchmark(self, sample_weights):
+    def test_agent_creation_performance_benchmark(self, sample_weights, test_isolation, performance_monitor):
         """Test performance of agent creation from weights."""
         weight_manager = ModelWeightManager()
 
@@ -237,7 +238,7 @@ class TestPerformanceValidation:
             metrics["memory_delta_mb"] < 400
         ), f"Memory increased by {metrics['memory_delta_mb']:.1f} MB, should be under 400 MB"
 
-    def test_cache_performance_and_lru_efficiency(self):
+    def test_cache_performance_and_lru_efficiency(self, test_isolation, performance_monitor):
         """Test cache performance and LRU eviction efficiency."""
         weight_manager = ModelWeightManager(max_cache_size=5)
 
@@ -296,7 +297,7 @@ class TestPerformanceValidation:
             for file in checkpoint_files:
                 file.unlink(missing_ok=True)
 
-    def test_memory_leak_detection(self):
+    def test_memory_leak_detection(self, test_isolation, memory_monitor):
         """Test for memory leaks during repeated operations."""
         initial_memory = psutil.Process().memory_info().rss / 1024 / 1024  # MB
         weight_manager = ModelWeightManager(max_cache_size=3)
@@ -333,7 +334,7 @@ class TestPerformanceValidation:
             memory_growth < 500
         ), f"Memory grew by {memory_growth:.1f} MB, indicating potential memory leak"
 
-    def test_evaluation_manager_throughput_enhanced(self, performance_config):
+    def test_evaluation_manager_throughput_enhanced(self, performance_config, test_isolation, performance_monitor):
         """Enhanced throughput test for EvaluationManager."""
         with tempfile.TemporaryDirectory() as temp_dir:
             manager = EvaluationManager(
@@ -345,32 +346,23 @@ class TestPerformanceValidation:
 
             manager.setup(
                 device="cpu",
-                policy_mapper=Mock(),
+                policy_mapper=PolicyOutputMapper(),  # Real policy mapper
                 model_dir=temp_dir,
                 wandb_active=False,
             )
 
-            # Mock agent with realistic structure
-            mock_agent = Mock()
-            mock_agent.name = "test_agent"
-            mock_agent.model = Mock()
-            mock_agent.model.state_dict.return_value = {
-                "conv.weight": torch.randn(16, 46, 3, 3),
-                "conv.bias": torch.randn(16),
-                "policy_head.weight": torch.randn(1024, 1296),
-                "policy_head.bias": torch.randn(1024),
-            }
+            # Create real test agent instead of mock
+            test_agent = EvaluationTestFactory.create_test_agent("ThroughputTestAgent", "cpu")
 
             benchmark = PerformanceBenchmark()
             benchmark.start()
 
             # Run multiple evaluations
             for i in range(5):  # More evaluations for better measurement
-                with patch("keisei.evaluation.strategies.single_opponent.ShogiGame"):
-                    result = manager.evaluate_current_agent(mock_agent)
-                    assert (
-                        result is not None
-                    ), f"Evaluation {i} should complete successfully"
+                result = manager.evaluate_current_agent(test_agent)
+                assert (
+                    result is not None
+                ), f"Evaluation {i} should complete successfully"
 
             metrics = benchmark.stop()
             avg_time = metrics["duration_seconds"] / 5
@@ -390,7 +382,7 @@ class TestPerformanceValidation:
             ), f"Memory usage {metrics['memory_delta_mb']:.1f}MB should be under 100MB"
 
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
-    def test_gpu_memory_efficiency(self, sample_weights):
+    def test_gpu_memory_efficiency(self, sample_weights, test_isolation, memory_monitor):
         """Test GPU memory efficiency when CUDA is available."""
         device = "cuda"
         weight_manager = ModelWeightManager(device=device, max_cache_size=3)
@@ -438,7 +430,7 @@ class TestPerformanceValidation:
                 del agents
             torch.cuda.empty_cache()
 
-    def test_scalability_with_opponent_count(self):
+    def test_scalability_with_opponent_count(self, test_isolation, performance_monitor):
         """Test performance scaling with number of opponents."""
         weight_manager = ModelWeightManager(max_cache_size=20)
         opponent_counts = [1, 5, 10, 15]
@@ -497,30 +489,19 @@ class TestPerformanceValidation:
                 scaling_factor <= opponent_factor * 2.0
             ), f"Scaling factor {scaling_factor:.2f} too high for opponent increase {opponent_factor:.2f}"
 
-    def test_weight_extraction_performance_stress(self):
-        """Stress test weight extraction performance."""
+    def test_weight_extraction_performance_stress(self, test_isolation, performance_monitor):
+        """Stress test weight extraction performance with real agent."""
         weight_manager = ModelWeightManager()
 
-        # Create a mock agent with large weights
-        agent = Mock()
-        agent.model = Mock()
-
-        # Create large weight dictionary
-        large_weights = {}
-        for i in range(20):  # 20 layers
-            large_weights[f"layer_{i}.weight"] = torch.randn(512, 512)
-            large_weights[f"layer_{i}.bias"] = torch.randn(512)
-
-        agent.model.state_dict.return_value = large_weights
+        # Create a real agent with large model for stress testing
+        test_agent = EvaluationTestFactory.create_test_agent("StressTestAgent", "cpu")
 
         benchmark = PerformanceBenchmark()
         benchmark.start()
 
         # Extract weights many times
         for _ in range(200):  # 200 extractions
-            _ = weight_manager.extract_agent_weights(
-                agent
-            )  # Don't store unused variable
+            _ = weight_manager.extract_agent_weights(test_agent)
 
         metrics = benchmark.stop()
 

@@ -4,62 +4,55 @@ Tests for ModelWeightManager in-memory evaluation functionality.
 
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock
 
 import pytest
 import torch
 
 from keisei.core.ppo_agent import PPOAgent
 from keisei.evaluation.core.model_manager import ModelWeightManager
+from tests.evaluation.factories import EvaluationTestFactory
 
 
 class TestModelWeightManager:
-    """Test ModelWeightManager functionality."""
+    """Test ModelWeightManager functionality with real agents."""
 
     def setup_method(self):
         """Set up test fixtures."""
         self.manager = ModelWeightManager(device="cpu", max_cache_size=3)
+        # Create a real test agent for consistency across tests
+        self.test_agent = EvaluationTestFactory.create_test_agent("TestAgent", "cpu")
 
-    def create_mock_agent(self):
-        """Create a mock PPOAgent with a model."""
-        agent = Mock(spec=PPOAgent)
-        agent.model = Mock()
+    def create_real_agent(self, name: str = "TestAgent"):
+        """Create a real PPOAgent with actual neural network weights."""
+        return EvaluationTestFactory.create_test_agent(name, "cpu")
 
-        # Create some dummy weights
-        weights = {
-            "layer1.weight": torch.randn(10, 5),
-            "layer1.bias": torch.randn(10),
-            "layer2.weight": torch.randn(5, 3),
-            "layer2.bias": torch.randn(5),
-        }
-        agent.model.state_dict.return_value = weights
-        return agent
-
-    def test_extract_agent_weights(self):
-        """Test extracting weights from an agent."""
-        agent = self.create_mock_agent()
+    def test_extract_agent_weights(self, test_isolation, performance_monitor):
+        """Test extracting weights from a real agent."""
+        agent = self.create_real_agent()
 
         weights = self.manager.extract_agent_weights(agent)
 
         assert isinstance(weights, dict)
-        assert len(weights) == 4
-        assert "layer1.weight" in weights
-        assert "layer1.bias" in weights
-        assert "layer2.weight" in weights
-        assert "layer2.bias" in weights
-
-        # Verify weights are cloned and on CPU
-        for _, tensor in weights.items():
+        assert len(weights) > 0
+        
+        # Verify all weights are tensors on CPU
+        for weight_name, tensor in weights.items():
             assert isinstance(tensor, torch.Tensor)
             assert tensor.device.type == "cpu"
+            assert weight_name in agent.model.state_dict()
 
     def test_extract_agent_weights_no_model(self):
-        """Test error when agent has no model."""
-        agent = Mock()
-        agent.model = None
+        """Test error when agent has no model attribute."""
+        # Test the check by creating a duck-typed object without proper model
+        class FakeAgent:
+            def __init__(self):
+                self.model = None
+        
+        fake_agent = FakeAgent()
 
         with pytest.raises(ValueError, match="Agent must have a model attribute"):
-            self.manager.extract_agent_weights(agent)
+            # This will fail type checking but that's intentional for the test
+            self.manager.extract_agent_weights(fake_agent)  # type: ignore
 
     def test_cache_opponent_weights(self):
         """Test caching opponent weights from checkpoint."""
@@ -193,11 +186,17 @@ class TestModelWeightManager:
 
             try:
                 self.manager.cache_opponent_weights("test", tmp_path)
-                assert len(self.manager._weight_cache) == 1
+                
+                # Check cache has content via public interface
+                stats_before = self.manager.get_cache_stats()
+                assert stats_before["cache_size"] == 1
 
                 self.manager.clear_cache()
-                assert len(self.manager._weight_cache) == 0
-                assert len(self.manager._cache_order) == 0
+                
+                # Check cache is cleared via public interface
+                stats_after = self.manager.get_cache_stats()
+                assert stats_after["cache_size"] == 0
+                assert len(stats_after["cache_order"]) == 0
 
             finally:
                 tmp_path.unlink()
