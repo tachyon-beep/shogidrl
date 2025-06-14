@@ -16,7 +16,7 @@ python-dotenv==1.1.0
 # Utilities
 Jinja2==3.1.6      # Often a dependency of other tools or for templating
 MarkupSafe==3.0.2  # Dependency of Jinja2
-requests==2.32.3   # For API interactions (e.g. W&B)
+requests==2.32.4   # For API interactions (e.g. W&B)
 triton==3.3.0      # For PyTorch, especially with NVIDIA GPUs
 wandb==0.19.11     # Experiment tracking
 rich==14.0.0       # Rich text and beautiful formatting in CLIs
