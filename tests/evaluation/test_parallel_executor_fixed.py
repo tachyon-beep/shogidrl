@@ -33,8 +33,13 @@ class TestParallelGameExecutor:
         
     def simulate_game_execution(self, agent_pair, game_id: str) -> Dict[str, Any]:
         """Simulate a game between two agents for testing purposes."""
+        import time
+        
         # Simple deterministic game result based on game_id
         game_num = int(game_id.split('_')[-1]) if '_' in game_id else 0
+        
+        # Add small delay to simulate actual work (needed for parallel vs sequential difference)
+        time.sleep(0.01)  # 10ms per game simulation
         
         return {
             "game_id": game_id,

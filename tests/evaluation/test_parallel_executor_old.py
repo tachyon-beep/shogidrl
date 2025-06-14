@@ -9,6 +9,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Any
+from unittest.mock import Mock, AsyncMock, patch
 
 import pytest
 
@@ -31,8 +32,13 @@ class TestParallelGameExecutor:
         
     def simulate_game_execution(self, agent_pair, game_id: str) -> Dict[str, Any]:
         """Simulate a game between two agents for testing purposes."""
+        import time
+        
         # Simple deterministic game result based on game_id
         game_num = int(game_id.split('_')[-1]) if '_' in game_id else 0
+        
+        # Add small delay to simulate actual work (needed for parallel vs sequential difference)
+        time.sleep(0.01)  # 10ms per game simulation
         
         return {
             "game_id": game_id,
@@ -305,6 +311,9 @@ class TestParallelGameExecutor:
         # Performance should be reasonable (under 1 second total)
         assert parallel_time < 1.0, \
             f"Parallel execution too slow: {parallel_time:.3f}s"
+    
+    @pytest.mark.asyncio
+    async def test_async_parallel_execution(self):
         """Test asynchronous parallel execution capabilities."""
         # Mock async executor directly
         mock_executor = AsyncMock()

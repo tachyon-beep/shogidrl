@@ -40,9 +40,10 @@ This document outlines a comprehensive plan to upgrade the evaluation test suite
 | Inconsistent Async Testing | Low | Potential reliability issues | `test_single_opponent_evaluator.py` |
 
 ### **Priority Order for Remaining Remediation:**
-1. **NEXT - Phase 3 (Week 3-4)**: Split large test files (>800 lines) for maintainability
-2. **Phase 4 (Week 5-6)**: Improve test organization and add integration testing
-3. **Phase 5 (Week 7-8)**: Quality assurance and optimization
+1. **NEXT - Phase 2 (Week 2-4)**: Real performance benchmarks and validation  
+2. **Phase 3 (Week 3-4)**: Split large test files (>800 lines) for maintainability
+3. **Phase 4 (Week 5-6)**: Improve test organization and add integration testing
+4. **Phase 5 (Week 7-8)**: Quality assurance and optimization
 
 ## ✅ Phase 1: Foundation Fixes (Sprint 1 - Week 1-2) - COMPLETED
 
@@ -168,17 +169,17 @@ def reset_global_state():
 - All async tests use `@pytest.mark.asyncio`
 - Test execution time reduced by 20%
 
-## ✅ Phase 2: Performance Validation (Sprint 1-2 - Week 2-4) - COMPLETED
+## Phase 2: Performance Validation (Sprint 1-2 - Week 2-4)
 
-### 2.1 ✅ Real Performance Benchmark Implementation
+### 2.1 Implement Real Performance Benchmarks
 
-**Status**: COMPLETED ✅
-**Effort**: 24 hours (Actual: 14 hours)
-**Completed**: June 14, 2025
+**Priority**: Critical
+**Effort**: 24 hours
+**Owner**: Performance Team
 
-#### ✅ File vs Memory Evaluation Benchmarks
+#### Add File vs Memory Evaluation Benchmarks
 
-**Enhanced**: `test_performance_validation.py` (543 lines)
+**Create**: `test_performance_benchmarks.py`
 
 ```python
 import time
