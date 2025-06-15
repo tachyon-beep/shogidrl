@@ -8,22 +8,12 @@ capabilities for evaluation results and tournament data.
 import json
 import logging
 import math
-import statistics
-from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
-import numpy as np
-
-# Optional scipy import for advanced statistical tests
-try:
-    from scipy import stats as scipy_stats
-
-    SCIPY_AVAILABLE = True
-except ImportError:
-    SCIPY_AVAILABLE = False
+from scipy import stats as scipy_stats
 
 from ..core import EvaluationResult, GameResult
 from .performance_analyzer import PerformanceAnalyzer
@@ -90,6 +80,14 @@ class AdvancedAnalytics:
         min_practical_difference: float = 0.05,  # 5% win rate difference
         trend_window_days: int = 30,
     ):
+        # Parameter validation
+        if not (0 <= significance_level <= 1):
+            raise ValueError("significance_level must be between 0 and 1")
+        if min_practical_difference < 0:
+            raise ValueError("min_practical_difference must be non-negative")
+        if trend_window_days <= 0:
+            raise ValueError("trend_window_days must be positive")
+            
         self.significance_level = significance_level
         self.min_practical_difference = min_practical_difference
         self.trend_window_days = trend_window_days
@@ -193,48 +191,25 @@ class AdvancedAnalytics:
 
         for timestamp, result in historical_results:
             if metric == "win_rate":
-                values.append(result.summary_stats.win_rate)
+                values.append(float(result.summary_stats.win_rate))
             elif metric == "avg_game_length":
-                values.append(result.summary_stats.avg_game_length)
+                values.append(float(result.summary_stats.avg_game_length))
             elif metric == "total_games":
-                values.append(result.summary_stats.total_games)
+                values.append(float(result.summary_stats.total_games))
             else:
-                logger.warning(f"Unknown metric: {metric}")
+                logger.warning("Unknown metric: %s", metric)
                 values.append(0.0)
 
         # Convert timestamps to days since first measurement
         first_timestamp = timestamps[0]
         days = [(ts - first_timestamp).total_seconds() / 86400 for ts in timestamps]
 
-        # Linear regression - using basic implementation if scipy not available
-        if SCIPY_AVAILABLE:
-            slope, intercept, r_value, p_value, std_err = scipy_stats.linregress(
-                days, values
-            )
-            r_squared = r_value**2
-        else:
-            # Simple linear regression implementation
-            n = len(days)
-            sum_x = sum(days)
-            sum_y = sum(values)
-            sum_xy = sum(x * y for x, y in zip(days, values))
-            sum_x2 = sum(x * x for x in days)
-
-            if n * sum_x2 - sum_x * sum_x == 0:
-                slope = 0.0
-                intercept = sum_y / n if n > 0 else 0.0
-                r_squared = 0.0
-            else:
-                slope = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x)
-                intercept = (sum_y - slope * sum_x) / n
-
-                # Calculate r-squared
-                y_mean = sum_y / n
-                ss_tot = sum((y - y_mean) ** 2 for y in values)
-                ss_res = sum(
-                    (values[i] - (slope * days[i] + intercept)) ** 2 for i in range(n)
-                )
-                r_squared = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0.0
+        # Linear regression using scipy
+        linreg_result = scipy_stats.linregress(days, values)
+        slope = float(linreg_result.slope)
+        intercept = float(linreg_result.intercept)
+        r_value = float(linreg_result.rvalue)
+        r_squared = float(r_value ** 2)
 
         # Determine trend direction and strength
         if abs(slope) < 1e-6:
@@ -298,6 +273,7 @@ class AdvancedAnalytics:
 
         # P-value (two-tailed)
         p_value = 2 * (1 - scipy_stats.norm.cdf(abs(z_stat)))
+        p_value = float(p_value)  # Convert from numpy array to float
 
         is_significant = bool(p_value < self.significance_level)
 
@@ -317,19 +293,9 @@ class AdvancedAnalytics:
         )
 
     def _mann_whitney_test(
-        self, sample1: List[float], sample2: List[float], metric_name: str
+        self, sample1: Sequence[Union[int, float]], sample2: Sequence[Union[int, float]], metric_name: str
     ) -> StatisticalTest:
         """Perform Mann-Whitney U test."""
-        if not SCIPY_AVAILABLE:
-            return StatisticalTest(
-                test_name=f"mann_whitney_{metric_name}",
-                statistic=0.0,
-                p_value=1.0,
-                is_significant=False,
-                confidence_level=1 - self.significance_level,
-                interpretation="Test skipped (scipy not available)",
-            )
-
         if len(sample1) < 3 or len(sample2) < 3:
             return StatisticalTest(
                 test_name=f"mann_whitney_{metric_name}",
@@ -337,44 +303,33 @@ class AdvancedAnalytics:
                 p_value=1.0,
                 is_significant=False,
                 confidence_level=1 - self.significance_level,
-                interpretation="Insufficient data for Mann-Whitney test",
+                interpretation="Insufficient data for Mann-Whitney test (too few samples)",
             )
-
         try:
-            statistic, p_value = scipy_stats.mannwhitneyu(
-                sample1, sample2, alternative="two-sided"
-            )
-
-            is_significant = p_value < self.significance_level
-
-            interpretation = f"Mann-Whitney U test for {metric_name}: "
-            if is_significant:
-                interpretation += f"Significant difference detected (p={p_value:.4f})"
-            else:
-                interpretation += f"No significant difference (p={p_value:.4f})"
-
-            return StatisticalTest(
-                test_name=f"mann_whitney_{metric_name}",
-                statistic=statistic,
-                p_value=p_value,
-                is_significant=is_significant,
-                confidence_level=1 - self.significance_level,
-                interpretation=interpretation,
-            )
-
+            stat, p_value = scipy_stats.mannwhitneyu(sample1, sample2, alternative="two-sided")
+            stat = float(stat)
+            p_value = float(p_value)
         except Exception as e:
-            logger.error(f"Mann-Whitney test failed: {e}")
-            return StatisticalTest(
-                test_name=f"mann_whitney_{metric_name}",
-                statistic=0.0,
-                p_value=1.0,
-                is_significant=False,
-                confidence_level=1 - self.significance_level,
-                interpretation=f"Test failed: {str(e)}",
-            )
+            logger.error("Mann-Whitney test failed: %s", str(e))
+            stat = 0.0
+            p_value = 1.0
+        is_significant = bool(p_value < self.significance_level)
+        interpretation = f"Mann-Whitney U test for {metric_name}: "
+        if is_significant:
+            interpretation += f"Significant difference detected (p={p_value:.4f})"
+        else:
+            interpretation += f"No significant difference (p={p_value:.4f})"
+        return StatisticalTest(
+            test_name=f"mann_whitney_{metric_name}",
+            statistic=stat,
+            p_value=p_value,
+            is_significant=is_significant,
+            confidence_level=1 - self.significance_level,
+            interpretation=interpretation,
+        )
 
     def _calculate_win_rate_difference_ci(
-        self, x1: int, n1: int, x2: int, n2: int, confidence_level: float = None
+        self, x1: int, n1: int, x2: int, n2: int, confidence_level: Optional[float] = None
     ) -> Tuple[float, float]:
         """Calculate confidence interval for win rate difference."""
         if confidence_level is None:
@@ -393,13 +348,13 @@ class AdvancedAnalytics:
 
         # Critical value
         alpha = 1 - confidence_level
-        z_critical = scipy_stats.norm.ppf(1 - alpha / 2)
+        z_critical = float(scipy_stats.norm.ppf(1 - alpha / 2))
 
         # Confidence interval
         diff = p2 - p1
         margin_error = z_critical * se_diff
 
-        return (diff - margin_error, diff + margin_error)
+        return (float(diff - margin_error), float(diff + margin_error))
 
     def _interpret_z_test(
         self, z_stat: float, p_value: float, is_significant: bool
@@ -474,6 +429,11 @@ class AdvancedAnalytics:
                 "generated_at": datetime.now().isoformat(),
                 "analysis_type": "comprehensive_evaluation_analysis",
                 "keisei_version": "1.0.0",
+                "analytics_config": {
+                    "significance_level": self.significance_level,
+                    "min_practical_difference": self.min_practical_difference,
+                    "trend_window_days": self.trend_window_days,
+                },
             },
             "current_performance": {
                 "total_games": current_results.summary_stats.total_games,
@@ -544,12 +504,11 @@ class AdvancedAnalytics:
         # Save report if output file specified
         if output_file:
             try:
-                output_file.parent.mkdir(parents=True, exist_ok=True)
-                with open(output_file, "w") as f:
-                    json.dump(report, f, indent=2)
-                logger.info(f"Analysis report saved to {output_file}")
-            except Exception as e:
-                logger.error(f"Failed to save report: {e}")
+                with open(output_file, "w", encoding="utf-8") as f:
+                    json.dump(report, f, indent=4)
+                logger.info("Analysis report saved to %s", output_file)
+            except (OSError, IOError) as e:
+                logger.error("Failed to save report: %s", str(e))
 
         return report
 

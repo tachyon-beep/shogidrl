@@ -69,7 +69,7 @@ class OpponentInfo:
             "checkpoint_path": self.checkpoint_path,
             "difficulty_level": self.difficulty_level,
             "version": self.version,
-            "metadata": self.metadata,
+            "metadata": self.metadata.copy(),
         }
 
     @classmethod

@@ -340,7 +340,11 @@ class EvaluatorFactory:
         Returns:
             Configured evaluator instance
         """
-        strategy_name = config.strategy.value
+        # Handle both enum and string strategy types
+        if hasattr(config.strategy, 'value'):
+            strategy_name = config.strategy.value
+        else:
+            strategy_name = str(config.strategy)
 
         if strategy_name not in cls._evaluators:
             raise ValueError(f"No evaluator registered for strategy: {strategy_name}")

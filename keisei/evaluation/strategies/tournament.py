@@ -113,11 +113,11 @@ class TournamentEvaluator(BaseEvaluator):
         device_str = "cpu"
         input_channels = 46
 
-        # Load evaluation entities - use the _game_ aliased methods for test compatibility
-        agent = self._game_load_evaluation_entity(
+        # Load evaluation entities
+        agent = self._load_evaluation_entity(
             agent_info, device_str, input_channels
         )
-        opponent = self._game_load_evaluation_entity(
+        opponent = self._load_evaluation_entity(
             opponent_info, device_str, input_channels
         )
 
@@ -138,9 +138,9 @@ class TournamentEvaluator(BaseEvaluator):
         sente_player = agent if agent_is_sente else opponent
         gote_player = opponent if agent_is_sente else agent
 
-        # Execute game loop - use the _game_ aliased method for test compatibility
-        moves_count_or_outcome = await self._game_run_game_loop(
-            sente_player, gote_player, context
+        # Execute game loop
+        moves_count_or_outcome = await self._run_tournament_game_loop(
+            game, sente_player, gote_player
         )
 
         # Handle both integer moves_count and dictionary outcome from mock
@@ -272,18 +272,22 @@ class TournamentEvaluator(BaseEvaluator):
 
         # Calculate number of games per opponent
         if self.config.num_games_per_opponent is not None:
-            num_games_per_opponent = self.config.num_games_per_opponent
+            # Use fixed number of games per opponent
+            games_per_opponent = [self.config.num_games_per_opponent] * len(opponents)
         else:
-            # Dynamic calculation based on total games
-            num_games_per_opponent = max(1, self.config.num_games // len(opponents))
+            # Dynamic calculation based on total games - distribute evenly
+            base_games = self.config.num_games // len(opponents)
+            extra_games = self.config.num_games % len(opponents)
+            games_per_opponent = [base_games + (1 if i < extra_games else 0) 
+                                for i in range(len(opponents))]
 
         # Play games against each opponent
         all_games = []
         all_errors = []
 
-        for opponent in opponents:
+        for i, opponent in enumerate(opponents):
             games, errors = await self._play_games_against_opponent(
-                agent_info, opponent, num_games_per_opponent, context
+                agent_info, opponent, games_per_opponent[i], context
             )
             all_games.extend(games)
             all_errors.extend(errors)
@@ -584,10 +588,10 @@ class TournamentEvaluator(BaseEvaluator):
 
                 # Alternate who plays sente by setting metadata
                 if (game_num % 2) == 0:
-                    # Agent plays sente
+                    # Agent plays sente (even-numbered games: 0, 2, 4...)
                     opponent_dict["metadata"]["agent_plays_sente_in_eval_step"] = True
                 else:
-                    # Agent plays gote
+                    # Agent plays gote (odd-numbered games: 1, 3, 5...)
                     opponent_dict["metadata"]["agent_plays_sente_in_eval_step"] = False
 
                 current_opponent_info = OpponentInfo.from_dict(opponent_dict)
@@ -604,103 +608,6 @@ class TournamentEvaluator(BaseEvaluator):
                 errors.append(error_msg)
 
         return results, errors
-
-    # Aliases for methods that tests expect with _game_ prefix
-    def _game_load_evaluation_entity(self, *args, **kwargs):
-        """Alias for _load_evaluation_entity for test compatibility."""
-        return self._load_evaluation_entity(*args, **kwargs)
-
-    async def _game_run_game_loop(self, sente_player, gote_player, context):
-        """Alias for game loop compatible with test expectations."""
-        # Create a game instance
-        game = ShogiGame()
-        # Run the game loop
-        return await self._run_tournament_game_loop(game, sente_player, gote_player)
-
-    async def _game_get_player_action(self, *args, **kwargs):
-        """Alias for _get_player_action for test compatibility."""
-        return await self._get_player_action(*args, **kwargs)
-
-    async def _game_validate_and_make_move(self, *args, **kwargs):
-        """Alias for _validate_and_make_move for test compatibility."""
-        return await self._validate_and_make_move(*args, **kwargs)
-
-    async def _game_process_one_turn(
-        self,
-        game,
-        current_player_entity,
-        evaluation_context,
-        pom=None,
-        agent_plays_sente=True,
-    ) -> bool:
-        """Process one turn in the game. Returns True if should continue, False otherwise."""
-        try:
-            # Check if there are legal moves
-            legal_moves = game.get_legal_moves()
-            if not legal_moves:
-                # Handle no legal moves scenario
-                await self._handle_no_legal_moves(game)
-                return False
-
-            # Get player action
-            try:
-                # Get legal mask for the action
-                if pom is None:
-                    pom = self.policy_mapper
-                legal_mask = pom.get_legal_mask(
-                    legal_moves, current_player_entity.device
-                )
-                action = await self._game_get_player_action(
-                    current_player_entity, game, legal_mask
-                )
-            except Exception as e:
-                logger.error(f"Error getting player action: {e}")
-                # Set termination reason for action selection error
-                game.game_over = True
-                current_player = game.current_player.value
-                game.winner = Color(1 - current_player)  # Other player wins
-                game.termination_reason = (
-                    f"{TERMINATION_REASON_ACTION_SELECTION_ERROR}: {str(e)}"
-                )
-                return False
-
-            # Validate and make move
-            success = await self._game_validate_and_make_move(
-                game,
-                action,
-                legal_moves,
-                game.current_player.value,
-                type(current_player_entity).__name__,
-            )
-
-            if not success:
-                return False
-
-            return True
-
-        except Exception as e:
-            logger.error(f"Error in _game_process_one_turn: {e}")
-            return False
-
-    async def _handle_no_legal_moves(self, game):
-        """Handle the case when there are no legal moves."""
-        # Check if the game already has a winner set
-        if game.winner is None:
-            # Don't set a winner - let the termination reason indicate the state
-            game.termination_reason = TERMINATION_REASON_NO_LEGAL_MOVES_UNDETERMINED
-            logger.warning(
-                f"No legal moves for player {game.current_player}, outcome undetermined"
-            )
-        else:
-            # Game already has a winner, preserve existing termination reason if it exists
-            if not game.termination_reason:
-                game.termination_reason = "No legal moves available"
-            logger.warning(
-                f"No legal moves for player {game.current_player}, winner already set to {game.winner}"
-            )
-
-        # Set game_over if the mock expects it
-        game.game_over = True
 
 
 # Register this evaluator with the factory

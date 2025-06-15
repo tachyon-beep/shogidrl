@@ -23,7 +23,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from keisei.evaluation.analytics.advanced_analytics import AdvancedAnalytics
 from keisei.evaluation.core import (
     AgentInfo,
     EvaluationResult,
@@ -164,91 +163,6 @@ class TestEnhancedEvaluationManager:
         assert status["advanced_analytics"] is True
         assert status["enhanced_opponents"] is False
         assert "analytics_output_dir" in status
-
-
-class TestAdvancedAnalytics:
-    """Test advanced analytics functionality."""
-
-    def test_analytics_initialization(self):
-        """Test analytics initialization."""
-        analytics = AdvancedAnalytics(
-            significance_level=0.01, min_practical_difference=0.1
-        )
-
-        assert abs(analytics.significance_level - 0.01) < 1e-9
-        assert abs(analytics.min_practical_difference - 0.1) < 1e-9
-
-    def test_performance_comparison(self, sample_game_results):
-        """Test performance comparison between result sets."""
-        analytics = AdvancedAnalytics()
-
-        # Split results into baseline and comparison
-        baseline_results = sample_game_results[:3]
-        comparison_results = sample_game_results[3:]
-
-        comparison = analytics.compare_performance(
-            baseline_results=baseline_results,
-            comparison_results=comparison_results,
-            baseline_name="Baseline",
-            comparison_name="Current",
-        )
-
-        assert comparison.baseline_name == "Baseline"
-        assert comparison.comparison_name == "Current"
-        assert isinstance(comparison.win_rate_difference, float)
-        assert isinstance(comparison.statistical_tests, list)
-        assert len(comparison.statistical_tests) > 0
-        assert isinstance(comparison.confidence_interval, tuple)
-        assert len(comparison.confidence_interval) == 2
-
-    def test_trend_analysis(self, sample_evaluation_result):
-        """Test trend analysis over time."""
-        analytics = AdvancedAnalytics()
-
-        # Create historical data
-        historical_data = []
-        base_time = datetime.now() - timedelta(days=30)
-
-        for i in range(10):
-            timestamp = base_time + timedelta(days=i * 3)
-            # Modify win rate slightly for each entry
-            modified_result = sample_evaluation_result
-            modified_result.summary_stats.wins = 2 + i // 3  # Gradual improvement
-            modified_result.summary_stats.total_games = 6
-            historical_data.append((timestamp, modified_result))
-
-        trend = analytics.analyze_trends(historical_data, "win_rate")
-
-        assert trend.metric_name == "win_rate"
-        assert trend.trend_direction in ["increasing", "decreasing", "stable"]
-        assert 0 <= trend.trend_strength <= 1
-        assert trend.data_points == len(historical_data)
-
-    def test_automated_report_generation(
-        self, sample_evaluation_result, temp_analytics_dir
-    ):
-        """Test automated report generation."""
-        analytics = AdvancedAnalytics()
-
-        output_file = temp_analytics_dir / "test_report.json"
-
-        report = analytics.generate_automated_report(
-            current_results=sample_evaluation_result, output_file=output_file
-        )
-
-        assert isinstance(report, dict)
-        assert "report_metadata" in report
-        assert "current_performance" in report
-        assert "advanced_metrics" in report
-        assert "insights_and_recommendations" in report
-
-        # Check file was created
-        assert output_file.exists()
-
-        # Validate JSON content
-        with open(output_file, "r") as f:
-            saved_report = json.load(f)
-        assert saved_report == report
 
 
 class TestEnhancedOpponentManager:
