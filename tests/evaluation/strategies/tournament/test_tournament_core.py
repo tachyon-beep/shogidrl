@@ -3,8 +3,10 @@
 This module contains tests for the basic tournament evaluator setup,
 configuration validation, and core tournament logic.
 """
+
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
 
 from keisei.evaluation.core import BaseEvaluator, SummaryStats
 from keisei.evaluation.strategies.tournament import TournamentEvaluator
@@ -134,14 +136,13 @@ class TestTournamentCore:
         game3.opponent_name = "Opponent2"
 
         games = [game1, game2, game3]
-        
-        # Create mock opponents
-        opponents = [
-            MagicMock(name="Opponent1"),
-            MagicMock(name="Opponent2")
-        ]
 
-        standings = evaluator._calculate_tournament_standings(games, opponents, mock_agent_info)
+        # Create mock opponents
+        opponents = [MagicMock(name="Opponent1"), MagicMock(name="Opponent2")]
+
+        standings = evaluator._calculate_tournament_standings(
+            games, opponents, mock_agent_info
+        )
 
         # Verify standings structure
         assert "overall_tournament_stats" in standings

@@ -211,7 +211,7 @@ class TestAdvancedAnalyticsIntegration:
         # Test multiple metrics in one analysis
         metrics = ["win_rate", "avg_game_length"]
         trends = {}
-        
+
         for metric in metrics:
             trend = analytics.analyze_trends(historical_evaluation_data, metric)
             trends[metric] = trend
@@ -230,17 +230,19 @@ class TestAdvancedAnalyticsIntegration:
         for session_id in range(3):
             games = []
             win_rate = 0.3 + (session_id * 0.2)  # Improving sessions
-            
+
             for i in range(20):
                 game = Mock(spec=GameResult)
                 game.is_agent_win = i < (win_rate * 20)
                 game.moves_count = 50 + session_id * 5
-                game.duration_seconds = 30.0 + session_id * 2 # Changed from game_length_seconds
+                game.duration_seconds = (
+                    30.0 + session_id * 2
+                )  # Changed from game_length_seconds
                 # Add other potentially missing attributes for SummaryStats
                 game.is_opponent_win = i >= (win_rate * 20)
                 game.is_draw = False
                 games.append(game)
-    
+
             summary_stats = SummaryStats.from_games(games)
             result = EvaluationResult(
                 context=Mock(),
@@ -263,8 +265,11 @@ class TestAdvancedAnalyticsIntegration:
         assert comparison.win_rate_difference > 0  # Should show improvement
 
     def test_comprehensive_report_with_all_features(
-        self, analytics, sample_evaluation_result, baseline_evaluation_result,
-        historical_evaluation_data
+        self,
+        analytics,
+        sample_evaluation_result,
+        baseline_evaluation_result,
+        historical_evaluation_data,
     ):
         """Test generating a comprehensive report with all analytics features."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -284,7 +289,7 @@ class TestAdvancedAnalyticsIntegration:
                 "advanced_metrics",
                 "performance_comparison",
                 "trend_analysis",
-                "insights_and_recommendations"
+                "insights_and_recommendations",
             ]
 
             for section in expected_sections:
@@ -306,19 +311,19 @@ class TestAdvancedAnalyticsIntegration:
 
         for day in range(365):  # One year of data
             timestamp = base_time + timedelta(days=day)
-            
+
             # Create minimal games to reduce memory overhead
             games = []
             for i in range(5):  # Smaller games per day
                 game = Mock(spec=GameResult)
                 game.is_agent_win = i < 3  # 60% win rate
                 game.moves_count = 50
-                game.duration_seconds = 30.0 # Changed from game_length_seconds
+                game.duration_seconds = 30.0  # Changed from game_length_seconds
                 # Add other potentially missing attributes for SummaryStats
                 game.is_opponent_win = i >= 3
                 game.is_draw = False
                 games.append(game)
-    
+
             summary_stats = SummaryStats.from_games(games)
             result = EvaluationResult(
                 context=Mock(),
@@ -347,18 +352,18 @@ class TestAdvancedAnalyticsIntegration:
 
         for i, scenario in enumerate(scenarios):
             timestamp = base_time + timedelta(days=i * 10)
-            
+
             games = []
             for j in range(scenario["games"]):
                 game = Mock(spec=GameResult)
                 game.is_agent_win = j % 2 == 0  # 50% win rate
                 game.moves_count = 50
-                game.duration_seconds = 30.0 # Changed from game_length_seconds
+                game.duration_seconds = 30.0  # Changed from game_length_seconds
                 # Add other potentially missing attributes for SummaryStats
                 game.is_opponent_win = j % 2 != 0
                 game.is_draw = False
                 games.append(game)
-    
+
             if games:  # Only create result if we have games
                 summary_stats = SummaryStats.from_games(games)
                 result = EvaluationResult(

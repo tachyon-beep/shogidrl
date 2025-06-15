@@ -3,18 +3,19 @@
 import gc
 import logging
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 import torch
 
 from keisei.evaluation.core import EvaluationStrategy
 from keisei.evaluation.core_manager import EvaluationManager
+
 from .conftest import (
-    PerformanceMonitor,
     ConfigurationFactory,
-    TestAgentFactory,
     MockGameResultFactory,
+    PerformanceMonitor,
+    TestAgentFactory,
 )
 
 # Performance baselines
@@ -68,7 +69,9 @@ class TestEvaluationThroughput:
             )
 
             # Execute evaluation
-            assert test_agent.checkpoint_path is not None, "Test agent must have a checkpoint path"
+            assert (
+                test_agent.checkpoint_path is not None
+            ), "Test agent must have a checkpoint path"
             result = manager.evaluate_checkpoint(test_agent.checkpoint_path)
 
         # Stop monitoring and validate
@@ -157,7 +160,9 @@ class TestMemoryStability:
                     )
                 )
 
-                assert test_agent.checkpoint_path is not None, "Test agent must have a checkpoint path"
+                assert (
+                    test_agent.checkpoint_path is not None
+                ), "Test agent must have a checkpoint path"
                 result = manager.evaluate_checkpoint(test_agent.checkpoint_path)
 
             cycle_end_memory = performance_monitor.get_current_memory_mb()
@@ -183,7 +188,9 @@ class TestMemoryStability:
             f"Memory stability test: avg={avg_growth:.1f}MB, max={max_growth:.1f}MB"
         )
 
-    def test_memory_cleanup_after_evaluation(self, config, test_agent, performance_monitor):
+    def test_memory_cleanup_after_evaluation(
+        self, config, test_agent, performance_monitor
+    ):
         """Test that memory is properly cleaned up after evaluation."""
         manager = EvaluationManager(config, "memory_cleanup_test")
         manager.setup(
@@ -204,7 +211,9 @@ class TestMemoryStability:
                 MockGameResultFactory.create_successful_game_result()
             )
 
-            assert test_agent.checkpoint_path is not None, "Test agent must have a checkpoint path"
+            assert (
+                test_agent.checkpoint_path is not None
+            ), "Test agent must have a checkpoint path"
             result = manager.evaluate_checkpoint(test_agent.checkpoint_path)
 
         # Clean up explicitly
@@ -263,7 +272,9 @@ class TestInMemoryPerformance:
 
             mock_evaluate.side_effect = slow_evaluate
 
-            assert test_agent.checkpoint_path is not None, "Test agent must have a checkpoint path"
+            assert (
+                test_agent.checkpoint_path is not None
+            ), "Test agent must have a checkpoint path"
             result_file_based = manager.evaluate_checkpoint(test_agent.checkpoint_path)
 
         file_based_metrics = performance_monitor.stop_monitoring()
@@ -278,7 +289,9 @@ class TestInMemoryPerformance:
                 MockGameResultFactory.create_successful_game_result()
             )
 
-            assert test_agent.checkpoint_path is not None, "Test agent must have a checkpoint path"
+            assert (
+                test_agent.checkpoint_path is not None
+            ), "Test agent must have a checkpoint path"
             result_in_memory = manager.evaluate_checkpoint(test_agent.checkpoint_path)
 
         in_memory_metrics = performance_monitor.stop_monitoring()
@@ -300,8 +313,8 @@ class TestCachePerformance:
 
     def test_cache_performance_and_efficiency(self):
         """Test cache hit performance and LRU efficiency."""
-        from collections import OrderedDict
         import time
+        from collections import OrderedDict
 
         # Simple LRU cache simulation for testing
         cache_size = 100
@@ -363,8 +376,12 @@ class TestCachePerformance:
         # Note: At microsecond level, hits aren't necessarily faster than misses
         # due to CPU caching and memory layout factors
         max_acceptable_time = 0.1  # 0.1ms
-        assert avg_hit_time < max_acceptable_time, f"Cache hit time {avg_hit_time:.3f}ms too slow"
-        assert avg_miss_time < max_acceptable_time, f"Cache miss time {avg_miss_time:.3f}ms too slow"
+        assert (
+            avg_hit_time < max_acceptable_time
+        ), f"Cache hit time {avg_hit_time:.3f}ms too slow"
+        assert (
+            avg_miss_time < max_acceptable_time
+        ), f"Cache miss time {avg_miss_time:.3f}ms too slow"
 
         logger.info(
             f"Cache performance test: hit={avg_hit_time:.3f}ms, miss={avg_miss_time:.3f}ms"

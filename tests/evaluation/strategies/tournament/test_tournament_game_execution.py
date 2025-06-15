@@ -3,12 +3,14 @@
 This module contains tests for game execution mechanics including player action selection,
 move validation, turn processing, and game state management.
 """
+
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
 
 from keisei.evaluation.strategies.tournament import TournamentEvaluator
-from keisei.shogi.shogi_game import ShogiGame
 from keisei.shogi.shogi_core_definitions import Color
+from keisei.shogi.shogi_game import ShogiGame
 
 
 class TestPlayerActions:
@@ -69,7 +71,11 @@ class TestMoveValidation:
         player_entity_type_name = "test_agent"
 
         result = await evaluator._validate_and_make_move(
-            mock_game, mock_move, legal_moves, current_player_color_value, player_entity_type_name
+            mock_game,
+            mock_move,
+            legal_moves,
+            current_player_color_value,
+            player_entity_type_name,
         )
 
         assert result is True
@@ -86,7 +92,11 @@ class TestMoveValidation:
         player_entity_type_name = "test_agent"
 
         result = await evaluator._validate_and_make_move(
-            mock_game, mock_move, legal_moves, current_player_color_value, player_entity_type_name
+            mock_game,
+            mock_move,
+            legal_moves,
+            current_player_color_value,
+            player_entity_type_name,
         )
 
         assert result is False

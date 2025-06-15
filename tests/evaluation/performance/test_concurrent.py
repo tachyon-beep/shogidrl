@@ -2,17 +2,18 @@
 
 import logging
 import time
-from unittest.mock import patch, MagicMock
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from unittest.mock import patch
 
 import pytest
 
 from keisei.evaluation.core_manager import EvaluationManager
+
 from .conftest import (
-    PerformanceMonitor,
     ConfigurationFactory,
-    TestAgentFactory,
     MockGameResultFactory,
+    PerformanceMonitor,
+    TestAgentFactory,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,9 +56,7 @@ class TestConcurrentEvaluation:
     ):
         """Test concurrent evaluation performance vs sequential."""
         # Test sequential evaluation
-        sequential_manager = EvaluationManager(
-            sequential_config, "sequential_test"
-        )
+        sequential_manager = EvaluationManager(sequential_config, "sequential_test")
         sequential_manager.setup(
             device="cpu",
             policy_mapper=None,
@@ -70,7 +69,7 @@ class TestConcurrentEvaluation:
             "keisei.evaluation.strategies.single_opponent.SingleOpponentEvaluator.evaluate_step"
         ) as mock_evaluate:
             # Simulate some processing time
-            def sequential_evaluate(*args, **kwargs):
+            def sequential_evaluate(*_args, **_kwargs):
                 time.sleep(0.005)  # 5ms per game
                 return MockGameResultFactory.create_successful_game_result()
 
@@ -96,13 +95,15 @@ class TestConcurrentEvaluation:
             "keisei.evaluation.strategies.single_opponent.SingleOpponentEvaluator.evaluate_step"
         ) as mock_evaluate:
             # Simulate concurrent processing
-            def parallel_evaluate(*args, **kwargs):
+            def parallel_evaluate(*_args, **_kwargs):
                 time.sleep(0.005)  # Same 5ms per game
                 return MockGameResultFactory.create_successful_game_result()
 
             mock_evaluate.side_effect = parallel_evaluate
 
-            parallel_result = parallel_manager.evaluate_checkpoint(test_agent_parallel.checkpoint_path)
+            parallel_result = parallel_manager.evaluate_checkpoint(
+                test_agent_parallel.checkpoint_path
+            )
 
         parallel_metrics = performance_monitor.stop_monitoring()
 
@@ -111,11 +112,15 @@ class TestConcurrentEvaluation:
         assert parallel_result.summary_stats.total_games == 20
 
         # Calculate performance improvement
-        speedup = sequential_metrics["execution_time"] / parallel_metrics["execution_time"]
+        speedup = (
+            sequential_metrics["execution_time"] / parallel_metrics["execution_time"]
+        )
 
         # Parallel should provide some speedup (though overhead may limit it in test environments)
         # Note: CI environments often don't show parallel benefits due to resource constraints
-        assert speedup >= 0.8, f"Parallel performance {speedup:.1f}x significantly degraded"
+        assert (
+            speedup >= 0.8
+        ), f"Parallel performance {speedup:.1f}x significantly degraded"
 
         # Memory overhead should be reasonable
         memory_overhead = (
@@ -126,8 +131,9 @@ class TestConcurrentEvaluation:
         ), f"Parallel memory overhead {memory_overhead:.1f}MB too high"
 
         logger.info(
-            f"Concurrent evaluation test: {speedup:.2f}x speedup, "
-            f"memory overhead: {memory_overhead:.1f}MB"
+            "Concurrent evaluation test: %.2fx speedup, memory overhead: %.1fMB",
+            speedup,
+            memory_overhead,
         )
 
     def test_parallel_executor_scalability(self, performance_monitor):
@@ -163,9 +169,15 @@ class TestConcurrentEvaluation:
         speedup = single_thread_time / best_parallel_time
         assert speedup >= 1.5, f"Parallel speedup {speedup:.1f}x insufficient"
 
+        # Find the worker count that achieved the best time
+        best_worker_count = min(
+            execution_times.keys(), key=lambda w: execution_times[w]
+        )
+
         logger.info(
-            f"Parallel scalability test: best speedup {speedup:.2f}x "
-            f"with {min(execution_times, key=execution_times.get)} workers"
+            "Parallel scalability test: best speedup %.2fx with %d workers",
+            speedup,
+            best_worker_count,
         )
 
     def test_resource_contention_handling(self, parallel_config, performance_monitor):
@@ -191,13 +203,15 @@ class TestConcurrentEvaluation:
                 "keisei.evaluation.strategies.single_opponent.SingleOpponentEvaluator.evaluate_step"
             ) as mock_evaluate:
 
-                def contention_evaluate(*args, **kwargs):
-                    time.sleep(contention_delay)
+                def contention_evaluate(*_args, delay=contention_delay, **_kwargs):
+                    time.sleep(delay)
                     return MockGameResultFactory.create_successful_game_result()
 
                 mock_evaluate.side_effect = contention_evaluate
 
-                result = manager.evaluate_checkpoint(test_agent.checkpoint_path)
+                # Ensure we have a valid checkpoint path
+                checkpoint_path = test_agent.checkpoint_path or "dummy_checkpoint.pth"
+                result = manager.evaluate_checkpoint(checkpoint_path)
 
             metrics = performance_monitor.stop_monitoring()
             execution_times.append(metrics["execution_time"])
@@ -206,8 +220,14 @@ class TestConcurrentEvaluation:
 
         # Execution time should scale roughly linearly with contention
         # (though parallel overhead may cause some deviation)
-        time_ratios = [execution_times[i] / execution_times[0] for i in range(1, len(execution_times))]
-        delay_ratios = [contention_levels[i] / contention_levels[0] for i in range(1, len(contention_levels))]
+        time_ratios = [
+            execution_times[i] / execution_times[0]
+            for i in range(1, len(execution_times))
+        ]
+        delay_ratios = [
+            contention_levels[i] / contention_levels[0]
+            for i in range(1, len(contention_levels))
+        ]
 
         # Check that time scaling is reasonable (within 2x of expected)
         for time_ratio, delay_ratio in zip(time_ratios, delay_ratios):
@@ -216,6 +236,7 @@ class TestConcurrentEvaluation:
             ), f"Time scaling {time_ratio:.1f} vs delay ratio {delay_ratio:.1f} too high"
 
         logger.info(
-            f"Resource contention test: time ratios {time_ratios}, "
-            f"delay ratios {delay_ratios}"
+            "Resource contention test: time ratios %s, delay ratios %s",
+            time_ratios,
+            delay_ratios,
         )

@@ -15,7 +15,7 @@ import asyncio
 import tempfile
 import threading
 from pathlib import Path
-from typing import Generator, Any
+from typing import Any, Generator
 from unittest.mock import MagicMock, Mock
 
 import pytest
@@ -216,6 +216,7 @@ def eval_logger_setup(tmp_path):
 
 # Phase 1 Foundation Fixes: Test Isolation and Async Testing Standards
 
+
 @pytest.fixture
 def isolated_temp_dir() -> Generator[Path, None, None]:
     """Provides isolated temporary directory for each test."""
@@ -229,12 +230,12 @@ def test_isolation():
     # Clear any existing PyTorch caches
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
-    
+
     # Reset any global state
     torch.manual_seed(42)
-    
+
     yield
-    
+
     # Cleanup after test
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -245,13 +246,14 @@ def thread_isolation():
     """Ensures thread safety and isolation for concurrent tests."""
     # Store original thread count
     original_thread_count = threading.active_count()
-    
+
     yield
-    
+
     # Verify no threads were leaked
     final_thread_count = threading.active_count()
-    assert final_thread_count <= original_thread_count + 1, \
-        f"Thread leak detected: {final_thread_count} vs {original_thread_count}"
+    assert (
+        final_thread_count <= original_thread_count + 1
+    ), f"Thread leak detected: {final_thread_count} vs {original_thread_count}"
 
 
 @pytest.fixture
@@ -260,7 +262,7 @@ def async_test_timeout():
     return 10.0  # 10 seconds timeout
 
 
-@pytest.fixture 
+@pytest.fixture
 def event_loop():
     """Standard event loop fixture for async tests."""
     loop = asyncio.new_event_loop()
@@ -271,10 +273,12 @@ def event_loop():
 @pytest.fixture
 def mock_agent_factory():
     """Factory for creating consistent mock agents across tests."""
+
     def create_mock_agent(name: str = "MockAgent", device: str = "cpu"):
         agent = MockPPOAgent(name=name)
         agent.device = device
         return agent
+
     return create_mock_agent
 
 
@@ -282,44 +286,48 @@ def mock_agent_factory():
 def performance_monitor():
     """Monitor test performance to ensure they meet Phase 1 requirements."""
     import time
+
     start_time = time.perf_counter()
-    
+
     yield
-    
+
     execution_time = time.perf_counter() - start_time
     # Phase 1 requirement: individual tests should complete within 5 seconds
-    assert execution_time < 5.0, \
-        f"Test took {execution_time:.3f}s, should be under 5s per Phase 1 requirements"
+    assert (
+        execution_time < 5.0
+    ), f"Test took {execution_time:.3f}s, should be under 5s per Phase 1 requirements"
 
 
 @pytest.fixture
 def memory_monitor():
     """Monitor memory usage to detect leaks during testing."""
-    import psutil
     import gc
-    
+
+    import psutil
+
     # Force garbage collection before monitoring
     gc.collect()
-    
+
     process = psutil.Process()
     initial_memory = process.memory_info().rss / 1024 / 1024  # MB
-    
+
     yield
-    
+
     # Force garbage collection after test
     gc.collect()
-    
+
     final_memory = process.memory_info().rss / 1024 / 1024  # MB
     memory_increase = final_memory - initial_memory
-    
+
     # Phase 1 requirement: individual tests should not leak significant memory
-    assert memory_increase < 100, \
-        f"Memory increased by {memory_increase:.1f} MB, possible memory leak"
+    assert (
+        memory_increase < 100
+    ), f"Memory increased by {memory_increase:.1f} MB, possible memory leak"
 
 
 class AsyncTestHelper:
     """Helper class for standardized async testing patterns."""
-    
+
     @staticmethod
     async def run_with_timeout(coro, timeout: float = 5.0):
         """Run a coroutine with timeout."""
@@ -327,16 +335,16 @@ class AsyncTestHelper:
             return await asyncio.wait_for(coro, timeout=timeout)
         except asyncio.TimeoutError:
             pytest.fail(f"Async operation timed out after {timeout}s")
-    
+
     @staticmethod
     async def simulate_concurrent_execution(tasks, max_concurrent: int = 4):
         """Simulate concurrent execution with limited concurrency."""
         semaphore = asyncio.Semaphore(max_concurrent)
-        
+
         async def limited_task(task):
             async with semaphore:
                 return await task
-        
+
         return await asyncio.gather(*[limited_task(task) for task in tasks])
 
 
@@ -348,18 +356,20 @@ def async_helper():
 
 # Error injection utilities for fault tolerance testing
 
+
 class ErrorInjector:
     """Utility for injecting controlled errors in tests."""
-    
+
     def __init__(self, failure_rate: float = 0.3, seed: int = 42):
         import random
+
         self.failure_rate = failure_rate
         self.random = random.Random(seed)
-    
+
     def should_fail(self) -> bool:
         """Determine if operation should fail based on failure rate."""
         return self.random.random() < self.failure_rate
-    
+
     def get_random_error(self):
         """Get a random error type for testing."""
         error_types = [TimeoutError, RuntimeError, ValueError]
@@ -374,14 +384,16 @@ def error_injector():
 
 # Cleanup utilities to ensure test isolation
 
+
 @pytest.fixture(autouse=True)
 def cleanup_test_environment():
     """Automatically clean up test environment after each test."""
     yield
-    
+
     # Clean up any remaining temporary files
     import tempfile
     import os
+
     temp_dir = tempfile.gettempdir()
     for filename in os.listdir(temp_dir):
         if filename.startswith("pytest_"):

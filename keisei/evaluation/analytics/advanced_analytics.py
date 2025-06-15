@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
-from scipy import stats as scipy_stats
+from scipy import stats as scipy_stats  # type: ignore[import-untyped]
 
 from ..core import EvaluationResult, GameResult
 from .performance_analyzer import PerformanceAnalyzer
@@ -81,13 +81,13 @@ class AdvancedAnalytics:
         trend_window_days: int = 30,
     ):
         # Parameter validation
-        if not (0 <= significance_level <= 1):
+        if not 0 <= significance_level <= 1:
             raise ValueError("significance_level must be between 0 and 1")
         if min_practical_difference < 0:
             raise ValueError("min_practical_difference must be non-negative")
         if trend_window_days <= 0:
             raise ValueError("trend_window_days must be positive")
-            
+
         self.significance_level = significance_level
         self.min_practical_difference = min_practical_difference
         self.trend_window_days = trend_window_days
@@ -206,10 +206,10 @@ class AdvancedAnalytics:
 
         # Linear regression using scipy
         linreg_result = scipy_stats.linregress(days, values)
-        slope = float(linreg_result.slope)
-        intercept = float(linreg_result.intercept)
-        r_value = float(linreg_result.rvalue)
-        r_squared = float(r_value ** 2)
+        slope = float(linreg_result.slope)  # type: ignore[attr-defined]
+        intercept = float(linreg_result.intercept)  # type: ignore[attr-defined]
+        r_value = float(linreg_result.rvalue)  # type: ignore[attr-defined]
+        r_squared = float(r_value**2)
 
         # Determine trend direction and strength
         if abs(slope) < 1e-6:
@@ -293,7 +293,10 @@ class AdvancedAnalytics:
         )
 
     def _mann_whitney_test(
-        self, sample1: Sequence[Union[int, float]], sample2: Sequence[Union[int, float]], metric_name: str
+        self,
+        sample1: Sequence[Union[int, float]],
+        sample2: Sequence[Union[int, float]],
+        metric_name: str,
     ) -> StatisticalTest:
         """Perform Mann-Whitney U test."""
         if len(sample1) < 3 or len(sample2) < 3:
@@ -306,10 +309,12 @@ class AdvancedAnalytics:
                 interpretation="Insufficient data for Mann-Whitney test (too few samples)",
             )
         try:
-            stat, p_value = scipy_stats.mannwhitneyu(sample1, sample2, alternative="two-sided")
+            stat, p_value = scipy_stats.mannwhitneyu(
+                sample1, sample2, alternative="two-sided"
+            )
             stat = float(stat)
             p_value = float(p_value)
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             logger.error("Mann-Whitney test failed: %s", str(e))
             stat = 0.0
             p_value = 1.0
@@ -329,7 +334,12 @@ class AdvancedAnalytics:
         )
 
     def _calculate_win_rate_difference_ci(
-        self, x1: int, n1: int, x2: int, n2: int, confidence_level: Optional[float] = None
+        self,
+        x1: int,
+        n1: int,
+        x2: int,
+        n2: int,
+        confidence_level: Optional[float] = None,
     ) -> Tuple[float, float]:
         """Calculate confidence interval for win rate difference."""
         if confidence_level is None:
@@ -499,7 +509,7 @@ class AdvancedAnalytics:
 
         # Generate insights and recommendations
         insights = self._generate_automated_insights(report)
-        report["insights_and_recommendations"] = insights
+        report["insights_and_recommendations"] = insights  # type: ignore[assignment]
 
         # Save report if output file specified
         if output_file:

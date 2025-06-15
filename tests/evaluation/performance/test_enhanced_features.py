@@ -2,17 +2,18 @@
 
 import logging
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from keisei.evaluation.core_manager import EvaluationManager
 from keisei.evaluation.core import EvaluationStrategy
+from keisei.evaluation.core_manager import EvaluationManager
+
 from .conftest import (
-    PerformanceMonitor,
     ConfigurationFactory,
-    TestAgentFactory,
     MockGameResultFactory,
+    PerformanceMonitor,
+    TestAgentFactory,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,9 +56,7 @@ class TestEnhancedFeaturesPerformance:
     ):
         """Test performance impact of enhanced evaluation features."""
         # Test baseline evaluation
-        baseline_manager = EvaluationManager(
-            baseline_config, "baseline_features_test"
-        )
+        baseline_manager = EvaluationManager(baseline_config, "baseline_features_test")
         baseline_manager.setup(
             device="cpu",
             policy_mapper=None,
@@ -80,9 +79,7 @@ class TestEnhancedFeaturesPerformance:
         baseline_metrics = performance_monitor.stop_monitoring()
 
         # Test enhanced evaluation
-        enhanced_manager = EvaluationManager(
-            enhanced_config, "enhanced_features_test"
-        )
+        enhanced_manager = EvaluationManager(enhanced_config, "enhanced_features_test")
         enhanced_manager.setup(
             device="cpu",
             policy_mapper=None,
@@ -148,9 +145,7 @@ class TestEnhancedFeaturesPerformance:
 
         test_agent = TestAgentFactory.create_test_agent(detailed_config)
 
-        manager = EvaluationManager(
-            detailed_config, "detailed_logging_test"
-        )
+        manager = EvaluationManager(detailed_config, "detailed_logging_test")
         manager.setup(
             device="cpu",
             policy_mapper=None,
@@ -172,7 +167,9 @@ class TestEnhancedFeaturesPerformance:
 
             mock_evaluate.side_effect = logging_evaluate
 
-            assert test_agent.checkpoint_path is not None, "Test agent must have a checkpoint path"
+            assert (
+                test_agent.checkpoint_path is not None
+            ), "Test agent must have a checkpoint path"
             result = manager.evaluate_checkpoint(test_agent.checkpoint_path)
 
         metrics = performance_monitor.stop_monitoring()
@@ -182,14 +179,18 @@ class TestEnhancedFeaturesPerformance:
 
         # Logging should not cause excessive overhead
         games_per_second = 10 / metrics["execution_time"]
-        assert games_per_second >= 3.0, f"Detailed logging slowed evaluation to {games_per_second:.1f} games/s"
+        assert (
+            games_per_second >= 3.0
+        ), f"Detailed logging slowed evaluation to {games_per_second:.1f} games/s"
 
         logger.info(
             f"Detailed logging test: {games_per_second:.2f} games/s, "
             f"{metrics['memory_used']:.1f}MB memory"
         )
 
-    def test_analytics_generation_performance(self, enhanced_config, performance_monitor):
+    def test_analytics_generation_performance(
+        self, enhanced_config, performance_monitor
+    ):
         """Test performance impact of analytics generation."""
         # Enable enhanced analytics
         analytics_config = ConfigurationFactory.create_base_config(
@@ -200,9 +201,7 @@ class TestEnhancedFeaturesPerformance:
 
         test_agent = TestAgentFactory.create_test_agent(analytics_config)
 
-        manager = EvaluationManager(
-            analytics_config, "analytics_test"
-        )
+        manager = EvaluationManager(analytics_config, "analytics_test")
         manager.setup(
             device="cpu",
             policy_mapper=None,
@@ -221,7 +220,9 @@ class TestEnhancedFeaturesPerformance:
 
             mock_evaluate.side_effect = analytics_evaluate
 
-            assert test_agent.checkpoint_path is not None, "Test agent must have a checkpoint path"
+            assert (
+                test_agent.checkpoint_path is not None
+            ), "Test agent must have a checkpoint path"
             result = manager.evaluate_checkpoint(test_agent.checkpoint_path)
 
         metrics = performance_monitor.stop_monitoring()
@@ -231,7 +232,9 @@ class TestEnhancedFeaturesPerformance:
 
         # Analytics should have reasonable performance impact
         games_per_second = 10 / metrics["execution_time"]
-        assert games_per_second >= 2.0, f"Analytics slowed evaluation to {games_per_second:.1f} games/s"
+        assert (
+            games_per_second >= 2.0
+        ), f"Analytics slowed evaluation to {games_per_second:.1f} games/s"
 
         logger.info(
             f"Analytics generation test: {games_per_second:.2f} games/s, "
@@ -256,9 +259,7 @@ class TestBaselineValidation:
         self, validation_config, validation_agent, performance_monitor
     ):
         """Comprehensive performance baseline validation test."""
-        manager = EvaluationManager(
-            validation_config, "baseline_validation_test"
-        )
+        manager = EvaluationManager(validation_config, "baseline_validation_test")
         manager.setup(
             device="cpu",
             policy_mapper=None,
@@ -269,7 +270,7 @@ class TestBaselineValidation:
         # Performance baselines from original test (adjusted for test environment)
         PERFORMANCE_BASELINES = {
             "setup_time_seconds": 2.0,  # Increased from 1.0
-            "games_per_second": 3.0,    # Decreased from 5.0
+            "games_per_second": 3.0,  # Decreased from 5.0
             "memory_per_game_mb": 20.0,  # Increased from 10.0
             "total_memory_limit_mb": 600.0,  # Increased from 250.0
         }
@@ -293,7 +294,9 @@ class TestBaselineValidation:
                 MockGameResultFactory.create_successful_game_result()
             )
 
-            assert validation_agent.checkpoint_path is not None, "Validation agent must have a checkpoint path"
+            assert (
+                validation_agent.checkpoint_path is not None
+            ), "Validation agent must have a checkpoint path"
             result = manager.evaluate_checkpoint(validation_agent.checkpoint_path)
 
         metrics = performance_monitor.stop_monitoring()

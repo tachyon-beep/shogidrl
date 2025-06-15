@@ -139,7 +139,9 @@ class TestAdvancedAnalyticsCore:
             # Should still work but with default values
             mock_logger.warning.assert_called()
 
-    def test_analyze_trends_statistical_accuracy(self, analytics, historical_evaluation_data):
+    def test_analyze_trends_statistical_accuracy(
+        self, analytics, historical_evaluation_data
+    ):
         """Test trend analysis statistical accuracy with actual scipy."""
         trend = analytics.analyze_trends(historical_evaluation_data, "win_rate")
 
@@ -147,7 +149,7 @@ class TestAdvancedAnalyticsCore:
         assert isinstance(trend.slope, float)
         assert isinstance(trend.r_squared, float)
         assert 0 <= trend.r_squared <= 1
-        
+
         # Should detect increasing trend due to our test data
         assert trend.trend_direction == "increasing"
         assert trend.slope > 0
@@ -157,19 +159,19 @@ class TestAdvancedAnalyticsCore:
         # Test identical performance
         baseline_games = []
         comparison_games = []
-        
+
         for i in range(10):
             # Create identical games
             baseline_game = Mock()
             baseline_game.is_agent_win = i < 5  # 50% win rate
             baseline_game.moves_count = 50
-            baseline_game.duration_seconds = 30.0 # CHANGED
+            baseline_game.duration_seconds = 30.0  # CHANGED
             baseline_games.append(baseline_game)
-            
+
             comparison_game = Mock()
             comparison_game.is_agent_win = i < 5  # Same 50% win rate
             comparison_game.moves_count = 50
-            comparison_game.duration_seconds = 30.0 # CHANGED
+            comparison_game.duration_seconds = 30.0  # CHANGED
             comparison_games.append(comparison_game)
 
         comparison = analytics.compare_performance(
@@ -186,26 +188,28 @@ class TestAdvancedAnalyticsCore:
         # Create stable performance data
         stable_data = []
         base_time = datetime.now() - timedelta(days=30)
-        
+
         for i in range(10):
             timestamp = base_time + timedelta(days=i * 3)
-    
+
             # Create consistent performance
             games = []
             for j in range(10):
                 game = Mock()
                 game.is_agent_win = j < 5  # Consistent 50% win rate
                 game.moves_count = 50  # Consistent game length
-                game.duration_seconds = 30.0 # Changed from game_length_seconds
+                game.duration_seconds = 30.0  # Changed from game_length_seconds
                 # Add other potentially missing attributes for SummaryStats
                 game.is_opponent_win = j >= 5
                 game.is_draw = False
                 games.append(game)
-    
+
             from keisei.evaluation.core.evaluation_result import SummaryStats
+
             summary_stats = SummaryStats.from_games(games)
-            
+
             from keisei.evaluation.core import EvaluationResult
+
             result = EvaluationResult(
                 context=Mock(),
                 games=games,
@@ -215,7 +219,7 @@ class TestAdvancedAnalyticsCore:
             stable_data.append((timestamp, result))
 
         trend = analytics.analyze_trends(stable_data, "win_rate")
-        
+
         # Should detect stable trend
         assert trend.trend_direction == "stable"
         assert abs(trend.slope) < 0.01  # Very small slope for stable data
@@ -223,32 +227,40 @@ class TestAdvancedAnalyticsCore:
     def test_analytics_parameter_validation(self):
         """Test analytics parameter validation."""
         # Test invalid significance level
-        with pytest.raises(ValueError, match="significance_level must be between 0 and 1"): # ADDED match
+        with pytest.raises(
+            ValueError, match="significance_level must be between 0 and 1"
+        ):  # ADDED match
             AdvancedAnalytics(significance_level=-0.1)
-        
-        with pytest.raises(ValueError, match="significance_level must be between 0 and 1"): # ADDED match
+
+        with pytest.raises(
+            ValueError, match="significance_level must be between 0 and 1"
+        ):  # ADDED match
             AdvancedAnalytics(significance_level=1.1)
-        
+
         # Test invalid practical difference
-        with pytest.raises(ValueError, match="min_practical_difference must be non-negative"): # ADDED match
+        with pytest.raises(
+            ValueError, match="min_practical_difference must be non-negative"
+        ):  # ADDED match
             AdvancedAnalytics(min_practical_difference=-0.1)
-        
+
         # Test invalid trend window
-        with pytest.raises(ValueError, match="trend_window_days must be positive"): # ADDED match
+        with pytest.raises(
+            ValueError, match="trend_window_days must be positive"
+        ):  # ADDED match
             AdvancedAnalytics(trend_window_days=0)
 
     def test_metric_extraction_robustness(self, analytics):
         """Test robustness of metric extraction from evaluation results."""
         from keisei.evaluation.core import EvaluationResult
         from keisei.evaluation.core.evaluation_result import SummaryStats
-        
+
         # Test with missing attributes
         incomplete_data = []
         base_time = datetime.now() - timedelta(days=10)
-        
+
         for i in range(3):
             timestamp = base_time + timedelta(days=i * 3)
-            
+
             # Create result with minimal data
             result = EvaluationResult(
                 context=Mock(),
@@ -278,7 +290,9 @@ class TestAdvancedAnalyticsCore:
 class TestPerformanceComparison:
     """Test PerformanceComparison functionality."""
 
-    def test_performance_comparison_creation(self, analytics, sample_game_results, baseline_game_results):
+    def test_performance_comparison_creation(
+        self, analytics, sample_game_results, baseline_game_results
+    ):
         """Test creation and basic properties of PerformanceComparison."""
         comparison = analytics.compare_performance(
             baseline_results=baseline_game_results,
@@ -286,13 +300,17 @@ class TestPerformanceComparison:
         )
 
         # Test basic properties
-        assert hasattr(comparison, "baseline_name") # CHANGED from baseline_win_rate
-        assert hasattr(comparison, "comparison_name") # CHANGED from comparison_win_rate
+        assert hasattr(comparison, "baseline_name")  # CHANGED from baseline_win_rate
+        assert hasattr(
+            comparison, "comparison_name"
+        )  # CHANGED from comparison_win_rate
         assert hasattr(comparison, "win_rate_difference")
         assert hasattr(comparison, "win_rate_change_percent")
         assert hasattr(comparison, "statistical_tests")
         assert hasattr(comparison, "confidence_interval")
-        assert hasattr(comparison, "practical_significance") # CHANGED from is_significant
+        assert hasattr(
+            comparison, "practical_significance"
+        )  # CHANGED from is_significant
         assert hasattr(comparison, "recommendation")
 
     def test_statistical_significance_determination(self, analytics):
@@ -300,22 +318,22 @@ class TestPerformanceComparison:
         # Create data that should be significantly different
         high_performance_results = []
         low_performance_results = []
-    
+
         for i in range(50):  # Larger sample for significance
             # High performance: 80% win rate
             game_high = Mock()
             game_high.is_agent_win = i < 40
-            game_high.moves_count = 50 # ADDED
-            game_high.duration_seconds = 30.0 
+            game_high.moves_count = 50  # ADDED
+            game_high.duration_seconds = 30.0
             high_performance_results.append(game_high)
-    
+
             # Low performance: 20% win rate
             game_low = Mock()
             game_low.is_agent_win = i < 10
-            game_low.moves_count = 50 # ADDED
-            game_low.duration_seconds = 30.0 
+            game_low.moves_count = 50  # ADDED
+            game_low.duration_seconds = 30.0
             low_performance_results.append(game_low)
-    
+
         comparison = analytics.compare_performance(
             baseline_results=low_performance_results,
             comparison_results=high_performance_results,
@@ -323,16 +341,23 @@ class TestPerformanceComparison:
 
         # With large effect size and sample, should be significant
         # Check if any statistical test shows significance
-        assert any(test.is_significant for test in comparison.statistical_tests) # CHANGED
+        assert any(
+            test.is_significant for test in comparison.statistical_tests
+        )  # CHANGED
         assert comparison.win_rate_difference > 0.5  # 60% difference
 
-    def test_recommendation_generation(self, analytics, sample_game_results, baseline_game_results):
+    def test_recommendation_generation(
+        self, analytics, sample_game_results, baseline_game_results
+    ):
         """Test recommendation generation based on comparison results."""
         comparison = analytics.compare_performance(
             baseline_results=baseline_game_results,  # 40% win rate
-            comparison_results=sample_game_results,   # 60% win rate
+            comparison_results=sample_game_results,  # 60% win rate
         )
 
         # Should recommend keeping the improvement
-        assert "improvement" in comparison.recommendation.lower() or "better" in comparison.recommendation.lower()
+        assert (
+            "improvement" in comparison.recommendation.lower()
+            or "better" in comparison.recommendation.lower()
+        )
         assert len(comparison.recommendation) > 20  # Should be descriptive

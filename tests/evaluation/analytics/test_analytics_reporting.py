@@ -9,6 +9,7 @@ import pytest
 
 from keisei.evaluation.core import EvaluationResult, GameResult
 from keisei.evaluation.core.evaluation_result import SummaryStats
+
 from .conftest import create_mock_evaluation_result
 
 
@@ -229,11 +230,11 @@ class TestAdvancedAnalyticsReporting:
         metadata = report["report_metadata"]
         required_fields = [
             "generated_at",
-            "analysis_type", 
+            "analysis_type",
             "keisei_version",
-            "analytics_config"
+            "analytics_config",
         ]
-        
+
         for field in required_fields:
             assert field in metadata, f"Missing metadata field: {field}"
 
@@ -249,12 +250,12 @@ class TestAdvancedAnalyticsReporting:
             game = Mock(spec=GameResult)
             game.is_agent_win = i < 12  # Exactly 60% win rate
             game.moves_count = 50 + i  # Incrementing game length
-            game.duration_seconds = 30.0 + (i * 2) # Changed from game_length_seconds
+            game.duration_seconds = 30.0 + (i * 2)  # Changed from game_length_seconds
             # Add other potentially missing attributes for SummaryStats
             game.is_opponent_win = i >= 12
             game.is_draw = False
             games.append(game)
-    
+
         summary_stats = SummaryStats.from_games(games)
         result = EvaluationResult(
             context=Mock(),
@@ -279,7 +280,7 @@ class TestAdvancedAnalyticsReporting:
         result = create_mock_evaluation_result(
             win_rate=0.55,  # Moderate performance
             total_games=20,
-            session_id="context_test"
+            session_id="context_test",
         )
 
         report = analytics.generate_automated_report(current_results=result)
@@ -287,11 +288,14 @@ class TestAdvancedAnalyticsReporting:
 
         assert len(insights) > 0
         insight_text = " ".join(insights).lower()
-        
+
         # Should not contain extreme language for moderate performance
         assert "excellent" not in insight_text
         assert "poor" not in insight_text
         assert "terrible" not in insight_text
 
         # Should contain balanced assessment
-        assert any(word in insight_text for word in ["moderate", "average", "balanced", "reasonable"])
+        assert any(
+            word in insight_text
+            for word in ["moderate", "average", "balanced", "reasonable"]
+        )

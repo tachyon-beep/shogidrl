@@ -341,7 +341,7 @@ class EvaluatorFactory:
             Configured evaluator instance
         """
         # Handle both enum and string strategy types
-        if hasattr(config.strategy, 'value'):
+        if hasattr(config.strategy, "value"):
             strategy_name = config.strategy.value
         else:
             strategy_name = str(config.strategy)

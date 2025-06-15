@@ -1,6 +1,8 @@
 """Shared fixtures for tournament evaluation tests."""
-import pytest
+
 from unittest.mock import MagicMock
+
+import pytest
 
 from keisei.evaluation.core import (
     AgentInfo,

@@ -23,11 +23,11 @@ from keisei.config_schema import (
     WandBConfig,
 )
 from keisei.evaluation.core import (
-    EvaluationStrategy,
     AgentInfo,
+    EvaluationStrategy,
     GameResult,
-    SummaryStats,
     OpponentInfo,
+    SummaryStats,
 )
 from keisei.evaluation.core_manager import EvaluationManager
 
@@ -73,8 +73,10 @@ class ConfigurationFactory:
     ):
         """Create evaluation configuration optimized for performance testing."""
         # Import the correct factory function
-        from keisei.evaluation.core import create_evaluation_config as create_eval_config
-        
+        from keisei.evaluation.core import (
+            create_evaluation_config as create_eval_config,
+        )
+
         return create_eval_config(
             strategy=EvaluationStrategy.SINGLE_OPPONENT,
             num_games=num_games,
@@ -97,8 +99,10 @@ class ConfigurationFactory:
     def create_minimal_test_config():
         """Create minimal evaluation configuration for testing."""
         # Import the correct factory function
-        from keisei.evaluation.core import create_evaluation_config as create_eval_config
-        
+        from keisei.evaluation.core import (
+            create_evaluation_config as create_eval_config,
+        )
+
         return create_eval_config(
             strategy=EvaluationStrategy.SINGLE_OPPONENT,
             num_games=1,
@@ -124,8 +128,10 @@ class ConfigurationFactory:
     ):
         """Create evaluation configuration for testing."""
         # Import the correct factory function
-        from keisei.evaluation.core import create_evaluation_config as create_eval_config
-        
+        from keisei.evaluation.core import (
+            create_evaluation_config as create_eval_config,
+        )
+
         return create_eval_config(
             strategy=strategy,
             num_games=num_games,
@@ -154,7 +160,7 @@ def create_evaluation_config(
     """Create evaluation configuration for testing."""
     # Import the correct factory function
     from keisei.evaluation.core import create_evaluation_config as create_eval_config
-    
+
     return create_eval_config(
         strategy=strategy,
         num_games=num_games,
@@ -197,7 +203,11 @@ class TestAgentFactory:
             model_type="test",
             training_timesteps=100,
             metadata={
-                "config": config.model_dump() if hasattr(config, 'model_dump') else str(config),
+                "config": (
+                    config.model_dump()
+                    if hasattr(config, "model_dump")
+                    else str(config)
+                ),
                 "performance_baseline": True,
             },
         )
@@ -216,19 +226,15 @@ class MockGameResultFactory:
         """Create a successful game result for testing."""
         # Create mock agent and opponent info
         from keisei.evaluation.core import AgentInfo, OpponentInfo
-        
+
         agent_info = AgentInfo(
-            name="test_agent",
-            model_type="test",
-            metadata={"test": True}
+            name="test_agent", model_type="test", metadata={"test": True}
         )
-        
+
         opponent_info = OpponentInfo(
-            name="test_opponent",
-            type="built_in",
-            metadata={"test": True}
+            name="test_opponent", type="built_in", metadata={"test": True}
         )
-        
+
         return GameResult(
             game_id=game_id,
             winner=0 if winner == "agent" else 1 if winner == "opponent" else None,

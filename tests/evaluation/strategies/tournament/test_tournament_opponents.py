@@ -3,8 +3,10 @@
 This module contains tests for loading tournament opponents from configuration
 and loading different types of evaluation entities (agents and opponents).
 """
-import pytest
+
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from keisei.evaluation.core import OpponentInfo
 from keisei.evaluation.strategies.tournament import TournamentEvaluator
@@ -154,7 +156,7 @@ class TestEntityLoading:
                 checkpoint_path=mock_agent_info.checkpoint_path,
                 device_str="cpu",
                 policy_mapper=evaluator.policy_mapper,
-                input_channels=46
+                input_channels=46,
             )
 
     def test_game_load_evaluation_entity_opponent_ppo(
@@ -181,7 +183,7 @@ class TestEntityLoading:
                 checkpoint_path="/path/to/ppo_opp.ptk",
                 device_str="cpu",
                 policy_mapper=evaluator.policy_mapper,
-                input_channels=46
+                input_channels=46,
             )
 
     def test_game_load_evaluation_entity_opponent_other(
@@ -209,7 +211,7 @@ class TestEntityLoading:
                 opponent_path="/path/h.dll",
                 device_str="cpu",
                 policy_mapper=evaluator.policy_mapper,
-                input_channels=46
+                input_channels=46,
             )
 
     def test_load_evaluation_entity_unknown_type(

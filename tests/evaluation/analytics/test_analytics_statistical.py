@@ -115,7 +115,7 @@ class TestAdvancedAnalyticsStatisticalTests:
 
         # Baseline: 20% win rate
         for i in range(100):
-            game = type('MockGame', (), {})()
+            game = type("MockGame", (), {})()
             game.is_agent_win = i < 20
             game.moves_count = 50
             game.game_length_seconds = 30.0
@@ -123,7 +123,7 @@ class TestAdvancedAnalyticsStatisticalTests:
 
         # Comparison: 80% win rate
         for i in range(100):
-            game = type('MockGame', (), {})()
+            game = type("MockGame", (), {})()
             game.is_agent_win = i < 80
             game.moves_count = 50
             game.game_length_seconds = 30.0
@@ -162,7 +162,7 @@ class TestAdvancedAnalyticsStatisticalTests:
     def test_effect_size_calculation(self, analytics):
         """Test effect size calculation in statistical tests."""
         z_test = analytics._two_proportion_z_test(80, 100, 60, 100)
-        
-        assert hasattr(z_test, 'effect_size')
+
+        assert hasattr(z_test, "effect_size")
         assert isinstance(z_test.effect_size, (int, float))
         assert z_test.effect_size >= 0  # Effect size should be non-negative

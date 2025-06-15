@@ -5,19 +5,20 @@ import logging
 import tempfile
 import time
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 import torch
 
-from keisei.evaluation.core_manager import EvaluationManager
-from keisei.evaluation.core import EvaluationStrategy
 from keisei.config_schema import EvaluationConfig
+from keisei.evaluation.core import EvaluationStrategy
+from keisei.evaluation.core_manager import EvaluationManager
+
 from .conftest import (
-    PerformanceMonitor,
     ConfigurationFactory,
-    TestAgentFactory,
     MockGameResultFactory,
+    PerformanceMonitor,
+    TestAgentFactory,
     create_evaluation_config,
 )
 
@@ -76,7 +77,11 @@ class TestErrorScenarios:
                     assert result.summary_stats.total_games >= 0
             except Exception as e:
                 # If it fails, it should be a graceful failure
-                assert "corrupted" in str(e).lower() or "invalid" in str(e).lower() or "checkpoint" in str(e).lower()
+                assert (
+                    "corrupted" in str(e).lower()
+                    or "invalid" in str(e).lower()
+                    or "checkpoint" in str(e).lower()
+                )
 
     def test_evaluation_timeout_handling(self, tmp_path, config):
         """Test handling of evaluation timeouts."""
@@ -107,19 +112,25 @@ class TestErrorScenarios:
 
             # With short timeout, should complete or timeout gracefully
             try:
-                assert test_agent.checkpoint_path is not None, "Test agent must have a checkpoint path"
+                assert (
+                    test_agent.checkpoint_path is not None
+                ), "Test agent must have a checkpoint path"
                 result = manager.evaluate_checkpoint(test_agent.checkpoint_path)
                 execution_time = time.perf_counter() - start_time
 
                 # Should complete within reasonable time (allowing for test overhead)
-                assert execution_time < 5.0, f"Evaluation took too long: {execution_time:.1f}s"
+                assert (
+                    execution_time < 5.0
+                ), f"Evaluation took too long: {execution_time:.1f}s"
 
                 if result:
                     assert result.summary_stats.total_games >= 0
 
             except TimeoutError:
                 execution_time = time.perf_counter() - start_time
-                assert execution_time < 5.0, f"Timeout handling took too long: {execution_time:.1f}s"
+                assert (
+                    execution_time < 5.0
+                ), f"Timeout handling took too long: {execution_time:.1f}s"
 
     def test_malformed_configuration_handling(self):
         """Test handling of malformed configurations."""
@@ -147,7 +158,9 @@ class TestErrorScenarios:
                         MockGameResultFactory.create_successful_game_result()
                     )
 
-                    assert test_agent.checkpoint_path is not None, "Test agent must have a checkpoint path"
+                    assert (
+                        test_agent.checkpoint_path is not None
+                    ), "Test agent must have a checkpoint path"
                     result = manager.evaluate_checkpoint(test_agent.checkpoint_path)
 
                     # If it succeeds, should be reasonable result
@@ -201,7 +214,9 @@ class TestEdgeCases:
                 )
             )
 
-            assert test_agent.checkpoint_path is not None, "Test agent must have a checkpoint path"
+            assert (
+                test_agent.checkpoint_path is not None
+            ), "Test agent must have a checkpoint path"
             result = manager.evaluate_checkpoint(test_agent.checkpoint_path)
 
             # Validate single game result
@@ -217,7 +232,9 @@ class TestEdgeCases:
                 == 1
             )
 
-    def test_memory_cleanup_after_evaluation(self, tmp_path, eval_config, performance_monitor):
+    def test_memory_cleanup_after_evaluation(
+        self, tmp_path, eval_config, performance_monitor
+    ):
         """Test that memory is properly cleaned up after evaluation."""
         manager = EvaluationManager(eval_config, "memory_cleanup_test")
         manager.setup(
@@ -246,7 +263,9 @@ class TestEdgeCases:
                 )
             )
 
-            assert test_agent.checkpoint_path is not None, "Test agent must have a checkpoint path"
+            assert (
+                test_agent.checkpoint_path is not None
+            ), "Test agent must have a checkpoint path"
             result = manager.evaluate_checkpoint(test_agent.checkpoint_path)
 
         # Force garbage collection
@@ -271,7 +290,9 @@ class TestEdgeCases:
                 ConfigurationFactory.create_minimal_test_config()
             )
 
-            assert test_agent.checkpoint_path is not None, "Test agent must have a checkpoint path"
+            assert (
+                test_agent.checkpoint_path is not None
+            ), "Test agent must have a checkpoint path"
             result = manager.evaluate_checkpoint(test_agent.checkpoint_path)
 
             # Should either reject zero games or return empty result
@@ -287,7 +308,10 @@ class TestEdgeCases:
         """Test handling of extreme concurrency settings."""
         extreme_configs = [
             {"max_concurrent_games": 1000},  # Very high concurrency
-            {"max_concurrent_games": 1, "num_games": 1000},  # High games, low concurrency
+            {
+                "max_concurrent_games": 1,
+                "num_games": 1000,
+            },  # High games, low concurrency
         ]
 
         for config_values in extreme_configs:
@@ -315,12 +339,16 @@ class TestEdgeCases:
 
                     # Test should not hang or crash
                     start_time = time.perf_counter()
-                    assert test_agent.checkpoint_path is not None, "Test agent must have a checkpoint path"
+                    assert (
+                        test_agent.checkpoint_path is not None
+                    ), "Test agent must have a checkpoint path"
                     result = manager.evaluate_checkpoint(test_agent.checkpoint_path)
                     execution_time = time.perf_counter() - start_time
 
                     # Should complete within reasonable time (even if slow)
-                    assert execution_time < 10.0, f"Extreme config took too long: {execution_time:.1f}s"
+                    assert (
+                        execution_time < 10.0
+                    ), f"Extreme config took too long: {execution_time:.1f}s"
 
                     if result:
                         assert result.summary_stats.total_games >= 0
@@ -329,7 +357,9 @@ class TestEdgeCases:
                 # Expected for extreme configurations
                 logger.info(f"Extreme configuration handled: {e}")
 
-    def test_rapid_successive_evaluations(self, tmp_path, eval_config, performance_monitor):
+    def test_rapid_successive_evaluations(
+        self, tmp_path, eval_config, performance_monitor
+    ):
         """Test performance of rapid successive evaluations."""
         manager = EvaluationManager(eval_config, "rapid_evaluation_test")
         manager.setup(
@@ -356,7 +386,9 @@ class TestEdgeCases:
 
             for _ in range(num_evaluations):
                 start_time = time.perf_counter()
-                assert test_agent.checkpoint_path is not None, "Test agent must have a checkpoint path"
+                assert (
+                    test_agent.checkpoint_path is not None
+                ), "Test agent must have a checkpoint path"
                 result = manager.evaluate_checkpoint(test_agent.checkpoint_path)
                 execution_time = time.perf_counter() - start_time
 
@@ -371,7 +403,9 @@ class TestEdgeCases:
 
         # Variation should be reasonable (max < 3x min)
         time_variation = max_time / min_time if min_time > 0 else 1.0
-        assert time_variation < 3.0, f"Execution time variation too high: {time_variation:.1f}x"
+        assert (
+            time_variation < 3.0
+        ), f"Execution time variation too high: {time_variation:.1f}x"
 
         logger.info(
             f"Rapid evaluation test: avg={avg_time:.3f}s, "

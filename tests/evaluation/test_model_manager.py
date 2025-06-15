@@ -34,7 +34,7 @@ class TestModelWeightManager:
 
         assert isinstance(weights, dict)
         assert len(weights) > 0
-        
+
         # Verify all weights are tensors on CPU
         for weight_name, tensor in weights.items():
             assert isinstance(tensor, torch.Tensor)
@@ -43,11 +43,12 @@ class TestModelWeightManager:
 
     def test_extract_agent_weights_no_model(self):
         """Test error when agent has no model attribute."""
+
         # Test the check by creating a duck-typed object without proper model
         class FakeAgent:
             def __init__(self):
                 self.model = None
-        
+
         fake_agent = FakeAgent()
 
         with pytest.raises(ValueError, match="Agent must have a model attribute"):
@@ -186,13 +187,13 @@ class TestModelWeightManager:
 
             try:
                 self.manager.cache_opponent_weights("test", tmp_path)
-                
+
                 # Check cache has content via public interface
                 stats_before = self.manager.get_cache_stats()
                 assert stats_before["cache_size"] == 1
 
                 self.manager.clear_cache()
-                
+
                 # Check cache is cleared via public interface
                 stats_after = self.manager.get_cache_stats()
                 assert stats_after["cache_size"] == 0

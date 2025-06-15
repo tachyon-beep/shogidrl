@@ -3,8 +3,10 @@
 This module contains tests for full tournament evaluation workflows,
 game execution integration, and end-to-end tournament functionality.
 """
+
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
 
 from keisei.evaluation.core import (
     EvaluationResult,
@@ -54,7 +56,7 @@ class TestGameExecution:
         # Check that both games were called with alternating colors
         calls = evaluator.evaluate_step.call_args_list
         assert len(calls) == 2
-        
+
         # Verify the structure of calls (agent_info, opponent, context)
         agent_info_1, opponent_1, context_1 = calls[0][0]
         assert agent_info_1 == mock_agent_info
@@ -94,7 +96,7 @@ class TestGameExecution:
             )
 
             assert len(results) == 0  # No successful games
-            assert len(errors) == 2   # Two error messages
+            assert len(errors) == 2  # Two error messages
             mock_logger.error.assert_called()
 
 
@@ -120,8 +122,14 @@ class TestEvaluationSteps:
         mock_game.game_over = True
 
         # Mock the internal methods properly
-        with patch.object(evaluator, '_load_evaluation_entity', side_effect=[mock_agent_entity, mock_opponent_entity]) as mock_load:
-            with patch.object(evaluator, '_run_tournament_game_loop', return_value=42) as mock_game_loop:
+        with patch.object(
+            evaluator,
+            "_load_evaluation_entity",
+            side_effect=[mock_agent_entity, mock_opponent_entity],
+        ) as mock_load:
+            with patch.object(
+                evaluator, "_run_tournament_game_loop", return_value=42
+            ) as mock_game_loop:
                 result = await evaluator.evaluate_step(
                     mock_agent_info, mock_opponent, mock_evaluation_context
                 )
@@ -145,8 +153,12 @@ class TestEvaluationSteps:
         mock_opponent_entity = MagicMock()
 
         # Mock the internal methods properly
-        with patch.object(evaluator, '_load_evaluation_entity', side_effect=[mock_agent_entity, mock_opponent_entity]):
-            with patch.object(evaluator, '_run_tournament_game_loop', return_value=35):
+        with patch.object(
+            evaluator,
+            "_load_evaluation_entity",
+            side_effect=[mock_agent_entity, mock_opponent_entity],
+        ):
+            with patch.object(evaluator, "_run_tournament_game_loop", return_value=35):
                 result = await evaluator.evaluate_step(
                     mock_agent_info, mock_opponent, mock_evaluation_context
                 )
@@ -247,12 +259,20 @@ class TestFullEvaluation:
             if game.winner == 2:
                 game.winner = None
             game.opponent_info = MagicMock()
-            game.opponent_info.name = f"Opp{(i // 7) + 1}"  # Distribute across opponents
+            game.opponent_info.name = (
+                f"Opp{(i // 7) + 1}"  # Distribute across opponents
+            )
         evaluator._play_games_against_opponent = AsyncMock(
             side_effect=[
-                (mock_games[0:7], []),   # (games, errors) tuple for 7 games against Opp1
-                (mock_games[7:14], []),  # (games, errors) tuple for 7 games against Opp2  
-                (mock_games[14:20], []), # (games, errors) tuple for 6 games against Opp3
+                (mock_games[0:7], []),  # (games, errors) tuple for 7 games against Opp1
+                (
+                    mock_games[7:14],
+                    [],
+                ),  # (games, errors) tuple for 7 games against Opp2
+                (
+                    mock_games[14:20],
+                    [],
+                ),  # (games, errors) tuple for 6 games against Opp3
             ]
         )
 
@@ -272,9 +292,11 @@ class TestFullEvaluation:
             # Verify dynamic game distribution (20 games / 3 opponents = 6-7 games each)
             play_calls = evaluator._play_games_against_opponent.call_args_list
             assert len(play_calls) == 3
-            
+
             # Check game counts: should be roughly equal distribution
-            game_counts = [call[0][2] for call in play_calls]  # Third argument is num_games
+            game_counts = [
+                call[0][2] for call in play_calls
+            ]  # Third argument is num_games
             assert sum(game_counts) == 20
             for count in game_counts:
                 assert 6 <= count <= 7  # Should be 6 or 7 games per opponent
@@ -287,7 +309,7 @@ class TestFullEvaluation:
         # Configure specific game count per opponent
         mock_tournament_config.num_games_per_opponent = 4
 
-        # Set up 2 opponents  
+        # Set up 2 opponents
         opponents = [
             OpponentInfo(name="StrongOpp", type="ppo_agent"),
             OpponentInfo(name="WeakOpp", type="random"),
@@ -310,8 +332,14 @@ class TestFullEvaluation:
             game.opponent_info.name = "StrongOpp" if i < 4 else "WeakOpp"
         evaluator._play_games_against_opponent = AsyncMock(
             side_effect=[
-                (mock_games[0:4], []),  # (games, errors) tuple for 4 games against StrongOpp
-                (mock_games[4:8], []),  # (games, errors) tuple for 4 games against WeakOpp
+                (
+                    mock_games[0:4],
+                    [],
+                ),  # (games, errors) tuple for 4 games against StrongOpp
+                (
+                    mock_games[4:8],
+                    [],
+                ),  # (games, errors) tuple for 4 games against WeakOpp
             ]
         )
 
@@ -319,7 +347,7 @@ class TestFullEvaluation:
         mock_summary_stats = MagicMock(spec=SummaryStats)
         mock_summary_stats.total_games = 8
         mock_standings = {"TestAgent": {"wins": 5, "losses": 3}}
-        
+
         with patch(
             "keisei.evaluation.core.SummaryStats.from_games",
             return_value=mock_summary_stats,
@@ -337,7 +365,7 @@ class TestFullEvaluation:
             # Verify both opponents were played against
             play_calls = evaluator._play_games_against_opponent.call_args_list
             assert len(play_calls) == 2
-            
+
             # Each call should be for 4 games
             for call in play_calls:
                 assert call[0][2] == 4  # num_games parameter

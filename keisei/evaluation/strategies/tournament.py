@@ -114,9 +114,7 @@ class TournamentEvaluator(BaseEvaluator):
         input_channels = 46
 
         # Load evaluation entities
-        agent = self._load_evaluation_entity(
-            agent_info, device_str, input_channels
-        )
+        agent = self._load_evaluation_entity(agent_info, device_str, input_channels)
         opponent = self._load_evaluation_entity(
             opponent_info, device_str, input_channels
         )
@@ -278,8 +276,10 @@ class TournamentEvaluator(BaseEvaluator):
             # Dynamic calculation based on total games - distribute evenly
             base_games = self.config.num_games // len(opponents)
             extra_games = self.config.num_games % len(opponents)
-            games_per_opponent = [base_games + (1 if i < extra_games else 0) 
-                                for i in range(len(opponents))]
+            games_per_opponent = [
+                base_games + (1 if i < extra_games else 0)
+                for i in range(len(opponents))
+            ]
 
         # Play games against each opponent
         all_games = []
