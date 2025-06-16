@@ -3,9 +3,10 @@ Tournament evaluation strategy implementation with in-memory evaluation support.
 """
 
 import logging
+import random
 import time
 import uuid
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 
@@ -21,6 +22,8 @@ from ..core import (
     BaseEvaluator,
     EvaluationContext,
     EvaluationResult,
+    EvaluationStrategy,
+    EvaluatorFactory,
     GameResult,
     OpponentInfo,
     SummaryStats,
@@ -80,8 +83,8 @@ class TournamentEvaluator(BaseEvaluator):
             )
             return result
 
-        except Exception as e:
-            logger.error(f"Error in tournament evaluate_step: {e}")
+        except (ValueError, TypeError, RuntimeError, AttributeError) as e:
+            logger.error("Error in tournament evaluate_step: %s", str(e))
             # Use a safe duration calculation to avoid StopIteration from mock exhaustion
             try:
                 duration = time.time() - start_time
@@ -107,7 +110,7 @@ class TournamentEvaluator(BaseEvaluator):
         opponent_info: OpponentInfo,
         game_id: str,
         start_time: float,
-        context: EvaluationContext,
+        _context: EvaluationContext,
     ) -> GameResult:
         """Execute a single tournament game."""
         device_str = "cpu"
@@ -129,8 +132,6 @@ class TournamentEvaluator(BaseEvaluator):
                 "agent_plays_sente_in_eval_step", True
             )
         else:
-            import random
-
             agent_is_sente = random.choice([True, False])
 
         sente_player = agent if agent_is_sente else opponent
@@ -228,8 +229,8 @@ class TournamentEvaluator(BaseEvaluator):
                 else:
                     break
 
-            except Exception as e:
-                logger.error(f"Error in game loop: {e}")
+            except (ValueError, TypeError, RuntimeError) as e:
+                logger.error("Error in game loop: %s", str(e))
                 break
 
         return moves_count
@@ -424,7 +425,8 @@ class TournamentEvaluator(BaseEvaluator):
             move = player_entity.select_move(game)
         else:
             logger.error(
-                f"Player entity of type {type(player_entity)} does not have a recognized action selection method."
+                "Player entity of type %s does not have a recognized action selection method.",
+                type(player_entity).__name__
             )
             raise TypeError(f"Unsupported player entity type: {type(player_entity)}")
         return move
@@ -440,8 +442,10 @@ class TournamentEvaluator(BaseEvaluator):
         """Validates the selected move and makes it in the game. Returns True if successful."""
         if move is None or move not in legal_moves:
             logger.warning(
-                f"Player {current_player_color_value} ({player_entity_type_name}) made an illegal move ({move}) or no move. "
-                f"Legal moves: {len(legal_moves) if legal_moves else 'None'}. Game ending."
+                "Player %s (%s) made an illegal move (%s) or no move. "
+                "Legal moves: %s. Game ending.",
+                current_player_color_value, player_entity_type_name, move,
+                len(legal_moves) if legal_moves else 'None'
             )
             game.game_over = True
             game.winner = Color(1 - current_player_color_value)  # Other player wins
@@ -452,9 +456,10 @@ class TournamentEvaluator(BaseEvaluator):
         try:
             game.make_move(move)
             return True
-        except Exception as e:
+        except (ValueError, TypeError, RuntimeError) as e:
             logger.error(
-                f"Error making move {move} for player {current_player_color_value}: {e}",
+                "Error making move %s for player %s: %s",
+                move, current_player_color_value, str(e),
                 exc_info=True,
             )
             game.game_over = True
@@ -470,7 +475,7 @@ class TournamentEvaluator(BaseEvaluator):
             )
             return []
 
-        opponents = []
+        opponents: List[OpponentInfo] = []
         for i, opponent_config in enumerate(self.config.opponent_pool_config):
             try:
                 if isinstance(opponent_config, OpponentInfo):
@@ -490,9 +495,11 @@ class TournamentEvaluator(BaseEvaluator):
                         type(opponent_config).__name__,
                         i,
                     )
-            except Exception as e:
-                formatted_msg = f"Failed to load opponent from config data at index {i}"
-                logger.error(formatted_msg, "additional_info", str(e))
+            except (ValueError, TypeError, AttributeError) as e:
+                logger.error(
+                    "Failed to load opponent from config data at index %d: %s",
+                    i, str(e)
+                )
 
         return opponents
 
@@ -500,10 +507,10 @@ class TournamentEvaluator(BaseEvaluator):
         self,
         games: List[GameResult],
         opponents: List[OpponentInfo],
-        agent_info: AgentInfo,
+        _agent_info: AgentInfo,
     ) -> Dict[str, Any]:
         """Calculate tournament standings from game results."""
-        standings = {
+        standings: Dict[str, Any] = {
             "overall_tournament_stats": {
                 "total_games": len(games),
                 "agent_total_wins": 0,
@@ -538,7 +545,7 @@ class TournamentEvaluator(BaseEvaluator):
             if game.opponent_info:
                 opponent_name = game.opponent_info.name
                 if opponent_name in standings["per_opponent_results"]:
-                    opp_stats = standings["per_opponent_results"][opponent_name]
+                    opp_stats: Dict[str, Any] = standings["per_opponent_results"][opponent_name]
                     opp_stats["played"] += 1
 
                     if game.winner is None:
@@ -602,7 +609,7 @@ class TournamentEvaluator(BaseEvaluator):
 
                 if result:
                     results.append(result)
-            except Exception as e:
+            except (ValueError, TypeError, RuntimeError, AttributeError) as e:
                 error_msg = f"Error during game orchestration for game {game_num + 1} against {getattr(opponent_info, 'name', 'Unknown')}: {str(e)}"
                 logger.error(error_msg, exc_info=True)
                 errors.append(error_msg)
@@ -611,7 +618,6 @@ class TournamentEvaluator(BaseEvaluator):
 
 
 # Register this evaluator with the factory
-from ..core import EvaluationStrategy, EvaluatorFactory
 
 EvaluatorFactory.register(
     EvaluationStrategy.TOURNAMENT.value, TournamentEvaluator  # type: ignore
