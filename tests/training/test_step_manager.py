@@ -777,7 +777,7 @@ class TestPrepareAndHandleDemoMode:
                 step_manager.config.display.turn_tick = 0.5
 
                 step_manager._handle_demo_mode(
-                    selected_move, episode_length, piece_info, mock_logger
+                    selected_move, episode_length, piece_info
                 )
 
                 mock_format.assert_called_once_with(
@@ -807,10 +807,9 @@ class TestPrepareAndHandleDemoMode:
             mock_format.return_value = "formatted_move"
 
             step_manager._handle_demo_mode(
-                selected_move, episode_length, piece_info, mock_logger
+                selected_move, episode_length, piece_info
             )
 
-            mock_logger.assert_not_called()
             assert "Unknown" in step_manager.move_log[-1]
 
     def test_handle_demo_mode_no_delay(
@@ -833,7 +832,7 @@ class TestPrepareAndHandleDemoMode:
                 step_manager.config.display.turn_tick = 0.0
 
                 step_manager._handle_demo_mode(
-                    selected_move, episode_length, piece_info, mock_logger
+                    selected_move, episode_length, piece_info
                 )
 
                 # Sleep should not be called

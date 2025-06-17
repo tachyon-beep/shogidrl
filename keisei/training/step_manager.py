@@ -218,7 +218,6 @@ class StepManager:
                     selected_shogi_move,
                     episode_state.episode_length,
                     piece_info_for_demo,
-                    logger_func,
                 )
 
             # Execute the move in the environment
@@ -566,7 +565,6 @@ class StepManager:
         selected_move: Tuple,
         episode_length: int,
         piece_info_for_demo: Optional[Any],
-        logger_func: Callable[[str, bool, Optional[Dict], str], None],
     ) -> None:
         """
         Handle demo mode logging and delay.
@@ -575,7 +573,6 @@ class StepManager:
             selected_move: The move selected by the agent
             episode_length: Current episode length
             piece_info_for_demo: Piece information for demo display
-            logger_func: Function for logging messages
         """
         # Get current player name
         current_player_name = (
@@ -621,7 +618,10 @@ class StepManager:
             winner_from_info = step_info.get("winner")
             reason_from_info = step_info.get("reason", "Unknown")
 
+        # Normalize winner color to lowercase for consistency
         final_winner_color = winner_from_info
+        if winner_from_info and isinstance(winner_from_info, str):
+            final_winner_color = winner_from_info.lower()
 
         if reason_from_info == "Tsumi" and winner_from_info is None:
             if hasattr(self.game, "winner") and self.game.winner is not None:
