@@ -22,6 +22,12 @@ class OpponentPool:
     def __init__(
         self, pool_size: int = 5, elo_registry_path: Optional[str] = None
     ) -> None:
+        # Validate pool size
+        if pool_size <= 0:
+            raise ValueError(f"Pool size must be positive, got: {pool_size}")
+        if pool_size > 1000:  # Reasonable upper limit
+            raise ValueError(f"Pool size too large (>1000), got: {pool_size}")
+            
         self.pool_size = pool_size
         self._entries: Deque[Path] = deque(maxlen=pool_size)
         self.elo_registry: Optional[EloRegistry] = None
@@ -32,6 +38,15 @@ class OpponentPool:
     def add_checkpoint(self, path: Path | str) -> None:
         """Add a checkpoint to the pool, evicting the oldest if full."""
         p = Path(path)
+        
+        # Validate checkpoint file exists
+        if not p.exists():
+            raise FileNotFoundError(f"Checkpoint file not found: {p}")
+        
+        # Validate checkpoint file is readable
+        if not p.is_file():
+            raise ValueError(f"Checkpoint path is not a file: {p}")
+        
         self._entries.append(p)
         if self.elo_registry:
             # Ensure rating entry exists

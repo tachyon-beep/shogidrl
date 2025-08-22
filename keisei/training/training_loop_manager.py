@@ -3,6 +3,7 @@
 Manages the main training loop execution, previously part of the Trainer class.
 """
 import time
+import asyncio
 from typing import TYPE_CHECKING, Any, Dict, Optional, cast
 
 import torch.nn as nn
@@ -149,6 +150,20 @@ class TrainingLoopManager:
 
                 # Execute step callbacks using centralized callback manager with error handling
                 self.trainer.callback_manager.execute_step_callbacks(self.trainer)
+                
+                # Execute async callbacks if available
+                if self.trainer.callback_manager.has_async_callbacks():
+                    try:
+                        # Run async callbacks in the training loop without blocking
+                        async_metrics = self._run_async_callbacks_sync(self.trainer)
+                        if async_metrics:
+                            # Integrate async callback metrics into training metrics
+                            self.trainer.metrics_manager.pending_progress_updates.update(async_metrics)
+                    except Exception as e:
+                        log_both(
+                            f"[ERROR] Async callback execution failed: {e}",
+                            also_to_wandb=False,
+                        )
 
         except KeyboardInterrupt:
             log_both(
@@ -163,6 +178,138 @@ class TrainingLoopManager:
             else:
                 log_info_to_stderr("TrainingLoopManager", log_message)
             log_both(f"Training error in training loop: {e}", also_to_wandb=True)
+            raise
+
+    def _run_async_callbacks_sync(self, trainer: "Trainer") -> Optional[Dict[str, float]]:
+        """
+        Execute async callbacks in a synchronous context.
+        This method safely handles async callbacks without disrupting the training loop.
+        """
+        try:
+            # Check if there's already a running event loop
+            try:
+                loop = asyncio.get_running_loop()
+                # If we're already in an async context, we cannot use asyncio.run
+                # Instead, we'll skip async callbacks with a warning
+                if hasattr(trainer, "log_both") and trainer.log_both:
+                    trainer.log_both(
+                        "[WARNING] Skipping async callbacks due to existing event loop. "
+                        "Consider using async training loop for full async callback support.",
+                        also_to_wandb=False,
+                    )
+                return None
+            except RuntimeError:
+                # No running event loop, safe to create one
+                pass
+
+            # Create and run the async callback execution
+            async def execute_async_callbacks():
+                return await trainer.callback_manager.execute_step_callbacks_async(trainer)
+
+            # Use asyncio.run to execute async callbacks
+            return asyncio.run(execute_async_callbacks())
+
+        except Exception as e:
+            if hasattr(trainer, "log_both") and trainer.log_both:
+                trainer.log_both(
+                    f"[ERROR] Failed to execute async callbacks: {e}",
+                    also_to_wandb=False,
+                )
+            return None
+
+    async def run_async(self):
+        """
+        Async version of the training loop for full async callback support.
+        This is an alternative to run() that supports native async callback execution.
+        """
+        log_both = self.trainer.log_both
+        if not log_both:
+            raise RuntimeError(
+                "Trainer's log_both callback is not set before running TrainingLoopManager."
+            )
+        if self.episode_state is None:
+            raise RuntimeError(
+                "Initial episode state not set in TrainingLoopManager before run."
+            )
+
+        self.last_time_for_sps = time.time()
+        self.steps_since_last_time_for_sps = 0
+        self.last_display_update_time = time.time()
+
+        # Start parallel workers if parallel training is enabled
+        if self.parallel_manager and self.config.parallel.enabled:
+            if self.trainer.agent and self.trainer.agent.model:
+                log_both(
+                    f"Starting {self.config.parallel.num_workers} parallel workers..."
+                )
+                if self.parallel_manager.start_workers(
+                    cast(nn.Module, self.trainer.agent.model)
+                ):
+                    log_both("Parallel workers started successfully")
+                else:
+                    log_both(
+                        "Failed to start parallel workers, falling back to sequential training"
+                    )
+                    self.parallel_manager = None
+            else:
+                log_both("Cannot start parallel workers: model not available")
+                self.parallel_manager = None
+
+        try:
+            while (
+                self.trainer.metrics_manager.global_timestep
+                < self.config.training.total_timesteps
+            ):
+                self.current_epoch += 1
+
+                self._run_epoch(log_both)
+
+                if (
+                    self.trainer.metrics_manager.global_timestep
+                    >= self.config.training.total_timesteps
+                ):
+                    log_both(
+                        f"Target timesteps ({self.config.training.total_timesteps}) reached during epoch {self.current_epoch}."
+                    )
+                    break
+
+                if self.episode_state and self.episode_state.current_obs is not None:
+                    self.trainer.metrics_manager.set_processing(True)
+                    self.trainer.perform_ppo_update(
+                        self.episode_state.current_obs, log_both
+                    )
+                    self.trainer.metrics_manager.set_processing(False)
+                else:
+                    log_both(
+                        "[WARNING] Skipping PPO update due to missing current_obs in episode_state. "
+                        f"(Timestep: {self.trainer.metrics_manager.global_timestep})",
+                        also_to_wandb=True,
+                    )
+                    self.trainer.metrics_manager.set_processing(False)
+
+                # Execute sync step callbacks first
+                self.trainer.callback_manager.execute_step_callbacks(self.trainer)
+                
+                # Execute async callbacks natively
+                if self.trainer.callback_manager.has_async_callbacks():
+                    async_metrics = await self.trainer.callback_manager.execute_step_callbacks_async(self.trainer)
+                    if async_metrics:
+                        # Integrate async callback metrics into training metrics
+                        self.trainer.metrics_manager.pending_progress_updates.update(async_metrics)
+
+        except KeyboardInterrupt:
+            log_both(
+                "Training interrupted by user (KeyboardInterrupt in TrainingLoopManager).",
+                also_to_wandb=True,
+            )
+            raise
+        except (RuntimeError, ValueError, AttributeError) as e:
+            log_message = f"Training error in TrainingLoopManager.run_async: {e}"
+            if hasattr(self.trainer, "logger") and self.trainer.logger:
+                self.trainer.logger.log(log_message)
+            else:
+                log_info_to_stderr("TrainingLoopManager", log_message)
+            log_both(f"Training error in async training loop: {e}", also_to_wandb=True)
             raise
 
     def _run_epoch(self, log_both):

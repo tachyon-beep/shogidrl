@@ -6,9 +6,11 @@ This package contains different evaluation strategy implementations, such as:
 - Tournament: Round-robin evaluation against a pool of opponents.
 - Ladder: ELO-based ladder progression against adaptive opponents.
 - Benchmark: Evaluate against a fixed suite of benchmark scenarios.
+- Custom: Flexible user-defined evaluation configurations.
 """
 
 from .benchmark import BenchmarkEvaluator
+from .custom import CustomEvaluator
 from .ladder import LadderEvaluator
 from .single_opponent import SingleOpponentEvaluator
 from .tournament import TournamentEvaluator
@@ -18,4 +20,5 @@ __all__ = [
     "TournamentEvaluator",
     "LadderEvaluator",
     "BenchmarkEvaluator",
+    "CustomEvaluator",
 ]

@@ -8,7 +8,15 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field, field_validator
 
 # Evaluation strategy constants - matches EvaluationStrategy enum values
-VALID_EVALUATION_STRATEGIES = ["single_opponent", "tournament", "ladder", "benchmark"]
+VALID_EVALUATION_STRATEGIES = ["single_opponent", "tournament", "ladder", "benchmark", "custom"]
+
+# Strategy constants for factory registration (backward compatibility)
+class EvaluationStrategy:
+    SINGLE_OPPONENT = "single_opponent"
+    TOURNAMENT = "tournament"
+    LADDER = "ladder"
+    BENCHMARK = "benchmark"
+    CUSTOM = "custom"
 
 
 class EnvConfig(BaseModel):
@@ -136,7 +144,7 @@ class EvaluationConfig(BaseModel):
     )
 
     # Strategy and game parameters
-    strategy: Literal["single_opponent", "tournament", "ladder", "benchmark"] = Field(
+    strategy: Literal["single_opponent", "tournament", "ladder", "benchmark", "custom"] = Field(
         "single_opponent",
         description="Evaluation strategy: 'single_opponent', 'tournament', 'ladder', 'benchmark'",
     )
@@ -146,6 +154,12 @@ class EvaluationConfig(BaseModel):
     )
     timeout_per_game: Optional[float] = Field(
         None, description="Timeout per game in seconds (None for no timeout)."
+    )
+    
+    # Strategy-specific parameters
+    strategy_params: dict = Field(
+        default_factory=dict,
+        description="Strategy-specific parameters for advanced configuration."
     )
 
     # Game configuration
@@ -213,6 +227,29 @@ class EvaluationConfig(BaseModel):
         True, description="Clear model weight cache after evaluation."
     )
 
+    # Performance safeguards (required by Performance Engineer)
+    max_evaluation_time_minutes: int = Field(
+        30, description="Maximum time per evaluation run in minutes"
+    )
+    evaluation_timeout_per_game: int = Field(
+        300, description="Timeout per individual game in seconds"  
+    )
+    max_concurrent_evaluations: int = Field(
+        1, description="Maximum concurrent evaluation processes"
+    )
+    enable_performance_monitoring: bool = Field(
+        True, description="Enable performance monitoring and SLA validation"
+    )
+    memory_limit_mb: int = Field(
+        1000, description="Maximum memory usage limit in MB"
+    )
+    cpu_limit_percent: float = Field(
+        80.0, description="Maximum CPU usage limit as percentage"
+    )
+    gpu_limit_percent: float = Field(
+        80.0, description="Maximum GPU usage limit as percentage"
+    )
+
     @field_validator("evaluation_interval_timesteps")
     # pylint: disable=no-self-argument
     def evaluation_interval_positive(cls, v):
@@ -270,6 +307,116 @@ class EvaluationConfig(BaseModel):
         if v <= 0:
             raise ValueError("process_restart_threshold must be positive")
         return v
+
+    @field_validator("max_evaluation_time_minutes")
+    def max_eval_time_positive(cls, v):  # pylint: disable=no-self-argument
+        if v <= 0:
+            raise ValueError("max_evaluation_time_minutes must be positive")
+        return v
+
+    @field_validator("evaluation_timeout_per_game")
+    def eval_timeout_positive(cls, v):  # pylint: disable=no-self-argument
+        if v <= 0:
+            raise ValueError("evaluation_timeout_per_game must be positive")
+        return v
+
+    @field_validator("max_concurrent_evaluations")
+    def max_concurrent_eval_positive(cls, v):  # pylint: disable=no-self-argument
+        if v <= 0:
+            raise ValueError("max_concurrent_evaluations must be positive")
+        return v
+
+    @field_validator("memory_limit_mb")
+    def memory_limit_positive(cls, v):  # pylint: disable=no-self-argument
+        if v <= 0:
+            raise ValueError("memory_limit_mb must be positive")
+        return v
+
+    @field_validator("cpu_limit_percent")
+    def cpu_limit_valid(cls, v):  # pylint: disable=no-self-argument
+        if not 0 < v <= 100:
+            raise ValueError("cpu_limit_percent must be between 0 and 100")
+        return v
+
+    @field_validator("gpu_limit_percent")
+    def gpu_limit_valid(cls, v):  # pylint: disable=no-self-argument
+        if not 0 < v <= 100:
+            raise ValueError("gpu_limit_percent must be between 0 and 100")
+        return v
+    
+    def get_strategy_param(self, key: str, default=None):
+        """Get a strategy-specific parameter with optional default."""
+        return self.strategy_params.get(key, default)
+    
+    def set_strategy_param(self, key: str, value) -> None:
+        """Set a strategy-specific parameter."""
+        self.strategy_params[key] = value
+    
+    def configure_for_single_opponent(
+        self,
+        opponent_name: str = "default_opponent",
+        opponent_path: Optional[str] = None,
+        play_as_both_colors: bool = True,
+        color_balance_tolerance: float = 0.1,
+        **kwargs
+    ) -> None:
+        """Configure for single opponent strategy."""
+        self.strategy = "single_opponent"
+        self.strategy_params.update({
+            "opponent_name": opponent_name,
+            "opponent_path": opponent_path,
+            "play_as_both_colors": play_as_both_colors,
+            "color_balance_tolerance": color_balance_tolerance,
+            **kwargs
+        })
+    
+    def configure_for_tournament(
+        self,
+        opponent_pool_config: Optional[list] = None,
+        num_games_per_opponent: Optional[int] = None,
+        **kwargs
+    ) -> None:
+        """Configure for tournament strategy."""
+        self.strategy = "tournament"
+        self.strategy_params.update({
+            "opponent_pool_config": opponent_pool_config or [],
+            "num_games_per_opponent": num_games_per_opponent,
+            **kwargs
+        })
+    
+    def configure_for_ladder(
+        self,
+        opponent_pool_config: Optional[list] = None,
+        elo_config: Optional[dict] = None,
+        num_games_per_match: int = 2,
+        num_opponents_per_evaluation: int = 3,
+        rating_match_range: int = 200,
+        **kwargs
+    ) -> None:
+        """Configure for ladder strategy."""
+        self.strategy = "ladder"
+        self.strategy_params.update({
+            "opponent_pool_config": opponent_pool_config or [],
+            "elo_config": elo_config or {},
+            "num_games_per_match": num_games_per_match,
+            "num_opponents_per_evaluation": num_opponents_per_evaluation,
+            "rating_match_range": rating_match_range,
+            **kwargs
+        })
+    
+    def configure_for_benchmark(
+        self,
+        suite_config: Optional[list] = None,
+        num_games_per_benchmark_case: int = 1,
+        **kwargs
+    ) -> None:
+        """Configure for benchmark strategy."""
+        self.strategy = "benchmark"
+        self.strategy_params.update({
+            "suite_config": suite_config or [],
+            "num_games_per_benchmark_case": num_games_per_benchmark_case,
+            **kwargs
+        })
 
 
 class LoggingConfig(BaseModel):

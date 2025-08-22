@@ -148,9 +148,10 @@ class EnhancedEvaluationManager(EvaluationManager):
             return None
 
         try:
-            # Create tournament config
-            tournament_config = self.config
-            tournament_config.num_games_per_opponent = num_games_per_opponent
+            # Create tournament config (deep copy to avoid mutation)
+            import copy
+            tournament_config = copy.deepcopy(self.config)
+            tournament_config.num_games = num_games_per_opponent
 
             tournament_id = await self.background_tournament_manager.start_tournament(
                 tournament_config=tournament_config,
@@ -271,10 +272,34 @@ class EnhancedEvaluationManager(EvaluationManager):
         if not self.enhanced_opponent_manager:
             logger.warning("Enhanced opponent management not available")
             return
+        
+        # Input validation
+        if not opponents:
+            logger.warning("No opponents provided for enhanced selection registration")
+            return
+        
+        if not isinstance(opponents, list):
+            logger.error("Opponents must be provided as a list")
+            return
+        
+        # Validate each opponent
+        valid_opponents = []
+        for i, opponent in enumerate(opponents):
+            if not isinstance(opponent, OpponentInfo):
+                logger.error(f"Opponent at index {i} is not an OpponentInfo instance")
+                continue
+            if not opponent.name:
+                logger.error(f"Opponent at index {i} has no name")
+                continue
+            valid_opponents.append(opponent)
+        
+        if not valid_opponents:
+            logger.error("No valid opponents found after validation")
+            return
 
         try:
-            self.enhanced_opponent_manager.register_opponents(opponents)
-            logger.info(f"Registered {len(opponents)} opponents for enhanced selection")
+            self.enhanced_opponent_manager.register_opponents(valid_opponents)
+            logger.info(f"Registered {len(valid_opponents)} opponents for enhanced selection")
         except Exception as e:
             logger.error(f"Failed to register opponents: {e}")
 

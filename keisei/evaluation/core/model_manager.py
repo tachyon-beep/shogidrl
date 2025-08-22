@@ -7,7 +7,7 @@ for efficient in-memory evaluation without file I/O overhead.
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 
@@ -108,7 +108,7 @@ class ModelWeightManager:
             if not checkpoint_path.exists():
                 raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
-            checkpoint = torch.load(checkpoint_path, map_location="cpu")
+            checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
 
             # Extract model weights from checkpoint
             if "model_state_dict" in checkpoint:
@@ -390,28 +390,40 @@ class ModelWeightManager:
                 value = self.value_head(x)
                 return policy, value
 
-            def get_action_and_value(self, x, action=None, mask=None):
+            def get_action_and_value(
+                self, 
+                obs: torch.Tensor, 
+                legal_mask: Optional[torch.Tensor] = None, 
+                deterministic: bool = False
+            ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
                 """Get action and value for compatibility with ActorCriticProtocol."""
-                logits, value = self.forward(x)
+                logits, value = self.forward(obs)
 
-                if mask is not None:
-                    logits = logits.masked_fill(mask == 0, float("-inf"))
+                if legal_mask is not None:
+                    logits = logits.masked_fill(legal_mask == 0, float("-inf"))
 
                 probs = Categorical(logits=logits)
-                if action is None:
+                if deterministic:
+                    action = torch.argmax(logits, dim=-1)
+                else:
                     action = probs.sample()
 
-                return action, probs.log_prob(action), probs.entropy(), value
+                return action, probs.log_prob(action), value.squeeze(-1)
 
-            def evaluate_actions(self, x, action, mask=None):
+            def evaluate_actions(
+                self, 
+                obs: torch.Tensor, 
+                actions: torch.Tensor, 
+                legal_mask: Optional[torch.Tensor] = None
+            ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
                 """Evaluate actions for compatibility with ActorCriticProtocol."""
-                logits, value = self.forward(x)
+                logits, value = self.forward(obs)
 
-                if mask is not None:
-                    logits = logits.masked_fill(mask == 0, float("-inf"))
+                if legal_mask is not None:
+                    logits = logits.masked_fill(legal_mask == 0, float("-inf"))
 
                 probs = Categorical(logits=logits)
-                return probs.log_prob(action), probs.entropy(), value
+                return probs.log_prob(actions), value.squeeze(-1), probs.entropy()
 
         return DynamicActorCritic(
             input_channels, total_actions, conv_out_channels, flattened_size

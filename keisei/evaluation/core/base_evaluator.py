@@ -15,7 +15,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional, Union
 
 import torch
 
-from .evaluation_config import EvaluationConfig
+from keisei.config_schema import EvaluationConfig
 from .evaluation_context import AgentInfo, EvaluationContext, OpponentInfo
 from .evaluation_result import EvaluationResult, GameResult
 
@@ -47,6 +47,46 @@ class BaseEvaluator(ABC):
         """Configure logging for this evaluator."""
         level = getattr(logging, self.config.log_level.upper())
         self.logger.setLevel(level)
+
+    def set_runtime_context(
+        self, 
+        policy_mapper=None, 
+        device: str = None, 
+        model_dir: str = None,
+        wandb_active: bool = False,
+        **kwargs
+    ) -> None:
+        """
+        Set runtime context from training system.
+        
+        This enables evaluators to access shared training infrastructure
+        like the policy mapper, device configuration, and model directories.
+        
+        Args:
+            policy_mapper: Shared PolicyOutputMapper from training
+            device: Target device for evaluation
+            model_dir: Directory containing model checkpoints
+            wandb_active: Whether Weights & Biases logging is active
+            **kwargs: Additional runtime context parameters
+        """
+        if policy_mapper is not None:
+            self.policy_mapper = policy_mapper
+        if device is not None:
+            self.device = device
+        if model_dir is not None:
+            self.model_dir = model_dir
+        self.wandb_active = wandb_active
+        
+        # Store any additional context
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+            
+        self.logger.debug(
+            "Runtime context set: device=%s, model_dir=%s, wandb_active=%s", 
+            getattr(self, 'device', 'None'),
+            getattr(self, 'model_dir', 'None'), 
+            wandb_active
+        )
 
     @abstractmethod
     async def evaluate(
@@ -156,9 +196,13 @@ class BaseEvaluator(ABC):
         self.context = context
         return context
 
+    @abstractmethod
     def get_opponents(self, context: EvaluationContext) -> List[OpponentInfo]:
         """
         Get list of opponents for this evaluation strategy.
+
+        Each evaluation strategy must implement this method to define
+        which opponents the agent will be evaluated against.
 
         Args:
             context: Current evaluation context
@@ -166,8 +210,7 @@ class BaseEvaluator(ABC):
         Returns:
             List of opponent information objects
         """
-        # Default implementation - subclasses should override
-        return []
+        pass
 
     async def run_game(
         self,
@@ -266,11 +309,24 @@ class BaseEvaluator(ABC):
             logger.error("Agent name is required")
             return False
 
-        if agent_info.checkpoint_path and not Path(agent_info.checkpoint_path).exists():
-            logger.error(
-                f"Agent checkpoint path does not exist: {agent_info.checkpoint_path}"
-            )
-            return False
+        # Only validate checkpoint path if it's provided and not for in-memory evaluation
+        if agent_info.checkpoint_path:
+            try:
+                checkpoint_path = Path(agent_info.checkpoint_path)
+                if not checkpoint_path.exists():
+                    # Check if this might be in-memory evaluation by looking for agent instance
+                    if not agent_info.metadata.get("agent_instance"):
+                        logger.error(
+                            f"Agent checkpoint path does not exist: {agent_info.checkpoint_path}"
+                        )
+                        return False
+                    else:
+                        logger.debug(
+                            "Checkpoint path validation skipped for in-memory evaluation"
+                        )
+            except (OSError, ValueError) as e:
+                logger.error(f"Invalid checkpoint path: {agent_info.checkpoint_path}, error: {e}")
+                return False
 
         return True
 
@@ -291,8 +347,10 @@ class BaseEvaluator(ABC):
 
     def log_evaluation_start(self, agent_info: AgentInfo, context: EvaluationContext):
         """Log the start of an evaluation run."""
+        # Handle both string and enum strategy types
+        strategy_name = self.config.strategy.value if hasattr(self.config.strategy, 'value') else self.config.strategy
         logger.info(
-            f"Starting {self.config.strategy.value} evaluation for agent: {agent_info.name}"
+            f"Starting {strategy_name} evaluation for agent: {agent_info.name}"
         )
         logger.info(
             f"Configuration: {self.config.num_games} games, "

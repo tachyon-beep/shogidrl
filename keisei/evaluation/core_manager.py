@@ -21,6 +21,7 @@ from .core import (
     OpponentInfo,
 )
 from .opponents import OpponentPool
+from .performance_manager import EvaluationPerformanceManager
 
 
 class EvaluationManager:
@@ -49,6 +50,20 @@ class EvaluationManager:
         self.enable_in_memory_eval = getattr(
             config, "enable_in_memory_evaluation", True
         )
+
+        # CRITICAL FIX: Initialize performance manager and integrate it into evaluation flow
+        self.performance_manager = EvaluationPerformanceManager(
+            max_concurrent=getattr(config, "max_concurrent_evaluations", 4),
+            timeout_seconds=getattr(config, "evaluation_timeout_seconds", 300)
+        )
+        
+        # Enable performance safeguards by default in production
+        self.performance_safeguards_enabled = getattr(
+            config, "enable_performance_safeguards", True
+        )
+        
+        if not self.performance_safeguards_enabled:
+            self.performance_manager.disable_enforcement()
 
     def setup(
         self,
@@ -98,8 +113,104 @@ class EvaluationManager:
             environment_info={"device": self.device},
         )
         evaluator = EvaluatorFactory.create(self.config)
-        # Many evaluators are async; run in asyncio event loop
-        return asyncio.run(evaluator.evaluate(agent_info, context))
+        # Set runtime context from training system
+        evaluator.set_runtime_context(
+            policy_mapper=self.policy_mapper,
+            device=self.device, 
+            model_dir=self.model_dir,
+            wandb_active=self.wandb_active
+        )
+        # FIXED: Check if we're in an async context and use appropriate method
+        try:
+            # Check if there's a running event loop
+            asyncio.get_running_loop()
+            # If we get here, we're in an async context - this shouldn't happen for evaluate_checkpoint
+            # which is designed for synchronous use. Return a sync wrapper.
+            import sys
+            if sys.version_info >= (3, 7):
+                # For Python 3.7+, we can create a new event loop for this thread
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    # CRITICAL FIX: Use performance manager for ALL evaluations
+                    if self.performance_safeguards_enabled:
+                        result = loop.run_until_complete(
+                            self.performance_manager.run_evaluation_with_safeguards(
+                                evaluator, agent_info, context
+                            )
+                        )
+                    else:
+                        result = loop.run_until_complete(evaluator.evaluate(agent_info, context))
+                finally:
+                    loop.close()
+                    asyncio.set_event_loop(None)
+                return result
+            else:
+                # Fallback for older Python versions
+                raise RuntimeError(
+                    "Cannot run evaluation synchronously from within async context. "
+                    "Use evaluate_checkpoint_async() instead."
+                )
+        except RuntimeError:
+            # No running event loop, safe to use asyncio.run
+            if self.performance_safeguards_enabled:
+                return asyncio.run(
+                    self.performance_manager.run_evaluation_with_safeguards(
+                        evaluator, agent_info, context
+                    )
+                )
+            else:
+                return asyncio.run(evaluator.evaluate(agent_info, context))
+
+    async def evaluate_checkpoint_async(
+        self, agent_checkpoint: str, _opponent_checkpoint: Optional[str] = None
+    ) -> EvaluationResult:
+        """Async version of evaluate_checkpoint for use in async contexts."""
+        # Validate checkpoint file exists and is readable
+        if not Path(agent_checkpoint).exists():
+            raise FileNotFoundError(f"Checkpoint file not found: {agent_checkpoint}")
+
+        # Try to validate the checkpoint file format
+        try:
+            import torch
+
+            # Use weights_only=False for evaluation checkpoint validation (trusted source)
+            checkpoint_data = torch.load(
+                agent_checkpoint, map_location="cpu", weights_only=False
+            )
+            # Basic validation - should be a dictionary with expected keys
+            if not isinstance(checkpoint_data, dict):
+                raise ValueError(
+                    f"Checkpoint file is not a valid PyTorch checkpoint: {agent_checkpoint}"
+                )
+        except Exception as e:
+            raise ValueError(
+                f"Failed to load checkpoint file {agent_checkpoint}: {str(e)}"
+            )
+
+        agent_info = AgentInfo(name="current_agent", checkpoint_path=agent_checkpoint)
+        context = EvaluationContext(
+            session_id=str(uuid4()),
+            timestamp=datetime.now(),
+            agent_info=agent_info,
+            configuration=self.config,
+            environment_info={"device": self.device},
+        )
+        evaluator = EvaluatorFactory.create(self.config)
+        # Set runtime context from training system
+        evaluator.set_runtime_context(
+            policy_mapper=self.policy_mapper,
+            device=self.device, 
+            model_dir=self.model_dir,
+            wandb_active=self.wandb_active
+        )
+        # CRITICAL FIX: Use performance manager for async evaluation
+        if self.performance_safeguards_enabled:
+            return await self.performance_manager.run_evaluation_with_safeguards(
+                evaluator, agent_info, context
+            )
+        else:
+            return await evaluator.evaluate(agent_info, context)
 
     def evaluate_current_agent(self, agent) -> EvaluationResult:
         """Evaluate an in-memory PPOAgent instance."""
@@ -127,8 +238,53 @@ class EvaluationManager:
         )
 
         evaluator = EvaluatorFactory.create(self.config)
-        # Use asyncio.run to handle async evaluator
-        result = asyncio.run(evaluator.evaluate(agent_info, context))
+        # Set runtime context from training system
+        evaluator.set_runtime_context(
+            policy_mapper=self.policy_mapper,
+            device=self.device, 
+            model_dir=self.model_dir,
+            wandb_active=self.wandb_active
+        )
+        # FIXED: Check if we're in an async context and use appropriate method
+        try:
+            # Check if there's a running event loop
+            asyncio.get_running_loop()
+            # If we get here, we're in an async context - this shouldn't happen for evaluate_current_agent
+            # which is designed for synchronous use from callbacks. Return a sync wrapper.
+            import sys
+            if sys.version_info >= (3, 7):
+                # For Python 3.7+, we can create a new event loop for this thread
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    # CRITICAL FIX: Use performance manager for current agent evaluation
+                    if self.performance_safeguards_enabled:
+                        result = loop.run_until_complete(
+                            self.performance_manager.run_evaluation_with_safeguards(
+                                evaluator, agent_info, context
+                            )
+                        )
+                    else:
+                        result = loop.run_until_complete(evaluator.evaluate(agent_info, context))
+                finally:
+                    loop.close()
+                    asyncio.set_event_loop(None)
+            else:
+                # Fallback for older Python versions
+                raise RuntimeError(
+                    "Cannot run evaluation synchronously from within async context. "
+                    "Use evaluate_current_agent_async() instead."
+                )
+        except RuntimeError:
+            # No running event loop, safe to use asyncio.run
+            if self.performance_safeguards_enabled:
+                result = asyncio.run(
+                    self.performance_manager.run_evaluation_with_safeguards(
+                        evaluator, agent_info, context
+                    )
+                )
+            else:
+                result = asyncio.run(evaluator.evaluate(agent_info, context))
 
         # Restore training mode after evaluation
         if hasattr(model, "train"):
@@ -162,7 +318,21 @@ class EvaluationManager:
         )
 
         evaluator = EvaluatorFactory.create(self.config)
-        result = await evaluator.evaluate(agent_info, context)
+        # Set runtime context from training system
+        evaluator.set_runtime_context(
+            policy_mapper=self.policy_mapper,
+            device=self.device, 
+            model_dir=self.model_dir,
+            wandb_active=self.wandb_active
+        )
+        
+        # CRITICAL FIX: Use performance manager for async current agent evaluation
+        if self.performance_safeguards_enabled:
+            result = await self.performance_manager.run_evaluation_with_safeguards(
+                evaluator, agent_info, context
+            )
+        else:
+            result = await evaluator.evaluate(agent_info, context)
 
         # Restore training mode after evaluation
         if hasattr(model, "train"):
@@ -175,7 +345,7 @@ class EvaluationManager:
     ) -> EvaluationResult:
         """Evaluate agent using in-memory weights without file I/O."""
         if not self.enable_in_memory_eval:
-            return self.evaluate_current_agent(agent)  # Fallback to file-based
+            return await self.evaluate_current_agent_async(agent)  # Fallback to async file-based
 
         try:
             # Extract current agent weights
@@ -233,8 +403,8 @@ class EvaluationManager:
 
         except (ValueError, FileNotFoundError, RuntimeError) as e:
             # Fallback to file-based evaluation on error
-            print(f"In-memory evaluation failed, falling back to file-based: {e}")
-            return self.evaluate_current_agent(agent)
+            print(f"In-memory evaluation failed, falling back to async file-based: {e}")
+            return await self.evaluate_current_agent_async(agent)
 
     async def _run_in_memory_evaluation(
         self, agent_weights, opponent_weights, agent_info, opponent_info, context
@@ -242,16 +412,54 @@ class EvaluationManager:
         """Run evaluation using in-memory weights."""
         # Get the evaluator
         evaluator = EvaluatorFactory.create(self.config)
+        # Set runtime context from training system
+        evaluator.set_runtime_context(
+            policy_mapper=self.policy_mapper,
+            device=self.device, 
+            model_dir=self.model_dir,
+            wandb_active=self.wandb_active
+        )
 
         # Check if evaluator supports in-memory evaluation
         if hasattr(evaluator, "evaluate_in_memory"):
-            return await evaluator.evaluate_in_memory(
-                agent_info,
-                context,
-                agent_weights=agent_weights,
-                opponent_weights=opponent_weights,
-                opponent_info=opponent_info,
-            )
+            # CRITICAL FIX: Apply performance safeguards to in-memory evaluation
+            if self.performance_safeguards_enabled:
+                # Create a wrapper for in-memory evaluation
+                class InMemoryEvaluatorWrapper:
+                    def __init__(self, eval_func, weights_args):
+                        self.eval_func = eval_func
+                        self.weights_args = weights_args
+                    
+                    async def evaluate(self, agent_info, context):
+                        return await self.eval_func(
+                            agent_info, context, **self.weights_args
+                        )
+                
+                wrapper = InMemoryEvaluatorWrapper(
+                    evaluator.evaluate_in_memory,
+                    {
+                        "agent_weights": agent_weights,
+                        "opponent_weights": opponent_weights,
+                        "opponent_info": opponent_info,
+                    }
+                )
+                
+                return await self.performance_manager.run_evaluation_with_safeguards(
+                    wrapper, agent_info, context
+                )
+            else:
+                return await evaluator.evaluate_in_memory(
+                    agent_info,
+                    context,
+                    agent_weights=agent_weights,
+                    opponent_weights=opponent_weights,
+                    opponent_info=opponent_info,
+                )
         else:
-            # Fallback to regular evaluation
-            return await evaluator.evaluate(agent_info, context)
+            # Fallback to regular evaluation with performance safeguards
+            if self.performance_safeguards_enabled:
+                return await self.performance_manager.run_evaluation_with_safeguards(
+                    evaluator, agent_info, context
+                )
+            else:
+                return await evaluator.evaluate(agent_info, context)

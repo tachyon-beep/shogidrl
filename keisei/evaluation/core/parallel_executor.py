@@ -170,19 +170,45 @@ class ParallelGameExecutor:
             ):
                 # Use in-memory evaluation if available
                 logger.debug(f"Using in-memory evaluation for game {task.task_id}")
-                result = asyncio.run(
-                    task.game_executor.__self__.evaluate_step_in_memory(
-                        task.agent_info, task.opponent_info, task.context
+                try:
+                    # Check if we're in an existing event loop
+                    loop = asyncio.get_running_loop()
+                    # Use asyncio.run_coroutine_threadsafe to run from thread pool
+                    future = asyncio.run_coroutine_threadsafe(
+                        task.game_executor.__self__.evaluate_step_in_memory(
+                            task.agent_info, task.opponent_info, task.context
+                        ),
+                        loop
                     )
-                )
+                    result = future.result(timeout=300)  # 5 minutes timeout
+                except RuntimeError:
+                    # No running loop, safe to use asyncio.run()
+                    result = asyncio.run(
+                        task.game_executor.__self__.evaluate_step_in_memory(
+                            task.agent_info, task.opponent_info, task.context
+                        )
+                    )
             else:
                 # Use regular evaluation
                 logger.debug(f"Using regular evaluation for game {task.task_id}")
-                result = asyncio.run(
-                    task.game_executor(
-                        task.agent_info, task.opponent_info, task.context
+                try:
+                    # Check if we're in an existing event loop
+                    loop = asyncio.get_running_loop()
+                    # Use asyncio.run_coroutine_threadsafe to run from thread pool
+                    future = asyncio.run_coroutine_threadsafe(
+                        task.game_executor(
+                            task.agent_info, task.opponent_info, task.context
+                        ),
+                        loop
                     )
-                )
+                    result = future.result(timeout=300)  # 5 minutes timeout
+                except RuntimeError:
+                    # No running loop, safe to use asyncio.run()
+                    result = asyncio.run(
+                        task.game_executor(
+                            task.agent_info, task.opponent_info, task.context
+                        )
+                    )
 
             task.result = result
             return result

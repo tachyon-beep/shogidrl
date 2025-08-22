@@ -18,13 +18,13 @@ from keisei.utils.agent_loading import initialize_opponent, load_evaluation_agen
 from ..core import (
     AgentInfo,
     BaseEvaluator,
-    BenchmarkConfig,
     EvaluationContext,
     EvaluationResult,
     GameResult,
     OpponentInfo,
     SummaryStats,
 )
+from keisei.config_schema import EvaluationConfig
 
 # Define constants for termination reasons
 TERMINATION_REASON_MAX_MOVES = "Max moves reached"
@@ -47,18 +47,56 @@ TERMINATION_REASON_EVAL_STEP_ERROR = "Benchmark evaluate_step error"
 class BenchmarkEvaluator(BaseEvaluator):
     """Evaluates agent against a fixed suite of benchmark opponents or scenarios."""
 
-    def __init__(self, config: BenchmarkConfig):  # type: ignore
+    def __init__(self, config: EvaluationConfig):  # type: ignore
         super().__init__(config)
-        self.config: BenchmarkConfig = config  # type: ignore
+        self.config: EvaluationConfig = config  # type: ignore
         self.benchmark_suite: List[OpponentInfo] = []
         self.policy_mapper = PolicyOutputMapper()
         if not hasattr(self, "logger") or self.logger is None:
             self.logger = logging.getLogger(__name__)
 
+    def get_opponents(self, context: EvaluationContext) -> List[OpponentInfo]:
+        """Get benchmark suite opponents from configuration."""
+        # Get suite configuration from strategy parameters
+        suite_config = self.config.get_strategy_param("suite_config", [])
+        
+        opponents = []
+        if not suite_config:
+            # Provide default benchmark suite
+            opponents = [
+                OpponentInfo(
+                    name="benchmark_random",
+                    type="random",
+                    checkpoint_path=None,
+                    metadata={"difficulty": "low", "description": "Random baseline"}
+                ),
+                OpponentInfo(
+                    name="benchmark_heuristic",
+                    type="heuristic", 
+                    checkpoint_path=None,
+                    metadata={"difficulty": "medium", "description": "Heuristic baseline"}
+                )
+            ]
+        else:
+            for i, benchmark_case_data in enumerate(suite_config):
+                name = benchmark_case_data.get("name", f"benchmark_case_{i}")
+                opp_type = benchmark_case_data.get("type", "random")
+                path = benchmark_case_data.get("checkpoint_path", None)
+                metadata = benchmark_case_data.get("metadata", {})
+                
+                opponents.append(OpponentInfo(
+                    name=name,
+                    type=opp_type,
+                    checkpoint_path=path,
+                    metadata=metadata
+                ))
+                
+        return opponents
+
     async def _load_benchmark_suite(self, context: EvaluationContext):
         """Load the benchmark suite from configuration."""
-        # BenchmarkConfig should define the suite: list of opponents, specific game setups, etc.
-        suite_config = getattr(self.config, "suite_config", [])
+        # Get suite configuration from strategy parameters
+        suite_config = self.config.get_strategy_param("suite_config", [])
         if not suite_config:
             self.logger.warning("No benchmark suite configured. Using placeholders.")
             self.benchmark_suite = [
@@ -646,15 +684,15 @@ class BenchmarkEvaluator(BaseEvaluator):
         if not super().validate_config():
             return False
         # Add benchmark-specific config validation
-        if not hasattr(self.config, "suite_config") or not isinstance(
-            getattr(self.config, "suite_config"), list
-        ):
+        suite_config = self.config.get_strategy_param("suite_config", [])
+        if not isinstance(suite_config, list):
             self.logger.warning(
-                "BenchmarkConfig.suite_config should be a list. Evaluation might not run as expected."
+                "suite_config should be a list. Evaluation might not run as expected."
             )
-        if getattr(self.config, "num_games_per_benchmark_case", 1) <= 0:
+        num_games_per_case = self.config.get_strategy_param("num_games_per_benchmark_case", 1)
+        if num_games_per_case <= 0:
             self.logger.error(
-                "BenchmarkConfig.num_games_per_benchmark_case must be positive."
+                "num_games_per_benchmark_case must be positive."
             )
             return False
         return True
@@ -706,5 +744,5 @@ class BenchmarkEvaluator(BaseEvaluator):
 from ..core import EvaluationStrategy, EvaluatorFactory
 
 EvaluatorFactory.register(
-    EvaluationStrategy.BENCHMARK.value, BenchmarkEvaluator  # type: ignore
+    EvaluationStrategy.BENCHMARK, BenchmarkEvaluator  # type: ignore
 )

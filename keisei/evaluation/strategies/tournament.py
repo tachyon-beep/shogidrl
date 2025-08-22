@@ -27,8 +27,8 @@ from ..core import (
     GameResult,
     OpponentInfo,
     SummaryStats,
-    TournamentConfig,
 )
+from keisei.config_schema import EvaluationConfig
 
 logger = logging.getLogger(__name__)
 
@@ -61,10 +61,39 @@ NO_OPPONENTS_LOADED_SHORT_MSG = "No opponents loaded for tournament."
 class TournamentEvaluator(BaseEvaluator):
     """Round-robin tournament evaluation against multiple opponents."""
 
-    def __init__(self, config: TournamentConfig):  # type: ignore
+    def __init__(self, config: EvaluationConfig):  # type: ignore
         super().__init__(config)
-        self.config: TournamentConfig = config  # type: ignore
+        self.config: EvaluationConfig = config  # type: ignore
         self.policy_mapper = PolicyOutputMapper()
+
+    def get_opponents(self, context: EvaluationContext) -> List[OpponentInfo]:
+        """Get tournament opponents from configuration."""
+        opponent_pool_config = self.config.get_strategy_param("opponent_pool_config", [])
+        
+        opponents = []
+        for i, opp_config in enumerate(opponent_pool_config):
+            name = opp_config.get("name", f"tournament_opponent_{i}")
+            opp_type = opp_config.get("type", "random")
+            checkpoint_path = opp_config.get("checkpoint_path")
+            metadata = opp_config.get("metadata", {})
+            
+            opponents.append(OpponentInfo(
+                name=name,
+                type=opp_type, 
+                checkpoint_path=checkpoint_path,
+                metadata=metadata
+            ))
+        
+        # If no opponents configured, provide a default random opponent
+        if not opponents:
+            opponents.append(OpponentInfo(
+                name="default_random",
+                type="random",
+                checkpoint_path=None,
+                metadata={"description": "Default random opponent for tournament"}
+            ))
+            
+        return opponents
 
     async def evaluate_step(
         self,
@@ -270,9 +299,10 @@ class TournamentEvaluator(BaseEvaluator):
             return evaluation_result
 
         # Calculate number of games per opponent
-        if self.config.num_games_per_opponent is not None:
+        num_games_per_opponent = self.config.get_strategy_param("num_games_per_opponent")
+        if num_games_per_opponent is not None:
             # Use fixed number of games per opponent
-            games_per_opponent = [self.config.num_games_per_opponent] * len(opponents)
+            games_per_opponent = [num_games_per_opponent] * len(opponents)
         else:
             # Dynamic calculation based on total games - distribute evenly
             base_games = self.config.num_games // len(opponents)
@@ -324,12 +354,90 @@ class TournamentEvaluator(BaseEvaluator):
 
         self.log_evaluation_start(agent_info, context)
 
-        # For now, return empty results as in-memory tournament is not fully implemented
+        # Get opponents from configuration
+        opponents = self.get_opponents(context)
+        if not opponents:
+            logger.warning(NO_OPPONENTS_LOADED_MSG)
+            evaluation_result = EvaluationResult(
+                context=context,
+                games=[],
+                summary_stats=SummaryStats.from_games([]),
+                analytics_data={"tournament_specific_analytics": {}},
+                errors=[NO_OPPONENTS_LOADED_SHORT_MSG],
+            )
+            self.log_evaluation_complete(evaluation_result)
+            return evaluation_result
+
+        # Create in-memory agent with provided weights
+        if agent_weights is not None:
+            # Clone agent_info and add weights to metadata for in-memory evaluation
+            in_memory_agent = AgentInfo(
+                name=agent_info.name,
+                checkpoint_path=agent_info.checkpoint_path,
+                metadata={
+                    **(agent_info.metadata or {}),
+                    "agent_weights": agent_weights,
+                    "use_in_memory": True
+                }
+            )
+        else:
+            in_memory_agent = agent_info
+
+        # Calculate number of games per opponent
+        num_games_per_opponent = self.config.get_strategy_param("num_games_per_opponent")
+        if num_games_per_opponent is not None:
+            games_per_opponent = [num_games_per_opponent] * len(opponents)
+        else:
+            base_games = self.config.num_games // len(opponents)
+            extra_games = self.config.num_games % len(opponents)
+            games_per_opponent = [
+                base_games + (1 if i < extra_games else 0)
+                for i in range(len(opponents))
+            ]
+
+        # Play games against each opponent using in-memory evaluation
+        all_games = []
+        all_errors = []
+
+        for i, opponent in enumerate(opponents):
+            # For in-memory tournament, create opponent with weights if provided
+            if opponent_weights is not None and opponent_info is not None:
+                in_memory_opponent = OpponentInfo(
+                    name=opponent_info.name if opponent_info else opponent.name,
+                    type=opponent_info.type if opponent_info else opponent.type,
+                    checkpoint_path=opponent_info.checkpoint_path if opponent_info else opponent.checkpoint_path,
+                    metadata={
+                        **(opponent.metadata or {}),
+                        "opponent_weights": opponent_weights,
+                        "use_in_memory": True
+                    }
+                )
+            else:
+                in_memory_opponent = opponent
+
+            # Use evaluate_step_in_memory if available, otherwise fall back to regular evaluation
+            if hasattr(self, 'evaluate_step_in_memory'):
+                games, errors = await self._play_games_against_opponent_in_memory(
+                    in_memory_agent, in_memory_opponent, games_per_opponent[i], context
+                )
+            else:
+                games, errors = await self._play_games_against_opponent(
+                    in_memory_agent, in_memory_opponent, games_per_opponent[i], context
+                )
+            all_games.extend(games)
+            all_errors.extend(errors)
+
+        # Calculate tournament standings
+        standings = self._calculate_tournament_standings(
+            all_games, opponents, in_memory_agent
+        )
+
         evaluation_result = EvaluationResult(
             context=context,
-            games=[],
-            summary_stats=SummaryStats.from_games([]),
-            analytics_data={"tournament_specific_analytics": {}},
+            games=all_games,
+            summary_stats=SummaryStats.from_games(all_games),
+            analytics_data={"tournament_specific_analytics": standings},
+            errors=all_errors,
         )
 
         self.log_evaluation_complete(evaluation_result)
@@ -341,18 +449,16 @@ class TournamentEvaluator(BaseEvaluator):
             return False
 
         # Check if opponent_pool_config exists and is a list
-        if (
-            not hasattr(self.config, "opponent_pool_config")
-            or self.config.opponent_pool_config is None
-        ):
+        opponent_pool_config = self.config.get_strategy_param("opponent_pool_config", [])
+        if opponent_pool_config is None:
             logger.warning(
-                "TournamentConfig.opponent_pool_config is missing or not a list"
+                "opponent_pool_config is missing or not a list"
             )
             return True  # Allow it but warn
 
-        if not isinstance(self.config.opponent_pool_config, list):
+        if not isinstance(opponent_pool_config, list):
             logger.warning(
-                "TournamentConfig.opponent_pool_config is missing or not a list"
+                "opponent_pool_config is missing or not a list"
             )
             return True  # Allow it but warn
 
@@ -616,9 +722,80 @@ class TournamentEvaluator(BaseEvaluator):
 
         return results, errors
 
+    async def _play_games_against_opponent_in_memory(
+        self,
+        agent_info: AgentInfo,
+        opponent_info: OpponentInfo,
+        num_games: int,
+        evaluation_context: EvaluationContext,
+    ) -> Tuple[List[GameResult], List[str]]:
+        """Play a series of games against a specific opponent using in-memory evaluation."""
+        results = []
+        errors = []
+
+        for game_num in range(num_games):
+            try:
+                # Create a copy of opponent_info with the right metadata for this game
+                opponent_dict = (
+                    opponent_info.to_dict()
+                    if hasattr(opponent_info, "to_dict")
+                    else {
+                        "name": getattr(opponent_info, "name", "Unknown"),
+                        "type": getattr(opponent_info, "type", "random"),
+                        "metadata": getattr(opponent_info, "metadata", {}).copy(),
+                    }
+                )
+
+                # Alternate who plays sente by setting metadata
+                if (game_num % 2) == 0:
+                    # Agent plays sente (even-numbered games: 0, 2, 4...)
+                    opponent_dict["metadata"]["agent_plays_sente_in_eval_step"] = True
+                else:
+                    # Agent plays gote (odd-numbered games: 1, 3, 5...)
+                    opponent_dict["metadata"]["agent_plays_sente_in_eval_step"] = False
+
+                current_opponent_info = OpponentInfo.from_dict(opponent_dict)
+
+                # Use in-memory evaluation step if available
+                if hasattr(self, 'evaluate_step_in_memory'):
+                    result = await self.evaluate_step_in_memory(
+                        agent_info, current_opponent_info, evaluation_context
+                    )
+                else:
+                    # Fall back to regular evaluation step
+                    result = await self.evaluate_step(
+                        agent_info, current_opponent_info, evaluation_context
+                    )
+
+                if result:
+                    results.append(result)
+            except (ValueError, TypeError, RuntimeError, AttributeError) as e:
+                error_msg = f"Error during in-memory game orchestration for game {game_num + 1} against {getattr(opponent_info, 'name', 'Unknown')}: {str(e)}"
+                logger.error(error_msg, exc_info=True)
+                errors.append(error_msg)
+
+        return results, errors
+
+    async def evaluate_step_in_memory(
+        self,
+        agent_info: AgentInfo,
+        opponent_info: OpponentInfo,
+        context: EvaluationContext,
+    ) -> GameResult:
+        """Evaluate a single step (game) using in-memory weights."""
+        # Extract in-memory weights from metadata if available
+        agent_weights = agent_info.metadata.get("agent_weights") if agent_info.metadata else None
+        opponent_weights = opponent_info.metadata.get("opponent_weights") if opponent_info.metadata else None
+        
+        # If we have in-memory weights, we need to create temporary agents with those weights
+        # For now, fall back to regular evaluation step
+        # This could be enhanced later to actually use the in-memory weights
+        logger.debug("Using evaluate_step_in_memory (currently falls back to regular evaluation)")
+        return await self.evaluate_step(agent_info, opponent_info, context)
+
 
 # Register this evaluator with the factory
 
 EvaluatorFactory.register(
-    EvaluationStrategy.TOURNAMENT.value, TournamentEvaluator  # type: ignore
+    EvaluationStrategy.TOURNAMENT, TournamentEvaluator  # type: ignore
 )

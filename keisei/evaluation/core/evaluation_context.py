@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
 if TYPE_CHECKING:
-    from .evaluation_config import EvaluationConfig
+    from keisei.config_schema import EvaluationConfig
 
 
 @dataclass

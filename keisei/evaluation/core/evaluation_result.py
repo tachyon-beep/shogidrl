@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 if TYPE_CHECKING:
     from ..analytics.elo_tracker import EloTracker
     from ..analytics.performance_analyzer import PerformanceAnalyzer
-    from .evaluation_config import EvaluationConfig  # Added for type hint
+    from keisei.config_schema import EvaluationConfig  # Added for type hint
     from .evaluation_context import AgentInfo, EvaluationContext, OpponentInfo
 
 
@@ -312,7 +312,7 @@ class EvaluationResult:
         """
         Reconstructs an EvaluationResult object from a dictionary.
         """
-        from .evaluation_config import EvaluationConfig, get_config_class
+        from keisei.config_schema import EvaluationConfig
         from .evaluation_context import EvaluationContext
 
         eval_config_data = data.get("context", {}).get("configuration")
