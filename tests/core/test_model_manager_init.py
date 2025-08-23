@@ -515,8 +515,10 @@ class TestModelManagerUtilities:
 
     @patch("keisei.training.model_manager.features.FEATURE_SPECS")
     @patch("keisei.training.model_manager.model_factory")
+    @patch("keisei.training.model_manager.safe_compile_model")
     def test_model_creation_and_agent_instantiation(
         self,
+        mock_safe_compile_model,
         mock_model_factory,
         mock_features,
         minimal_model_manager_config,
@@ -533,6 +535,9 @@ class TestModelManagerUtilities:
         mock_model = Mock()
         mock_model.to.return_value = mock_model  # .to() returns itself
         mock_model_factory.return_value = mock_model
+        
+        # Mock torch.compile to return the model unchanged for fast test execution
+        mock_safe_compile_model.return_value = (mock_model, Mock(success=True, performance_improvement=1.25))
 
         # Create ModelManager
         manager = ModelManager(

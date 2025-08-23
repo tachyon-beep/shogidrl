@@ -507,21 +507,24 @@ class TestModelManagerEnhancedCheckpointHandling:
         manager = ModelManager(
             minimal_model_manager_config, args_with_resume, device, logger_func
         )
-        manager.create_model()
+        # Mock create_model to avoid torch.compile optimization in tests
+        with patch.object(manager, 'create_model') as mock_create_model:
+            mock_create_model.return_value = mock_model
+            manager.model = mock_model
 
-        # Mock an agent for testing
-        mock_agent = Mock()
-        mock_agent.load_model.return_value = checkpoint_data
+            # Mock an agent for testing
+            mock_agent = Mock()
+            mock_agent.load_model.return_value = checkpoint_data
 
-        # Test loading latest checkpoint
-        result = manager.handle_checkpoint_resume(
-            mock_agent, minimal_model_manager_config.logging.model_dir
-        )
+            # Test loading latest checkpoint
+            result = manager.handle_checkpoint_resume(
+                mock_agent, minimal_model_manager_config.logging.model_dir
+            )
 
-        assert result is True
-        assert manager.checkpoint_data is not None
-        assert manager.checkpoint_data["global_timestep"] == 2000
-        mock_agent.load_model.assert_called_with(latest_checkpoint_path)
+            assert result is True
+            assert manager.checkpoint_data is not None
+            assert manager.checkpoint_data["global_timestep"] == 2000
+            mock_agent.load_model.assert_called_with(latest_checkpoint_path)
 
     @patch("keisei.training.model_manager.features.FEATURE_SPECS")
     @patch("keisei.training.model_manager.model_factory")
@@ -552,25 +555,33 @@ class TestModelManagerEnhancedCheckpointHandling:
         manager = ModelManager(
             minimal_model_manager_config, mock_args, device, logger_func
         )
-        manager.create_model()
+        
+        # Mock create_model to avoid torch.compile optimization in tests
+        with patch.object(manager, 'create_model') as mock_create_model:
+            mock_create_model.return_value = mock_model
+            manager.model = mock_model
 
-        mock_agent = Mock()
+            mock_agent = Mock()
 
-        # Test loading specific non-existent checkpoint - set args to use specific path
-        args_with_resume = MockArgs(resume="checkpoint_9999.pth")
-        manager_with_resume = ModelManager(
-            minimal_model_manager_config, args_with_resume, device, logger_func
-        )
-        manager_with_resume.create_model()
+            # Test loading specific non-existent checkpoint - set args to use specific path
+            args_with_resume = MockArgs(resume="checkpoint_9999.pth")
+            manager_with_resume = ModelManager(
+                minimal_model_manager_config, args_with_resume, device, logger_func
+            )
+            
+            # Mock create_model for the second manager too
+            with patch.object(manager_with_resume, 'create_model') as mock_create_model2:
+                mock_create_model2.return_value = mock_model
+                manager_with_resume.model = mock_model
 
-        result = manager_with_resume.handle_checkpoint_resume(
-            mock_agent, "/some/model/dir"
-        )
+                result = manager_with_resume.handle_checkpoint_resume(
+                    mock_agent, "/some/model/dir"
+                )
 
-        assert result is False
-        logger_func.assert_any_call(
-            "Specified resume checkpoint not found: checkpoint_9999.pth"
-        )
+                assert result is False
+                logger_func.assert_any_call(
+                    "Specified resume checkpoint not found: checkpoint_9999.pth"
+                )
 
     @patch("keisei.training.model_manager.features.FEATURE_SPECS")
     @patch("keisei.training.model_manager.model_factory")
@@ -604,29 +615,37 @@ class TestModelManagerEnhancedCheckpointHandling:
         manager = ModelManager(
             minimal_model_manager_config, mock_args, device, logger_func
         )
-        manager.create_model()
+        
+        # Mock create_model to avoid torch.compile optimization in tests
+        with patch.object(manager, 'create_model') as mock_create_model:
+            mock_create_model.return_value = mock_model
+            manager.model = mock_model
 
-        mock_agent = Mock()
-        mock_agent.load_model.return_value = {"incomplete": "data"}
+            mock_agent = Mock()
+            mock_agent.load_model.return_value = {"incomplete": "data"}
 
-        # Test loading corrupted checkpoint
-        args_with_resume = MockArgs(resume="latest")
-        manager_with_resume = ModelManager(
-            minimal_model_manager_config, args_with_resume, device, logger_func
-        )
-        manager_with_resume.create_model()
-
-        # Mock the utils.find_latest_checkpoint to return a valid path
-        with patch(
-            "keisei.training.model_manager.utils.find_latest_checkpoint",
-            return_value="/path/to/corrupt.pth",
-        ):
-            result = manager_with_resume.handle_checkpoint_resume(
-                mock_agent, "/some/model/dir"
+            # Test loading corrupted checkpoint
+            args_with_resume = MockArgs(resume="latest")
+            manager_with_resume = ModelManager(
+                minimal_model_manager_config, args_with_resume, device, logger_func
             )
+            
+            # Mock create_model for the second manager too
+            with patch.object(manager_with_resume, 'create_model') as mock_create_model2:
+                mock_create_model2.return_value = mock_model
+                manager_with_resume.model = mock_model
 
-        # Should handle gracefully - either succeed or fail, but not crash
-        assert isinstance(result, bool)  # Should return a boolean
+                # Mock the utils.find_latest_checkpoint to return a valid path
+                with patch(
+                    "keisei.training.model_manager.utils.find_latest_checkpoint",
+                    return_value="/path/to/corrupt.pth",
+                ):
+                    result = manager_with_resume.handle_checkpoint_resume(
+                        mock_agent, "/some/model/dir"
+                    )
+
+                # Should handle gracefully - either succeed or fail, but not crash
+                assert isinstance(result, bool)  # Should return a boolean
 
     @patch("keisei.training.model_manager.features.FEATURE_SPECS")
     @patch("keisei.training.model_manager.model_factory")
