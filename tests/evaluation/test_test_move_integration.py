@@ -12,7 +12,7 @@ import pytest
 
 from keisei.evaluation.core import EvaluationConfig, create_evaluation_config
 from keisei.evaluation.strategies.single_opponent import SingleOpponentEvaluator
-from keisei.shogi.shogi_core_definitions import Color, MoveTuple, PieceType
+from keisei.shogi.shogi_core_definitions import Color, PieceType
 from keisei.shogi.shogi_game import ShogiGame
 
 
@@ -29,8 +29,9 @@ class TestTestMoveBasicFunctionality:
         game.set_piece(6, 0, Piece(PieceType.PAWN, Color.BLACK))
         
         # Valid pawn move - move from (6,0) to (5,0)
-        move = MoveTuple(from_row=6, from_col=0, to_row=5, to_col=0, promote=False)
-        is_valid = game.test_move(move, Color.BLACK)
+        # BoardMoveTuple = Tuple[int, int, int, int, bool] = (from_row, from_col, to_row, to_col, promote)
+        move = (6, 0, 5, 0, False)  # BoardMoveTuple format
+        is_valid = game.test_move(move)
         assert is_valid is True
 
     def test_invalid_move_returns_false(self):
@@ -38,8 +39,9 @@ class TestTestMoveBasicFunctionality:
         game = ShogiGame()
         
         # Invalid move - try to move a piece that doesn't exist
-        move = MoveTuple(from_row=4, from_col=4, to_row=3, to_col=4, promote=False)
-        is_valid = game.test_move(move, Color.BLACK)
+        # BoardMoveTuple = Tuple[int, int, int, int, bool] = (from_row, from_col, to_row, to_col, promote)
+        move = (4, 4, 3, 4, False)  # BoardMoveTuple format
+        is_valid = game.test_move(move)
         assert is_valid is False
 
 
