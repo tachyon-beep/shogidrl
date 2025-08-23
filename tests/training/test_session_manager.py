@@ -618,6 +618,7 @@ class TestTrainerIntegration:
             patch("os.path.join", side_effect=lambda *args: "/".join(args)),
             patch("glob.glob", return_value=[]),
             patch("os.path.exists", return_value=True),
+            patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True) as mock_resource_monitor,
         ):
 
             # --- Mock SessionManager side effects ---
