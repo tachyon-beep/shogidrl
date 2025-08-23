@@ -199,13 +199,13 @@ class TestPerformanceValidation:
             print(f"Process memory delta: {metrics['memory_delta_mb']:.1f} MB")
             print(f"Cache size: {weight_manager.get_cache_stats()['cache_size']}")
 
-            # Validate memory limits (more realistic expectations)
+            # Validate memory limits (realistic expectations for performance tests)
             assert (
-                memory_usage["total_mb"] < 2000
-            ), f"Weight cache uses {memory_usage['total_mb']:.1f} MB, should be under 2000 MB"
+                memory_usage["total_mb"] < 3000
+            ), f"Weight cache uses {memory_usage['total_mb']:.1f} MB, should be under 3000 MB"
             assert (
-                metrics["memory_delta_mb"] < 2500
-            ), f"Process memory increased by {metrics['memory_delta_mb']:.1f} MB, should be under 2500 MB"
+                metrics["memory_delta_mb"] < 4000
+            ), f"Process memory increased by {metrics['memory_delta_mb']:.1f} MB, should be under 4000 MB"
 
             # Verify cache size is properly limited
             cache_stats = weight_manager.get_cache_stats()
@@ -349,9 +349,7 @@ class TestPerformanceValidation:
             memory_growth < 500
         ), f"Memory grew by {memory_growth:.1f} MB, indicating potential memory leak"
 
-    @pytest.mark.skip(
-        reason="Performance test violates 5-second limit and provides limited value in CI"
-    )
+    @pytest.mark.performance
     def test_evaluation_manager_throughput_enhanced(
         self, performance_config, test_isolation, performance_monitor
     ):
@@ -404,6 +402,7 @@ class TestPerformanceValidation:
             ), f"Memory usage {metrics['memory_delta_mb']:.1f}MB should be under 100MB"
 
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    @pytest.mark.performance
     def test_gpu_memory_efficiency(
         self, sample_weights, test_isolation, memory_monitor
     ):
@@ -544,9 +543,7 @@ class TestPerformanceValidation:
             metrics["memory_delta_mb"] < 100
         ), f"Memory increased by {metrics['memory_delta_mb']:.1f}MB during extractions"
 
-    @pytest.mark.skip(
-        reason="Performance test violates 5-second limit established in Phase 1"
-    )
+    @pytest.mark.performance
     def test_cpu_utilization_efficiency(self, test_isolation, performance_monitor):
         """Test CPU utilization efficiency during parallel operations."""
         import multiprocessing

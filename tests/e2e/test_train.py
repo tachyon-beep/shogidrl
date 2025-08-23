@@ -47,7 +47,7 @@ def check_training_outputs(result, expected_timesteps):
            str(expected_timesteps) in result.stderr, f"Expected timesteps {expected_timesteps} not found in output"
 
 
-@pytest.mark.slow
+@pytest.mark.e2e
 def test_train_cli_help(mock_wandb_disabled):
     """Test that train.py train --help runs and prints usage."""
     result = subprocess.run(
@@ -61,7 +61,7 @@ def test_train_cli_help(mock_wandb_disabled):
     assert "--device" in result.stdout
 
 
-@pytest.mark.slow
+@pytest.mark.e2e
 def test_train_resume_autodetect(tmp_path, mock_wandb_disabled):
     """
     Test that train.py can auto-detect a checkpoint from parent directory and resume training.
@@ -137,6 +137,7 @@ def test_train_resume_autodetect(tmp_path, mock_wandb_disabled):
         capture_output=True,
         text=True,
         env=env,
+        timeout=180,  # 3 minute timeout for E2E tests
     )
     
     print(f"Return code: {result.returncode}")
@@ -158,7 +159,7 @@ def test_train_resume_autodetect(tmp_path, mock_wandb_disabled):
     assert checkpoints, "No checkpoints found in run directory"
 
 
-@pytest.mark.slow
+@pytest.mark.e2e
 def test_train_runs_minimal(mock_wandb_disabled):
     """Test that train.py runs with minimal configuration."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -180,6 +181,7 @@ def test_train_runs_minimal(mock_wandb_disabled):
             capture_output=True,
             text=True,
             env=env,
+            timeout=180,  # 3 minute timeout for E2E tests
         )
         
         print(f"Return code: {result.returncode}")
@@ -197,7 +199,7 @@ def test_train_runs_minimal(mock_wandb_disabled):
         check_training_outputs(result, 10)
 
 
-@pytest.mark.slow
+@pytest.mark.e2e
 def test_train_config_override(mock_wandb_disabled):
     """Test that train.py handles config overrides correctly."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -221,6 +223,7 @@ def test_train_config_override(mock_wandb_disabled):
             capture_output=True,
             text=True,
             env=env,
+            timeout=180,  # 3 minute timeout for E2E tests
         )
         
         print(f"Return code: {result.returncode}")
@@ -235,7 +238,7 @@ def test_train_config_override(mock_wandb_disabled):
         check_training_outputs(result, 10)
 
 
-@pytest.mark.slow
+@pytest.mark.e2e
 def test_train_run_name_and_savedir(mock_wandb_disabled):
     """Test that train.py respects custom run names and save directories."""
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -261,6 +264,7 @@ def test_train_run_name_and_savedir(mock_wandb_disabled):
             capture_output=True,
             text=True,
             env=env,
+            timeout=180,  # 3 minute timeout for E2E tests
         )
         
         print(f"Return code: {result.returncode}")
@@ -285,7 +289,7 @@ def test_train_run_name_and_savedir(mock_wandb_disabled):
         check_training_outputs(result, 10)
 
 
-@pytest.mark.slow
+@pytest.mark.e2e
 def test_train_explicit_resume(tmp_path, mock_wandb_disabled):
     """
     Test explicit checkpoint resuming with train.py.
@@ -365,6 +369,7 @@ def test_train_explicit_resume(tmp_path, mock_wandb_disabled):
         capture_output=True,
         text=True,
         env=env,
+        timeout=180,  # 3 minute timeout for E2E tests
     )
     
     print(f"Return code: {result.returncode}")
