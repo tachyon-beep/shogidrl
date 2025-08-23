@@ -286,6 +286,17 @@ class EvaluationConfig(BaseModel):
         True, description="Clear model weight cache after evaluation."
     )
 
+    # Advanced evaluation features
+    enable_background_tournaments: bool = Field(
+        False, description="Enable background tournament system for continuous evaluation."
+    )
+    enable_advanced_analytics: bool = Field(
+        False, description="Enable advanced analytics and reporting."
+    )
+    enable_enhanced_opponents: bool = Field(
+        False, description="Enable enhanced opponent management with adaptive selection."
+    )
+
     # Performance safeguards (required by Performance Engineer)
     max_evaluation_time_minutes: int = Field(
         30, description="Maximum time per evaluation run in minutes"

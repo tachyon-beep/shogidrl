@@ -32,6 +32,7 @@ class MockArgs:
 class TestTrainerTrainingLoopIntegration:
     """Test end-to-end training loop integration with real components and minimal mocking."""
 
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
     @patch("wandb.init")
     @patch("wandb.log")
     @patch("wandb.finish")
@@ -51,6 +52,7 @@ class TestTrainerTrainingLoopIntegration:
         _mock_wandb_finish,
         _mock_wandb_log,
         _mock_wandb_init,
+        _mock_resource_monitor,
         integration_test_config,
         tmp_path,
     ):
@@ -160,6 +162,7 @@ class TestTrainerTrainingLoopIntegration:
                 assert trainer.metrics_manager.white_wins == 35
                 assert trainer.metrics_manager.draws == 25
 
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
     @patch("wandb.init")
     @patch("wandb.log")
     @patch("wandb.finish")
@@ -174,6 +177,7 @@ class TestTrainerTrainingLoopIntegration:
         _mock_wandb_finish,
         _mock_wandb_log,
         _mock_wandb_init,
+        _mock_resource_monitor,
         integration_test_config,
         tmp_path,
     ):
@@ -243,6 +247,7 @@ class TestTrainerTrainingLoopIntegration:
             assert trainer.metrics_manager.white_wins >= 0
             assert trainer.metrics_manager.draws >= 0
 
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
     @patch("wandb.init")
     @patch("wandb.log")
     @patch("wandb.finish")
@@ -257,6 +262,7 @@ class TestTrainerTrainingLoopIntegration:
         _mock_wandb_finish,
         _mock_wandb_log,
         _mock_wandb_init,
+        _mock_resource_monitor,
         integration_test_config,
         tmp_path,
     ):
@@ -328,6 +334,7 @@ class TestTrainerTrainingLoopIntegration:
             assert trainer.metrics_manager.global_timestep >= 0
             assert trainer.metrics_manager.total_episodes_completed >= 0
 
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
     @patch("wandb.init")
     @patch("wandb.log")
     @patch("wandb.finish")
@@ -342,6 +349,7 @@ class TestTrainerTrainingLoopIntegration:
         _mock_wandb_finish,
         _mock_wandb_log,
         _mock_wandb_init,
+        _mock_resource_monitor,
         integration_test_config,
         tmp_path,
     ):
@@ -414,6 +422,7 @@ class TestTrainerTrainingLoopIntegration:
             assert trainer.metrics_manager.global_timestep >= 0
             assert trainer.metrics_manager.total_episodes_completed >= 0
 
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
     @patch("wandb.init")
     @patch("wandb.log")
     @patch("wandb.finish")
@@ -431,6 +440,7 @@ class TestTrainerTrainingLoopIntegration:
         _mock_wandb_finish,
         _mock_wandb_log,
         _mock_wandb_init,
+        _mock_resource_monitor,
         integration_test_config,
         tmp_path,
     ):

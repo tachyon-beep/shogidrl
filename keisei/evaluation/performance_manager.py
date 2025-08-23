@@ -126,10 +126,17 @@ class EvaluationPerformanceManager:
     def __init__(self, max_concurrent: int = 4, timeout_seconds: int = 300):
         self.semaphore = asyncio.Semaphore(max_concurrent)
         self.timeout = timeout_seconds
-        self.resource_monitor = ResourceMonitor()
+        self._resource_monitor = None  # Lazy initialization
         self.sla_monitor = EvaluationPerformanceSLA()
         self.max_memory_mb = 500  # Maximum memory overhead allowed
         self.active = True  # Performance enforcement active
+        
+    @property
+    def resource_monitor(self) -> ResourceMonitor:
+        """Lazy initialization of ResourceMonitor."""
+        if self._resource_monitor is None:
+            self._resource_monitor = ResourceMonitor()
+        return self._resource_monitor
         
     def enforce_resource_limits(self, metrics: PerformanceMetrics) -> bool:
         """Enforce resource limits during evaluation."""

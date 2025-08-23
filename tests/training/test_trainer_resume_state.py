@@ -134,6 +134,7 @@ def temp_dir():
 class TestTrainerResumeState:
     """Test Trainer training state restoration during checkpoint resumption."""
 
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
     @patch("keisei.training.trainer.EnvManager")
     @patch("keisei.training.trainer.ModelManager")
     @patch("keisei.training.trainer.SessionManager")
@@ -154,6 +155,7 @@ class TestTrainerResumeState:
         mock_session_manager_class,
         mock_model_manager_class,
         mock_env_manager_class,
+        _mock_resource_monitor,
         mock_config,
         temp_dir,
     ):
@@ -270,6 +272,7 @@ class TestTrainerResumeState:
         assert trainer.metrics_manager.draws == 35
         assert trainer.resumed_from_checkpoint == "/path/to/checkpoint.pth"
 
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
     @patch("keisei.training.trainer.EnvManager")
     @patch("keisei.training.trainer.ModelManager")
     @patch("keisei.training.trainer.SessionManager")
@@ -290,6 +293,7 @@ class TestTrainerResumeState:
         mock_session_manager_class,
         mock_model_manager_class,
         mock_env_manager_class,
+        _mock_resource_monitor,
         mock_config,
         temp_dir,
     ):
@@ -386,6 +390,7 @@ class TestTrainerResumeState:
         )  # Missing field, should default to 0
         assert trainer.metrics_manager.draws == 0  # Missing field, should default to 0
 
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
     @patch("keisei.training.trainer.EnvManager")
     @patch("keisei.training.trainer.ModelManager")
     @patch("keisei.training.trainer.SessionManager")
@@ -406,6 +411,7 @@ class TestTrainerResumeState:
         mock_session_manager_class,
         mock_model_manager_class,
         mock_env_manager_class,
+        _mock_resource_monitor,
         mock_config,
         temp_dir,
     ):
@@ -476,6 +482,7 @@ class TestTrainerResumeState:
         assert trainer.metrics_manager.draws == 0
         assert trainer.resumed_from_checkpoint is None
 
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
     @patch("keisei.training.trainer.EnvManager")
     @patch("keisei.training.trainer.ModelManager")
     @patch("keisei.training.trainer.SessionManager")
@@ -496,6 +503,7 @@ class TestTrainerResumeState:
         mock_session_manager_class,
         mock_model_manager_class,
         mock_env_manager_class,
+        _mock_resource_monitor,
         mock_config,
         temp_dir,
     ):
@@ -558,6 +566,7 @@ class TestTrainerResumeState:
         ):
             trainer._handle_checkpoint_resume()
 
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
     @patch("keisei.training.trainer.EnvManager")
     @patch("keisei.training.trainer.ModelManager")
     @patch("keisei.training.trainer.TrainingLoopManager")
@@ -570,18 +579,19 @@ class TestTrainerResumeState:
     @patch("keisei.core.ppo_agent.PPOAgent")
     def test_trainer_model_manager_integration_flow(
         self,
-        mock_ppo_agent_class,  # PPOAgent (last patch)
-        mock_model_factory,  # model_factory
-        _mock_experience_buffer,  # ExperienceBuffer
-        _mock_policy_mapper,  # PolicyOutputMapper
-        mock_feature_specs,  # FEATURE_SPECS
-        _mock_shogi_game,  # ShogiGame
-        mock_session_manager_class,  # SessionManager
-        mock_training_loop_manager_class,  # TrainingLoopManager
-        mock_model_manager_class,  # ModelManager
-        mock_env_manager_class,  # EnvManager (first patch)
-        mock_config,  # Added missing fixture
-        temp_dir,
+        mock_ppo_agent_class,  # PPOAgent (patch 11)
+        mock_model_factory,  # model_factory (patch 10)
+        _mock_experience_buffer,  # ExperienceBuffer (patch 9)
+        _mock_policy_mapper,  # PolicyOutputMapper (patch 8)
+        mock_feature_specs,  # FEATURE_SPECS (patch 7)
+        _mock_shogi_game,  # ShogiGame (patch 6)
+        mock_session_manager_class,  # SessionManager (patch 5)
+        mock_training_loop_manager_class,  # TrainingLoopManager (patch 4)
+        mock_model_manager_class,  # ModelManager (patch 3)
+        mock_env_manager_class,  # EnvManager (patch 2)
+        _mock_resource_monitor,  # ResourceMonitor (patch 1)
+        mock_config,  # pytest fixture
+        temp_dir,  # pytest fixture
     ):
         """Test complete flow of ModelManager checkpoint resume integration with Trainer."""
         # Setup mocks
@@ -622,6 +632,8 @@ class TestTrainerResumeState:
         mock_env_manager_instance = mock_env_manager_class.return_value
         mock_game = Mock()
         mock_policy_mapper = Mock()
+        # Create the setup_environment method explicitly
+        mock_env_manager_instance.setup_environment = Mock()
         mock_env_manager_instance.setup_environment.return_value = (
             mock_game,
             mock_policy_mapper,
@@ -674,6 +686,7 @@ class TestTrainerResumeState:
             assert trainer.metrics_manager.draws == 50
             assert trainer.resumed_from_checkpoint == checkpoint_path
 
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
     @patch("keisei.training.trainer.EnvManager")
     @patch("keisei.training.trainer.ModelManager")
     @patch("keisei.training.trainer.TrainingLoopManager")
@@ -696,6 +709,7 @@ class TestTrainerResumeState:
         mock_training_loop_manager_class,
         mock_model_manager_class,
         mock_env_manager_class,
+        _mock_resource_monitor,
         mock_config,
         temp_dir,
     ):

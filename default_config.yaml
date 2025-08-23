@@ -280,11 +280,11 @@ evaluation:
   enable_periodic_evaluation: true
 
   # Run evaluation every N timesteps (should be multiple of steps_per_epoch)
-  evaluation_interval_timesteps: 50000
+  evaluation_interval_timesteps: 2048
 
   # --- Strategy and Game Parameters ---
   # Evaluation strategy: "single_opponent", "tournament", "ladder", "benchmark"
-  strategy: "single_opponent"
+  strategy: "tournament"
 
   # Number of games to play during each evaluation session
   num_games: 20
@@ -297,8 +297,8 @@ evaluation:
 
   # --- Game Configuration ---
   # Type of opponent for evaluation games
-  # Options: "random" (random moves), "heuristic" (rule-based), or other implemented opponents
-  opponent_type: "random"
+  # Options: "random" (random moves), "heuristic" (rule-based), "ppo" (previous checkpoints), or other implemented opponents
+  opponent_type: "ppo"
 
   # Maximum moves per evaluation game (prevents infinite games)
   max_moves_per_game: 500
@@ -359,6 +359,36 @@ evaluation:
 
   # Clear model weight cache after evaluation (recommended)
   clear_cache_after_evaluation: true
+
+  # --- Advanced Evaluation Features ---
+  # Enable background tournament system for continuous evaluation
+  enable_background_tournaments: true
+
+  # Enable advanced analytics and reporting
+  enable_advanced_analytics: true
+
+  # Enable enhanced opponent management with adaptive selection
+  enable_enhanced_opponents: true
+
+  # Tournament strategy parameters
+  strategy_params:
+    # Tournament configuration for round-robin or bracket tournaments
+    tournament_type: "round_robin"
+    
+    # Number of rounds in tournament
+    tournament_rounds: 1
+    
+    # Games per opponent pairing in tournament
+    games_per_pairing: 2
+    
+    # Enable background tournament execution (non-blocking)
+    run_tournaments_in_background: true
+    
+    # Tournament scheduling interval (seconds)
+    background_tournament_interval: 300  # Run tournament every 5 minutes
+    
+    # Best opponent selection strategy: "elo_rating", "win_rate", "recent_performance"
+    best_opponent_selection: "elo_rating"
 
 # =============================================================================
 # LOGGING CONFIGURATION (LoggingConfig)

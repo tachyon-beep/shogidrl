@@ -116,12 +116,47 @@ class EvaluationCallback(Callback):
             opponent_ckpt = None
             if hasattr(trainer, "evaluation_manager"):
                 opponent_ckpt = trainer.evaluation_manager.opponent_pool.sample()
+            
+            # Handle initial case: no previous checkpoints available
             if opponent_ckpt is None:
                 if trainer.log_both:
                     trainer.log_both(
-                        "[INFO] EvaluationCallback: No previous checkpoint available for Elo evaluation.",
-                        also_to_wandb=False,
+                        "[INFO] EvaluationCallback: No previous checkpoints available. Running initial evaluation against random opponent.",
+                        also_to_wandb=True,
                     )
+                
+                # Run evaluation against random opponent to bootstrap Elo system
+                current_model.eval()  # Set the agent's model to eval mode
+                eval_results = trainer.evaluation_manager.evaluate_current_agent(
+                    trainer.agent
+                )
+                current_model.train()  # Set model back to train mode
+                
+                if trainer.log_both is not None:
+                    trainer.log_both(
+                        f"Initial evaluation completed. Results: {eval_results}",
+                        also_to_wandb=True,
+                        wandb_data=(
+                            dict(eval_results)
+                            if isinstance(eval_results, dict)
+                            else {"eval_summary": str(eval_results)}
+                        ),
+                    )
+                
+                # Save current model as first checkpoint for future evaluations
+                ckpt_path = trainer.model_manager.save_checkpoint(
+                    trainer.agent,
+                    trainer.metrics_manager.global_timestep + 1,
+                    trainer.session_manager.run_artifact_dir,
+                    "initial_eval_checkpoint"
+                )
+                if ckpt_path and hasattr(trainer, "evaluation_manager"):
+                    trainer.evaluation_manager.opponent_pool.add_checkpoint(ckpt_path)
+                    if trainer.log_both:
+                        trainer.log_both(
+                            f"Added initial checkpoint to opponent pool: {ckpt_path}",
+                            also_to_wandb=True,
+                        )
                 return
 
             if trainer.log_both is not None:

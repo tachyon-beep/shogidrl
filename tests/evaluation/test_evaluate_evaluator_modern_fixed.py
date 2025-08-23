@@ -143,7 +143,10 @@ def test_evaluation_manager_integration_basic(tmp_path):
         mock_create_evaluator.assert_called_once()
 
         # Manually trigger ELO registry creation (since mock bypasses normal flow)
-        eval_manager.opponent_pool.add_checkpoint("dummy_checkpoint.pth")
+        # Create a dummy checkpoint file for testing
+        dummy_checkpoint = tmp_path / "dummy_checkpoint.pth"
+        dummy_checkpoint.write_text("dummy checkpoint content")
+        eval_manager.opponent_pool.add_checkpoint(str(dummy_checkpoint))
 
         # Verify Elo registry file exists
         elo_file = tmp_path / "elo_registry.json"

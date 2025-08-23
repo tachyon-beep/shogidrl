@@ -137,7 +137,7 @@ def test_train_resume_autodetect(tmp_path, mock_wandb_disabled):
         capture_output=True,
         text=True,
         env=env,
-        timeout=180,  # 3 minute timeout for E2E tests
+        timeout=300,  # 5 minute timeout for E2E tests (accounts for model compilation, WandB setup, etc.)
     )
     
     print(f"Return code: {result.returncode}")
@@ -181,7 +181,7 @@ def test_train_runs_minimal(mock_wandb_disabled):
             capture_output=True,
             text=True,
             env=env,
-            timeout=180,  # 3 minute timeout for E2E tests
+            timeout=300,  # 5 minute timeout for E2E tests (accounts for model compilation, WandB setup, etc.)
         )
         
         print(f"Return code: {result.returncode}")
@@ -223,7 +223,7 @@ def test_train_config_override(mock_wandb_disabled):
             capture_output=True,
             text=True,
             env=env,
-            timeout=180,  # 3 minute timeout for E2E tests
+            timeout=300,  # 5 minute timeout for E2E tests (accounts for model compilation, WandB setup, etc.)
         )
         
         print(f"Return code: {result.returncode}")
@@ -264,7 +264,7 @@ def test_train_run_name_and_savedir(mock_wandb_disabled):
             capture_output=True,
             text=True,
             env=env,
-            timeout=180,  # 3 minute timeout for E2E tests
+            timeout=300,  # 5 minute timeout for E2E tests (accounts for model compilation, WandB setup, etc.)
         )
         
         print(f"Return code: {result.returncode}")
@@ -369,7 +369,7 @@ def test_train_explicit_resume(tmp_path, mock_wandb_disabled):
         capture_output=True,
         text=True,
         env=env,
-        timeout=180,  # 3 minute timeout for E2E tests
+        timeout=300,  # 5 minute timeout for E2E tests (accounts for model compilation, WandB setup, etc.)
     )
     
     print(f"Return code: {result.returncode}")

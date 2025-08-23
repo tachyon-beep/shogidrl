@@ -3,6 +3,7 @@ trainer.py: Contains the Trainer class for managing the Shogi RL training loop (
 """
 
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Callable, Dict, Optional, cast
 
 import torch
@@ -12,7 +13,7 @@ from keisei.config_schema import AppConfig
 from keisei.core.actor_critic_protocol import ActorCriticProtocol
 from keisei.core.experience_buffer import ExperienceBuffer
 from keisei.core.ppo_agent import PPOAgent
-from keisei.evaluation.core_manager import EvaluationManager
+from keisei.evaluation.enhanced_manager import EnhancedEvaluationManager
 from keisei.utils import TrainingLogger
 
 from .callback_manager import CallbackManager
@@ -111,14 +112,19 @@ class Trainer:
             process_restart_threshold=config.evaluation.process_restart_threshold,
             temp_agent_device=config.evaluation.temp_agent_device,
             clear_cache_after_evaluation=config.evaluation.clear_cache_after_evaluation,
-            # Add strategy-specific parameters for single_opponent strategy
+            # Add strategy-specific parameters
             opponent_name=config.evaluation.opponent_type,
+            strategy_params=getattr(config.evaluation, 'strategy_params', {}),
         )
-        self.evaluation_manager = EvaluationManager(
+        self.evaluation_manager = EnhancedEvaluationManager(
             eval_config,
             self.run_name,
             pool_size=config.evaluation.previous_model_pool_size,
             elo_registry_path=config.evaluation.elo_registry_path,
+            enable_background_tournaments=getattr(config.evaluation, 'enable_background_tournaments', False),
+            enable_advanced_analytics=getattr(config.evaluation, 'enable_advanced_analytics', False),
+            enable_enhanced_opponents=getattr(config.evaluation, 'enable_enhanced_opponents', False),
+            analytics_output_dir=Path(self.model_dir) / "analytics",
         )
         self.evaluation_elo_snapshot: Optional[Dict[str, Any]] = None
         self.callback_manager = CallbackManager(config, self.model_dir)

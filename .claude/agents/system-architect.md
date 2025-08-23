@@ -69,7 +69,7 @@ When we need to add new capabilities, modify subsystem interactions, or evolve t
 ## Essential Working Principles
 
 ### Preserve Working Patterns
-Esper's architecture has evolved to support morphogenetic training. Existing patterns often solve complex coordination problems - understand why they exist before changing them.
+Keisei's architecture has evolved to support stable RL training. Existing manager patterns often solve complex coordination problems - understand why they exist before changing them.
 
 ### Enable Continuous Evolution
 Every architectural decision should make it easier for the system to adapt and evolve. Static architectures can't support self-modifying neural networks.

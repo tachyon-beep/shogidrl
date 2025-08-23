@@ -19,8 +19,9 @@ from keisei.utils.opponents import SimpleRandomOpponent
 class TestIntegrationSmoke:
     """Integration tests to verify the full system works end-to-end."""
 
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
     @pytest.mark.slow
-    def test_training_smoke_test(self, mock_wandb_disabled):
+    def test_training_smoke_test(self, _mock_resource_monitor, mock_wandb_disabled):
         """
         Run a very short training session to ensure the system can initialize,
         run without errors, and terminate cleanly.

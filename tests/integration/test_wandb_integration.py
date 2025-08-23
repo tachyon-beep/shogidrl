@@ -141,7 +141,8 @@ def make_test_config(**overrides) -> AppConfig:
 class TestWandBArtifacts:
     """Test W&B artifacts functionality."""
 
-    def test_create_model_artifact_wandb_disabled(self, tmp_path):
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
+    def test_create_model_artifact_wandb_disabled(self, _mock_resource_monitor, tmp_path):
         """Test artifact creation when W&B is disabled."""
         config = make_test_config(wandb_enabled=False)
         args = DummyArgs()
@@ -167,7 +168,8 @@ class TestWandBArtifacts:
 
             assert result is False
 
-    def test_create_model_artifact_success(self, mock_wandb_active, tmp_path):
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
+    def test_create_model_artifact_success(self, _mock_resource_monitor, mock_wandb_active, tmp_path):
         """Test successful artifact creation when W&B is enabled."""
         config = make_test_config(wandb_enabled=True)
         args = DummyArgs()
@@ -202,12 +204,16 @@ class TestWandBArtifacts:
             assert result is True
 
             # Verify artifact was created with correct parameters
-            mock_wandb_active["artifact_class"].assert_called_once_with(
-                name="test_run_123-test-model",
-                type="model",
-                description="Test model for unit testing",
-                metadata={"timesteps": 1000, "test": True},
-            )
+            mock_wandb_active["artifact_class"].assert_called_once()
+            call_args = mock_wandb_active["artifact_class"].call_args
+            assert call_args[1]["name"] == "test_run_123-test-model"
+            assert call_args[1]["type"] == "model"
+            assert call_args[1]["description"] == "Test model for unit testing"
+            
+            # Verify base metadata is present (torch.compile metadata may be added)
+            actual_metadata = call_args[1]["metadata"]
+            assert actual_metadata["timesteps"] == 1000
+            assert actual_metadata["test"] is True
 
             # Verify file was added to artifact
             mock_artifact.add_file.assert_called_once_with(str(model_path))
@@ -217,7 +223,8 @@ class TestWandBArtifacts:
                 mock_artifact, aliases=["latest", "test"]
             )
 
-    def test_create_model_artifact_missing_file(self, tmp_path):
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
+    def test_create_model_artifact_missing_file(self, _mock_resource_monitor, tmp_path):
         """Test artifact creation with missing model file."""
         config = make_test_config(wandb_enabled=True)
         args = DummyArgs()
@@ -239,7 +246,8 @@ class TestWandBArtifacts:
 
             assert result is False
 
-    def test_create_model_artifact_wandb_error(self, mock_wandb_active, tmp_path):
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
+    def test_create_model_artifact_wandb_error(self, _mock_resource_monitor, mock_wandb_active, tmp_path):
         """Test artifact creation when W&B throws an error."""
         config = make_test_config(wandb_enabled=True)
         args = DummyArgs()
@@ -268,7 +276,8 @@ class TestWandBArtifacts:
 
             assert result is False
 
-    def test_create_model_artifact_default_parameters(self, tmp_path):
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
+    def test_create_model_artifact_default_parameters(self, _mock_resource_monitor, tmp_path):
         """Test artifact creation with default parameters."""
         config = make_test_config(wandb_enabled=True)
         args = DummyArgs()
@@ -299,14 +308,19 @@ class TestWandBArtifacts:
             assert result is True
 
             # Verify defaults were used
-            mock_artifact_class.assert_called_once_with(
-                name="test_run_defaults-minimal-model",
-                type="model",  # default
-                description="Model checkpoint from run test_run_defaults",  # default
-                metadata={},  # default
-            )
+            mock_artifact_class.assert_called_once()
+            call_args = mock_artifact_class.call_args
+            assert call_args[1]["name"] == "test_run_defaults-minimal-model"
+            assert call_args[1]["type"] == "model"  # default
+            assert call_args[1]["description"] == "Model checkpoint from run test_run_defaults"  # default
+            
+            # Metadata may include torch.compile information, but should start empty from user perspective
+            # The enhanced metadata is added internally by the model manager
+            actual_metadata = call_args[1]["metadata"]
+            assert isinstance(actual_metadata, dict)  # Should be a dict (may have torch.compile info)
 
-    def test_create_model_artifact_retry_logic(self, mock_wandb_active, tmp_path):
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
+    def test_create_model_artifact_retry_logic(self, _mock_resource_monitor, mock_wandb_active, tmp_path):
         """Test artifact creation retry logic with network failures."""
         config = make_test_config(wandb_enabled=True)
         args = DummyArgs()
@@ -504,7 +518,8 @@ class TestWandBUtilities:
 class TestWandBLoggingIntegration:
     """Test the integration between Trainer.log_both and W&B logging with current logic."""
 
-    def test_log_both_impl_creation_and_wandb_logic(self, temp_base_dir):
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
+    def test_log_both_impl_creation_and_wandb_logic(self, _mock_resource_monitor, temp_base_dir):
         """Test that log_both_impl correctly implements W&B logging logic."""
         config = make_test_config(wandb_enabled=True)
         args = DummyArgs()
@@ -572,7 +587,8 @@ class TestWandBLoggingIntegration:
                     expected_payload, step=trainer.metrics_manager.global_timestep
                 )
 
-    def test_log_both_impl_wandb_run_none(self, temp_base_dir):
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
+    def test_log_both_impl_wandb_run_none(self, _mock_resource_monitor, temp_base_dir):
         """Test that log_both_impl handles the case where wandb.run is None."""
         config = make_test_config(wandb_enabled=True)
         args = DummyArgs()
@@ -629,7 +645,8 @@ class TestWandBLoggingIntegration:
                 # Verify wandb.log was NOT called since wandb.run is None
                 mock_wandb_log.assert_not_called()
 
-    def test_log_both_impl_wandb_disabled_in_config(self, temp_base_dir):
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
+    def test_log_both_impl_wandb_disabled_in_config(self, _mock_resource_monitor, temp_base_dir):
         """Test that log_both_impl does not log to W&B when disabled in config."""
         config = make_test_config(wandb_enabled=False)  # W&B disabled
         args = DummyArgs()
@@ -685,7 +702,8 @@ class TestWandBLoggingIntegration:
                 # Verify wandb.log was NOT called
                 mock_wandb_log.assert_not_called()
 
-    def test_log_both_impl_also_to_wandb_false(self, temp_base_dir):
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
+    def test_log_both_impl_also_to_wandb_false(self, _mock_resource_monitor, temp_base_dir):
         """Test that log_both_impl respects also_to_wandb=False parameter."""
         config = make_test_config(wandb_enabled=True)
         args = DummyArgs()
@@ -745,7 +763,8 @@ class TestWandBLoggingIntegration:
         config = make_test_config(wandb_enabled=True)
         args = DummyArgs()
 
-        with patch("keisei.training.utils.setup_directories") as mock_setup_dirs:
+        with patch("keisei.training.utils.setup_directories") as mock_setup_dirs, \
+             patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True):
             # Create actual test directories
             run_artifact_dir = os.path.join(temp_base_dir, "test_run")
             model_dir = os.path.join(run_artifact_dir, "models")

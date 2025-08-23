@@ -3,6 +3,7 @@ test_trainer_config.py: Tests for Trainer/model/feature config integration in Ke
 """
 
 from typing import Any, Dict, cast  # Add Dict, Any
+from unittest.mock import patch
 
 import pytest
 
@@ -121,7 +122,8 @@ def make_config_and_args(**overrides):
     return config, args
 
 
-def test_trainer_instantiates_resnet_and_features():
+@patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
+def test_trainer_instantiates_resnet_and_features(_mock_resource_monitor):
     config, args = make_config_and_args(
         input_features="core46+all",
         model_type="resnet",
@@ -151,7 +153,8 @@ def test_trainer_instantiates_resnet_and_features():
     assert first_res_block.conv1.in_channels == trainer.model_manager.tower_width
 
 
-def test_trainer_invalid_feature_raises():
+@patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
+def test_trainer_invalid_feature_raises(_mock_resource_monitor):
     config, args = make_config_and_args(
         input_features="not_a_feature", model_type="resnet"
     )
@@ -159,7 +162,8 @@ def test_trainer_invalid_feature_raises():
         Trainer(config, args)
 
 
-def test_trainer_invalid_model_raises():
+@patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
+def test_trainer_invalid_model_raises(_mock_resource_monitor):
     config, args = make_config_and_args(
         input_features="core46", model_type="not_a_model"
     )
@@ -167,7 +171,8 @@ def test_trainer_invalid_model_raises():
         Trainer(config, args)
 
 
-def test_cli_overrides_config():
+@patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
+def test_cli_overrides_config(_mock_resource_monitor):
     # CLI args should override config
     config, _ = make_config_and_args(
         input_features="core46", model_type="resnet", tower_depth=3

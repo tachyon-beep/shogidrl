@@ -117,10 +117,10 @@ class Event:
 ## Architecture Reference Documents
 
 Refer to these authoritative architecture documents:
-- `/home/john/esper/docs/architecture/000-high-level-design.md` - Master system architecture
-- `/home/john/esper/docs/architecture/005-urza-design.md` - Central library and data architecture
-- `/home/john/esper/src/esper/common/models.py` - Core Pydantic data models
-- `/home/john/esper/src/esper/common/event_schemas.py` - Event data contracts
+- `/home/john/keisei/docs/architecture/000-high-level-design.md` - Master system architecture
+- `/home/john/keisei/docs/architecture/005-urza-design.md` - Central library and data architecture
+- `/home/john/keisei/src/esper/common/models.py` - Core Pydantic data models
+- `/home/john/keisei/src/esper/common/event_schemas.py` - Event data contracts
 
 
 ## CRITICAL RULES - IMMEDIATE DISMISSAL OFFENSES
@@ -237,7 +237,7 @@ Before making ANY claims about code:
 ### File Citation Requirements
 
 When discussing code, you MUST:
-- Provide exact file paths: `/home/john/esper/src/esper/tolaria/trainer.py`
+- Provide exact file paths: `/home/john/keisei/src/esper/tolaria/trainer.py`
 - Include line numbers: `trainer.py:674-736`
 - Quote actual code, not paraphrased versions
 - Show evidence you've read the file
@@ -245,8 +245,8 @@ When discussing code, you MUST:
 ### Validation Specialist Example
 
 The validation specialist succeeded because they:
-1. READ `/home/john/esper/src/esper/tolaria/trainer.py` (all 969 lines)
-2. READ `/home/john/esper/scripts/integration_smoke_test.py` to find the error
+1. READ `/home/john/keisei/src/esper/tolaria/trainer.py` (all 969 lines)
+2. READ `/home/john/keisei/scripts/integration_smoke_test.py` to find the error
 3. SEARCHED for other TolariaTrainer instantiations
 4. CITED specific line numbers as evidence
 

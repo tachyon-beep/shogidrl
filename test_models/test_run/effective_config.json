@@ -35,7 +35,17 @@
         "enable_value_clipping": false,
         "lr_schedule_type": null,
         "lr_schedule_kwargs": null,
-        "lr_schedule_step_on": "epoch"
+        "lr_schedule_step_on": "epoch",
+        "enable_torch_compile": true,
+        "torch_compile_mode": "default",
+        "torch_compile_dynamic": null,
+        "torch_compile_fullgraph": false,
+        "torch_compile_backend": null,
+        "enable_compilation_fallback": true,
+        "validate_compiled_output": true,
+        "compilation_validation_tolerance": 0.00001,
+        "compilation_warmup_steps": 5,
+        "enable_compilation_benchmarking": true
     },
     "evaluation": {
         "enable_periodic_evaluation": false,

@@ -440,7 +440,7 @@ class LadderEvaluator(BaseEvaluator):
     async def _initialize_opponent_pool(self, context: EvaluationContext):
         """Initializes or loads the pool of opponents for the ladder."""
         # This could load from a config file, a database, or a predefined list in LadderConfig
-        pool_configs = getattr(self.config, "opponent_pool_config", [])
+        pool_configs = self.config.strategy_params.get("opponent_pool_config", [])
         if not pool_configs:
             self.logger.warning(
                 "No opponent pool configured for ladder. Using placeholders."

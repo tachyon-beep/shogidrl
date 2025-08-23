@@ -109,10 +109,16 @@ def setup_wandb(config, run_name, run_artifact_dir):
     is_active = wandb_cfg.enabled
     if is_active:
         try:
+            # Debug wandb import state
+            import wandb as local_wandb
+            log_info_to_stderr(
+                "TrainingUtils", f"wandb module type: {type(local_wandb)}, has init: {hasattr(local_wandb, 'init')}"
+            )
+            
             config_dict_for_wandb = (
                 json.loads(serialize_config(config)) if serialize_config(config) else {}
             )
-            wandb.init(
+            local_wandb.init(
                 project=wandb_cfg.project,
                 entity=wandb_cfg.entity,
                 name=run_name,
@@ -122,10 +128,18 @@ def setup_wandb(config, run_name, run_artifact_dir):
                 resume="allow",
                 id=run_name,
             )
-        except (TypeError, ValueError, OSError) as e:
-            log_error_to_stderr(
-                "TrainingUtils", f"Error initializing W&B: {e}. W&B logging disabled."
-            )
+        except (TypeError, ValueError, OSError, AttributeError) as e:
+            # Add specific debugging for AttributeError
+            if isinstance(e, AttributeError):
+                import traceback
+                error_trace = traceback.format_exc()
+                log_error_to_stderr(
+                    "TrainingUtils", f"AttributeError in W&B init: {e}. Traceback:\n{error_trace}"
+                )
+            else:
+                log_error_to_stderr(
+                    "TrainingUtils", f"Error initializing W&B: {e}. W&B logging disabled."
+                )
             is_active = False
     if not is_active:
         log_info_to_stderr(
@@ -142,10 +156,13 @@ def apply_wandb_sweep_config():
         Dict[str, Any]: Dictionary of configuration overrides extracted from sweep parameters.
                        Empty dict if no W&B sweep is active.
     """
-    if wandb.run is None:
+    try:
+        if wandb.run is None:
+            return {}
+        sweep_config = wandb.config
+    except (AttributeError, ImportError):
+        # WandB not properly initialized or not available
         return {}
-
-    sweep_config = wandb.config
     log_info_to_stderr(
         "TrainingUtils", f"Running W&B sweep with config: {dict(sweep_config)}"
     )

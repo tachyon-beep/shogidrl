@@ -48,6 +48,7 @@ def temp_dir():
 class TestTrainerSessionIntegration:
     """Test SessionManager integration in Trainer."""
 
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
     @patch("keisei.training.trainer.SessionManager")
     @patch("keisei.shogi.ShogiGame")
     @patch("keisei.shogi.features.FEATURE_SPECS")
@@ -64,6 +65,7 @@ class TestTrainerSessionIntegration:
         mock_feature_specs,
         _mock_shogi_game,
         mock_session_manager_class,
+        _mock_resource_monitor,
         mock_config,
         temp_dir,
     ):
@@ -106,6 +108,7 @@ class TestTrainerSessionIntegration:
         assert trainer.log_file_path == f"{temp_dir}/train.log"
         assert trainer.is_train_wandb_active is True
 
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
     @patch("keisei.training.utils.setup_seeding")
     @patch("keisei.training.utils.setup_directories")
     @patch("keisei.training.utils.setup_wandb")
@@ -126,6 +129,7 @@ class TestTrainerSessionIntegration:
         mock_setup_wandb,
         mock_setup_dirs,
         _mock_setup_seeding,
+        _mock_resource_monitor,
         mock_wandb_disabled,  # Use the correct fixture name
         mock_config,
         mock_args,
@@ -154,10 +158,11 @@ class TestTrainerSessionIntegration:
         trainer.session_manager.finalize_session()
         mock_wandb_disabled["finish"].assert_called_once()
 
+    @patch("keisei.evaluation.performance_manager.ResourceMonitor", autospec=True)
     @patch("keisei.training.utils.setup_directories")
     @patch("keisei.training.models.model_factory")
     def test_session_manager_error_handling(
-        self, _mock_model_factory, mock_setup_dirs, mock_config, mock_args
+        self, _mock_model_factory, mock_setup_dirs, _mock_resource_monitor, mock_config, mock_args
     ):
         """Test that SessionManager errors are handled during Trainer initialization."""
         mock_setup_dirs.side_effect = OSError("Permission denied")
