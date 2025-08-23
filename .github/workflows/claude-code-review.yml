@@ -3,12 +3,13 @@ name: Claude Code Review
 on:
   pull_request:
     types: [opened, synchronize]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
+    # Only run on Python code changes and key configuration files
+    paths:
+      - "keisei/**/*.py"
+      - "tests/**/*.py"
+      - "*.py"
+      - "requirements*.txt"
+      - "default_config.yaml"
 
 jobs:
   claude-review:
@@ -42,14 +43,35 @@ jobs:
 
           # Direct prompt for automated review (no @claude mention needed)
           direct_prompt: |
-            Please review this pull request and provide feedback on:
-            - Code quality and best practices
-            - Potential bugs or issues
-            - Performance considerations
-            - Security concerns
-            - Test coverage
+            Please review this pull request for the Keisei Deep Reinforcement Learning system and provide feedback on:
             
-            Be constructive and helpful in your feedback.
+            **Code Quality & Architecture:**
+            - Adherence to the manager-based architecture pattern
+            - Clean interfaces between training components
+            - PPO algorithm implementation correctness
+            - Neural network architecture patterns
+            
+            **Shogi Game Implementation:**
+            - Game rule logic correctness
+            - Move validation and execution
+            - Board state representation accuracy
+            
+            **Performance & Efficiency:**
+            - PyTorch usage patterns and memory management
+            - Training loop efficiency
+            - GPU utilization optimization
+            
+            **Testing & Safety:**
+            - Test coverage for RL training components
+            - Error handling and edge cases
+            - Configuration validation
+            
+            **Deep RL Best Practices:**
+            - Experience buffer management
+            - Policy/value function separation
+            - Checkpointing and model persistence
+            
+            Be constructive and focus on maintaining stable, production-ready RL training.
 
           # Optional: Use sticky comments to make Claude reuse the same comment on subsequent pushes to the same PR
           # use_sticky_comment: true

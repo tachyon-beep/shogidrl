@@ -49,14 +49,25 @@ jobs:
           # Optional: Trigger when specific user is assigned to an issue
           # assignee_trigger: "claude-bot"
           
-          # Optional: Allow Claude to run specific commands
-          # allowed_tools: "Bash(npm install),Bash(npm run build),Bash(npm run test:*),Bash(npm run lint:*)"
+          # Allow Claude to run project-specific commands
+          allowed_tools: "Bash(pytest tests/* -v),Bash(python train.py --help),Bash(python -m keisei.evaluation.evaluate --help),Bash(flake8 keisei/ --count),Bash(mypy keisei/ --ignore-missing-imports)"
           
-          # Optional: Add custom instructions for Claude to customize its behavior for your project
-          # custom_instructions: |
-          #   Follow our coding standards
-          #   Ensure all new code has tests
-          #   Use TypeScript for new files
+          # Custom instructions for Keisei Deep RL project
+          custom_instructions: |
+            You are helping with the Keisei Deep Reinforcement Learning system for Shogi training.
+            
+            Key project context:
+            - Manager-based architecture with 9 specialized components
+            - PPO algorithm implementation for policy optimization
+            - Full Shogi game engine with complete rule implementation
+            - Production-ready training with Rich console UI and WandB integration
+            
+            Follow these guidelines:
+            - Maintain the manager separation pattern (SessionManager, ModelManager, etc.)
+            - Preserve PyTorch best practices and GPU memory efficiency
+            - Ensure RL training stability and checkpoint integrity
+            - Test changes with pytest and verify imports work correctly
+            - Follow the existing code style and architectural patterns
           
           # Optional: Custom environment variables for Claude
           # claude_env: |
