@@ -657,35 +657,50 @@ class TestModelManagerEnhancedCheckpointHandling:
         manager = ModelManager(
             minimal_model_manager_config, mock_args, device, logger_func
         )
-        manager.create_model()
+        
+        # Mock the create_model method to avoid torch.compile optimization in tests
+        with patch.object(manager, 'create_model') as mock_create_model:
+            mock_create_model.return_value = mock_model
+            manager.model = mock_model  # Set the model directly
 
-        mock_agent = Mock()
-        mock_agent.model = manager.model
-        mock_agent.optimizer = Mock()
+            mock_agent = Mock()
+            mock_agent.model = manager.model
+            mock_agent.optimizer = Mock()
+            # Add proper mock for save_model method to prevent infinite loop
+            mock_agent.save_model = Mock(return_value=True)
 
-        # Test checkpoint saving - should create directory
-        stats = {
-            "black_wins": 10,
-            "white_wins": 8,
-            "draws": 7,
-        }
-        manager.save_checkpoint(
-            agent=mock_agent,
-            model_dir=nonexistent_model_dir,
-            timestep=1000,
-            episode_count=25,
-            stats=stats,
-            run_name="test_run",
-            is_wandb_active=False,
-        )
+            # Test checkpoint saving - should create directory
+            stats = {
+                "black_wins": 10,
+                "white_wins": 8,
+                "draws": 7,
+            }
+            
+            # Mock WandB to prevent network calls during test
+            with patch('keisei.training.model_manager.wandb') as mock_wandb:
+                mock_wandb.run = None  # Disable WandB during test
+                result = manager.save_checkpoint(
+                    agent=mock_agent,
+                    model_dir=nonexistent_model_dir,
+                    timestep=1000,
+                    episode_count=25,
+                    stats=stats,
+                    run_name="test_run",
+                    is_wandb_active=False,
+                )
 
-        # Verify directory was created
-        assert os.path.exists(nonexistent_model_dir)
+            # Verify checkpoint save was successful
+            success, checkpoint_path = result
+            assert success is True
+            assert checkpoint_path is not None
+            
+            # Verify directory was created
+            assert os.path.exists(nonexistent_model_dir)
 
-        # Verify save was attempted via agent.save_model
-        mock_agent.save_model.assert_called_once_with(
-            os.path.join(nonexistent_model_dir, "checkpoint_ts1000.pth"),
-            1000,
-            25,
-            stats_to_save=stats,
-        )
+            # Verify save was attempted via agent.save_model
+            mock_agent.save_model.assert_called_once_with(
+                os.path.join(nonexistent_model_dir, "checkpoint_ts1000.pth"),
+                1000,
+                25,
+                stats_to_save=stats,
+            )
