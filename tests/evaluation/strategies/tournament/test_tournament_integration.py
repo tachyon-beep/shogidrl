@@ -234,9 +234,9 @@ class TestFullEvaluation:
         self, mock_tournament_config, mock_agent_info, mock_evaluation_context
     ):
         """Test full evaluation with dynamic game count calculation."""
-        # Configure for dynamic calculation
+        # Configure for dynamic calculation using strategy params
         mock_tournament_config.num_games = 20
-        mock_tournament_config.num_games_per_opponent = None
+        mock_tournament_config.set_strategy_param("num_games_per_opponent", None)
 
         # Set up 3 opponents
         opponents = [
@@ -306,8 +306,8 @@ class TestFullEvaluation:
         self, mock_tournament_config, mock_agent_info, mock_evaluation_context
     ):
         """Test full evaluation run with configured opponents and games."""
-        # Configure specific game count per opponent
-        mock_tournament_config.num_games_per_opponent = 4
+        # Configure specific game count per opponent using strategy params
+        mock_tournament_config.set_strategy_param("num_games_per_opponent", 4)
 
         # Set up 2 opponents
         opponents = [

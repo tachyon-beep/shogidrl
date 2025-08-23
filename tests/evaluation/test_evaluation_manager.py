@@ -6,7 +6,7 @@ import torch
 from keisei.evaluation.core import (
     EvaluationConfig,
     EvaluationResult,
-    EvaluationStrategy,
+    create_evaluation_config,
 )
 from keisei.evaluation.core_manager import EvaluationManager
 
@@ -15,13 +15,24 @@ class DummyEvaluator:
     def __init__(self, config):
         self.config = config
 
+    def set_runtime_context(
+        self,
+        policy_mapper=None,
+        device: str = None,
+        model_dir: str = None,
+        wandb_active: bool = False,
+        **kwargs
+    ):
+        """Mock implementation of set_runtime_context."""
+        pass
+
     async def evaluate(self, agent_info, context):
         _ = agent_info  # use argument to avoid lint complaint
         return EvaluationResult(context=context, games=[], summary_stats=MagicMock())
 
 
 def test_evaluate_checkpoint(monkeypatch, tmp_path):
-    cfg = EvaluationConfig(strategy=EvaluationStrategy.SINGLE_OPPONENT, num_games=1)
+    cfg = create_evaluation_config(strategy="single_opponent", num_games=1)
     manager = EvaluationManager(cfg, run_name="test")
 
     dummy_evaluator = DummyEvaluator(cfg)
@@ -40,7 +51,7 @@ def test_evaluate_checkpoint(monkeypatch, tmp_path):
 
 
 def test_evaluate_current_agent(monkeypatch):
-    cfg = EvaluationConfig(strategy=EvaluationStrategy.SINGLE_OPPONENT, num_games=1)
+    cfg = create_evaluation_config(strategy="single_opponent", num_games=1)
     manager = EvaluationManager(cfg, run_name="test")
 
     dummy_agent = MagicMock()
@@ -51,6 +62,17 @@ def test_evaluate_current_agent(monkeypatch):
     class DummyEvaluator:
         def __init__(self, config):
             self.config = config
+
+        def set_runtime_context(
+            self,
+            policy_mapper=None,
+            device: str = None,
+            model_dir: str = None,
+            wandb_active: bool = False,
+            **kwargs
+        ):
+            """Mock implementation of set_runtime_context."""
+            pass
 
         async def evaluate(self, agent_info, context):
             _ = context  # use both args to avoid lint
@@ -74,13 +96,16 @@ def test_evaluate_current_agent_real_integration(tmp_path):
     """Test evaluation of a real agent with actual evaluator integration."""
     from keisei.evaluation.core import (
         EvaluationResult,
-        EvaluationStrategy,
-        SingleOpponentConfig,
+        create_evaluation_config,
     )
     from keisei.evaluation.core_manager import EvaluationManager
     from tests.evaluation.factories import EvaluationTestFactory
 
-    cfg = SingleOpponentConfig(num_games=1, opponent_name="test_opponent")
+    cfg = create_evaluation_config(
+        strategy="single_opponent", 
+        num_games=1, 
+        opponent_name="test_opponent"
+    )
     manager = EvaluationManager(
         cfg, run_name="real_integration", pool_size=1, elo_registry_path=None
     )
@@ -107,14 +132,13 @@ def test_in_memory_evaluation_full_workflow(tmp_path):
 
     from keisei.evaluation.core import (
         EvaluationResult,
-        EvaluationStrategy,
         create_evaluation_config,
     )
     from keisei.evaluation.core_manager import EvaluationManager
     from tests.evaluation.factories import EvaluationTestFactory
 
     cfg = create_evaluation_config(
-        strategy=EvaluationStrategy.SINGLE_OPPONENT,
+        strategy="single_opponent",
         num_games=1,
         enable_in_memory_evaluation=True,
         opponent_name="test_opponent",
@@ -154,7 +178,7 @@ def test_evaluation_error_propagation(monkeypatch):
     from keisei.evaluation.core import (
         EvaluationConfig,
         EvaluationResult,
-        EvaluationStrategy,
+        create_evaluation_config,
     )
     from keisei.evaluation.core_manager import EvaluationManager, EvaluatorFactory
     from tests.evaluation.factories import EvaluationTestFactory
@@ -165,12 +189,23 @@ def test_evaluation_error_propagation(monkeypatch):
             # no-op initializer
             self.config = config
 
+        def set_runtime_context(
+            self,
+            policy_mapper=None,
+            device: str = None,
+            model_dir: str = None,
+            wandb_active: bool = False,
+            **kwargs
+        ):
+            """Mock implementation of set_runtime_context."""
+            pass
+
         async def evaluate(self, agent_info, context):
             raise RuntimeError("simulated failure")
 
     # Monkeypatch factory
     monkeypatch.setattr(EvaluatorFactory, "create", lambda cfg: FailingEvaluator(cfg))
-    cfg = EvaluationConfig(strategy=EvaluationStrategy.SINGLE_OPPONENT, num_games=1)
+    cfg = create_evaluation_config(strategy="single_opponent", num_games=1)
     manager = EvaluationManager(
         cfg, run_name="error_prop", pool_size=1, elo_registry_path=None
     )

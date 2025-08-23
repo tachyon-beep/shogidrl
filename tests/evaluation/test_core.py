@@ -7,13 +7,17 @@ from keisei.evaluation.core import (
     EvaluationContext,
     GameResult,
     OpponentInfo,
-    SingleOpponentConfig,
     SummaryStats,
+    EvaluationConfig,
+    create_evaluation_config,
 )
 
 
 def test_context_creation_and_serialization():
-    config = SingleOpponentConfig(num_games=1)
+    config = create_evaluation_config(
+        strategy="single_opponent",
+        num_games=1
+    )
     ctx = EvaluationContext(
         session_id="sess1",
         timestamp=datetime(2025, 1, 1),

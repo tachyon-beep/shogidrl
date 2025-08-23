@@ -786,7 +786,7 @@ class SingleOpponentEvaluator(BaseEvaluator):
         """
         total_games = self.config.num_games
 
-        if not self.config.play_as_both_colors:
+        if not self.config.get_strategy_param("play_as_both_colors", True):
             # All games with agent as first player
             return {"agent_first": total_games, "agent_second": 0}
 
@@ -818,7 +818,7 @@ class SingleOpponentEvaluator(BaseEvaluator):
         # Calculate color-specific statistics if applicable
         analytics = {}
 
-        if self.config.play_as_both_colors:
+        if self.config.get_strategy_param("play_as_both_colors", True):
             # Separate games by color (approximation based on metadata)
             first_player_games = [
                 g

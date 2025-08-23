@@ -44,6 +44,7 @@
         "num_games": 1,
         "max_concurrent_games": 4,
         "timeout_per_game": null,
+        "strategy_params": {},
         "opponent_type": "random",
         "max_moves_per_game": 500,
         "randomize_positions": true,
@@ -63,7 +64,14 @@
         "enable_parallel_execution": true,
         "process_restart_threshold": 100,
         "temp_agent_device": "cpu",
-        "clear_cache_after_evaluation": true
+        "clear_cache_after_evaluation": true,
+        "max_evaluation_time_minutes": 30,
+        "evaluation_timeout_per_game": 300,
+        "max_concurrent_evaluations": 1,
+        "enable_performance_monitoring": true,
+        "memory_limit_mb": 1000,
+        "cpu_limit_percent": 80.0,
+        "gpu_limit_percent": 80.0
     },
     "logging": {
         "log_file": "test_training.log",

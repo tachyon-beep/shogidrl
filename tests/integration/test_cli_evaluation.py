@@ -50,8 +50,8 @@ class TestCLIEvaluationWorkflows:
                 run_name="test_cli_eval"
             )
             
-            # Mock the evaluation manager and result
-            with patch('keisei.training.train.EvaluationManager') as mock_manager_class:
+            # Mock the evaluation manager and result - patch the import source
+            with patch('keisei.evaluation.core_manager.EvaluationManager') as mock_manager_class:
                 mock_manager = Mock()
                 mock_result = Mock()
                 mock_result.summary_stats = Mock()
@@ -119,7 +119,7 @@ evaluation:
                 )
                 mock_load_config.return_value = mock_config
                 
-                with patch('keisei.training.train.EvaluationManager') as mock_manager_class:
+                with patch('keisei.evaluation.core_manager.EvaluationManager') as mock_manager_class:
                     mock_manager = Mock()
                     mock_result = Mock()
                     mock_result.summary_stats = Mock()
@@ -173,7 +173,7 @@ evaluation:
                 )
                 
                 # Mock evaluation manager
-                with patch('keisei.training.train.EvaluationManager') as mock_manager_class:
+                with patch('keisei.evaluation.core_manager.EvaluationManager') as mock_manager_class:
                     mock_manager = Mock()
                     mock_result = Mock()
                     mock_result.summary_stats = Mock()
@@ -302,7 +302,7 @@ evaluation:
             )
             
             # Mock evaluation
-            with patch('keisei.training.train.EvaluationManager') as mock_manager_class:
+            with patch('keisei.evaluation.core_manager.EvaluationManager') as mock_manager_class:
                 mock_manager = Mock()
                 mock_result = Mock()
                 mock_result.summary_stats = Mock()
@@ -350,10 +350,13 @@ class TestCLIIntegrationWithAsyncFixes:
             )
             
             # Verify that evaluate_checkpoint_async is called (not the sync version)
-            with patch('keisei.training.train.EvaluationManager') as mock_manager_class:
+            with patch('keisei.evaluation.core_manager.EvaluationManager') as mock_manager_class:
                 mock_manager = Mock()
                 mock_result = Mock()
-                mock_result.summary_stats = Mock()
+                # Create a proper mock with numeric win_rate for formatting
+                mock_summary_stats = Mock()
+                mock_summary_stats.win_rate = 0.75  # Numeric value for formatting
+                mock_result.summary_stats = mock_summary_stats
                 mock_manager.evaluate_checkpoint_async = AsyncMock(return_value=mock_result)
                 mock_manager_class.return_value = mock_manager
                 

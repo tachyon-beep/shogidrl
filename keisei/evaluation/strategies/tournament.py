@@ -575,14 +575,14 @@ class TournamentEvaluator(BaseEvaluator):
 
     async def _load_tournament_opponents(self) -> List[OpponentInfo]:
         """Load tournament opponents from configuration."""
-        if not self.config.opponent_pool_config:
+        if not self.config.get_strategy_param("opponent_pool_config", []):
             logger.warning(
                 "No opponent pool configuration found. Tournament will have no opponents."
             )
             return []
 
         opponents: List[OpponentInfo] = []
-        for i, opponent_config in enumerate(self.config.opponent_pool_config):
+        for i, opponent_config in enumerate(self.config.get_strategy_param("opponent_pool_config", [])):
             try:
                 if isinstance(opponent_config, OpponentInfo):
                     opponents.append(opponent_config)

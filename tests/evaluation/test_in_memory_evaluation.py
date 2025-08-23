@@ -91,10 +91,11 @@ class TestInMemoryEvaluationIntegration:
     @async_test
     async def test_evaluation_manager_in_memory_with_mock_agent(self):
         """Test EvaluationManager in-memory evaluation with mocked components."""
-        from keisei.evaluation.core import SingleOpponentConfig
-
-        config = SingleOpponentConfig(
-            num_games=2, opponent_name="random", enable_in_memory_evaluation=True
+        config = create_evaluation_config(
+            strategy=EvaluationStrategy.SINGLE_OPPONENT,
+            num_games=2, 
+            enable_in_memory_evaluation=True,
+            opponent_name="random",
         )
         manager = EvaluationManager(config, "test_run")
 

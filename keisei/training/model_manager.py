@@ -4,9 +4,11 @@ training/model_manager.py: Model lifecycle management for Shogi RL training.
 This module handles model-related concerns including:
 - Model configuration and factory instantiation
 - Mixed precision training setup
+- torch.compile optimization with validation and fallback
 - Checkpoint loading and resuming
 - Model artifact creation for WandB
 - Final model saving and persistence
+- Performance benchmarking and optimization validation
 """
 
 import os
@@ -23,12 +25,22 @@ from keisei.core.actor_critic_protocol import ActorCriticProtocol
 from keisei.core.ppo_agent import PPOAgent
 from keisei.shogi import features
 from keisei.training.models import model_factory
+from keisei.utils.performance_benchmarker import PerformanceBenchmarker, create_benchmarker
+from keisei.utils.compilation_validator import CompilationValidator, safe_compile_model, CompilationResult
 
 from . import utils
 
 
 class ModelManager:
-    """Manages model lifecycle for training runs."""
+    """
+    Manages model lifecycle for training runs with torch.compile optimization.
+    
+    New features in this version:
+    - torch.compile integration with automatic fallback
+    - Performance benchmarking and validation
+    - Numerical equivalence verification
+    - Compilation status tracking and reporting
+    """
 
     def __init__(
         self, config: AppConfig, args: Any, device: torch.device, logger_func=None
@@ -69,12 +81,19 @@ class ModelManager:
         # Initialize mixed precision
         self._setup_mixed_precision()
 
+        # Initialize torch.compile optimization infrastructure
+        self._setup_compilation_infrastructure()
+
         # Model will be created by explicit call to create_model()
         self.model: Optional[ActorCriticProtocol] = None
 
         # Track checkpoint resume status
         self.resumed_from_checkpoint: Optional[str] = None
         self.checkpoint_data: Optional[Dict[str, Any]] = None
+
+        # Track compilation status
+        self.compilation_result: Optional[CompilationResult] = None
+        self.model_is_compiled: bool = False
 
     def _setup_feature_spec(self):
         """Setup feature specification and observation shape."""
@@ -100,9 +119,40 @@ class ModelManager:
         else:
             self.scaler = None
 
+    def _setup_compilation_infrastructure(self):
+        """Setup torch.compile optimization infrastructure."""
+        # Initialize performance benchmarker if enabled
+        if getattr(self.config.training, 'enable_compilation_benchmarking', True):
+            self.benchmarker = create_benchmarker(
+                self.config.training, 
+                self.logger_func
+            )
+        else:
+            self.benchmarker = None
+
+        # Initialize compilation validator
+        self.compilation_validator = CompilationValidator(
+            config_training=self.config.training,
+            logger_func=self.logger_func,
+            benchmarker=self.benchmarker
+        )
+
+        # Log compilation configuration
+        if getattr(self.config.training, 'enable_torch_compile', True):
+            compile_mode = getattr(self.config.training, 'torch_compile_mode', 'default')
+            self.logger_func(f"torch.compile optimization enabled (mode: {compile_mode})")
+        else:
+            self.logger_func("torch.compile optimization disabled")
+
     def create_model(self) -> ActorCriticProtocol:
-        """Create the model using the model factory and sets it to self.model.
-        Raises RuntimeError if model creation fails.
+        """
+        Create the model using the model factory and apply torch.compile optimization.
+        
+        Returns:
+            ActorCriticProtocol: Optimized model ready for training
+            
+        Raises:
+            RuntimeError: If model creation fails
         """
         # Call model_factory once and assign to a temporary variable
         created_model = model_factory(
@@ -117,15 +167,135 @@ class ModelManager:
         if not created_model:  # Check if model_factory returned a valid model
             raise RuntimeError("Model factory returned None, failed to create model.")
 
-        # Assign to self.model after moving to device
-        self.model = created_model.to(self.device)
+        # Move to device first
+        created_model = created_model.to(self.device)
 
-        if (
-            self.model is None
-        ):  # Should not happen if .to() raises on error or created_model was None
+        if created_model is None:  # Should not happen if .to() raises on error
             raise RuntimeError("Failed to create model or move model to device.")
 
+        # Apply torch.compile optimization if enabled
+        optimized_model = self._apply_torch_compile_optimization(created_model)
+
+        # Assign to self.model after optimization
+        self.model = optimized_model
+
         return self.model
+
+    def _apply_torch_compile_optimization(
+        self, 
+        model: ActorCriticProtocol
+    ) -> ActorCriticProtocol:
+        """
+        Apply torch.compile optimization with validation and fallback.
+        
+        Args:
+            model: Model to optimize
+            
+        Returns:
+            Optimized model (compiled or fallback to original)
+        """
+        # Create sample input for validation
+        sample_input = torch.randn(
+            1, *self.obs_shape, 
+            device=self.device, 
+            dtype=torch.float32
+        )
+
+        # Attempt compilation with validation
+        compiled_model, compilation_result = safe_compile_model(
+            model=model,
+            sample_input=sample_input,
+            config_training=self.config.training,
+            logger_func=self.logger_func,
+            benchmarker=self.benchmarker,
+            model_name=f"{self.model_type}_model"
+        )
+
+        # Store compilation results for status reporting
+        self.compilation_result = compilation_result
+        self.model_is_compiled = compilation_result.success and not compilation_result.fallback_used
+
+        # Log compilation status
+        if self.model_is_compiled:
+            perf_info = ""
+            if compilation_result.performance_improvement:
+                perf_info = f" ({compilation_result.performance_improvement:.2f}x speedup)"
+            self.logger_func(f"Model compilation successful{perf_info}")
+        elif compilation_result.fallback_used:
+            self.logger_func(f"Model compilation failed, using fallback: {compilation_result.error_message}")
+        else:
+            self.logger_func("Model compilation skipped (disabled in configuration)")
+
+        return compiled_model
+
+    def get_compilation_status(self) -> Dict[str, Any]:
+        """Get detailed compilation status information."""
+        if not self.compilation_result:
+            return {
+                'attempted': False,
+                'enabled': getattr(self.config.training, 'enable_torch_compile', True),
+                'message': 'Compilation not attempted yet'
+            }
+
+        return {
+            'attempted': True,
+            'enabled': getattr(self.config.training, 'enable_torch_compile', True),
+            'success': self.compilation_result.success,
+            'compiled': self.model_is_compiled,
+            'fallback_used': self.compilation_result.fallback_used,
+            'validation_passed': self.compilation_result.validation_passed,
+            'performance_improvement': self.compilation_result.performance_improvement,
+            'error_message': self.compilation_result.error_message,
+            'metadata': self.compilation_result.metadata
+        }
+
+    def benchmark_model_performance(
+        self, 
+        model: Optional[ActorCriticProtocol] = None,
+        num_iterations: int = 100
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Benchmark current model performance for analysis.
+        
+        Args:
+            model: Model to benchmark (uses self.model if None)
+            num_iterations: Number of benchmark iterations
+            
+        Returns:
+            Benchmark results dictionary or None if benchmarking disabled
+        """
+        if not self.benchmarker:
+            return None
+
+        target_model = model or self.model
+        if not target_model:
+            self.logger_func("No model available for benchmarking")
+            return None
+
+        # Create sample input
+        sample_input = torch.randn(
+            1, *self.obs_shape,
+            device=self.device,
+            dtype=torch.float32
+        )
+
+        # Run benchmark
+        self.benchmarker.benchmark_iterations = num_iterations
+        result = self.benchmarker.benchmark_model(
+            model=target_model,
+            input_tensor=sample_input,
+            name="current_model",
+            model_type=self.model_type
+        )
+
+        return {
+            'mean_time_ms': result.mean_time_ms,
+            'std_time_ms': result.std_time_ms,
+            'memory_peak_mb': result.memory_peak_mb,
+            'device': result.device,
+            'num_iterations': result.num_iterations,
+            'compiled': self.model_is_compiled
+        }
 
     # create_agent method removed as Trainer will instantiate the agent
 
@@ -256,11 +426,23 @@ class ModelManager:
         try:
             # Create artifact with run name prefix for uniqueness
             full_artifact_name = f"{run_name}-{artifact_name}"
+
+            # Enhance metadata with compilation information
+            enhanced_metadata = metadata or {}
+            if self.compilation_result:
+                enhanced_metadata.update({
+                    'torch_compile_enabled': getattr(self.config.training, 'enable_torch_compile', False),
+                    'model_compiled': self.model_is_compiled,
+                    'compilation_success': self.compilation_result.success,
+                    'compilation_mode': getattr(self.config.training, 'torch_compile_mode', 'default'),
+                    'performance_improvement': self.compilation_result.performance_improvement
+                })
+
             artifact = wandb.Artifact(
                 name=full_artifact_name,
                 type=artifact_type,
                 description=description or f"Model checkpoint from run {run_name}",
-                metadata=metadata or {},
+                metadata=enhanced_metadata,
             )
 
             # Add the model file
@@ -356,7 +538,7 @@ class ModelManager:
             )
             self.logger_func(f"Final model saved to {final_model_path}")
 
-            # Create W&B artifact for final model
+            # Create W&B artifact for final model with compilation info
             final_metadata = {
                 "training_timesteps": global_timestep,
                 "total_episodes": total_episodes_completed,
@@ -436,7 +618,7 @@ class ModelManager:
             )
             self.logger_func(f"Checkpoint saved to {checkpoint_filename}")
 
-            # Create W&B artifact for this checkpoint
+            # Create W&B artifact for this checkpoint with compilation info
             checkpoint_metadata = {
                 "training_timesteps": timestep,
                 "total_episodes": episode_count,
@@ -511,7 +693,7 @@ class ModelManager:
             )
             self.logger_func(f"Final checkpoint saved to {checkpoint_filename}")
 
-            # Create W&B artifact for final checkpoint
+            # Create W&B artifact for final checkpoint with compilation info
             checkpoint_metadata = {
                 "training_timesteps": global_timestep,
                 "total_episodes": total_episodes_completed,
@@ -542,8 +724,8 @@ class ModelManager:
             return False, None
 
     def get_model_info(self) -> Dict[str, Any]:
-        """Get information about the current model configuration."""
-        return {
+        """Get information about the current model configuration and optimization status."""
+        base_info = {
             "model_type": self.model_type,
             "input_features": self.input_features,
             "tower_depth": self.tower_depth,
@@ -554,3 +736,13 @@ class ModelManager:
             "use_mixed_precision": self.use_mixed_precision,
             "device": str(self.device),
         }
+
+        # Add compilation status information
+        compilation_status = self.get_compilation_status()
+        base_info.update({
+            "torch_compile": compilation_status,
+            "optimization_applied": self.model_is_compiled,
+            "performance_benchmarking_enabled": self.benchmarker is not None
+        })
+
+        return base_info

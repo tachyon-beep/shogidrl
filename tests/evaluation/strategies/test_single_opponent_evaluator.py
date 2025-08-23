@@ -15,14 +15,18 @@ from keisei.evaluation.core import (
     AgentInfo,
     EvaluationContext,
     OpponentInfo,
-    SingleOpponentConfig,
+    EvaluationConfig,
+    create_evaluation_config,
 )
 from keisei.evaluation.strategies.single_opponent import SingleOpponentEvaluator
 
 
 @async_test
 async def test_load_agent_instance_direct():
-    cfg = SingleOpponentConfig(opponent_name="opp")
+    cfg = create_evaluation_config(
+        strategy="single_opponent",
+        opponent_name="opp"
+    )
     evaluator = SingleOpponentEvaluator(cfg)
     dummy_agent = MagicMock()
     info = AgentInfo(name="agent", metadata={"agent_instance": dummy_agent})
@@ -39,8 +43,10 @@ async def test_load_agent_instance_direct():
 @async_test
 async def test_evaluate_in_memory_basic():
     """Test basic in-memory evaluation functionality."""
-    cfg = SingleOpponentConfig(
-        opponent_name="test_opponent", opponent_path="dummy/path", num_games=2
+    cfg = create_evaluation_config(
+        strategy="single_opponent",
+        opponent_name="test_opponent",
+        num_games=2
     )
     evaluator = SingleOpponentEvaluator(cfg)
 
@@ -101,7 +107,10 @@ async def test_evaluate_in_memory_basic():
 @async_test
 async def test_load_evaluation_entity_in_memory_fallback():
     """Test that in-memory entity loading falls back to regular loading when weights not available."""
-    cfg = SingleOpponentConfig(opponent_name="test_opponent")
+    cfg = create_evaluation_config(
+        strategy="single_opponent",
+        opponent_name="test_opponent"
+    )
     evaluator = SingleOpponentEvaluator(cfg)
 
     # Create agent info without in-memory weights

@@ -8,27 +8,22 @@ from keisei.evaluation.core import (
     AgentInfo,
     EvaluationContext,
     OpponentInfo,
-    TournamentConfig,
+    EvaluationConfig,
+    create_evaluation_config,
 )
 
 
 @pytest.fixture
 def mock_tournament_config():
     """Mock tournament configuration for testing."""
-    config = MagicMock(spec=TournamentConfig)
-    config.name = "TestTournament"
-    config.num_games = 10
-    config.num_games_per_opponent = 2
-    config.opponent_pool_config = []
-    config.default_device = "cpu"
-    config.input_channels = 46
-    config.max_moves_per_game = 100
-    config.log_level = "INFO"
-    config.evaluation_strategy = "tournament"
-    config.output_dir = "/tmp/eval_output"
-    config.save_results = True
-    config.save_replays = False
-    config.custom_params = {}
+    config = create_evaluation_config(
+        strategy="tournament",
+        num_games=10,
+        strategy_params={
+            "num_games_per_opponent": 2,
+            "opponent_pool_config": []
+        }
+    )
     return config
 
 

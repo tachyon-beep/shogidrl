@@ -112,6 +112,47 @@ class TrainingConfig(BaseModel):
         description="When to step the scheduler: 'epoch' (per PPO epoch) or 'update' (per minibatch update)",
     )
 
+    # torch.compile Configuration - Neural Network Optimization
+    enable_torch_compile: bool = Field(
+        True, description="Enable torch.compile for neural network optimization (10-30% speedup)."
+    )
+    torch_compile_mode: Literal["default", "reduce-overhead", "max-autotune"] = Field(
+        "default", 
+        description="torch.compile mode: 'default' (balanced), 'reduce-overhead' (faster compilation), 'max-autotune' (maximum optimization)."
+    )
+    torch_compile_dynamic: Optional[bool] = Field(
+        None, 
+        description="Enable dynamic shape tracing for variable input sizes (None for auto-detection)."
+    )
+    torch_compile_fullgraph: bool = Field(
+        False, 
+        description="Force full graph compilation (may fail on complex models but provides maximum optimization)."
+    )
+    torch_compile_backend: Optional[str] = Field(
+        None, 
+        description="Compilation backend ('inductor', 'aot_eager', 'cudagraphs'). None for auto-selection."
+    )
+    enable_compilation_fallback: bool = Field(
+        True, 
+        description="Automatically fallback to non-compiled model if compilation fails."
+    )
+    validate_compiled_output: bool = Field(
+        True, 
+        description="Validate numerical equivalence between compiled and non-compiled models during initialization."
+    )
+    compilation_validation_tolerance: float = Field(
+        1e-5, 
+        description="Numerical tolerance for compiled model validation (absolute difference)."
+    )
+    compilation_warmup_steps: int = Field(
+        5, 
+        description="Number of warmup forward passes for torch.compile optimization."
+    )
+    enable_compilation_benchmarking: bool = Field(
+        True, 
+        description="Enable performance benchmarking for compiled vs non-compiled models."
+    )
+
     @field_validator("learning_rate")
     # pylint: disable=no-self-argument
     def lr_positive(cls, v):
@@ -131,6 +172,24 @@ class TrainingConfig(BaseModel):
     def validate_lr_schedule_step_on(cls, v):  # pylint: disable=no-self-argument
         if v not in ["epoch", "update"]:
             raise ValueError("lr_schedule_step_on must be 'epoch' or 'update'")
+        return v
+
+    @field_validator("torch_compile_mode")
+    def validate_torch_compile_mode(cls, v):  # pylint: disable=no-self-argument
+        if v not in ["default", "reduce-overhead", "max-autotune"]:
+            raise ValueError("torch_compile_mode must be one of: 'default', 'reduce-overhead', 'max-autotune'")
+        return v
+
+    @field_validator("compilation_validation_tolerance")
+    def validate_compilation_tolerance(cls, v):  # pylint: disable=no-self-argument
+        if v <= 0:
+            raise ValueError("compilation_validation_tolerance must be positive")
+        return v
+
+    @field_validator("compilation_warmup_steps")
+    def validate_warmup_steps(cls, v):  # pylint: disable=no-self-argument
+        if v < 0:
+            raise ValueError("compilation_warmup_steps must be non-negative")
         return v
 
 
@@ -352,6 +411,10 @@ class EvaluationConfig(BaseModel):
         """Set a strategy-specific parameter."""
         self.strategy_params[key] = value
     
+    def to_dict(self) -> dict:
+        """Convert config to dictionary for serialization."""
+        return self.model_dump()
+
     def configure_for_single_opponent(
         self,
         opponent_name: str = "default_opponent",

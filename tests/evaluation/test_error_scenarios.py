@@ -14,10 +14,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 import torch
 
-from keisei.evaluation.core import GameResult
+from keisei.evaluation.core import GameResult, EvaluationConfig, create_evaluation_config
 from keisei.evaluation.core.evaluation_context import AgentInfo, OpponentInfo
 from keisei.evaluation.core_manager import EvaluationManager
-from keisei.evaluation.strategies.single_opponent import SingleOpponentConfig
 
 
 class TestErrorScenarios:
@@ -26,11 +25,12 @@ class TestErrorScenarios:
     @pytest.fixture
     def test_config(self):
         """Create test configuration."""
-        return SingleOpponentConfig(
+        return create_evaluation_config(
+            strategy="single_opponent",
             num_games=4,
             max_concurrent_games=2,
             opponent_name="test_opponent",
-            play_as_both_colors=True,
+            strategy_params={"play_as_both_colors": True}
         )
 
     @pytest.fixture
@@ -60,6 +60,9 @@ class TestErrorScenarios:
             tower_width=32,
             se_ratio=0.25,
         )
+        # Create a minimal config for the agent
+        from tests.evaluation.conftest import make_test_config
+        config = make_test_config()
         return PPOAgent(model=model, config=config, device=torch.device("cpu"))
 
     def test_corrupted_checkpoint_recovery(self, test_config):
@@ -91,10 +94,11 @@ class TestErrorScenarios:
         """Test system handles invalid configurations gracefully."""
         # Test invalid config parameters
         with pytest.raises((ValueError, TypeError)):
-            invalid_config = SingleOpponentConfig(
+            invalid_config = create_evaluation_config(
+                strategy="single_opponent",
                 opponent_name="",  # Empty name
                 num_games=-1,  # Negative games
-                play_as_both_colors=True,
+                strategy_params={"play_as_both_colors": True}
             )
             EvaluationManager(invalid_config, "invalid_test")
 
@@ -122,11 +126,12 @@ class TestEdgeCases:
     @pytest.fixture
     def edge_case_config(self):
         """Configuration for edge case testing."""
-        return SingleOpponentConfig(
+        return create_evaluation_config(
+            strategy="single_opponent",
             num_games=1,  # Minimal games
             max_concurrent_games=1,
             opponent_name="edge_test_opponent",
-            play_as_both_colors=False,
+            strategy_params={"play_as_both_colors": False}
         )
 
     def test_single_game_evaluation(self, edge_case_config):

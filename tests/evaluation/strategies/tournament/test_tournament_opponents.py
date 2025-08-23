@@ -20,7 +20,7 @@ class TestTournamentOpponents:
         self, mock_tournament_config, mock_evaluation_context
     ):
         """Test loading opponents with empty configuration."""
-        mock_tournament_config.opponent_pool_config = []
+        mock_tournament_config.set_strategy_param("opponent_pool_config", [])
         evaluator = TournamentEvaluator(mock_tournament_config)
 
         with patch(
@@ -41,7 +41,7 @@ class TestTournamentOpponents:
             "type": "ppo_agent",
             "checkpoint_path": "/path/opp2.ptk",
         }
-        mock_tournament_config.opponent_pool_config = [opponent_data_1, opponent_data_2]
+        mock_tournament_config.set_strategy_param("opponent_pool_config", [opponent_data_1, opponent_data_2])
 
         evaluator = TournamentEvaluator(mock_tournament_config)
 
@@ -65,7 +65,7 @@ class TestTournamentOpponents:
             name="PredefinedOpp1", type="heuristic", metadata={"id": "pre1"}
         )
         opponent_data_2 = {"name": "Opp2", "type": "random"}
-        mock_tournament_config.opponent_pool_config = [opp_info_1, opponent_data_2]
+        mock_tournament_config.set_strategy_param("opponent_pool_config", [opp_info_1, opponent_data_2])
 
         evaluator = TournamentEvaluator(mock_tournament_config)
         with patch("keisei.evaluation.strategies.tournament.logger", MagicMock()):
@@ -82,7 +82,7 @@ class TestTournamentOpponents:
         """Test loading opponents with malformed configuration entry."""
         opponent_data_1 = {"name": "Opp1", "type": "random"}
         malformed_data = "not_a_dict_or_opponent_info"
-        mock_tournament_config.opponent_pool_config = [opponent_data_1, malformed_data]
+        mock_tournament_config.set_strategy_param("opponent_pool_config", [opponent_data_1, malformed_data])
 
         evaluator = TournamentEvaluator(mock_tournament_config)
         with patch(
@@ -107,10 +107,10 @@ class TestTournamentOpponents:
             "name": "ProblemOpp",
             "type": "special_type_that_breaks_init",
         }
-        mock_tournament_config.opponent_pool_config = [
+        mock_tournament_config.set_strategy_param("opponent_pool_config", [
             opponent_data_1,
             problematic_data,
-        ]
+        ])
 
         evaluator = TournamentEvaluator(mock_tournament_config)
 

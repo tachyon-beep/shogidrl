@@ -35,6 +35,11 @@
 #   * Displays actual model type (from training.model_type)
 #   * Updates automatically when configuration changes
 #
+# - TORCH.COMPILE NEURAL NETWORK OPTIMIZATION: Automatic model compilation for 10-30% speedup
+#   * Enabled by default with automatic fallback on compilation failures
+#   * Comprehensive numerical validation ensures model equivalence
+#   * Performance benchmarking validates optimization effectiveness
+#   * Configuration-driven compilation modes and parameters
 # =============================================================================
 
 # =============================================================================
@@ -136,6 +141,37 @@ training:
   # Enable DistributedDataParallel for multi-GPU training
   ddp: false
 
+  # --- torch.compile Neural Network Optimization ---
+  # Enable torch.compile for automatic model optimization (10-30% speedup potential)
+  enable_torch_compile: true
+
+  # Compilation mode: "default" (balanced), "reduce-overhead" (faster compilation), "max-autotune" (maximum optimization)
+  torch_compile_mode: "default"
+
+  # Enable dynamic shape tracing for variable input sizes (null for auto-detection)
+  torch_compile_dynamic: null
+
+  # Force full graph compilation (may fail on complex models but provides maximum optimization)
+  torch_compile_fullgraph: false
+
+  # Compilation backend (null for auto-selection): "inductor", "aot_eager", "cudagraphs"
+  torch_compile_backend: null
+
+  # Automatically fallback to non-compiled model if compilation fails
+  enable_compilation_fallback: true
+
+  # Validate numerical equivalence between compiled and non-compiled models during initialization
+  validate_compiled_output: true
+
+  # Numerical tolerance for compiled model validation (absolute difference)
+  compilation_validation_tolerance: 0.00001
+
+  # Number of warmup forward passes for torch.compile optimization
+  compilation_warmup_steps: 5
+
+  # Enable performance benchmarking for compiled vs non-compiled models
+  enable_compilation_benchmarking: true
+
   # --- Display and Progress Settings ---
   # Update frequency for expensive UI elements to reduce flicker
   render_every_steps: 1
@@ -178,6 +214,61 @@ training:
   # lr_schedule_kwargs:
   #   step_size: 50               # Decay every 50 epochs/updates
   #   gamma: 0.5                  # Multiply by 0.5 at each step
+
+# =============================================================================
+# TORCH.COMPILE OPTIMIZATION EXAMPLES
+# =============================================================================
+# The following examples show different torch.compile configurations for various scenarios.
+# Uncomment and modify the relevant settings above to use these configurations.
+#
+# EXAMPLE 1: Maximum Performance (recommended for production training)
+# ----------------------------------------
+# training:
+#   enable_torch_compile: true
+#   torch_compile_mode: "max-autotune"        # Maximum optimization
+#   torch_compile_fullgraph: true            # Full graph compilation
+#   enable_compilation_fallback: true        # Safety fallback
+#   validate_compiled_output: true           # Ensure correctness
+#   compilation_validation_tolerance: 0.00001
+#
+# EXAMPLE 2: Fast Development (quick compilation for development)
+# ----------------------------------------
+# training:
+#   enable_torch_compile: true
+#   torch_compile_mode: "reduce-overhead"     # Faster compilation
+#   torch_compile_fullgraph: false           # Partial compilation
+#   enable_compilation_fallback: true        # Safety fallback
+#   validate_compiled_output: false          # Skip validation for speed
+#
+# EXAMPLE 3: Conservative (safe settings for testing)
+# ----------------------------------------
+# training:
+#   enable_torch_compile: true
+#   torch_compile_mode: "default"            # Balanced approach
+#   torch_compile_fullgraph: false           # Safer partial compilation
+#   enable_compilation_fallback: true        # Always use fallback
+#   validate_compiled_output: true           # Full validation
+#   compilation_validation_tolerance: 0.0001 # Relaxed tolerance
+#
+# EXAMPLE 4: Debugging (disabled compilation for troubleshooting)
+# ----------------------------------------
+# training:
+#   enable_torch_compile: false              # Disable compilation
+#   enable_compilation_benchmarking: false   # Disable benchmarking
+#
+# PERFORMANCE TUNING NOTES:
+# - "max-autotune" mode provides best performance but slower compilation
+# - "reduce-overhead" mode compiles faster but may be less optimized
+# - Full graph compilation ("torch_compile_fullgraph: true") gives best performance
+# - Validation adds overhead but ensures numerical correctness
+# - Dynamic shape tracing ("torch_compile_dynamic: true") handles variable inputs
+# - Backend selection is usually best left to auto-detection (null)
+#
+# TROUBLESHOOTING:
+# - If compilation fails frequently, use "reduce-overhead" mode
+# - If numerical differences occur, increase validation tolerance
+# - If training is unstable, disable full graph compilation
+# - For debugging, temporarily disable torch.compile entirely
 # =============================================================================
 # EVALUATION CONFIGURATION (EvaluationConfig)
 # =============================================================================
@@ -495,3 +586,4 @@ display:
 # - Too many layers? Use more specific keywords
 # - Slow performance? Reduce the number of keywords
 # - Missing important layers? Add broader keywords like "head" or "output"
+#

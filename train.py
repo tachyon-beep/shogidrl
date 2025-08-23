@@ -2,6 +2,7 @@
 
 import sys
 import os
+import asyncio
 import multiprocessing
 from dotenv import load_dotenv  # Add this import
 from keisei.training.train import main  # Moved import to the top
@@ -13,4 +14,5 @@ load_dotenv()  # Load environment variables from .env file
 if __name__ == "__main__":
     # Fix B6: Add multiprocessing.freeze_support() for Windows compatibility
     multiprocessing.freeze_support()
-    main()
+    # Run the async main function
+    asyncio.run(main())

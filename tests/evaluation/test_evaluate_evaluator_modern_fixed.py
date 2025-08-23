@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 import torch
 
 from keisei.core.ppo_agent import PPOAgent
-from keisei.evaluation.core.evaluation_config import (
+from keisei.evaluation.core import (
     EvaluationStrategy,
     create_evaluation_config,
 )

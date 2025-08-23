@@ -19,11 +19,9 @@ from keisei.evaluation.core import (
     EvaluationResult,
     GameResult,
     SummaryStats,
+    EvaluationConfig,
+    create_evaluation_config,
 )
-from keisei.evaluation.strategies.benchmark import BenchmarkConfig
-from keisei.evaluation.strategies.ladder import LadderConfig
-from keisei.evaluation.strategies.single_opponent import SingleOpponentConfig
-from keisei.evaluation.strategies.tournament import TournamentConfig
 
 
 class EvaluationTestFactory:
@@ -32,9 +30,9 @@ class EvaluationTestFactory:
     @staticmethod
     def create_test_agent(model_complexity: str = "simple"):
         """Create a test agent with specified complexity."""
-        from keisei.config import CONFIG
-        from keisei.training.core.agent.ppo_agent import PPOAgent
-        from keisei.training.core.model.resnet_tower import ResNetTower
+        from tests.evaluation.conftest import make_test_config
+        from keisei.core.ppo_agent import PPOAgent
+        from keisei.training.models.resnet_tower import ActorCriticResTower
 
         if model_complexity == "simple":
             num_blocks = 2
@@ -45,13 +43,16 @@ class EvaluationTestFactory:
         else:
             num_blocks = 2
 
-        model = ResNetTower(
-            board_size=CONFIG.GAME.BOARD_SIZE,
-            num_channels=CONFIG.MODEL.NUM_CHANNELS,
-            num_blocks=num_blocks,
+        model = ActorCriticResTower(
+            input_channels=46,
+            num_actions_total=13527,
+            tower_depth=num_blocks,
+            tower_width=32,
+            se_ratio=0.25,
         )
 
-        return PPOAgent(model=model, config=CONFIG)
+        config = make_test_config()
+        return PPOAgent(model=model, config=config, device=torch.device("cpu"))
 
     @staticmethod
     def create_game_result(
@@ -64,11 +65,15 @@ class EvaluationTestFactory:
         if timestamp is None:
             timestamp = datetime.now()
 
+        from keisei.evaluation.core import AgentInfo, OpponentInfo
+        
         return GameResult(
-            winner=winner,
-            game_length=game_length,
-            elo_change=elo_change,
-            timestamp=timestamp,
+            game_id=f"test_game_{random.randint(1000, 9999)}",
+            winner=0 if winner == "agent" else (1 if winner == "opponent" else None),
+            moves_count=game_length,
+            duration_seconds=game_length * 2.0,  # Approximate timing
+            agent_info=AgentInfo(name="TestAgent"),
+            opponent_info=OpponentInfo(name="TestOpponent", type="random"),
         )
 
     @staticmethod
@@ -123,15 +128,20 @@ class EvaluationTestFactory:
         """Create summary statistics for testing."""
         total_games = wins + losses + draws
         win_rate = wins / total_games if total_games > 0 else 0.0
+        loss_rate = losses / total_games if total_games > 0 else 0.0
+        draw_rate = draws / total_games if total_games > 0 else 0.0
 
         return SummaryStats(
-            wins=wins,
-            losses=losses,
-            draws=draws,
             total_games=total_games,
+            agent_wins=wins,
+            opponent_wins=losses,
+            draws=draws,
             win_rate=win_rate,
+            loss_rate=loss_rate,
+            draw_rate=draw_rate,
             avg_game_length=avg_game_length,
-            total_time=total_time,
+            total_moves=int(avg_game_length * total_games),
+            avg_duration_seconds=total_time / total_games if total_games > 0 else 0.0,
         )
 
     @staticmethod
@@ -147,21 +157,14 @@ class EvaluationTestFactory:
 
         if summary_stats is None:
             # Calculate from games
-            wins = sum(1 for g in games if g.winner == "agent")
-            losses = sum(1 for g in games if g.winner == "opponent")
-            draws = sum(1 for g in games if g.winner == "draw")
-            avg_length = sum(g.game_length for g in games) / len(games) if games else 0
+            wins = sum(1 for g in games if g.winner == 0)
+            losses = sum(1 for g in games if g.winner == 1)
+            draws = sum(1 for g in games if g.winner is None)
+            avg_length = sum(g.moves_count for g in games) / len(games) if games else 0
 
             summary_stats = EvaluationTestFactory.create_summary_stats(
                 wins=wins, losses=losses, draws=draws, avg_game_length=avg_length
             )
-
-        if analytics is None:
-            analytics = {
-                "first_player_win_rate": 0.6,
-                "second_player_win_rate": 0.4,
-                "avg_elo_change": 5.0,
-            }
 
         if context is None:
             context = EvaluationTestFactory.create_evaluation_context()
@@ -170,7 +173,6 @@ class EvaluationTestFactory:
             context=context,
             games=games,
             summary_stats=summary_stats,
-            analytics=analytics,
         )
 
     @staticmethod
@@ -180,11 +182,20 @@ class EvaluationTestFactory:
         run_name: str = "test_run",
     ) -> EvaluationContext:
         """Create evaluation context for testing."""
-        return EvaluationContext(
+        from keisei.evaluation.core import AgentInfo
+        
+        config = create_evaluation_config(
             strategy=strategy,
-            opponent_name=opponent_name,
-            run_name=run_name,
+            opponent_name=opponent_name
+        )
+        
+        return EvaluationContext(
+            session_id="test_session",
             timestamp=datetime.now(),
+            agent_info=AgentInfo(name="TestAgent"),
+            configuration=config,
+            environment_info={"device": "cpu"},
+            metadata={"run_name": run_name},
         )
 
 
@@ -197,13 +208,14 @@ class ConfigurationFactory:
         num_games: int = 10,
         play_as_both_colors: bool = True,
         max_concurrent_games: int = 1,
-    ) -> SingleOpponentConfig:
+    ) -> EvaluationConfig:
         """Create single opponent configuration."""
-        return SingleOpponentConfig(
+        return create_evaluation_config(
+            strategy="single_opponent",
             opponent_name=opponent_name,
             num_games=num_games,
-            play_as_both_colors=play_as_both_colors,
             max_concurrent_games=max_concurrent_games,
+            strategy_params={"play_as_both_colors": play_as_both_colors}
         )
 
     @staticmethod
@@ -211,15 +223,19 @@ class ConfigurationFactory:
         opponent_pool: Optional[List[str]] = None,
         num_games_per_opponent: int = 5,
         max_concurrent_games: int = 1,
-    ) -> TournamentConfig:
+    ) -> EvaluationConfig:
         """Create tournament configuration."""
         if opponent_pool is None:
             opponent_pool = ["opponent1", "opponent2", "opponent3"]
 
-        return TournamentConfig(
-            opponent_pool=opponent_pool,
-            num_games_per_opponent=num_games_per_opponent,
+        return create_evaluation_config(
+            strategy="tournament",
+            num_games=num_games_per_opponent * len(opponent_pool),
             max_concurrent_games=max_concurrent_games,
+            strategy_params={
+                "opponent_pool": opponent_pool,
+                "num_games_per_opponent": num_games_per_opponent
+            }
         )
 
     @staticmethod
@@ -227,28 +243,37 @@ class ConfigurationFactory:
         initial_opponents: Optional[List[str]] = None,
         games_per_evaluation: int = 10,
         elo_k_factor: float = 32.0,
-    ) -> LadderConfig:
+    ) -> EvaluationConfig:
         """Create ladder configuration."""
         if initial_opponents is None:
             initial_opponents = ["ladder_opponent1", "ladder_opponent2"]
 
-        return LadderConfig(
-            initial_opponents=initial_opponents,
-            games_per_evaluation=games_per_evaluation,
-            elo_k_factor=elo_k_factor,
+        return create_evaluation_config(
+            strategy="ladder",
+            num_games=games_per_evaluation,
+            strategy_params={
+                "initial_opponents": initial_opponents,
+                "elo_k_factor": elo_k_factor
+            }
         )
 
     @staticmethod
     def create_benchmark_config(
-        benchmark_opponents: Optional[List[str]] = None, games_per_benchmark: int = 20
-    ) -> BenchmarkConfig:
+        benchmark_opponents: Optional[List[str]] = None, 
+        games_per_benchmark: int = 20
+    ) -> EvaluationConfig:
         """Create benchmark configuration."""
         if benchmark_opponents is None:
             benchmark_opponents = ["benchmark1", "benchmark2"]
 
-        return BenchmarkConfig(
-            benchmark_opponents=benchmark_opponents,
-            games_per_benchmark=games_per_benchmark,
+        return create_evaluation_config(
+            strategy="benchmark",
+            num_games=games_per_benchmark * len(benchmark_opponents),
+            strategy_params={
+                "benchmark_opponents": benchmark_opponents,
+                "num_games_per_benchmark_case": games_per_benchmark,
+                "suite_config": [{"name": name, "type": "random"} for name in benchmark_opponents]
+            }
         )
 
 
@@ -286,207 +311,6 @@ class MockFactory:
             mock_agent.model = mock_model
 
         return mock_agent
-
-
-class TestDataGenerator:
-    """Generator for creating realistic test data patterns."""
-
-    @staticmethod
-    def generate_performance_trend(
-        num_sessions: int = 10, trend_type: str = "improving", noise_level: float = 0.1
-    ) -> List[tuple]:
-        """Generate evaluation sessions with performance trends."""
-        sessions = []
-        base_time = datetime.now() - timedelta(days=num_sessions)
-
-        for i in range(num_sessions):
-            if trend_type == "improving":
-                base_win_rate = 0.3 + (i / num_sessions) * 0.4  # 0.3 to 0.7
-            elif trend_type == "declining":
-                base_win_rate = 0.7 - (i / num_sessions) * 0.4  # 0.7 to 0.3
-            elif trend_type == "stable":
-                base_win_rate = 0.5
-            else:
-                base_win_rate = 0.5
-
-            # Add noise
-            win_rate = max(
-                0.0, min(1.0, base_win_rate + random.uniform(-noise_level, noise_level))
-            )
-
-            # Generate games for this session
-            games = EvaluationTestFactory.create_game_series(
-                num_games=10,
-                win_rate=win_rate,
-                base_timestamp=base_time + timedelta(days=i),
-            )
-
-            result = EvaluationTestFactory.create_evaluation_result(games=games)
-            sessions.append((base_time + timedelta(days=i), result))
-
-        return sessions
-
-    @staticmethod
-    def generate_realistic_game_lengths(
-        num_games: int = 100, game_type: str = "normal"
-    ) -> List[int]:
-        """Generate realistic game length distributions."""
-        if game_type == "normal":
-            # Normal distribution around 50 moves
-            return [max(5, int(random.gauss(50, 15))) for _ in range(num_games)]
-        elif game_type == "quick":
-            # Shorter games
-            return [max(5, int(random.gauss(25, 8))) for _ in range(num_games)]
-        elif game_type == "long":
-            # Longer games
-            return [max(10, int(random.gauss(100, 30))) for _ in range(num_games)]
-        else:
-            return [50] * num_games
-
-    @staticmethod
-    def generate_elo_progression(
-        num_games: int = 100,
-        starting_elo: float = 1500.0,
-        skill_change_rate: float = 0.1,
-    ) -> List[float]:
-        """Generate realistic ELO progression over games."""
-        elo_changes = []
-        current_skill = 0.0  # Skill relative to opponents
-
-        for i in range(num_games):
-            # Gradually improve skill
-            current_skill += skill_change_rate * random.uniform(-0.1, 0.2)
-
-            # Win probability based on skill difference
-            win_prob = 1 / (1 + 10 ** (-current_skill / 400))
-
-            # Determine game outcome
-            if random.random() < win_prob:
-                # Win: positive ELO change
-                elo_change = random.uniform(5.0, 20.0)
-            else:
-                # Loss: negative ELO change
-                elo_change = random.uniform(-20.0, -5.0)
-
-            elo_changes.append(elo_change)
-
-        return elo_changes
-
-
-class PerformanceTestUtils:
-    """Utilities for performance testing."""
-
-    @staticmethod
-    def measure_memory_usage(func, *args, **kwargs):
-        """Measure memory usage of a function call."""
-        import os
-
-        import psutil
-
-        process = psutil.Process(os.getpid())
-        initial_memory = process.memory_info().rss
-
-        result = func(*args, **kwargs)
-
-        final_memory = process.memory_info().rss
-        memory_used = final_memory - initial_memory
-
-        return result, memory_used
-
-    @staticmethod
-    def measure_execution_time(func, *args, **kwargs):
-        """Measure execution time of a function call."""
-        import time
-
-        start_time = time.perf_counter()
-        result = func(*args, **kwargs)
-        execution_time = time.perf_counter() - start_time
-
-        return result, execution_time
-
-    @staticmethod
-    def create_temporary_checkpoint(agent, checkpoint_dir: Optional[Path] = None):
-        """Create a temporary checkpoint file for testing."""
-        if checkpoint_dir is None:
-            checkpoint_dir = Path(tempfile.mkdtemp())
-
-        checkpoint_path = checkpoint_dir / "test_checkpoint.pth"
-
-        # Save agent state
-        torch.save(
-            {
-                "model_state_dict": agent.model.state_dict(),
-                "agent_type": type(agent).__name__,
-                "config": getattr(agent, "config", None),
-            },
-            checkpoint_path,
-        )
-
-        return checkpoint_path
-
-
-class ValidationUtils:
-    """Utilities for validating test results."""
-
-    @staticmethod
-    def validate_evaluation_result(result: EvaluationResult) -> bool:
-        """Validate that an evaluation result is well-formed."""
-        try:
-            # Check basic structure
-            assert result.games is not None
-            assert result.summary_stats is not None
-            assert result.analytics is not None
-
-            # Check summary stats consistency
-            stats = result.summary_stats
-            assert stats.total_games == len(result.games)
-            assert stats.wins + stats.losses + stats.draws == stats.total_games
-
-            if stats.total_games > 0:
-                expected_win_rate = stats.wins / stats.total_games
-                assert abs(stats.win_rate - expected_win_rate) < 0.001
-
-            # Check game results
-            for game in result.games:
-                assert game.winner in ["agent", "opponent", "draw"]
-                assert game.game_length > 0
-                assert isinstance(game.elo_change, (int, float))
-
-            return True
-
-        except AssertionError:
-            return False
-
-    @staticmethod
-    def validate_performance_metrics(
-        execution_time: float,
-        memory_usage: int,
-        max_time: float = 10.0,
-        max_memory: int = 100_000_000,  # 100MB
-    ) -> bool:
-        """Validate performance metrics against thresholds."""
-        return execution_time < max_time and memory_usage < max_memory
-
-    @staticmethod
-    def compare_evaluation_results(
-        result1: EvaluationResult, result2: EvaluationResult, tolerance: float = 0.01
-    ) -> bool:
-        """Compare two evaluation results for similarity."""
-        stats1, stats2 = result1.summary_stats, result2.summary_stats
-
-        # Compare win rates
-        if abs(stats1.win_rate - stats2.win_rate) > tolerance:
-            return False
-
-        # Compare game counts
-        if stats1.total_games != stats2.total_games:
-            return False
-
-        # Compare average game lengths
-        if abs(stats1.avg_game_length - stats2.avg_game_length) > tolerance * 100:
-            return False
-
-        return True
 
 
 # Convenience functions for common test patterns

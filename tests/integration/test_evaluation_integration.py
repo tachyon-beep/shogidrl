@@ -33,7 +33,8 @@ class MockTrainer:
         self.evaluation_manager.opponent_pool.sample.return_value = "/mock/checkpoint.pt"
         self.evaluation_manager.evaluate_current_agent_async = AsyncMock()
         self.metrics_manager = Mock()
-        self.metrics_manager.global_timestep = 1000
+        # Set global_timestep so that (timestep + 1) % interval == 0 for interval=1000
+        self.metrics_manager.global_timestep = 999  # So step becomes 1000, and 1000 % 1000 == 0
         self.run_name = "test_run"
         self.log_both = Mock()
 
@@ -44,11 +45,12 @@ class TestAsyncEvaluationIntegration:
     @pytest.mark.asyncio
     async def test_async_evaluation_callback_execution(self):
         """Test that async evaluation callback executes properly."""
-        # Setup
+        # Setup - create config without elo_registry_path to avoid Elo registry issues
         eval_config = EvaluationConfig(
             enable_periodic_evaluation=True,
             evaluation_interval_timesteps=1000,
-            num_games=5
+            num_games=5,
+            elo_registry_path=None  # Disable Elo registry to avoid file system issues
         )
         callback = AsyncEvaluationCallback(eval_config, interval=1000)
         trainer = MockTrainer()
@@ -77,7 +79,8 @@ class TestAsyncEvaluationIntegration:
         # Setup
         eval_config = EvaluationConfig(
             enable_periodic_evaluation=False,
-            evaluation_interval_timesteps=1000
+            evaluation_interval_timesteps=1000,
+            elo_registry_path=None
         )
         callback = AsyncEvaluationCallback(eval_config, interval=1000)
         trainer = MockTrainer()
@@ -95,7 +98,8 @@ class TestAsyncEvaluationIntegration:
         # Setup
         eval_config = EvaluationConfig(
             enable_periodic_evaluation=True,
-            evaluation_interval_timesteps=1000
+            evaluation_interval_timesteps=1000,
+            elo_registry_path=None
         )
         callback = AsyncEvaluationCallback(eval_config, interval=1000)
         trainer = MockTrainer()
@@ -118,9 +122,10 @@ class TestCallbackManagerIntegration:
         """Test that callback manager can setup async callbacks."""
         # Setup
         config = Mock()
-        config.evaluation = EvaluationConfig()
+        config.evaluation = EvaluationConfig(elo_registry_path=None)
         config.training = Mock()
         config.training.steps_per_epoch = 2048
+        config.training.checkpoint_interval_timesteps = 4096  # Make it divisible by steps_per_epoch
         
         callback_manager = CallbackManager(config, "test_model_dir")
         
@@ -136,15 +141,21 @@ class TestCallbackManagerIntegration:
         """Test that callback manager can execute async callbacks."""
         # Setup
         config = Mock()
-        config.evaluation = EvaluationConfig()
+        config.evaluation = EvaluationConfig(
+            elo_registry_path=None,
+            enable_periodic_evaluation=True,
+            evaluation_interval_timesteps=2048  # Match steps_per_epoch to trigger evaluation
+        )
         config.training = Mock()
         config.training.steps_per_epoch = 2048
         
         callback_manager = CallbackManager(config, "test_model_dir")
         callback_manager.setup_async_callbacks()
         
-        # Mock trainer
+        # Mock trainer with proper timestep alignment
         trainer = MockTrainer()
+        trainer.metrics_manager.global_timestep = 2047  # So step becomes 2048, and 2048 % 2048 == 0
+        
         mock_result = Mock()
         mock_result.summary_stats = Mock()
         mock_result.summary_stats.win_rate = 0.7
@@ -164,9 +175,10 @@ class TestCallbackManagerIntegration:
         """Test switching to async evaluation mode."""
         # Setup
         config = Mock()
-        config.evaluation = EvaluationConfig()
+        config.evaluation = EvaluationConfig(elo_registry_path=None)
         config.training = Mock()
         config.training.steps_per_epoch = 2048
+        config.training.checkpoint_interval_timesteps = 4096  # Make it divisible by steps_per_epoch
         
         callback_manager = CallbackManager(config, "test_model_dir")
         callback_manager.setup_default_callbacks()
@@ -283,6 +295,11 @@ class TestSessionManagerEvaluationIntegration:
         config.env.seed = 42
         config.logging = Mock()
         config.logging.run_name = None
+        config.training = Mock()
+        config.training.model_type = "resnet_tower"  # Provide proper model type string
+        config.training.input_features = "core_46_channels"  # Provide proper input features string
+        config.wandb = Mock()
+        config.wandb.run_name_prefix = "keisei"  # Provide proper wandb config
         
         args = Mock()
         args.run_name = None
@@ -290,7 +307,8 @@ class TestSessionManagerEvaluationIntegration:
         eval_config = EvaluationConfig(
             strategy="single_opponent",
             num_games=10,
-            enable_periodic_evaluation=True
+            enable_periodic_evaluation=True,
+            elo_registry_path=None
         )
         
         session_manager = SessionManager(config, args)
@@ -316,17 +334,35 @@ class TestSessionManagerEvaluationIntegration:
         config.env = Mock()
         config.logging = Mock()
         config.logging.run_name = None
+        config.training = Mock()
+        config.training.model_type = "resnet_tower"
+        config.training.input_features = "core_46_channels"
+        config.wandb = Mock()
+        config.wandb.run_name_prefix = "keisei"
         
         args = Mock()
         session_manager = SessionManager(config, args)
         session_manager._is_wandb_active = True
         
-        # Mock evaluation result
-        mock_result = Mock()
-        mock_result.summary_stats = Mock()
-        mock_result.summary_stats.win_rate = 0.75
-        mock_result.summary_stats.total_games = 20
-        mock_result.summary_stats.avg_game_length = 60.0
+        # Create a proper mock result that behaves like the expected object
+        class MockEvalResult:
+            def __init__(self):
+                self.summary_stats = Mock()
+                self.summary_stats.win_rate = 0.75
+                self.summary_stats.total_games = 20
+                self.summary_stats.avg_game_length = 60.0
+                self.win_rate = 0.75
+                self.total_games = 20
+                self.avg_game_length = 60.0
+            
+            def __iter__(self):
+                return iter([
+                    ("win_rate", 0.75),
+                    ("total_games", 20),
+                    ("avg_game_length", 60.0)
+                ])
+        
+        mock_result = MockEvalResult()
         
         # Mock wandb
         with patch('wandb.run', Mock()):
@@ -351,6 +387,11 @@ class TestSessionManagerEvaluationIntegration:
         config = Mock()
         config.env = Mock()
         config.logging = Mock()
+        config.training = Mock()
+        config.training.model_type = "resnet_tower"
+        config.training.input_features = "core_46_channels"
+        config.wandb = Mock()
+        config.wandb.run_name_prefix = "keisei"
         args = Mock()
         
         session_manager = SessionManager(config, args)
@@ -391,7 +432,7 @@ class TestEvaluationManagerAsyncIntegration:
             torch.save(mock_data, tmp_file.name)
         
         try:
-            eval_config = EvaluationConfig(num_games=2)
+            eval_config = EvaluationConfig(num_games=2, elo_registry_path=None)
             manager = EvaluationManager(eval_config, "test_run")
             manager.setup("cpu", None, str(Path(checkpoint_path).parent), False)
             
@@ -418,7 +459,7 @@ class TestEvaluationManagerAsyncIntegration:
     async def test_evaluate_current_agent_async(self):
         """Test async current agent evaluation."""
         # Setup
-        eval_config = EvaluationConfig(num_games=2)
+        eval_config = EvaluationConfig(num_games=2, elo_registry_path=None)
         manager = EvaluationManager(eval_config, "test_run")
         manager.setup("cpu", None, "/mock/model/dir", False)
         
@@ -500,7 +541,10 @@ class TestResourceContentionPrevention:
         # This test verifies the fix for the asyncio.run() anti-pattern
         
         # Setup callback in simulated async context
-        eval_config = EvaluationConfig(enable_periodic_evaluation=True)
+        eval_config = EvaluationConfig(
+            enable_periodic_evaluation=True, 
+            elo_registry_path=None
+        )
         callback = AsyncEvaluationCallback(eval_config, interval=1000)
         trainer = MockTrainer()
         
