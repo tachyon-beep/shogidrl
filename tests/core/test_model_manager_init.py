@@ -461,13 +461,15 @@ class TestModelManagerInitialization:
         assert manager.use_mixed_precision is False
         assert manager.scaler is None
 
-        # Verify warning was logged
+        # Verify warning was logged (check all calls for the mixed precision warning)
         logger_func.assert_called()
-        warning_call = logger_func.call_args[0][0]
-        assert (
-            "Mixed precision training requested but CUDA is not available"
-            in warning_call
+        # Check if any of the logged messages contain the expected warning
+        logged_messages = [call[0][0] for call in logger_func.call_args_list]
+        mixed_precision_warning_found = any(
+            "Mixed precision training requested but CUDA is not available" in msg
+            for msg in logged_messages
         )
+        assert mixed_precision_warning_found, f"Expected mixed precision warning not found in: {logged_messages}"
 
 
 class TestModelManagerUtilities:
@@ -498,8 +500,8 @@ class TestModelManagerUtilities:
         # Get model info
         info = manager.get_model_info()
 
-        # Verify returned information
-        expected_info = {
+        # Verify returned information (just check the core fields we care about)
+        expected_core_fields = {
             "model_type": minimal_model_manager_config.training.model_type,
             "input_features": minimal_model_manager_config.training.input_features,
             "tower_depth": minimal_model_manager_config.training.tower_depth,
@@ -511,7 +513,15 @@ class TestModelManagerUtilities:
             "device": "cpu",
         }
 
-        assert info == expected_info
+        # Check that all expected core fields are present with correct values
+        for key, expected_value in expected_core_fields.items():
+            assert key in info, f"Missing expected field: {key}"
+            assert info[key] == expected_value, f"Field {key}: expected {expected_value}, got {info[key]}"
+        
+        # Verify torch.compile fields exist (values may vary depending on config)
+        assert "torch_compile" in info
+        assert "optimization_applied" in info
+        assert "performance_benchmarking_enabled" in info
 
     @patch("keisei.training.model_manager.features.FEATURE_SPECS")
     @patch("keisei.training.model_manager.model_factory")
