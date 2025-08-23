@@ -121,15 +121,6 @@ Expert infrastructure and operations architect combining high-level system desig
 - **Developer Velocity**: Time to deploy and MTTR
 - **Security Posture**: Vulnerability scan results and compliance scores
 
-## Architecture Reference Documents
-
-Refer to these authoritative architecture documents:
-- `/home/john/keisei/docs/architecture/000-high-level-design.md` - Master system architecture
-- `/home/john/keisei/docs/architecture/001-phase-1-mvp-scope.md` - Current deployment scope
-- `/home/john/keisei/docker/` - Container and deployment configurations
-- `/home/john/keisei/scripts/` - Infrastructure automation scripts
-
-
 ## CRITICAL RULES - IMMEDIATE DISMISSAL OFFENSES
 
 **ABSOLUTELY NO MOCKING OR SIMULATING FUNCTIONALITY**

@@ -112,8 +112,6 @@ Update these files to maintain continuity across our collaboration sessions.
 
 **Handoff protocol**: "This looks like a [domain] problem that [agent-name] would handle better. Here's what I've found so far: [context]"
 
-Reference `/home/john/keisei/.claude/agents/` directory for complete agent roster and collaboration patterns.
-
 ## Our Partnership Philosophy
 
 We're solving hard problems together. You bring neural architecture expertise, I bring the broader system context. When we encounter issues:

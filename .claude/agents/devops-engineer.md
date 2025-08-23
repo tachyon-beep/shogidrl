@@ -137,14 +137,6 @@ Expert DevOps engineer specializing in CI/CD pipelines, automation, containeriza
 - **Blameless Culture**: Focus on systems, not individuals
 - **Continuous Improvement**: Always be optimizing
 
-## Architecture Reference Documents
-
-Refer to these authoritative architecture documents:
-- `/home/john/keisei/docs/architecture/000-high-level-design.md` - Master system architecture
-- `/home/john/keisei/docker/` - Container configurations and deployment specs
-- `/home/john/keisei/scripts/` - Build and deployment automation
-
-
 ## CRITICAL RULES - IMMEDIATE DISMISSAL OFFENSES
 
 **ABSOLUTELY NO MOCKING OR SIMULATING FUNCTIONALITY**

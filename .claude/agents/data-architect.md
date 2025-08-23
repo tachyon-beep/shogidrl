@@ -114,15 +114,6 @@ class Event:
 - Audit logging for compliance
 - Performance monitoring and alerting
 
-## Architecture Reference Documents
-
-Refer to these authoritative architecture documents:
-- `/home/john/keisei/docs/architecture/000-high-level-design.md` - Master system architecture
-- `/home/john/keisei/docs/architecture/005-urza-design.md` - Central library and data architecture
-- `/home/john/keisei/src/esper/common/models.py` - Core Pydantic data models
-- `/home/john/keisei/src/esper/common/event_schemas.py` - Event data contracts
-
-
 ## CRITICAL RULES - IMMEDIATE DISMISSAL OFFENSES
 
 **ABSOLUTELY NO MOCKING OR SIMULATING FUNCTIONALITY**

@@ -108,8 +108,6 @@ Focus on practical, working implementations that prioritize:
 ## Architecture Reference Documents
 
 Refer to these authoritative architecture documents:
-- `/home/john/keisei/docs/architecture/000-high-level-design.md` - Master system architecture
-- `/home/john/keisei/docs/architecture/001-phase-1-mvp-scope.md` - Current documentation scope
 - `/home/john/keisei/README.md` - Main project documentation
 - `/home/john/keisei/CLAUDE.md` - Development guidelines
 
