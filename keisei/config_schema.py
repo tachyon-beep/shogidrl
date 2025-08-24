@@ -8,7 +8,14 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field, field_validator
 
 # Evaluation strategy constants - matches EvaluationStrategy enum values
-VALID_EVALUATION_STRATEGIES = ["single_opponent", "tournament", "ladder", "benchmark", "custom"]
+VALID_EVALUATION_STRATEGIES = [
+    "single_opponent",
+    "tournament",
+    "ladder",
+    "benchmark",
+    "custom",
+]
+
 
 # Strategy constants for factory registration (backward compatibility)
 class EvaluationStrategy:
@@ -114,43 +121,43 @@ class TrainingConfig(BaseModel):
 
     # torch.compile Configuration - Neural Network Optimization
     enable_torch_compile: bool = Field(
-        True, description="Enable torch.compile for neural network optimization (10-30% speedup)."
+        True,
+        description="Enable torch.compile for neural network optimization (10-30% speedup).",
     )
     torch_compile_mode: Literal["default", "reduce-overhead", "max-autotune"] = Field(
-        "default", 
-        description="torch.compile mode: 'default' (balanced), 'reduce-overhead' (faster compilation), 'max-autotune' (maximum optimization)."
+        "default",
+        description="torch.compile mode: 'default' (balanced), 'reduce-overhead' (faster compilation), 'max-autotune' (maximum optimization).",
     )
     torch_compile_dynamic: Optional[bool] = Field(
-        None, 
-        description="Enable dynamic shape tracing for variable input sizes (None for auto-detection)."
+        None,
+        description="Enable dynamic shape tracing for variable input sizes (None for auto-detection).",
     )
     torch_compile_fullgraph: bool = Field(
-        False, 
-        description="Force full graph compilation (may fail on complex models but provides maximum optimization)."
+        False,
+        description="Force full graph compilation (may fail on complex models but provides maximum optimization).",
     )
     torch_compile_backend: Optional[str] = Field(
-        None, 
-        description="Compilation backend ('inductor', 'aot_eager', 'cudagraphs'). None for auto-selection."
+        None,
+        description="Compilation backend ('inductor', 'aot_eager', 'cudagraphs'). None for auto-selection.",
     )
     enable_compilation_fallback: bool = Field(
-        True, 
-        description="Automatically fallback to non-compiled model if compilation fails."
+        True,
+        description="Automatically fallback to non-compiled model if compilation fails.",
     )
     validate_compiled_output: bool = Field(
-        True, 
-        description="Validate numerical equivalence between compiled and non-compiled models during initialization."
+        True,
+        description="Validate numerical equivalence between compiled and non-compiled models during initialization.",
     )
     compilation_validation_tolerance: float = Field(
-        1e-5, 
-        description="Numerical tolerance for compiled model validation (absolute difference)."
+        1e-5,
+        description="Numerical tolerance for compiled model validation (absolute difference).",
     )
     compilation_warmup_steps: int = Field(
-        5, 
-        description="Number of warmup forward passes for torch.compile optimization."
+        5, description="Number of warmup forward passes for torch.compile optimization."
     )
     enable_compilation_benchmarking: bool = Field(
-        True, 
-        description="Enable performance benchmarking for compiled vs non-compiled models."
+        True,
+        description="Enable performance benchmarking for compiled vs non-compiled models.",
     )
 
     @field_validator("learning_rate")
@@ -177,7 +184,9 @@ class TrainingConfig(BaseModel):
     @field_validator("torch_compile_mode")
     def validate_torch_compile_mode(cls, v):  # pylint: disable=no-self-argument
         if v not in ["default", "reduce-overhead", "max-autotune"]:
-            raise ValueError("torch_compile_mode must be one of: 'default', 'reduce-overhead', 'max-autotune'")
+            raise ValueError(
+                "torch_compile_mode must be one of: 'default', 'reduce-overhead', 'max-autotune'"
+            )
         return v
 
     @field_validator("compilation_validation_tolerance")
@@ -203,7 +212,9 @@ class EvaluationConfig(BaseModel):
     )
 
     # Strategy and game parameters
-    strategy: Literal["single_opponent", "tournament", "ladder", "benchmark", "custom"] = Field(
+    strategy: Literal[
+        "single_opponent", "tournament", "ladder", "benchmark", "custom"
+    ] = Field(
         "single_opponent",
         description="Evaluation strategy: 'single_opponent', 'tournament', 'ladder', 'benchmark'",
     )
@@ -214,11 +225,11 @@ class EvaluationConfig(BaseModel):
     timeout_per_game: Optional[float] = Field(
         None, description="Timeout per game in seconds (None for no timeout)."
     )
-    
+
     # Strategy-specific parameters
     strategy_params: dict = Field(
         default_factory=dict,
-        description="Strategy-specific parameters for advanced configuration."
+        description="Strategy-specific parameters for advanced configuration.",
     )
 
     # Game configuration
@@ -288,13 +299,15 @@ class EvaluationConfig(BaseModel):
 
     # Advanced evaluation features
     enable_background_tournaments: bool = Field(
-        False, description="Enable background tournament system for continuous evaluation."
+        False,
+        description="Enable background tournament system for continuous evaluation.",
     )
     enable_advanced_analytics: bool = Field(
         False, description="Enable advanced analytics and reporting."
     )
     enable_enhanced_opponents: bool = Field(
-        False, description="Enable enhanced opponent management with adaptive selection."
+        False,
+        description="Enable enhanced opponent management with adaptive selection.",
     )
 
     # Performance safeguards (required by Performance Engineer)
@@ -302,7 +315,7 @@ class EvaluationConfig(BaseModel):
         30, description="Maximum time per evaluation run in minutes"
     )
     evaluation_timeout_per_game: int = Field(
-        300, description="Timeout per individual game in seconds"  
+        300, description="Timeout per individual game in seconds"
     )
     max_concurrent_evaluations: int = Field(
         1, description="Maximum concurrent evaluation processes"
@@ -310,9 +323,7 @@ class EvaluationConfig(BaseModel):
     enable_performance_monitoring: bool = Field(
         True, description="Enable performance monitoring and SLA validation"
     )
-    memory_limit_mb: int = Field(
-        1000, description="Maximum memory usage limit in MB"
-    )
+    memory_limit_mb: int = Field(1000, description="Maximum memory usage limit in MB")
     cpu_limit_percent: float = Field(
         80.0, description="Maximum CPU usage limit as percentage"
     )
@@ -413,15 +424,15 @@ class EvaluationConfig(BaseModel):
         if not 0 < v <= 100:
             raise ValueError("gpu_limit_percent must be between 0 and 100")
         return v
-    
+
     def get_strategy_param(self, key: str, default=None):
         """Get a strategy-specific parameter with optional default."""
         return self.strategy_params.get(key, default)
-    
+
     def set_strategy_param(self, key: str, value) -> None:
         """Set a strategy-specific parameter."""
         self.strategy_params[key] = value
-    
+
     def to_dict(self) -> dict:
         """Convert config to dictionary for serialization."""
         return self.model_dump()
@@ -432,32 +443,36 @@ class EvaluationConfig(BaseModel):
         opponent_path: Optional[str] = None,
         play_as_both_colors: bool = True,
         color_balance_tolerance: float = 0.1,
-        **kwargs
+        **kwargs,
     ) -> None:
         """Configure for single opponent strategy."""
         self.strategy = "single_opponent"
-        self.strategy_params.update({
-            "opponent_name": opponent_name,
-            "opponent_path": opponent_path,
-            "play_as_both_colors": play_as_both_colors,
-            "color_balance_tolerance": color_balance_tolerance,
-            **kwargs
-        })
-    
+        self.strategy_params.update(
+            {
+                "opponent_name": opponent_name,
+                "opponent_path": opponent_path,
+                "play_as_both_colors": play_as_both_colors,
+                "color_balance_tolerance": color_balance_tolerance,
+                **kwargs,
+            }
+        )
+
     def configure_for_tournament(
         self,
         opponent_pool_config: Optional[list] = None,
         num_games_per_opponent: Optional[int] = None,
-        **kwargs
+        **kwargs,
     ) -> None:
         """Configure for tournament strategy."""
         self.strategy = "tournament"
-        self.strategy_params.update({
-            "opponent_pool_config": opponent_pool_config or [],
-            "num_games_per_opponent": num_games_per_opponent,
-            **kwargs
-        })
-    
+        self.strategy_params.update(
+            {
+                "opponent_pool_config": opponent_pool_config or [],
+                "num_games_per_opponent": num_games_per_opponent,
+                **kwargs,
+            }
+        )
+
     def configure_for_ladder(
         self,
         opponent_pool_config: Optional[list] = None,
@@ -465,32 +480,36 @@ class EvaluationConfig(BaseModel):
         num_games_per_match: int = 2,
         num_opponents_per_evaluation: int = 3,
         rating_match_range: int = 200,
-        **kwargs
+        **kwargs,
     ) -> None:
         """Configure for ladder strategy."""
         self.strategy = "ladder"
-        self.strategy_params.update({
-            "opponent_pool_config": opponent_pool_config or [],
-            "elo_config": elo_config or {},
-            "num_games_per_match": num_games_per_match,
-            "num_opponents_per_evaluation": num_opponents_per_evaluation,
-            "rating_match_range": rating_match_range,
-            **kwargs
-        })
-    
+        self.strategy_params.update(
+            {
+                "opponent_pool_config": opponent_pool_config or [],
+                "elo_config": elo_config or {},
+                "num_games_per_match": num_games_per_match,
+                "num_opponents_per_evaluation": num_opponents_per_evaluation,
+                "rating_match_range": rating_match_range,
+                **kwargs,
+            }
+        )
+
     def configure_for_benchmark(
         self,
         suite_config: Optional[list] = None,
         num_games_per_benchmark_case: int = 1,
-        **kwargs
+        **kwargs,
     ) -> None:
         """Configure for benchmark strategy."""
         self.strategy = "benchmark"
-        self.strategy_params.update({
-            "suite_config": suite_config or [],
-            "num_games_per_benchmark_case": num_games_per_benchmark_case,
-            **kwargs
-        })
+        self.strategy_params.update(
+            {
+                "suite_config": suite_config or [],
+                "num_games_per_benchmark_case": num_games_per_benchmark_case,
+                **kwargs,
+            }
+        )
 
 
 class LoggingConfig(BaseModel):

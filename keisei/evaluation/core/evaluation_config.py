@@ -21,18 +21,18 @@ if TYPE_CHECKING:
 # Re-export the unified config for backward compatibility during migration
 try:
     from keisei.config_schema import EvaluationConfig
-    
+
     # Issue deprecation warning
     warnings.warn(
         "keisei.evaluation.core.evaluation_config is deprecated. "
         "Use keisei.config_schema.EvaluationConfig instead.",
         DeprecationWarning,
-        stacklevel=2
+        stacklevel=2,
     )
-    
+
     # Maintain backward compatibility for a short migration period
     __all__ = ["EvaluationConfig"]
-    
+
 except ImportError as e:
     raise ImportError(
         "Failed to import unified EvaluationConfig from config_schema. "

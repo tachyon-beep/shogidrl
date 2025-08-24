@@ -6,4 +6,4 @@ including helper functions, decorators, and shared components.
 """
 
 # Utility implementations will be added here as they are developed
-__all__ = []
+__all__: list[str] = []

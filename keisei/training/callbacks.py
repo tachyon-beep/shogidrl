@@ -22,7 +22,7 @@ class Callback(ABC):
 
 class AsyncCallback(ABC):
     """Base class for async callbacks."""
-    
+
     async def on_step_end_async(self, trainer: "Trainer"):
         # Base implementation - subclasses override this method
         pass
@@ -116,7 +116,7 @@ class EvaluationCallback(Callback):
             opponent_ckpt = None
             if hasattr(trainer, "evaluation_manager"):
                 opponent_ckpt = trainer.evaluation_manager.opponent_pool.sample()
-            
+
             # Handle initial case: no previous checkpoints available
             if opponent_ckpt is None:
                 if trainer.log_both:
@@ -124,14 +124,14 @@ class EvaluationCallback(Callback):
                         "[INFO] EvaluationCallback: No previous checkpoints available. Running initial evaluation against random opponent.",
                         also_to_wandb=True,
                     )
-                
+
                 # Run evaluation against random opponent to bootstrap Elo system
                 current_model.eval()  # Set the agent's model to eval mode
                 eval_results = trainer.evaluation_manager.evaluate_current_agent(
                     trainer.agent
                 )
                 current_model.train()  # Set model back to train mode
-                
+
                 if trainer.log_both is not None:
                     trainer.log_both(
                         f"Initial evaluation completed. Results: {eval_results}",
@@ -142,13 +142,13 @@ class EvaluationCallback(Callback):
                             else {"eval_summary": str(eval_results)}
                         ),
                     )
-                
+
                 # Save current model as first checkpoint for future evaluations
                 ckpt_path = trainer.model_manager.save_checkpoint(
                     trainer.agent,
                     trainer.metrics_manager.global_timestep + 1,
                     trainer.session_manager.run_artifact_dir,
-                    "initial_eval_checkpoint"
+                    "initial_eval_checkpoint",
                 )
                 if ckpt_path and hasattr(trainer, "evaluation_manager"):
                     trainer.evaluation_manager.opponent_pool.add_checkpoint(ckpt_path)
@@ -223,22 +223,24 @@ class EvaluationCallback(Callback):
 
 class AsyncEvaluationCallback(AsyncCallback):
     """Async-native evaluation callback following Keisei patterns."""
-    
+
     def __init__(self, eval_cfg, interval: int):
         self.eval_cfg = eval_cfg
         self.interval = interval
-        
+
     async def on_step_end_async(self, trainer: "Trainer") -> Optional[Dict[str, float]]:
         """Async callback hook for evaluation triggers."""
         if not getattr(self.eval_cfg, "enable_periodic_evaluation", False):
             return None
-            
+
         step = trainer.metrics_manager.global_timestep + 1
         if step % self.interval == 0:
             return await self._run_evaluation_async(trainer, step)
         return None
-    
-    async def _run_evaluation_async(self, trainer: "Trainer", step: int) -> Optional[Dict[str, float]]:
+
+    async def _run_evaluation_async(
+        self, trainer: "Trainer", step: int
+    ) -> Optional[Dict[str, float]]:
         """Run evaluation in async-native way."""
         if not trainer.agent:
             if trainer.log_both:
@@ -280,10 +282,12 @@ class AsyncEvaluationCallback(AsyncCallback):
 
         try:
             # Use async evaluation to avoid event loop conflicts
-            eval_results = await trainer.evaluation_manager.evaluate_current_agent_async(
-                trainer.agent
+            eval_results = (
+                await trainer.evaluation_manager.evaluate_current_agent_async(
+                    trainer.agent
+                )
             )
-            
+
             if trainer.log_both is not None:
                 trainer.log_both(
                     f"Async periodic evaluation finished. Results: {eval_results}",
@@ -333,16 +337,18 @@ class AsyncEvaluationCallback(AsyncCallback):
                                 also_to_wandb=True,
                             )
                         trainer.evaluation_elo_snapshot = None
-            
+
             # Return summary metrics for integration with training metrics
-            if eval_results and hasattr(eval_results, 'summary_stats'):
+            if eval_results and hasattr(eval_results, "summary_stats"):
                 return {
                     "evaluation/win_rate": eval_results.summary_stats.win_rate,
                     "evaluation/total_games": eval_results.summary_stats.total_games,
-                    "evaluation/avg_game_length": getattr(eval_results.summary_stats, 'avg_game_length', 0.0)
+                    "evaluation/avg_game_length": getattr(
+                        eval_results.summary_stats, "avg_game_length", 0.0
+                    ),
                 }
             return None
-            
+
         except Exception as e:
             if trainer.log_both:
                 trainer.log_both(

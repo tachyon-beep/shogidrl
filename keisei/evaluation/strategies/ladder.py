@@ -114,21 +114,25 @@ class LadderEvaluator(BaseEvaluator):
         """Get ladder opponents from configuration and pool."""
         # If opponent pool is empty, initialize from config
         if not self.opponent_pool:
-            opponent_pool_config = self.config.get_strategy_param("opponent_pool_config", [])
-            
+            opponent_pool_config = self.config.get_strategy_param(
+                "opponent_pool_config", []
+            )
+
             for i, opp_config in enumerate(opponent_pool_config):
                 name = opp_config.get("name", f"ladder_opponent_{i}")
                 opp_type = opp_config.get("type", "random")
                 checkpoint_path = opp_config.get("checkpoint_path")
                 metadata = opp_config.get("metadata", {})
-                
-                self.opponent_pool.append(OpponentInfo(
-                    name=name,
-                    type=opp_type,
-                    checkpoint_path=checkpoint_path,
-                    metadata=metadata
-                ))
-        
+
+                self.opponent_pool.append(
+                    OpponentInfo(
+                        name=name,
+                        type=opp_type,
+                        checkpoint_path=checkpoint_path,
+                        metadata=metadata,
+                    )
+                )
+
         # If still no opponents, provide defaults
         if not self.opponent_pool:
             self.opponent_pool = [
@@ -136,18 +140,20 @@ class LadderEvaluator(BaseEvaluator):
                     name="ladder_random",
                     type="random",
                     checkpoint_path=None,
-                    metadata={"description": "Default random opponent for ladder"}
+                    metadata={"description": "Default random opponent for ladder"},
                 ),
                 OpponentInfo(
-                    name="ladder_heuristic", 
+                    name="ladder_heuristic",
                     type="heuristic",
                     checkpoint_path=None,
-                    metadata={"description": "Default heuristic opponent for ladder"}
-                )
+                    metadata={"description": "Default heuristic opponent for ladder"},
+                ),
             ]
-            
+
         # For ladder, select subset based on rating range
-        num_opponents = self.config.get_strategy_param("num_opponents_per_evaluation", 3)
+        num_opponents = self.config.get_strategy_param(
+            "num_opponents_per_evaluation", 3
+        )
         return self.opponent_pool[:num_opponents]
 
     # --- Game Playing Helper Methods (adapted from TournamentEvaluator) ---
@@ -729,6 +735,4 @@ class LadderEvaluator(BaseEvaluator):
 # Register this evaluator with the factory
 from ..core import EvaluationStrategy, EvaluatorFactory
 
-EvaluatorFactory.register(
-    EvaluationStrategy.LADDER, LadderEvaluator  # type: ignore
-)
+EvaluatorFactory.register(EvaluationStrategy.LADDER, LadderEvaluator)  # type: ignore

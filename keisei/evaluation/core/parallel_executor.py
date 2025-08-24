@@ -178,7 +178,7 @@ class ParallelGameExecutor:
                         task.game_executor.__self__.evaluate_step_in_memory(
                             task.agent_info, task.opponent_info, task.context
                         ),
-                        loop
+                        loop,
                     )
                     result = future.result(timeout=300)  # 5 minutes timeout
                 except RuntimeError:
@@ -199,7 +199,7 @@ class ParallelGameExecutor:
                         task.game_executor(
                             task.agent_info, task.opponent_info, task.context
                         ),
-                        loop
+                        loop,
                     )
                     result = future.result(timeout=300)  # 5 minutes timeout
                 except RuntimeError:

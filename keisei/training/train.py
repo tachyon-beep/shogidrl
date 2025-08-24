@@ -27,16 +27,16 @@ def create_main_parser():
     parser = argparse.ArgumentParser(
         description="Keisei Shogi RL Training and Evaluation System"
     )
-    subparsers = parser.add_subparsers(dest='command', help='Available commands')
-    
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
     # Training command (existing functionality)
-    train_parser = subparsers.add_parser('train', help='Train Shogi RL agent')
+    train_parser = subparsers.add_parser("train", help="Train Shogi RL agent")
     add_training_arguments(train_parser)
-    
+
     # Evaluation command (new functionality)
-    eval_parser = subparsers.add_parser('evaluate', help='Evaluate trained agent')
+    eval_parser = subparsers.add_parser("evaluate", help="Evaluate trained agent")
     add_evaluation_arguments(eval_parser)
-    
+
     return parser
 
 
@@ -206,15 +206,15 @@ def add_evaluation_arguments(parser):
 def create_agent_info_from_checkpoint(checkpoint_path: str):
     """Create AgentInfo from checkpoint path for evaluation."""
     from keisei.evaluation.core import AgentInfo
-    
-    checkpoint_path = Path(checkpoint_path)
-    if not checkpoint_path.exists():
+
+    checkpoint_path_obj = Path(checkpoint_path)
+    if not checkpoint_path_obj.exists():
         raise FileNotFoundError(f"Checkpoint file not found: {checkpoint_path}")
-    
+
     return AgentInfo(
-        name=checkpoint_path.stem,
+        name=checkpoint_path_obj.stem,
         checkpoint_path=str(checkpoint_path),
-        metadata={"source": "cli_evaluation"}
+        metadata={"source": "cli_evaluation"},
     )
 
 
@@ -222,9 +222,9 @@ async def run_evaluation_command(args):
     """Handle standalone evaluation commands."""
     from keisei.evaluation.core_manager import EvaluationManager
     from keisei.evaluation.core import EvaluationConfig
-    
+
     log_info_to_stderr("Evaluation", f"Starting evaluation of {args.agent_checkpoint}")
-    
+
     # Load or create evaluation config
     if args.config:
         # Load from file and override with CLI args
@@ -233,7 +233,7 @@ async def run_evaluation_command(args):
     else:
         # Create default evaluation config
         eval_config = EvaluationConfig()
-    
+
     # Override config with CLI arguments
     if args.strategy:
         eval_config.strategy = args.strategy
@@ -247,17 +247,17 @@ async def run_evaluation_command(args):
         eval_config.save_games = args.save_games
     if args.output_dir:
         eval_config.save_path = args.output_dir
-    
+
     # Configure strategy-specific parameters
     if args.strategy == "single_opponent":
         eval_config.configure_for_single_opponent(
             opponent_name=args.opponent_type,
             opponent_path=args.opponent_checkpoint,
         )
-    
+
     # Generate run name if not provided
     run_name = args.run_name or f"eval_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    
+
     # Create evaluation manager
     manager = EvaluationManager(
         config=eval_config,
@@ -265,7 +265,7 @@ async def run_evaluation_command(args):
         pool_size=eval_config.previous_model_pool_size,
         elo_registry_path=eval_config.elo_registry_path,
     )
-    
+
     # Setup device and runtime context (minimal for CLI evaluation)
     manager.setup(
         device=args.device,
@@ -273,47 +273,61 @@ async def run_evaluation_command(args):
         model_dir=str(Path(args.agent_checkpoint).parent),
         wandb_active=args.wandb_log_eval,
     )
-    
+
     try:
         # Create agent info and run evaluation
         agent_info = create_agent_info_from_checkpoint(args.agent_checkpoint)
-        
-        log_info_to_stderr("Evaluation", f"Running {eval_config.strategy} evaluation with {eval_config.num_games} games")
-        
+
+        log_info_to_stderr(
+            "Evaluation",
+            f"Running {eval_config.strategy} evaluation with {eval_config.num_games} games",
+        )
+
         # Use async evaluation for better performance
-        result = await manager.evaluate_checkpoint_async(args.agent_checkpoint, args.opponent_checkpoint)
-        
+        result = await manager.evaluate_checkpoint_async(
+            args.agent_checkpoint, args.opponent_checkpoint
+        )
+
         # Display results
         log_info_to_stderr("Evaluation", f"Evaluation complete!")
         log_info_to_stderr("Evaluation", f"Results: {result.summary_stats}")
-        
-        if hasattr(result.summary_stats, 'win_rate'):
-            log_info_to_stderr("Evaluation", f"Win Rate: {result.summary_stats.win_rate:.2%}")
-        if hasattr(result.summary_stats, 'total_games'):
-            log_info_to_stderr("Evaluation", f"Total Games: {result.summary_stats.total_games}")
-        
+
+        if hasattr(result.summary_stats, "win_rate"):
+            log_info_to_stderr(
+                "Evaluation", f"Win Rate: {result.summary_stats.win_rate:.2%}"
+            )
+        if hasattr(result.summary_stats, "total_games"):
+            log_info_to_stderr(
+                "Evaluation", f"Total Games: {result.summary_stats.total_games}"
+            )
+
         # Save results if requested
         if eval_config.save_games and eval_config.save_path:
             output_path = Path(eval_config.save_path)
             output_path.mkdir(parents=True, exist_ok=True)
             result_file = output_path / f"{run_name}_results.json"
-            
+
             # Save evaluation results (simplified)
             import json
+
             results_data = {
                 "agent_checkpoint": args.agent_checkpoint,
                 "evaluation_config": eval_config.model_dump(),
-                "results": result.model_dump() if hasattr(result, 'model_dump') else str(result),
+                "results": (
+                    result.model_dump()
+                    if hasattr(result, "model_dump")
+                    else str(result)
+                ),
                 "timestamp": datetime.now().isoformat(),
             }
-            
-            with open(result_file, 'w') as f:
+
+            with open(result_file, "w") as f:
                 json.dump(results_data, f, indent=2, default=str)
-            
+
             log_info_to_stderr("Evaluation", f"Results saved to {result_file}")
-        
+
         return result
-        
+
     except Exception as e:
         log_error_to_stderr("Evaluation", f"Evaluation failed: {e}")
         raise
@@ -344,31 +358,31 @@ def run_training_command(args):
 
     # Initialize and run the trainer (Trainer will determine run_name)
     trainer = Trainer(config=config, args=args)
-    
+
     # Enable async evaluation if requested
-    if getattr(args, 'enable_async_evaluation', False):
+    if getattr(args, "enable_async_evaluation", False):
         trainer.callback_manager.use_async_evaluation()
         log_info_to_stderr("Training", "Async evaluation callbacks enabled")
-    
+
     trainer.run_training_loop()
 
 
 async def main():
     """Extended main function with evaluation support."""
     parser = create_main_parser()
-    
+
     # If no arguments provided, default to training with help
     if len(sys.argv) == 1:
         # Show help and set default command to train
         parser.print_help()
         sys.exit(1)
-    
+
     args = parser.parse_args()
-    
-    if args.command == 'evaluate':
+
+    if args.command == "evaluate":
         # Pure evaluation mode
         await run_evaluation_command(args)
-    elif args.command == 'train':
+    elif args.command == "train":
         # Training mode (with optional evaluation)
         run_training_command(args)
     else:

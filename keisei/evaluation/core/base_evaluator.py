@@ -49,19 +49,19 @@ class BaseEvaluator(ABC):
         self.logger.setLevel(level)
 
     def set_runtime_context(
-        self, 
-        policy_mapper=None, 
-        device: str = None, 
+        self,
+        policy_mapper=None,
+        device: str = None,
         model_dir: str = None,
         wandb_active: bool = False,
-        **kwargs
+        **kwargs,
     ) -> None:
         """
         Set runtime context from training system.
-        
+
         This enables evaluators to access shared training infrastructure
         like the policy mapper, device configuration, and model directories.
-        
+
         Args:
             policy_mapper: Shared PolicyOutputMapper from training
             device: Target device for evaluation
@@ -76,16 +76,16 @@ class BaseEvaluator(ABC):
         if model_dir is not None:
             self.model_dir = model_dir
         self.wandb_active = wandb_active
-        
+
         # Store any additional context
         for key, value in kwargs.items():
             setattr(self, key, value)
-            
+
         self.logger.debug(
-            "Runtime context set: device=%s, model_dir=%s, wandb_active=%s", 
-            getattr(self, 'device', 'None'),
-            getattr(self, 'model_dir', 'None'), 
-            wandb_active
+            "Runtime context set: device=%s, model_dir=%s, wandb_active=%s",
+            getattr(self, "device", "None"),
+            getattr(self, "model_dir", "None"),
+            wandb_active,
         )
 
     @abstractmethod
@@ -325,7 +325,9 @@ class BaseEvaluator(ABC):
                             "Checkpoint path validation skipped for in-memory evaluation"
                         )
             except (OSError, ValueError) as e:
-                logger.error(f"Invalid checkpoint path: {agent_info.checkpoint_path}, error: {e}")
+                logger.error(
+                    f"Invalid checkpoint path: {agent_info.checkpoint_path}, error: {e}"
+                )
                 return False
 
         return True
@@ -348,10 +350,12 @@ class BaseEvaluator(ABC):
     def log_evaluation_start(self, agent_info: AgentInfo, context: EvaluationContext):
         """Log the start of an evaluation run."""
         # Handle both string and enum strategy types
-        strategy_name = self.config.strategy.value if hasattr(self.config.strategy, 'value') else self.config.strategy
-        logger.info(
-            f"Starting {strategy_name} evaluation for agent: {agent_info.name}"
+        strategy_name = (
+            self.config.strategy.value
+            if hasattr(self.config.strategy, "value")
+            else self.config.strategy
         )
+        logger.info(f"Starting {strategy_name} evaluation for agent: {agent_info.name}")
         logger.info(
             f"Configuration: {self.config.num_games} games, "
             f"{self.config.max_concurrent_games} concurrent"

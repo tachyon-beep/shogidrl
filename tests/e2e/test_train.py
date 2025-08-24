@@ -217,8 +217,8 @@ def test_train_config_override(mock_wandb_disabled):
                 "--savedir", str(tmp_path),
                 "--seed", "42",
                 "--device", "cpu",
-                "--override", "model.tower_width=32",
-                "--override", "ppo.learning_rate=0.001",
+                "--override", "training.tower_width=32",
+                "--override", "training.learning_rate=0.001",
             ],
             capture_output=True,
             text=True,
@@ -271,17 +271,19 @@ def test_train_run_name_and_savedir(mock_wandb_disabled):
         print(f"Stdout: {result.stdout}")
         print(f"Stderr: {result.stderr}")
         
-        # Verify run directory with custom name was created
+        # When --run-name is explicitly provided, the directory uses that name exactly
+        # (not combining with model/feature parameters)
         run_dirs = list(tmp_path.glob("mytestrunprefix*"))
+        assert run_dirs, f"Expected run directory starting with 'mytestrunprefix' not found in {tmp_path}"
+        
+        # Find the run directory that starts with our custom run name
         run_dir = None
         for d in run_dirs:
-            if d.is_dir() and "mytestrunprefix_testmodel_feats" in d.name:
+            if d.is_dir() and d.name.startswith("mytestrunprefix"):
                 run_dir = d
                 break
         
-        assert (
-            run_dir is not None
-        ), f"Expected run directory starting with 'mytestrunprefix_testmodel_feats' not found in {tmp_path}"
+        assert run_dir is not None, f"No run directory starting with 'mytestrunprefix' found in {tmp_path}"
         
         print(f"Found run directory: {run_dir}")
         
@@ -386,6 +388,7 @@ def test_train_explicit_resume(tmp_path, mock_wandb_disabled):
     # Verify that training completed successfully
     check_training_outputs(result, 150)
     
-    # Verify that the checkpoint was copied to the run directory
-    copied_checkpoints = list(run_dir.glob("my_explicit_checkpoint_ts100.pth"))
-    assert copied_checkpoints, "Checkpoint was not copied to run directory"
+    # When using explicit checkpoint resume, the original checkpoint is used directly
+    # but new checkpoints should be created in the run directory during training
+    new_checkpoints = list(run_dir.glob("checkpoint_ts*.pth"))
+    assert new_checkpoints, f"No new checkpoints found in run directory: {run_dir}. Files: {list(run_dir.iterdir())}"

@@ -96,7 +96,9 @@ class CallbackManager:
             )
             eval_interval = aligned
 
-        async_callback_list.append(callbacks.AsyncEvaluationCallback(eval_cfg, eval_interval))
+        async_callback_list.append(
+            callbacks.AsyncEvaluationCallback(eval_cfg, eval_interval)
+        )
 
         self.async_callbacks = async_callback_list
         return async_callback_list
@@ -119,7 +121,9 @@ class CallbackManager:
                         also_to_wandb=False,
                     )
 
-    async def execute_step_callbacks_async(self, trainer: "Trainer") -> Optional[Dict[str, float]]:
+    async def execute_step_callbacks_async(
+        self, trainer: "Trainer"
+    ) -> Optional[Dict[str, float]]:
         """
         Execute async on_step_end callbacks for all registered async callbacks.
 
@@ -130,7 +134,7 @@ class CallbackManager:
             Dictionary of metrics from async callbacks, if any
         """
         combined_metrics = {}
-        
+
         for callback in self.async_callbacks:
             try:
                 result = await callback.on_step_end_async(trainer)
@@ -233,14 +237,19 @@ class CallbackManager:
         """
         # Remove sync evaluation callback
         self.remove_callback(callbacks.EvaluationCallback)
-        
+
         # Setup async evaluation callback if not already present
-        if not any(isinstance(cb, callbacks.AsyncEvaluationCallback) for cb in self.async_callbacks):
+        if not any(
+            isinstance(cb, callbacks.AsyncEvaluationCallback)
+            for cb in self.async_callbacks
+        ):
             eval_cfg = getattr(self.config, "evaluation", None)
             eval_interval = (
                 eval_cfg.evaluation_interval_timesteps
                 if eval_cfg and hasattr(eval_cfg, "evaluation_interval_timesteps")
-                else getattr(self.config.training, "evaluation_interval_timesteps", 1000)
+                else getattr(
+                    self.config.training, "evaluation_interval_timesteps", 1000
+                )
             )
 
             steps_per_epoch = self.config.training.steps_per_epoch
@@ -248,4 +257,6 @@ class CallbackManager:
                 aligned = ((eval_interval // steps_per_epoch) + 1) * steps_per_epoch
                 eval_interval = aligned
 
-            self.add_async_callback(callbacks.AsyncEvaluationCallback(eval_cfg, eval_interval))
+            self.add_async_callback(
+                callbacks.AsyncEvaluationCallback(eval_cfg, eval_interval)
+            )

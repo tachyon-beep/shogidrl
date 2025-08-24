@@ -267,7 +267,9 @@ class SingleOpponentEvaluator(BaseEvaluator):
             "default_opponent": "random",  # Default fallback
         }
 
-        opponent_name = self.config.get_strategy_param("opponent_name", "default_opponent")
+        opponent_name = self.config.get_strategy_param(
+            "opponent_name", "default_opponent"
+        )
         opponent_type = opponent_type_mapping.get(opponent_name, "random")
 
         opponent_info = OpponentInfo(
@@ -409,7 +411,9 @@ class SingleOpponentEvaluator(BaseEvaluator):
             # Create opponent info if not provided
             if opponent_info is None:
                 opponent_info = OpponentInfo(
-                    name=self.config.get_strategy_param("opponent_name", "default_opponent"),
+                    name=self.config.get_strategy_param(
+                        "opponent_name", "default_opponent"
+                    ),
                     type="ppo_agent" if self.opponent_weights else "unknown",
                     checkpoint_path=self.config.get_strategy_param("opponent_path"),
                     metadata=self.config.get_strategy_param("opponent_params", {}),
@@ -758,10 +762,10 @@ class SingleOpponentEvaluator(BaseEvaluator):
         }
 
         # Determine opponent type based on name and configuration
-        opponent_name = self.config.get_strategy_param("opponent_name", "default_opponent")
-        opponent_type = opponent_type_mapping.get(
-            opponent_name.lower(), "unknown"
+        opponent_name = self.config.get_strategy_param(
+            "opponent_name", "default_opponent"
         )
+        opponent_type = opponent_type_mapping.get(opponent_name.lower(), "unknown")
 
         # If we have a checkpoint path but the type is still unknown, assume it's a PPO agent
         opponent_path = self.config.get_strategy_param("opponent_path")
@@ -770,7 +774,9 @@ class SingleOpponentEvaluator(BaseEvaluator):
 
         return [
             OpponentInfo(
-                name=self.config.get_strategy_param("opponent_name", "default_opponent"),
+                name=self.config.get_strategy_param(
+                    "opponent_name", "default_opponent"
+                ),
                 type=opponent_type,
                 checkpoint_path=self.config.get_strategy_param("opponent_path"),
                 metadata=self.config.get_strategy_param("opponent_params", {}),
@@ -797,7 +803,9 @@ class SingleOpponentEvaluator(BaseEvaluator):
         # Check if the distribution is within tolerance
         if total_games > 0:
             imbalance = abs(half_games - (half_games + remainder)) / total_games
-            color_balance_tolerance = self.config.get_strategy_param("color_balance_tolerance", 0.1)
+            color_balance_tolerance = self.config.get_strategy_param(
+                "color_balance_tolerance", 0.1
+            )
             if imbalance > color_balance_tolerance:
                 logger.warning(
                     "Color balance tolerance exceeded: %.3f > %.3f",
@@ -870,11 +878,10 @@ class SingleOpponentEvaluator(BaseEvaluator):
             logger.error("Opponent name is required for single opponent evaluation")
             return False
 
-        color_balance_tolerance = self.config.get_strategy_param("color_balance_tolerance", 0.1)
-        if (
-            color_balance_tolerance < 0
-            or color_balance_tolerance > 0.5
-        ):
+        color_balance_tolerance = self.config.get_strategy_param(
+            "color_balance_tolerance", 0.1
+        )
+        if color_balance_tolerance < 0 or color_balance_tolerance > 0.5:
             logger.error("Color balance tolerance must be between 0 and 0.5")
             return False
 
@@ -884,6 +891,4 @@ class SingleOpponentEvaluator(BaseEvaluator):
 # Register this evaluator with the factory
 from ..core import EvaluationStrategy, EvaluatorFactory
 
-EvaluatorFactory.register(
-    EvaluationStrategy.SINGLE_OPPONENT, SingleOpponentEvaluator
-)
+EvaluatorFactory.register(EvaluationStrategy.SINGLE_OPPONENT, SingleOpponentEvaluator)

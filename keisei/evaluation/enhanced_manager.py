@@ -150,6 +150,7 @@ class EnhancedEvaluationManager(EvaluationManager):
         try:
             # Create tournament config (deep copy to avoid mutation)
             import copy
+
             tournament_config = copy.deepcopy(self.config)
             tournament_config.num_games = num_games_per_opponent
 
@@ -272,16 +273,16 @@ class EnhancedEvaluationManager(EvaluationManager):
         if not self.enhanced_opponent_manager:
             logger.warning("Enhanced opponent management not available")
             return
-        
+
         # Input validation
         if not opponents:
             logger.warning("No opponents provided for enhanced selection registration")
             return
-        
+
         if not isinstance(opponents, list):
             logger.error("Opponents must be provided as a list")
             return
-        
+
         # Validate each opponent
         valid_opponents = []
         for i, opponent in enumerate(opponents):
@@ -292,14 +293,16 @@ class EnhancedEvaluationManager(EvaluationManager):
                 logger.error(f"Opponent at index {i} has no name")
                 continue
             valid_opponents.append(opponent)
-        
+
         if not valid_opponents:
             logger.error("No valid opponents found after validation")
             return
 
         try:
             self.enhanced_opponent_manager.register_opponents(valid_opponents)
-            logger.info(f"Registered {len(valid_opponents)} opponents for enhanced selection")
+            logger.info(
+                f"Registered {len(valid_opponents)} opponents for enhanced selection"
+            )
         except Exception as e:
             logger.error(f"Failed to register opponents: {e}")
 

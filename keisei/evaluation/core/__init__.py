@@ -27,6 +27,7 @@ from .parallel_executor import (
     create_parallel_game_tasks,
 )
 
+
 # Config factory function
 def create_evaluation_config(
     strategy: str = "single_opponent",
@@ -47,11 +48,11 @@ def create_evaluation_config(
     temp_agent_device: str = "cpu",
     clear_cache_after_evaluation: bool = True,
     opponent_name: str = "random",
-    **kwargs
+    **kwargs,
 ) -> EvaluationConfig:
     """
     Create an EvaluationConfig instance with the specified parameters.
-    
+
     This factory function provides a convenient way to create evaluation
     configurations for the unified evaluation system.
     """
@@ -75,8 +76,9 @@ def create_evaluation_config(
         clear_cache_after_evaluation=clear_cache_after_evaluation,
         opponent_type=opponent_name,
         strategy_params=kwargs.get("strategy_params", {}),
-        **{k: v for k, v in kwargs.items() if k != "strategy_params"}
+        **{k: v for k, v in kwargs.items() if k != "strategy_params"},
     )
+
 
 __all__ = [
     # Base classes
@@ -86,7 +88,7 @@ __all__ = [
     "create_agent_info",
     # Configuration
     "EvaluationConfig",
-    "EvaluationStrategy", 
+    "EvaluationStrategy",
     "create_evaluation_config",
     # Context and metadata
     "EvaluationContext",

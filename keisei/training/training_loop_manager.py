@@ -150,7 +150,7 @@ class TrainingLoopManager:
 
                 # Execute step callbacks using centralized callback manager with error handling
                 self.trainer.callback_manager.execute_step_callbacks(self.trainer)
-                
+
                 # Execute async callbacks if available
                 if self.trainer.callback_manager.has_async_callbacks():
                     try:
@@ -158,7 +158,9 @@ class TrainingLoopManager:
                         async_metrics = self._run_async_callbacks_sync(self.trainer)
                         if async_metrics:
                             # Integrate async callback metrics into training metrics
-                            self.trainer.metrics_manager.pending_progress_updates.update(async_metrics)
+                            self.trainer.metrics_manager.pending_progress_updates.update(
+                                async_metrics
+                            )
                     except Exception as e:
                         log_both(
                             f"[ERROR] Async callback execution failed: {e}",
@@ -180,7 +182,9 @@ class TrainingLoopManager:
             log_both(f"Training error in training loop: {e}", also_to_wandb=True)
             raise
 
-    def _run_async_callbacks_sync(self, trainer: "Trainer") -> Optional[Dict[str, float]]:
+    def _run_async_callbacks_sync(
+        self, trainer: "Trainer"
+    ) -> Optional[Dict[str, float]]:
         """
         Execute async callbacks in a synchronous context.
         This method safely handles async callbacks without disrupting the training loop.
@@ -204,7 +208,9 @@ class TrainingLoopManager:
 
             # Create and run the async callback execution
             async def execute_async_callbacks():
-                return await trainer.callback_manager.execute_step_callbacks_async(trainer)
+                return await trainer.callback_manager.execute_step_callbacks_async(
+                    trainer
+                )
 
             # Use asyncio.run to execute async callbacks
             return asyncio.run(execute_async_callbacks())
@@ -289,13 +295,17 @@ class TrainingLoopManager:
 
                 # Execute sync step callbacks first
                 self.trainer.callback_manager.execute_step_callbacks(self.trainer)
-                
+
                 # Execute async callbacks natively
                 if self.trainer.callback_manager.has_async_callbacks():
-                    async_metrics = await self.trainer.callback_manager.execute_step_callbacks_async(self.trainer)
+                    async_metrics = await self.trainer.callback_manager.execute_step_callbacks_async(
+                        self.trainer
+                    )
                     if async_metrics:
                         # Integrate async callback metrics into training metrics
-                        self.trainer.metrics_manager.pending_progress_updates.update(async_metrics)
+                        self.trainer.metrics_manager.pending_progress_updates.update(
+                            async_metrics
+                        )
 
         except KeyboardInterrupt:
             log_both(

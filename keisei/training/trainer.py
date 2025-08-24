@@ -114,16 +114,22 @@ class Trainer:
             clear_cache_after_evaluation=config.evaluation.clear_cache_after_evaluation,
             # Add strategy-specific parameters
             opponent_name=config.evaluation.opponent_type,
-            strategy_params=getattr(config.evaluation, 'strategy_params', {}),
+            strategy_params=getattr(config.evaluation, "strategy_params", {}),
         )
         self.evaluation_manager = EnhancedEvaluationManager(
             eval_config,
             self.run_name,
             pool_size=config.evaluation.previous_model_pool_size,
             elo_registry_path=config.evaluation.elo_registry_path,
-            enable_background_tournaments=getattr(config.evaluation, 'enable_background_tournaments', False),
-            enable_advanced_analytics=getattr(config.evaluation, 'enable_advanced_analytics', False),
-            enable_enhanced_opponents=getattr(config.evaluation, 'enable_enhanced_opponents', False),
+            enable_background_tournaments=getattr(
+                config.evaluation, "enable_background_tournaments", False
+            ),
+            enable_advanced_analytics=getattr(
+                config.evaluation, "enable_advanced_analytics", False
+            ),
+            enable_enhanced_opponents=getattr(
+                config.evaluation, "enable_enhanced_opponents", False
+            ),
             analytics_output_dir=Path(self.model_dir) / "analytics",
         )
         self.evaluation_elo_snapshot: Optional[Dict[str, Any]] = None

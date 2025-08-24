@@ -59,7 +59,7 @@ class BenchmarkEvaluator(BaseEvaluator):
         """Get benchmark suite opponents from configuration."""
         # Get suite configuration from strategy parameters
         suite_config = self.config.get_strategy_param("suite_config", [])
-        
+
         opponents = []
         if not suite_config:
             # Provide default benchmark suite
@@ -68,14 +68,17 @@ class BenchmarkEvaluator(BaseEvaluator):
                     name="benchmark_random",
                     type="random",
                     checkpoint_path=None,
-                    metadata={"difficulty": "low", "description": "Random baseline"}
+                    metadata={"difficulty": "low", "description": "Random baseline"},
                 ),
                 OpponentInfo(
                     name="benchmark_heuristic",
-                    type="heuristic", 
+                    type="heuristic",
                     checkpoint_path=None,
-                    metadata={"difficulty": "medium", "description": "Heuristic baseline"}
-                )
+                    metadata={
+                        "difficulty": "medium",
+                        "description": "Heuristic baseline",
+                    },
+                ),
             ]
         else:
             for i, benchmark_case_data in enumerate(suite_config):
@@ -83,14 +86,16 @@ class BenchmarkEvaluator(BaseEvaluator):
                 opp_type = benchmark_case_data.get("type", "random")
                 path = benchmark_case_data.get("checkpoint_path", None)
                 metadata = benchmark_case_data.get("metadata", {})
-                
-                opponents.append(OpponentInfo(
-                    name=name,
-                    type=opp_type,
-                    checkpoint_path=path,
-                    metadata=metadata
-                ))
-                
+
+                opponents.append(
+                    OpponentInfo(
+                        name=name,
+                        type=opp_type,
+                        checkpoint_path=path,
+                        metadata=metadata,
+                    )
+                )
+
         return opponents
 
     async def _load_benchmark_suite(self, context: EvaluationContext):
@@ -689,11 +694,11 @@ class BenchmarkEvaluator(BaseEvaluator):
             self.logger.warning(
                 "suite_config should be a list. Evaluation might not run as expected."
             )
-        num_games_per_case = self.config.get_strategy_param("num_games_per_benchmark_case", 1)
+        num_games_per_case = self.config.get_strategy_param(
+            "num_games_per_benchmark_case", 1
+        )
         if num_games_per_case <= 0:
-            self.logger.error(
-                "num_games_per_benchmark_case must be positive."
-            )
+            self.logger.error("num_games_per_benchmark_case must be positive.")
             return False
         return True
 

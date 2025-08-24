@@ -68,31 +68,37 @@ class TournamentEvaluator(BaseEvaluator):
 
     def get_opponents(self, context: EvaluationContext) -> List[OpponentInfo]:
         """Get tournament opponents from configuration."""
-        opponent_pool_config = self.config.get_strategy_param("opponent_pool_config", [])
-        
+        opponent_pool_config = self.config.get_strategy_param(
+            "opponent_pool_config", []
+        )
+
         opponents = []
         for i, opp_config in enumerate(opponent_pool_config):
             name = opp_config.get("name", f"tournament_opponent_{i}")
             opp_type = opp_config.get("type", "random")
             checkpoint_path = opp_config.get("checkpoint_path")
             metadata = opp_config.get("metadata", {})
-            
-            opponents.append(OpponentInfo(
-                name=name,
-                type=opp_type, 
-                checkpoint_path=checkpoint_path,
-                metadata=metadata
-            ))
-        
+
+            opponents.append(
+                OpponentInfo(
+                    name=name,
+                    type=opp_type,
+                    checkpoint_path=checkpoint_path,
+                    metadata=metadata,
+                )
+            )
+
         # If no opponents configured, provide a default random opponent
         if not opponents:
-            opponents.append(OpponentInfo(
-                name="default_random",
-                type="random",
-                checkpoint_path=None,
-                metadata={"description": "Default random opponent for tournament"}
-            ))
-            
+            opponents.append(
+                OpponentInfo(
+                    name="default_random",
+                    type="random",
+                    checkpoint_path=None,
+                    metadata={"description": "Default random opponent for tournament"},
+                )
+            )
+
         return opponents
 
     async def evaluate_step(
@@ -299,7 +305,9 @@ class TournamentEvaluator(BaseEvaluator):
             return evaluation_result
 
         # Calculate number of games per opponent
-        num_games_per_opponent = self.config.get_strategy_param("num_games_per_opponent")
+        num_games_per_opponent = self.config.get_strategy_param(
+            "num_games_per_opponent"
+        )
         if num_games_per_opponent is not None:
             # Use fixed number of games per opponent
             games_per_opponent = [num_games_per_opponent] * len(opponents)
@@ -377,14 +385,16 @@ class TournamentEvaluator(BaseEvaluator):
                 metadata={
                     **(agent_info.metadata or {}),
                     "agent_weights": agent_weights,
-                    "use_in_memory": True
-                }
+                    "use_in_memory": True,
+                },
             )
         else:
             in_memory_agent = agent_info
 
         # Calculate number of games per opponent
-        num_games_per_opponent = self.config.get_strategy_param("num_games_per_opponent")
+        num_games_per_opponent = self.config.get_strategy_param(
+            "num_games_per_opponent"
+        )
         if num_games_per_opponent is not None:
             games_per_opponent = [num_games_per_opponent] * len(opponents)
         else:
@@ -405,18 +415,22 @@ class TournamentEvaluator(BaseEvaluator):
                 in_memory_opponent = OpponentInfo(
                     name=opponent_info.name if opponent_info else opponent.name,
                     type=opponent_info.type if opponent_info else opponent.type,
-                    checkpoint_path=opponent_info.checkpoint_path if opponent_info else opponent.checkpoint_path,
+                    checkpoint_path=(
+                        opponent_info.checkpoint_path
+                        if opponent_info
+                        else opponent.checkpoint_path
+                    ),
                     metadata={
                         **(opponent.metadata or {}),
                         "opponent_weights": opponent_weights,
-                        "use_in_memory": True
-                    }
+                        "use_in_memory": True,
+                    },
                 )
             else:
                 in_memory_opponent = opponent
 
             # Use evaluate_step_in_memory if available, otherwise fall back to regular evaluation
-            if hasattr(self, 'evaluate_step_in_memory'):
+            if hasattr(self, "evaluate_step_in_memory"):
                 games, errors = await self._play_games_against_opponent_in_memory(
                     in_memory_agent, in_memory_opponent, games_per_opponent[i], context
                 )
@@ -449,17 +463,15 @@ class TournamentEvaluator(BaseEvaluator):
             return False
 
         # Check if opponent_pool_config exists and is a list
-        opponent_pool_config = self.config.get_strategy_param("opponent_pool_config", [])
+        opponent_pool_config = self.config.get_strategy_param(
+            "opponent_pool_config", []
+        )
         if opponent_pool_config is None:
-            logger.warning(
-                "opponent_pool_config is missing or not a list"
-            )
+            logger.warning("opponent_pool_config is missing or not a list")
             return True  # Allow it but warn
 
         if not isinstance(opponent_pool_config, list):
-            logger.warning(
-                "opponent_pool_config is missing or not a list"
-            )
+            logger.warning("opponent_pool_config is missing or not a list")
             return True  # Allow it but warn
 
         return True
@@ -532,7 +544,7 @@ class TournamentEvaluator(BaseEvaluator):
         else:
             logger.error(
                 "Player entity of type %s does not have a recognized action selection method.",
-                type(player_entity).__name__
+                type(player_entity).__name__,
             )
             raise TypeError(f"Unsupported player entity type: {type(player_entity)}")
         return move
@@ -550,8 +562,10 @@ class TournamentEvaluator(BaseEvaluator):
             logger.warning(
                 "Player %s (%s) made an illegal move (%s) or no move. "
                 "Legal moves: %s. Game ending.",
-                current_player_color_value, player_entity_type_name, move,
-                len(legal_moves) if legal_moves else 'None'
+                current_player_color_value,
+                player_entity_type_name,
+                move,
+                len(legal_moves) if legal_moves else "None",
             )
             game.game_over = True
             game.winner = Color(1 - current_player_color_value)  # Other player wins
@@ -565,7 +579,9 @@ class TournamentEvaluator(BaseEvaluator):
         except (ValueError, TypeError, RuntimeError) as e:
             logger.error(
                 "Error making move %s for player %s: %s",
-                move, current_player_color_value, str(e),
+                move,
+                current_player_color_value,
+                str(e),
                 exc_info=True,
             )
             game.game_over = True
@@ -582,7 +598,9 @@ class TournamentEvaluator(BaseEvaluator):
             return []
 
         opponents: List[OpponentInfo] = []
-        for i, opponent_config in enumerate(self.config.get_strategy_param("opponent_pool_config", [])):
+        for i, opponent_config in enumerate(
+            self.config.get_strategy_param("opponent_pool_config", [])
+        ):
             try:
                 if isinstance(opponent_config, OpponentInfo):
                     opponents.append(opponent_config)
@@ -604,7 +622,8 @@ class TournamentEvaluator(BaseEvaluator):
             except (ValueError, TypeError, AttributeError) as e:
                 logger.error(
                     "Failed to load opponent from config data at index %d: %s",
-                    i, str(e)
+                    i,
+                    str(e),
                 )
 
         return opponents
@@ -651,7 +670,9 @@ class TournamentEvaluator(BaseEvaluator):
             if game.opponent_info:
                 opponent_name = game.opponent_info.name
                 if opponent_name in standings["per_opponent_results"]:
-                    opp_stats: Dict[str, Any] = standings["per_opponent_results"][opponent_name]
+                    opp_stats: Dict[str, Any] = standings["per_opponent_results"][
+                        opponent_name
+                    ]
                     opp_stats["played"] += 1
 
                     if game.winner is None:
@@ -757,7 +778,7 @@ class TournamentEvaluator(BaseEvaluator):
                 current_opponent_info = OpponentInfo.from_dict(opponent_dict)
 
                 # Use in-memory evaluation step if available
-                if hasattr(self, 'evaluate_step_in_memory'):
+                if hasattr(self, "evaluate_step_in_memory"):
                     result = await self.evaluate_step_in_memory(
                         agent_info, current_opponent_info, evaluation_context
                     )
@@ -784,13 +805,21 @@ class TournamentEvaluator(BaseEvaluator):
     ) -> GameResult:
         """Evaluate a single step (game) using in-memory weights."""
         # Extract in-memory weights from metadata if available
-        agent_weights = agent_info.metadata.get("agent_weights") if agent_info.metadata else None
-        opponent_weights = opponent_info.metadata.get("opponent_weights") if opponent_info.metadata else None
-        
+        agent_weights = (
+            agent_info.metadata.get("agent_weights") if agent_info.metadata else None
+        )
+        opponent_weights = (
+            opponent_info.metadata.get("opponent_weights")
+            if opponent_info.metadata
+            else None
+        )
+
         # If we have in-memory weights, we need to create temporary agents with those weights
         # For now, fall back to regular evaluation step
         # This could be enhanced later to actually use the in-memory weights
-        logger.debug("Using evaluate_step_in_memory (currently falls back to regular evaluation)")
+        logger.debug(
+            "Using evaluate_step_in_memory (currently falls back to regular evaluation)"
+        )
         return await self.evaluate_step(agent_info, opponent_info, context)
 
 

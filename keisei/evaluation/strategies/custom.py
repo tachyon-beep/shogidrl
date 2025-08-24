@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 class CustomEvaluator(BaseEvaluator):
     """
     Custom evaluation strategy with flexible configuration.
-    
+
     This evaluator allows users to define custom evaluation scenarios
     through configuration parameters, making it ideal for research
     and experimentation.
@@ -43,9 +43,9 @@ class CustomEvaluator(BaseEvaluator):
         """Get custom opponents from configuration."""
         # Custom strategy can define opponents in multiple ways
         custom_opponents_config = self.config.get_strategy_param("custom_opponents", [])
-        
+
         opponents = []
-        
+
         # Method 1: Direct opponent configuration list
         if isinstance(custom_opponents_config, list):
             for i, opp_config in enumerate(custom_opponents_config):
@@ -54,48 +54,58 @@ class CustomEvaluator(BaseEvaluator):
                     opp_type = opp_config.get("type", "random")
                     checkpoint_path = opp_config.get("checkpoint_path")
                     metadata = opp_config.get("metadata", {})
-                    
-                    opponents.append(OpponentInfo(
-                        name=name,
-                        type=opp_type,
-                        checkpoint_path=checkpoint_path,
-                        metadata=metadata
-                    ))
-        
+
+                    opponents.append(
+                        OpponentInfo(
+                            name=name,
+                            type=opp_type,
+                            checkpoint_path=checkpoint_path,
+                            metadata=metadata,
+                        )
+                    )
+
         # Method 2: Opponent pool reference
         opponent_pool_size = self.config.get_strategy_param("opponent_pool_size", 0)
         if opponent_pool_size > 0 and not opponents:
             # Create opponents from pool configuration
             pool_type = self.config.get_strategy_param("opponent_pool_type", "random")
             for i in range(opponent_pool_size):
-                opponents.append(OpponentInfo(
-                    name=f"pool_opponent_{i}",
-                    type=pool_type,
-                    checkpoint_path=None,
-                    metadata={"pool_index": i}
-                ))
-        
+                opponents.append(
+                    OpponentInfo(
+                        name=f"pool_opponent_{i}",
+                        type=pool_type,
+                        checkpoint_path=None,
+                        metadata={"pool_index": i},
+                    )
+                )
+
         # Method 3: Single custom opponent
         single_opponent_config = self.config.get_strategy_param("single_opponent", None)
         if single_opponent_config and not opponents:
             if isinstance(single_opponent_config, dict):
-                opponents.append(OpponentInfo(
-                    name=single_opponent_config.get("name", "custom_single"),
-                    type=single_opponent_config.get("type", "random"),
-                    checkpoint_path=single_opponent_config.get("checkpoint_path"),
-                    metadata=single_opponent_config.get("metadata", {})
-                ))
-        
+                opponents.append(
+                    OpponentInfo(
+                        name=single_opponent_config.get("name", "custom_single"),
+                        type=single_opponent_config.get("type", "random"),
+                        checkpoint_path=single_opponent_config.get("checkpoint_path"),
+                        metadata=single_opponent_config.get("metadata", {}),
+                    )
+                )
+
         # Fallback: If no opponents configured, provide a default
         if not opponents:
-            logger.warning("No custom opponents configured, using default random opponent")
-            opponents.append(OpponentInfo(
-                name="default_custom_random",
-                type="random",
-                checkpoint_path=None,
-                metadata={"description": "Default opponent for custom evaluation"}
-            ))
-        
+            logger.warning(
+                "No custom opponents configured, using default random opponent"
+            )
+            opponents.append(
+                OpponentInfo(
+                    name="default_custom_random",
+                    type="random",
+                    checkpoint_path=None,
+                    metadata={"description": "Default opponent for custom evaluation"},
+                )
+            )
+
         logger.info(f"Custom evaluation configured with {len(opponents)} opponents")
         return opponents
 
@@ -112,17 +122,29 @@ class CustomEvaluator(BaseEvaluator):
         opponents = self.get_opponents(context)
 
         # Determine evaluation mode
-        evaluation_mode = self.config.get_strategy_param("evaluation_mode", "round_robin")
-        
+        evaluation_mode = self.config.get_strategy_param(
+            "evaluation_mode", "round_robin"
+        )
+
         if evaluation_mode == "round_robin":
-            results = await self._run_round_robin_evaluation(agent_info, opponents, context)
+            results = await self._run_round_robin_evaluation(
+                agent_info, opponents, context
+            )
         elif evaluation_mode == "single_elimination":
-            results = await self._run_single_elimination_evaluation(agent_info, opponents, context)
+            results = await self._run_single_elimination_evaluation(
+                agent_info, opponents, context
+            )
         elif evaluation_mode == "custom_sequence":
-            results = await self._run_custom_sequence_evaluation(agent_info, opponents, context)
+            results = await self._run_custom_sequence_evaluation(
+                agent_info, opponents, context
+            )
         else:
-            logger.warning(f"Unknown evaluation mode: {evaluation_mode}, using round_robin")
-            results = await self._run_round_robin_evaluation(agent_info, opponents, context)
+            logger.warning(
+                f"Unknown evaluation mode: {evaluation_mode}, using round_robin"
+            )
+            results = await self._run_round_robin_evaluation(
+                agent_info, opponents, context
+            )
 
         evaluation_result = EvaluationResult(
             context=context,
@@ -132,7 +154,7 @@ class CustomEvaluator(BaseEvaluator):
                 "custom_evaluation_analytics": {
                     "evaluation_mode": evaluation_mode,
                     "total_opponents": len(opponents),
-                    "configuration": self.config.strategy_params
+                    "configuration": self.config.strategy_params,
                 }
             },
             errors=[],
@@ -164,15 +186,15 @@ class CustomEvaluator(BaseEvaluator):
                 metadata={
                     **(agent_info.metadata or {}),
                     "agent_weights": agent_weights,
-                    "use_in_memory": True
-                }
+                    "use_in_memory": True,
+                },
             )
         else:
             in_memory_agent = agent_info
 
         # Get opponents (potentially using in-memory configuration)
         opponents = self.get_opponents(context)
-        
+
         # If specific opponent info and weights provided, use those
         if opponent_info is not None and opponent_weights is not None:
             in_memory_opponent = OpponentInfo(
@@ -182,23 +204,33 @@ class CustomEvaluator(BaseEvaluator):
                 metadata={
                     **(opponent_info.metadata or {}),
                     "opponent_weights": opponent_weights,
-                    "use_in_memory": True
-                }
+                    "use_in_memory": True,
+                },
             )
             # Use this single opponent for evaluation
             opponents = [in_memory_opponent]
 
         # Run evaluation with in-memory configuration
-        evaluation_mode = self.config.get_strategy_param("evaluation_mode", "round_robin")
-        
+        evaluation_mode = self.config.get_strategy_param(
+            "evaluation_mode", "round_robin"
+        )
+
         if evaluation_mode == "round_robin":
-            results = await self._run_round_robin_evaluation(in_memory_agent, opponents, context)
+            results = await self._run_round_robin_evaluation(
+                in_memory_agent, opponents, context
+            )
         elif evaluation_mode == "single_elimination":
-            results = await self._run_single_elimination_evaluation(in_memory_agent, opponents, context)
+            results = await self._run_single_elimination_evaluation(
+                in_memory_agent, opponents, context
+            )
         elif evaluation_mode == "custom_sequence":
-            results = await self._run_custom_sequence_evaluation(in_memory_agent, opponents, context)
+            results = await self._run_custom_sequence_evaluation(
+                in_memory_agent, opponents, context
+            )
         else:
-            results = await self._run_round_robin_evaluation(in_memory_agent, opponents, context)
+            results = await self._run_round_robin_evaluation(
+                in_memory_agent, opponents, context
+            )
 
         evaluation_result = EvaluationResult(
             context=context,
@@ -209,7 +241,7 @@ class CustomEvaluator(BaseEvaluator):
                     "evaluation_mode": evaluation_mode,
                     "total_opponents": len(opponents),
                     "in_memory_evaluation": True,
-                    "configuration": self.config.strategy_params
+                    "configuration": self.config.strategy_params,
                 }
             },
             errors=[],
@@ -228,17 +260,18 @@ class CustomEvaluator(BaseEvaluator):
         # For custom evaluation, we can add custom game logic here
         # For now, delegate to the base implementation which will raise NotImplementedError
         # This will need to be implemented based on the specific game engine integration
-        
+
         # Generate a placeholder result for now
         game_id = f"custom_game_{context.session_id}_{opponent_info.name}"
-        
+
         # In a real implementation, this would run the actual game
         logger.debug(f"Running custom game: {agent_info.name} vs {opponent_info.name}")
-        
+
         # Placeholder result - in real implementation would come from game engine
         import random
+
         winner = random.choice([0, 1, None])  # 0=agent, 1=opponent, None=draw
-        
+
         return GameResult(
             game_id=game_id,
             winner=winner,
@@ -248,7 +281,7 @@ class CustomEvaluator(BaseEvaluator):
             opponent_info=opponent_info,
             metadata={
                 "evaluation_strategy": "custom",
-                "custom_params": self.config.strategy_params
+                "custom_params": self.config.strategy_params,
             },
         )
 
@@ -261,7 +294,7 @@ class CustomEvaluator(BaseEvaluator):
         """Run round-robin evaluation against all opponents."""
         results = []
         games_per_opponent = self.config.get_strategy_param("games_per_opponent", 1)
-        
+
         for opponent in opponents:
             for game_num in range(games_per_opponent):
                 try:
@@ -273,16 +306,20 @@ class CustomEvaluator(BaseEvaluator):
                         metadata={
                             **(opponent.metadata or {}),
                             "game_index": game_num,
-                            "agent_plays_sente_in_eval_step": (game_num % 2) == 0
-                        }
+                            "agent_plays_sente_in_eval_step": (game_num % 2) == 0,
+                        },
                     )
-                    
-                    result = await self.evaluate_step(agent_info, game_opponent, context)
+
+                    result = await self.evaluate_step(
+                        agent_info, game_opponent, context
+                    )
                     results.append(result)
-                    
+
                 except Exception as e:
-                    logger.error(f"Error in round-robin game {game_num} vs {opponent.name}: {e}")
-        
+                    logger.error(
+                        f"Error in round-robin game {game_num} vs {opponent.name}: {e}"
+                    )
+
         return results
 
     async def _run_single_elimination_evaluation(
@@ -293,22 +330,22 @@ class CustomEvaluator(BaseEvaluator):
     ) -> List[GameResult]:
         """Run single-elimination tournament evaluation."""
         results = []
-        
+
         # Single elimination: agent plays against each opponent until first loss
         for opponent in opponents:
             try:
                 result = await self.evaluate_step(agent_info, opponent, context)
                 results.append(result)
-                
+
                 # If agent lost, stop the elimination
                 if result.winner == 1:  # Opponent won
                     logger.info(f"Agent eliminated by {opponent.name}")
                     break
-                    
+
             except Exception as e:
                 logger.error(f"Error in elimination game vs {opponent.name}: {e}")
                 break
-        
+
         return results
 
     async def _run_custom_sequence_evaluation(
@@ -319,26 +356,32 @@ class CustomEvaluator(BaseEvaluator):
     ) -> List[GameResult]:
         """Run custom sequence evaluation based on configuration."""
         results = []
-        
+
         # Get custom sequence configuration
         custom_sequence = self.config.get_strategy_param("custom_sequence", [])
-        
+
         if not custom_sequence:
             logger.warning("No custom sequence defined, falling back to round-robin")
-            return await self._run_round_robin_evaluation(agent_info, opponents, context)
-        
+            return await self._run_round_robin_evaluation(
+                agent_info, opponents, context
+            )
+
         # Execute custom sequence
         for step in custom_sequence:
             if isinstance(step, dict):
                 opponent_name = step.get("opponent")
                 games = step.get("games", 1)
-                
+
                 # Find the specified opponent
-                opponent = next((opp for opp in opponents if opp.name == opponent_name), None)
+                opponent = next(
+                    (opp for opp in opponents if opp.name == opponent_name), None
+                )
                 if opponent is None:
-                    logger.warning(f"Opponent '{opponent_name}' not found in sequence step")
+                    logger.warning(
+                        f"Opponent '{opponent_name}' not found in sequence step"
+                    )
                     continue
-                
+
                 # Play the specified number of games
                 for game_num in range(games):
                     try:
@@ -350,16 +393,20 @@ class CustomEvaluator(BaseEvaluator):
                                 **(opponent.metadata or {}),
                                 "sequence_step": len(results),
                                 "game_index": game_num,
-                                "agent_plays_sente_in_eval_step": (game_num % 2) == 0
-                            }
+                                "agent_plays_sente_in_eval_step": (game_num % 2) == 0,
+                            },
                         )
-                        
-                        result = await self.evaluate_step(agent_info, game_opponent, context)
+
+                        result = await self.evaluate_step(
+                            agent_info, game_opponent, context
+                        )
                         results.append(result)
-                        
+
                     except Exception as e:
-                        logger.error(f"Error in custom sequence game vs {opponent_name}: {e}")
-        
+                        logger.error(
+                            f"Error in custom sequence game vs {opponent_name}: {e}"
+                        )
+
         return results
 
 
