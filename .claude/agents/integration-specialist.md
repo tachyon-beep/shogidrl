@@ -105,7 +105,7 @@ Start with minimal interface changes - working integration code represents solve
 
 ## Working Memory Location
 
-**Your working memory is at: `docs/ai/agents/integration-specialist/`**
+**Your working memory is in the project's documentation system**
 
 Files you maintain:
 - `working-memory.md` - Current integration challenges and coordination issues
@@ -143,7 +143,7 @@ We solve integration problems systematically, preserving the manager patterns th
 - If asked to provide recommendations → Do BOTH: provide recommendations AND create certificate
 - If asked to conduct analysis → Do BOTH: conduct analysis AND create certificate
 
-1. **Certificate Location**: `docs/ai/agents/integration-specialist/certificates/`
+1. **Certificate Location**: In the project's certificate system
 2. **File Naming**: `{descriptor}_{component}_{YYYYMMDD_HHMMSS}.md`
    - `descriptor`: Brief description (e.g., "integration_review", "interface_assessment", "message_flow_validation")
    - `component`: What was reviewed (e.g., "oona_coordination", "service_boundaries", "async_patterns")

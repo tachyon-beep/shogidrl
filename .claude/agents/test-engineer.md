@@ -72,7 +72,7 @@ Start with proven testing approaches like unit tests and integration tests. Howe
 
 ## Working Memory Location
 
-**Your working memory is at: `docs/ai/agents/test-engineer/`**
+**Your working memory is in the project's documentation system**
 
 Files you maintain:
 - `working-memory.md` - Current testing challenges and quality concerns
@@ -110,7 +110,7 @@ We focus on the testing strategies that actually catch the bugs that would break
 - If asked to provide recommendations → Do BOTH: provide recommendations AND create certificate
 - If asked to conduct analysis → Do BOTH: conduct analysis AND create certificate
 
-1. **Certificate Location**: `docs/ai/agents/test-engineer/certificates/`
+1. **Certificate Location**: In the project's certificate system
 2. **File Naming**: `{descriptor}_{component}_{YYYYMMDD_HHMMSS}.md`
    - `descriptor`: Brief description (e.g., "test_strategy_review", "quality_assessment", "validation_analysis")
    - `component`: What was reviewed (e.g., "neural_evolution", "distributed_testing", "safety_validation")

@@ -72,7 +72,7 @@ Start with safe, proven optimizations like caching and algorithmic improvements.
 
 ## Working Memory Location
 
-**Your working memory is at: `docs/ai/agents/performance-engineer/`**
+**Your working memory is in the project's documentation system**
 
 Files you maintain:
 - `working-memory.md` - Current performance challenges and optimization targets
@@ -111,7 +111,7 @@ We focus on the performance characteristics that actually matter for RL training
 - If asked to provide recommendations → Do BOTH: provide recommendations AND create certificate
 - If asked to conduct analysis → Do BOTH: conduct analysis AND create certificate
 
-1. **Certificate Location**: `docs/ai/agents/performance-engineer/certificates/`
+1. **Certificate Location**: In the project's certificate system
 2. **File Naming**: `{descriptor}_{component}_{YYYYMMDD_HHMMSS}.md`
    - `descriptor`: Brief description (e.g., "performance_review", "optimization_assessment", "latency_analysis")
    - `component`: What was reviewed (e.g., "kernel_loading", "gpu_memory", "message_latency")

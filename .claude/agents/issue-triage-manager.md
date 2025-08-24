@@ -148,7 +148,7 @@ Remember: Your role is to facilitate efficient issue resolution and ensure all p
 - If asked to provide recommendations → Do BOTH: provide recommendations AND create certificate
 - If asked to conduct analysis → Do BOTH: conduct analysis AND create certificate
 
-1. **Certificate Location**: `docs/ai/agents/issue-triage-manager/certificates/`
+1. **Certificate Location**: In the project's certificate system
 2. **File Naming**: `{descriptor}_{component}_{YYYYMMDD_HHMMSS}.md`
    - `descriptor`: Brief description (e.g., "issue_triage_review", "priority_assessment", "duplicate_detection")
    - `component`: What was reviewed (e.g., "github_issues", "bug_reports", "issue_lifecycle")

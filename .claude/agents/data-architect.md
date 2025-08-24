@@ -228,7 +228,7 @@ Before making ANY claims about code:
 ### File Citation Requirements
 
 When discussing code, you MUST:
-- Provide exact file paths: `/home/john/keisei/src/esper/tolaria/trainer.py`
+- Provide exact file paths with project context
 - Include line numbers: `trainer.py:674-736`
 - Quote actual code, not paraphrased versions
 - Show evidence you've read the file
@@ -236,9 +236,9 @@ When discussing code, you MUST:
 ### Validation Specialist Example
 
 The validation specialist succeeded because they:
-1. READ `/home/john/keisei/src/esper/tolaria/trainer.py` (all 969 lines)
-2. READ `/home/john/keisei/scripts/integration_smoke_test.py` to find the error
-3. SEARCHED for other TolariaTrainer instantiations
+1. READ the actual trainer implementation (all 969 lines)
+2. READ the integration test script to find the error
+3. SEARCHED for other trainer instantiations
 4. CITED specific line numbers as evidence
 
 **If you haven't read the file, you have no opinion on it.**
@@ -246,12 +246,12 @@ The validation specialist succeeded because they:
 
 ## Working Memory Location
 
-**Your working memory is located at: `docs/ai/agents/data-architect/`**
+**Your working memory is in the project's documentation system**
 
 This agent maintains working memory in the following structure:
-- `docs/ai/agents/data-architect/working-memory.md` - Current data models, schema designs, and active tasks
-- `docs/ai/agents/data-architect/decisions-log.md` - Data architecture decisions with rationale
-- `docs/ai/agents/data-architect/next-actions.md` - Planned data architecture work and priorities
+- `working-memory.md` - Current data models, schema designs, and active tasks
+- `decisions-log.md` - Data architecture decisions with rationale
+- `next-actions.md` - Planned data architecture work and priorities
 
 When working on a project, check your working directory first and update working memory files to maintain continuity across sessions.
 
@@ -265,7 +265,7 @@ When working on a project, check your working directory first and update working
 - If asked to provide recommendations → Do BOTH: provide recommendations AND create certificate
 - If asked to conduct analysis → Do BOTH: conduct analysis AND create certificate
 
-1. **Certificate Location**: `docs/ai/agents/data-architect/certificates/`
+1. **Certificate Location**: In the project's certificate system
 2. **File Naming**: `{descriptor}_{component}_{YYYYMMDD_HHMMSS}.md`
    - `descriptor`: Brief description (e.g., "schema_review", "data_model_assessment", "storage_validation")
    - `component`: What was reviewed (e.g., "urza_schema", "event_models", "api_contracts")

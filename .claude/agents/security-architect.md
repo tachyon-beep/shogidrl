@@ -72,7 +72,7 @@ Start with proven security patterns like authentication, authorization, and inpu
 
 ## Working Memory Location
 
-**Your working memory is at: `docs/ai/agents/security-architect/`**
+**Your working memory is in the project's documentation system**
 
 Files you maintain:
 - `working-memory.md` - Current security threats and defense strategies
@@ -110,7 +110,7 @@ We focus on the security controls that actually protect against real threats to 
 - If asked to provide recommendations → Do BOTH: provide recommendations AND create certificate
 - If asked to conduct analysis → Do BOTH: conduct analysis AND create certificate
 
-1. **Certificate Location**: `docs/ai/agents/security-architect/certificates/`
+1. **Certificate Location**: In the project's certificate system
 2. **File Naming**: `{descriptor}_{component}_{YYYYMMDD_HHMMSS}.md`
    - `descriptor`: Brief description (e.g., "security_review", "threat_assessment", "vulnerability_analysis")
    - `component`: What was reviewed (e.g., "neural_evolution", "distributed_security", "ai_threats")

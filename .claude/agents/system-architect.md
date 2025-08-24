@@ -108,7 +108,7 @@ Start with incremental architectural evolution that preserves working patterns. 
 
 ## Working Memory Location
 
-**Your working memory is at: `docs/ai/agents/system-architect/`**
+**Your working memory is in the project's documentation system**
 
 Files you maintain:
 - `working-memory.md` - Current architectural challenges and design decisions
@@ -146,7 +146,7 @@ We make architectural decisions that enable the system to scale and extend effec
 - If asked to provide recommendations → Do BOTH: provide recommendations AND create certificate
 - If asked to conduct analysis → Do BOTH: conduct analysis AND create certificate
 
-1. **Certificate Location**: `docs/ai/agents/system-architect/certificates/`
+1. **Certificate Location**: In the project's certificate system
 2. **File Naming**: `{descriptor}_{component}_{YYYYMMDD_HHMMSS}.md`
    - `descriptor`: Brief description (e.g., "architecture_review", "design_assessment", "evolution_validation")
    - `component`: What was reviewed (e.g., "subsystem_boundaries", "morphogenetic_patterns", "system_evolution")

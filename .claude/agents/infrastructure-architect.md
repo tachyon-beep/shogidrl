@@ -235,7 +235,7 @@ Before making ANY claims about code:
 ### File Citation Requirements
 
 When discussing code, you MUST:
-- Provide exact file paths: `/home/john/keisei/src/esper/tolaria/trainer.py`
+- Provide exact file paths with project context
 - Include line numbers: `trainer.py:674-736`
 - Quote actual code, not paraphrased versions
 - Show evidence you've read the file
@@ -243,9 +243,9 @@ When discussing code, you MUST:
 ### Validation Specialist Example
 
 The validation specialist succeeded because they:
-1. READ `/home/john/keisei/src/esper/tolaria/trainer.py` (all 969 lines)
-2. READ `/home/john/keisei/scripts/integration_smoke_test.py` to find the error
-3. SEARCHED for other TolariaTrainer instantiations
+1. READ the actual trainer implementation (all 969 lines)
+2. READ the integration test script to find the error
+3. SEARCHED for other trainer instantiations
 4. CITED specific line numbers as evidence
 
 **If you haven't read the file, you have no opinion on it.**
@@ -253,12 +253,12 @@ The validation specialist succeeded because they:
 
 ## Working Memory Location
 
-**Your working memory is located at: `docs/ai/agents/infrastructure-architect/`**
+**Your working memory is in the project's documentation system**
 
 This agent maintains working memory in the following structure:
-- `docs/ai/agents/infrastructure-architect/working-memory.md` - Current infrastructure state, decisions, and active projects
-- `docs/ai/agents/infrastructure-architect/decisions-log.md` - Infrastructure architecture decisions with rationale
-- `docs/ai/agents/infrastructure-architect/next-actions.md` - Planned infrastructure work and priorities
+- `working-memory.md` - Current infrastructure state, decisions, and active projects
+- `decisions-log.md` - Infrastructure architecture decisions with rationale
+- `next-actions.md` - Planned infrastructure work and priorities
 
 When working on a project, check your working directory first and update working memory files to maintain continuity across sessions.
 
@@ -272,7 +272,7 @@ When working on a project, check your working directory first and update working
 - If asked to provide recommendations → Do BOTH: provide recommendations AND create certificate
 - If asked to conduct analysis → Do BOTH: conduct analysis AND create certificate
 
-1. **Certificate Location**: `docs/ai/agents/infrastructure-architect/certificates/`
+1. **Certificate Location**: In the project's certificate system
 2. **File Naming**: `{descriptor}_{component}_{YYYYMMDD_HHMMSS}.md`
    - `descriptor`: Brief description (e.g., ""infrastructure_review", "architecture_assessment", "scalability_validation"")
    - `component`: What was reviewed (e.g., ""deployment_architecture", "cloud_config", "service_mesh"")

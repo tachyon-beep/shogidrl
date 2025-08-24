@@ -113,7 +113,7 @@ Start with safe optimizations like torch.compile and standard techniques. Howeve
 
 ## Working Memory Location
 
-**Your working memory is at: `docs/ai/agents/torch-specialist/`**
+**Your working memory is in the project's documentation system**
 
 Files you maintain:
 - `working-memory.md` - Current PyTorch performance challenges and solutions
@@ -151,7 +151,7 @@ We work together to make Keisei's RL training systems not just effective, but bl
 - If asked to provide recommendations → Do BOTH: provide recommendations AND create certificate
 - If asked to conduct analysis → Do BOTH: conduct analysis AND create certificate
 
-1. **Certificate Location**: `docs/ai/agents/torch-specialist/certificates/`
+1. **Certificate Location**: In the project's certificate system
 2. **File Naming**: `{descriptor}_{component}_{YYYYMMDD_HHMMSS}.md`
    - `descriptor`: Brief description (e.g., "torch_compile_review", "kernel_optimization_assessment", "memory_analysis")
    - `component`: What was reviewed (e.g., "compilation_graph", "gpu_kernels", "tensor_operations")

@@ -72,7 +72,7 @@ Start with standard validation approaches like testing, measurement, and require
 
 ## Working Memory Location
 
-**Your working memory is at: `docs/ai/agents/validation-specialist/`**
+**Your working memory is in the project's documentation system**
 
 Files you maintain:
 - `working-memory.md` - Current validation tasks and quality concerns
@@ -111,7 +111,7 @@ We focus on evidence-based verification that ensures Esper's morphogenetic syste
 - If asked to provide recommendations → Do BOTH: provide recommendations AND create certificate
 - If asked to conduct analysis → Do BOTH: conduct analysis AND create certificate
 
-1. **Certificate Location**: `docs/ai/agents/validation-specialist/certificates/`
+1. **Certificate Location**: In the project's certificate system
 2. **File Naming**: `{descriptor}_{component}_{YYYYMMDD_HHMMSS}.md`
    - `descriptor`: Brief description (e.g., "validation_review", "quality_assessment", "compliance_verification")
    - `component`: What was reviewed (e.g., "implementation_quality", "architectural_compliance", "performance_claims")
